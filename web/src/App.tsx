@@ -157,6 +157,11 @@ function Board() {
     if (a) openTerm({ id: a.id, name: a.name });
   };
 
+  // Double-click focuses a node — single click already opens its terminal.
+  const onNodeDoubleClick: NodeMouseHandler = (_, node) => {
+    fitView({ nodes: [{ id: node.id }], padding: 0.9, maxZoom: 1.4, duration: 300 });
+  };
+
   const onNodeContextMenu: NodeMouseHandler = (ev, node) => {
     ev.preventDefault();
     if (!agents[node.id] && !workspaces[node.id]) return;
@@ -209,6 +214,7 @@ function Board() {
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         onNodeDragStop={onNodeDragStop}
         onConnectEnd={onConnectEnd}
         onEdgeClick={(_, edge) => setEdgeDetail(edge.id)}
