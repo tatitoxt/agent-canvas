@@ -26,6 +26,7 @@ export type LiveEdge = {
   to: string;
   task: string;
   result?: string;
+  files?: number;
   state: "delegated" | "returned" | "failed";
 };
 
@@ -163,7 +164,12 @@ export const useBoard = create<BoardState>((set, get) => ({
               set({
                 edges: {
                   ...edges,
-                  [msg.edge_id]: { ...edge, result: msg.summary, state: "returned" },
+                  [msg.edge_id]: {
+                    ...edge,
+                    result: msg.summary,
+                    files: msg.files,
+                    state: "returned",
+                  },
                 },
               });
             }
@@ -201,6 +207,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                   to: d.to,
                   task: d.task,
                   result: d.result ?? undefined,
+                  files: d.files,
                   state: d.state as LiveEdge["state"],
                 },
               ]),

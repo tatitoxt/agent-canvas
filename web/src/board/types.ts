@@ -33,5 +33,7 @@ export type BoardNodeData =
 export type DelegationEdgeData = {
   task?: string;
   result?: string;
+  /** Files the child changed — the edge's produced diff. */
+  files?: number;
   state: "delegated" | "returned" | "failed";
 };

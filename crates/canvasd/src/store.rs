@@ -9,8 +9,17 @@ use std::sync::Mutex;
 /// Row of the agents table: (id, name, command, worktree, status,
 /// workspace_id, permission).
 pub type AgentRow = (String, String, String, String, String, Option<String>, String);
-/// Row of the delegations table: (id, from, to, task, result, state).
-pub type DelegationRow = (String, String, String, String, Option<String>, String);
+/// Row of the delegations table: (id, from, to, task, result, state,
+/// files_changed).
+pub type DelegationRow = (
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    String,
+    Option<i64>,
+);
 
 pub struct Store {
     conn: Mutex<Connection>,
@@ -69,6 +78,14 @@ impl Store {
             conn.execute_batch(
                 "ALTER TABLE agents ADD COLUMN permission TEXT NOT NULL DEFAULT 'supervised';
                  PRAGMA user_version = 2;",
+            )?;
+        }
+        // v2 → v3: how many files the child's worktree changed when the
+        // delegation resolved — the edge's produced diff, persisted.
+        if version < 3 {
+            conn.execute_batch(
+                "ALTER TABLE delegations ADD COLUMN files_changed INTEGER;
+                 PRAGMA user_version = 3;",
             )?;
         }
         Ok(Self { conn: Mutex::new(conn) })
@@ -156,10 +173,10 @@ impl Store {
     }
 
     #[allow(dead_code)]
-    pub fn delegation_resolved(&self, id: &str, result: &str) -> Result<()> {
+    pub fn delegation_resolved(&self, id: &str, result: &str, files: u32) -> Result<()> {
         self.conn.lock().unwrap().execute(
-            "UPDATE delegations SET result = ?2, state = 'returned', resolved_at = datetime('now') WHERE id = ?1",
-            (id, result),
+            "UPDATE delegations SET result = ?2, files_changed = ?3, state = 'returned', resolved_at = datetime('now') WHERE id = ?1",
+            (id, result, files),
         )?;
         Ok(())
     }
@@ -195,10 +212,18 @@ impl Store {
     ) -> Result<Vec<DelegationRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
-            "SELECT id, from_node, to_node, task, result, state FROM delegations ORDER BY created_at",
+            "SELECT id, from_node, to_node, task, result, state, files_changed FROM delegations ORDER BY created_at",
         )?;
         let rows = st.query_map([], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+            ))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }

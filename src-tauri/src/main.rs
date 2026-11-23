@@ -255,8 +255,8 @@ fn snapshot(state: State<'_, CanvasState>) -> Result<serde_json::Value, String> 
         .delegations_snapshot()
         .unwrap_or_default()
         .into_iter()
-        .map(|(edge_id, from, to, task, result, state)| SnapshotDelegation {
-            edge_id, from, to, task, result, state,
+        .map(|(edge_id, from, to, task, result, state, files)| SnapshotDelegation {
+            edge_id, from, to, task, result, files: files.unwrap_or(0) as u32, state,
         })
         .collect();
     let layout = state.store.layout_map().unwrap_or_default();
@@ -319,8 +319,16 @@ fn main() {
                     }
                     for (agent_id, edge_id, summary) in resolved {
                         state.pending_results.lock().unwrap().remove(&agent_id);
-                        let _ = state.store.delegation_resolved(&edge_id, &summary);
-                        emit_control(&handle, &ServerMsg::Result { edge_id, summary });
+                        let files = state
+                            .agents
+                            .worktree(&agent_id)
+                            .map(|wt| dirty_file_count(&wt))
+                            .unwrap_or(0);
+                        let _ = state.store.delegation_resolved(&edge_id, &summary, files);
+                        emit_control(
+                            &handle,
+                            &ServerMsg::Result { edge_id, summary, files },
+                        );
                     }
 
                     // Diff pass (every 3rd tick): files changed per worktree.

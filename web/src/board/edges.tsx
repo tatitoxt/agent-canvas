@@ -36,7 +36,10 @@ export function DelegationEdge({
     targetPosition,
   });
   const style = STATE_STYLE[data?.state ?? "delegated"];
-  const label = data?.state === "returned" ? data.result : data?.task;
+  const label =
+    data?.state === "returned"
+      ? `${data.result ?? ""}${data.files ? ` · ${data.files} file${data.files === 1 ? "" : "s"}` : ""}`
+      : data?.task;
 
   return (
     <>

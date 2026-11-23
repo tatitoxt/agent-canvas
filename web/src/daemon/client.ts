@@ -19,7 +19,7 @@ export type ServerMsg =
   | { type: "diff"; agent_id: string; files: number }
   | { type: "error"; agent_id: string | null; message: string }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
-  | { type: "result"; edge_id: string; summary: string }
+  | { type: "result"; edge_id: string; summary: string; files?: number }
   | {
       type: "snapshot";
       agents: SnapshotAgent[];
@@ -40,6 +40,7 @@ export type SnapshotDelegation = {
   to: string;
   task: string;
   result?: string | null;
+  files?: number;
   state: string;
 };
 

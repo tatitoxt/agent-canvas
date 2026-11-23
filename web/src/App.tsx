@@ -125,7 +125,7 @@ function Board() {
       source: e.from,
       target: e.to,
       type: "delegation" as const,
-      data: { state: e.state, task: e.task, result: e.result },
+      data: { state: e.state, task: e.task, result: e.result, files: e.files },
     }));
   }, [connected, liveEdges]);
 

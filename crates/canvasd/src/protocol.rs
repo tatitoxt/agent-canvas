@@ -114,7 +114,7 @@ pub enum ServerMsg {
     Diff { agent_id: String, files: u32 },
     Error { agent_id: Option<String>, message: String },
     Delegation { edge_id: String, from: String, to: String, task: String },
-    Result { edge_id: String, summary: String },
+    Result { edge_id: String, summary: String, files: u32 },
     WorkspaceCreated { workspace_id: String, name: String, repo: String },
     /// Board state replay sent once when a client connects: every agent the
     /// board knows (live and dead) plus saved node positions.
@@ -140,6 +140,8 @@ pub struct SnapshotDelegation {
     pub to: String,
     pub task: String,
     pub result: Option<String>,
+    /// Files the child changed in its worktree — what the edge produced.
+    pub files: u32,
     pub state: String,
 }
 

@@ -161,8 +161,16 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .delegations_snapshot()
                 .unwrap_or_default()
                 .into_iter()
-                .map(|(edge_id, from, to, task, result, state)| {
-                    protocol::SnapshotDelegation { edge_id, from, to, task, result, state }
+                .map(|(edge_id, from, to, task, result, state, files)| {
+                    protocol::SnapshotDelegation {
+                        edge_id,
+                        from,
+                        to,
+                        task,
+                        result,
+                        files: files.unwrap_or(0) as u32,
+                        state,
+                    }
                 })
                 .collect(),
             layout: state.store.layout_map().unwrap_or_default(),
@@ -484,10 +492,17 @@ async fn main() -> Result<()> {
                     }
                     for (agent_id, edge_id, summary) in resolved {
                         pending.lock().unwrap().remove(&agent_id);
-                        let _ = store.delegation_resolved(&edge_id, &summary);
+                        // What the delegation produced: uncommitted files
+                        // in the child's worktree at resolve time.
+                        let files = agents
+                            .worktree(&agent_id)
+                            .map(|wt| dirty_file_count(&wt))
+                            .unwrap_or(0);
+                        let _ = store.delegation_resolved(&edge_id, &summary, files);
                         let _ = ev.send(Event::Control(ServerMsg::Result {
                             edge_id,
                             summary,
+                            files,
                         }));
                     }
                 }
