@@ -5,3 +5,5 @@ web/dist/
 .DS_Store
 .env
 .env.local
+.canvas/
+.canvas-worktrees/
