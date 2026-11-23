@@ -3,7 +3,7 @@
 //! Binds to 127.0.0.1 only. Every connection requires the per-launch session
 //! token (`?token=` on /ws, `Authorization: Bearer` on /api/*).
 
-use canvasd::agent::{canvas_result_line, dirty_file_count, last_visible_line, sensitive_line, AgentManager};
+use canvasd::agent::{canvas_result_line, dirty_file_count, last_visible_line, sensitive_line, worktree_branch, AgentManager};
 use canvasd::protocol;
 use canvasd::store;
 use anyhow::Result;
@@ -202,6 +202,15 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 })
                 .collect(),
             layout: state.store.layout_map().unwrap_or_default(),
+            approvals: state
+                .pending_inputs
+                .lock()
+                .unwrap()
+                .iter()
+                .filter_map(|(id, bytes)| {
+                    sensitive_line(bytes).map(|line| (id.clone(), line))
+                })
+                .collect(),
         };
         if let Ok(text) = serde_json::to_string(&snapshot) {
             let _ = socket.send(Message::Text(text.into())).await;
@@ -512,7 +521,7 @@ async fn main() -> Result<()> {
                 std::collections::HashMap::new();
             let mut last_line: std::collections::HashMap<String, String> =
                 std::collections::HashMap::new();
-            let mut last_diff: std::collections::HashMap<String, u32> =
+            let mut last_diff: std::collections::HashMap<String, (u32, String)> =
                 std::collections::HashMap::new();
             let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
             let mut tick_n: u32 = 0;
@@ -574,11 +583,13 @@ async fn main() -> Result<()> {
                     for id in agents.ids() {
                         if let Some(wt) = agents.worktree(&id) {
                             let files = dirty_file_count(&wt);
-                            if last_diff.get(&id) != Some(&files) {
-                                last_diff.insert(id.clone(), files);
+                            let branch = worktree_branch(&wt);
+                            if last_diff.get(&id) != Some(&(files, branch.clone())) {
+                                last_diff.insert(id.clone(), (files, branch.clone()));
                                 let _ = ev.send(Event::Control(ServerMsg::Diff {
                                     agent_id: id,
                                     files,
+                                    branch,
                                 }));
                             }
                         }

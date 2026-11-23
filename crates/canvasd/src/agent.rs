@@ -406,6 +406,19 @@ pub fn dirty_file_count(worktree: &Path) -> u32 {
         .unwrap_or(0)
 }
 
+/// Current branch of the agent's worktree (`canvas/<name>-<id>`) — the
+/// node's branch badge; empty string when git can't answer.
+pub fn worktree_branch(worktree: &Path) -> String {
+    std::process::Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(worktree)
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty() && s != "HEAD")
+        .unwrap_or_default()
+}
+
 fn uuid_like() -> String {
     uuid::Uuid::new_v4().simple().to_string()[..12].to_string()
 }

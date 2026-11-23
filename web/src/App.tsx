@@ -92,6 +92,7 @@ function Board() {
           status: a.status === "exited" ? ("done" as const) : a.status,
           task: a.status === "exited" ? "session ended" : (a.lastLine ?? "live PTY — click to open"),
           pendingApproval: approvals[a.id],
+          branch: a.branch,
         },
       };
     });

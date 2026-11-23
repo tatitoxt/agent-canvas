@@ -109,6 +109,19 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           >
             {STATUS_LABEL[data.status]}
           </span>
+          {data.branch && (
+            <span
+              style={{
+                fontSize: 9.5,
+                fontFamily: "ui-monospace, SFMono-Regular, monospace",
+                color: "var(--cv-ink-faint)",
+                fontWeight: 500,
+              }}
+              title="worktree branch"
+            >
+              ⎇ {data.branch}
+            </span>
+          )}
           {data.files != null && data.files > 0 && (
             <span
               style={{ fontSize: 10, color: "var(--cv-ink-faint)", fontWeight: 500 }}

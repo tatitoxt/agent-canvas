@@ -10,6 +10,8 @@ export type LiveAgent = {
   permission?: string;
   lastLine?: string;
   files?: number;
+  /** Worktree branch (`canvas/<name>-<id>`) — the node's branch badge. */
+  branch?: string;
   status: AgentStatus | "exited";
   workspace_id?: string | null;
 };
@@ -136,7 +138,11 @@ export const useBoard = create<BoardState>((set, get) => ({
               set({
                 agents: {
                   ...agents,
-                  [msg.agent_id]: { ...agents[msg.agent_id], files: msg.files },
+                  [msg.agent_id]: {
+                    ...agents[msg.agent_id],
+                    files: msg.files,
+                    branch: msg.branch ?? agents[msg.agent_id].branch,
+                  },
                 },
               });
             }
@@ -220,7 +226,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                 },
               ]),
             );
-            set({ agents, positions, edges, workspaces });
+            set({ agents, positions, edges, workspaces, approvals: msg.approvals ?? {} });
             break;
           }
           case "error":

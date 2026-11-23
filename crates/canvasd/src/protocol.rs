@@ -116,7 +116,7 @@ pub enum ServerMsg {
     Activity { agent_id: String, line: String },
     /// Files with uncommitted changes in the agent's worktree — the
     /// node's diff badge; what the delegation actually produced.
-    Diff { agent_id: String, files: u32 },
+    Diff { agent_id: String, files: u32, branch: String },
     /// A supervised agent's PTY input matched a destructive pattern and
     /// is held until ApproveInput/DenyInput.
     NeedsApproval { agent_id: String, line: String },
@@ -131,6 +131,9 @@ pub enum ServerMsg {
         delegations: Vec<SnapshotDelegation>,
         workspaces: Vec<SnapshotWorkspace>,
         layout: std::collections::HashMap<String, (f64, f64)>,
+        /// Held supervised inputs: agent_id → the line awaiting approval.
+        /// Replayed so late-joining clients still see pending gates.
+        approvals: std::collections::HashMap<String, String>,
     },
 }
 

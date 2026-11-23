@@ -16,7 +16,7 @@ export type ServerMsg =
   | { type: "workspace_created"; workspace_id: string; name: string; repo: string }
   | { type: "status"; agent_id: string; status: string }
   | { type: "activity"; agent_id: string; line: string }
-  | { type: "diff"; agent_id: string; files: number }
+  | { type: "diff"; agent_id: string; files: number; branch?: string }
   | { type: "error"; agent_id: string | null; message: string }
   | { type: "needs_approval"; agent_id: string; line: string }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
@@ -27,6 +27,7 @@ export type ServerMsg =
       delegations?: SnapshotDelegation[];
       workspaces?: SnapshotWorkspace[];
       layout: Record<string, [number, number]>;
+      approvals?: Record<string, string>;
     };
 
 export type SnapshotWorkspace = {

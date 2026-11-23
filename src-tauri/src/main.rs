@@ -8,7 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use base64::Engine;
-use canvasd::agent::{canvas_result_line, dirty_file_count, sensitive_line, AgentManager};
+use canvasd::agent::{canvas_result_line, dirty_file_count, sensitive_line, worktree_branch, AgentManager};
 use canvasd::protocol::{AgentStatus, ServerMsg, SnapshotAgent, SnapshotDelegation};
 use canvasd::store::Store;
 use std::collections::HashMap;
@@ -299,6 +299,13 @@ fn snapshot(state: State<'_, CanvasState>) -> Result<serde_json::Value, String> 
         "delegations": delegations,
         "workspaces": workspaces,
         "layout": layout,
+        "approvals": state
+            .pending_inputs
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|(id, bytes)| sensitive_line(bytes).map(|line| (id.clone(), line)))
+            .collect::<HashMap<_, _>>(),
     }))
 }
 
@@ -329,7 +336,7 @@ fn main() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let mut last: HashMap<String, &'static str> = HashMap::new();
-                let mut last_diff: HashMap<String, u32> = HashMap::new();
+                let mut last_diff: HashMap<String, (u32, String)> = HashMap::new();
                 let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
                 let mut tick_n: u32 = 0;
                 loop {
@@ -370,11 +377,12 @@ fn main() {
                         for id in state.agents.ids() {
                             if let Some(wt) = state.agents.worktree(&id) {
                                 let files = dirty_file_count(&wt);
-                                if last_diff.get(&id) != Some(&files) {
-                                    last_diff.insert(id.clone(), files);
+                                let branch = worktree_branch(&wt);
+                                if last_diff.get(&id) != Some(&(files, branch.clone())) {
+                                    last_diff.insert(id.clone(), (files, branch.clone()));
                                     emit_control(
                                         &handle,
-                                        &ServerMsg::Diff { agent_id: id, files },
+                                        &ServerMsg::Diff { agent_id: id, files, branch },
                                     );
                                 }
                             }

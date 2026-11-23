@@ -14,6 +14,8 @@ export type AgentNodeData = {
   files?: number;
   /** Command line held by the supervised-input gate awaiting a decision. */
   pendingApproval?: string;
+  /** Worktree branch — shown as a muted mono badge. */
+  branch?: string;
 };
 
 export type OrchestratorNodeData = {
