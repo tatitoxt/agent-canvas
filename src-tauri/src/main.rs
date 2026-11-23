@@ -206,6 +206,21 @@ fn delete_board(
 }
 
 #[tauri::command]
+fn delete_workspace(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    workspace_id: String,
+) -> Result<(), String> {
+    match state.store.workspace_deleted(&workspace_id) {
+        Ok(true) => {
+            emit_control(&app, &ServerMsg::WorkspaceDeleted { workspace_id });
+            Ok(())
+        }
+        _ => Err("workspace has live agents".to_string()),
+    }
+}
+
+#[tauri::command]
 fn create_workspace(
     app: AppHandle,
     state: State<'_, CanvasState>,
@@ -733,6 +748,7 @@ fn main() {
             rename_node,
             rename_board,
             delete_board,
+            delete_workspace,
             create_workspace,
             move_to_board,
             delegate,

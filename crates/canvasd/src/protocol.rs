@@ -42,6 +42,9 @@ pub enum ClientMsg {
     RenameBoard { board_id: String, name: String },
     /// Delete a board — refused while it still holds nodes.
     DeleteBoard { board_id: String },
+    /// Delete a workspace — refused while it holds live agents; dead
+    /// agents are detached and stay on the canvas.
+    DeleteWorkspace { workspace_id: String },
     PtyInput {
         agent_id: String,
         /// Base64-encoded bytes to write to the PTY.
@@ -175,6 +178,8 @@ pub enum ServerMsg {
     BoardRenamed { board_id: String, name: String },
     /// A board was deleted (only emitted for empty boards).
     BoardDeleted { board_id: String },
+    /// A workspace was deleted; agents keep existing detached from it.
+    WorkspaceDeleted { workspace_id: String },
     /// Unified diff text for one agent's worktree (DiffDetail answer).
     DiffDetail { agent_id: String, diff: String },
     /// Board state replay sent once when a client connects: every agent the

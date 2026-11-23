@@ -125,6 +125,10 @@ export class TauriCanvasClient {
     invoke("rename_board", { boardId, name }).catch(console.error);
   }
 
+  deleteWorkspace(workspaceId: string) {
+    return invoke("delete_workspace", { workspaceId }) as Promise<unknown>;
+  }
+
   deleteBoard(boardId: string) {
     invoke("delete_board", { boardId }).catch(console.error);
   }

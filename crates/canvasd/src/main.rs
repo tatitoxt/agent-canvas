@@ -669,6 +669,19 @@ fn handle_client_msg(
                 }),
             }
         }
+        ClientMsg::DeleteWorkspace { workspace_id } => {
+            match state.store.workspace_deleted(&workspace_id) {
+                Ok(true) => send_control(ServerMsg::WorkspaceDeleted { workspace_id }),
+                Ok(false) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: "workspace has live agents".into(),
+                }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
+            }
+        }
         ClientMsg::DiffDetail { agent_id } => {
             // Live agents come from the manager; exited agents fall back
             // to their persisted worktree path so a done node's diff is

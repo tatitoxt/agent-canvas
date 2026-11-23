@@ -79,6 +79,7 @@ type BoardState = {
   renameNode: (nodeId: string, name: string) => void;
   renameBoard: (boardId: string, name: string) => void;
   deleteBoard: (boardId: string) => void;
+  deleteWorkspace: (workspaceId: string) => void;
   /** agent_id → latest fetched unified diff text. */
   diffTexts: Record<string, string>;
   requestDiff: (agentId: string) => void;
@@ -175,6 +176,18 @@ export const useBoard = create<BoardState>((set, get) => ({
               },
             });
             break;
+          case "workspace_deleted": {
+            const { [msg.workspace_id]: _gone, ...rest } = get().workspaces;
+            // Agents of the dead workspace are detached but stay on the board.
+            const agents = { ...get().agents };
+            for (const a of Object.values(agents)) {
+              if (a.workspace_id === msg.workspace_id) {
+                agents[a.id] = { ...a, workspace_id: null };
+              }
+            }
+            set({ workspaces: rest, agents });
+            break;
+          }
           case "board_created":
             set({
               boards: { ...get().boards, [msg.board_id]: msg.name },
@@ -400,6 +413,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   renameNode: (nodeId, name) => client?.renameNode(nodeId, name),
   renameBoard: (boardId, name) => client?.renameBoard(boardId, name),
   deleteBoard: (boardId) => client?.deleteBoard(boardId),
+  deleteWorkspace: (workspaceId) => client?.deleteWorkspace(workspaceId),
   diffTexts: {},
   requestDiff: (agentId) => client?.diffDetail(agentId),
 

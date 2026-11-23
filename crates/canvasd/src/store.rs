@@ -239,6 +239,27 @@ impl Store {
         Ok(n > 0)
     }
 
+    /// A workspace can only be deleted when no live agent belongs to it —
+    /// dead agents keep their records but the container can go.
+    pub fn workspace_deleted(&self, id: &str) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let live: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM agents WHERE workspace_id = ?1 AND status != 'exited'",
+            (id,),
+            |r| r.get(0),
+        )?;
+        if live > 0 {
+            return Ok(false);
+        }
+        // Detach dead agents so they stay on the canvas as loose nodes.
+        conn.execute(
+            "UPDATE agents SET workspace_id = NULL WHERE workspace_id = ?1",
+            (id,),
+        )?;
+        let n = conn.execute("DELETE FROM workspaces WHERE id = ?1", (id,))?;
+        Ok(n > 0)
+    }
+
     /// Worktree path of any agent row (live or dead) — DiffDetail falls
     /// back here for agents whose PTY already exited.
     pub fn agent_worktree(&self, id: &str) -> Result<Option<String>> {

@@ -28,7 +28,9 @@ export function ContextMenu({
   const current = useBoard(
     (s) => s.agents[nodeId]?.board_id ?? s.workspaces[nodeId]?.board_id ?? "main",
   );
+  const deleteWorkspace = useBoard((s) => s.deleteWorkspace);
   const [confirmKill, setConfirmKill] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(currentName);
   const [boardsOpen, setBoardsOpen] = useState(false);
@@ -146,7 +148,7 @@ export function ContextMenu({
           </div>
         )}
       </div>
-      {isAgent && (
+      {isAgent ? (
         <button
           style={{
             ...item,
@@ -158,6 +160,19 @@ export function ContextMenu({
           }}
         >
           {confirmKill ? "confirm kill?" : "kill agent"}
+        </button>
+      ) : (
+        <button
+          style={{
+            ...item,
+            color: confirmDel ? "var(--cv-blocked)" : "var(--cv-ink-dim)",
+          }}
+          onClick={() => {
+            if (confirmDel) { deleteWorkspace(nodeId); onClose(); }
+            else setConfirmDel(true);
+          }}
+        >
+          {confirmDel ? "confirm delete?" : "delete workspace"}
         </button>
       )}
     </div>
