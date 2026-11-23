@@ -1,6 +1,10 @@
 [workspace]
 resolver = "2"
 members = ["crates/canvasd"]
+# The Tauri shell is its own root package (needs system webkit deps that the
+# daemon doesn't): it path-depends on canvasd but is excluded from this
+# workspace so plain `cargo build` keeps working without GUI libraries.
+exclude = ["src-tauri"]
 
 [workspace.package]
 edition = "2021"

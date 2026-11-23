@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { CanvasClient, type ServerMsg } from "../daemon/client";
+import { isTauri, TauriCanvasClient } from "../daemon/tauriClient";
 import type { AgentStatus } from "../board/types";
 
 export type LiveAgent = {
@@ -8,14 +9,27 @@ export type LiveAgent = {
   status: AgentStatus | "exited";
 };
 
+export type LiveEdge = {
+  id: string;
+  from: string;
+  to: string;
+  task: string;
+  result?: string;
+  state: "delegated" | "returned" | "failed";
+};
+
+type DaemonTransport = CanvasClient | TauriCanvasClient;
+
 type BoardState = {
   connected: boolean;
   agents: Record<string, LiveAgent>;
+  edges: Record<string, LiveEdge>;
   /** Saved node positions — replayed from the daemon's layout table. */
   positions: Record<string, { x: number; y: number }>;
   ptyListeners: Record<string, (bytes: Uint8Array) => void>;
   connect: (token: string) => void;
   spawn: (name: string, command: string) => void;
+  delegate: (from: string, name: string, command: string, task: string) => void;
   kill: (agentId: string) => void;
   moveNode: (agentId: string, x: number, y: number) => void;
   attachPty: (agentId: string, cb: (bytes: Uint8Array) => void) => void;
@@ -23,7 +37,7 @@ type BoardState = {
   sendInput: (agentId: string, bytes: Uint8Array) => void;
 };
 
-let client: CanvasClient | null = null;
+let client: DaemonTransport | null = null;
 
 const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
   new URLSearchParams(location.search).get("token") ??
@@ -32,15 +46,16 @@ const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
 export const useBoard = create<BoardState>((set, get) => ({
   connected: false,
   agents: {},
+  edges: {},
   positions: {},
   ptyListeners: {},
 
   connect: (token: string) => {
     const t = token || TOKEN;
-    if (!t || client) return;
-    client = new CanvasClient(t, {
+    if (client || (!t && !isTauri())) return;
+    const handlers = {
       onControl: (msg: ServerMsg) => {
-        const { agents } = get();
+        const { agents, edges } = get();
         switch (msg.type) {
           case "spawned":
             set({
@@ -63,6 +78,32 @@ export const useBoard = create<BoardState>((set, get) => ({
               });
             }
             break;
+          case "delegation":
+            set({
+              edges: {
+                ...edges,
+                [msg.edge_id]: {
+                  id: msg.edge_id,
+                  from: msg.from,
+                  to: msg.to,
+                  task: msg.task,
+                  state: "delegated",
+                },
+              },
+            });
+            break;
+          case "result": {
+            const edge = edges[msg.edge_id];
+            if (edge) {
+              set({
+                edges: {
+                  ...edges,
+                  [msg.edge_id]: { ...edge, result: msg.summary, state: "returned" },
+                },
+              });
+            }
+            break;
+          }
           case "snapshot": {
             const agents = Object.fromEntries(
               msg.agents.map((a) => [
@@ -73,7 +114,20 @@ export const useBoard = create<BoardState>((set, get) => ({
             const positions = Object.fromEntries(
               Object.entries(msg.layout).map(([id, [x, y]]) => [id, { x, y }]),
             );
-            set({ agents, positions });
+            const edges = Object.fromEntries(
+              (msg.delegations ?? []).map((d) => [
+                d.edge_id,
+                {
+                  id: d.edge_id,
+                  from: d.from,
+                  to: d.to,
+                  task: d.task,
+                  result: d.result ?? undefined,
+                  state: d.state as LiveEdge["state"],
+                },
+              ]),
+            );
+            set({ agents, positions, edges });
             break;
           }
           case "error":
@@ -83,15 +137,20 @@ export const useBoard = create<BoardState>((set, get) => ({
             break;
         }
       },
-      onPty: (agentId, bytes) => {
+      onPty: (agentId: string, bytes: Uint8Array) => {
         get().ptyListeners[agentId]?.(bytes);
       },
       onClose: () => set({ connected: false }),
-    });
+    };
+    // Inside Tauri there is no socket and no token — the app itself is the peer.
+    client = isTauri() ? new TauriCanvasClient(handlers) : new CanvasClient(t, handlers);
     void client.whenOpen().then(() => set({ connected: true }));
   },
 
   spawn: (name, command) => client?.spawnAgent(name, command),
+
+  delegate: (from, name, command, task) =>
+    client?.delegate(from, name, command, task),
 
   kill: (agentId) => client?.confirmDestructive(agentId, "kill"),
 

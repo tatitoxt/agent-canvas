@@ -27,6 +27,7 @@ const edgeTypes = { delegation: DelegationEdge };
 
 function Board() {
   const agents = useBoard((s) => s.agents);
+  const liveEdges = useBoard((s) => s.edges);
   const positions = useBoard((s) => s.positions);
   const moveNode = useBoard((s) => s.moveNode);
   const connected = useBoard((s) => s.connected);
@@ -83,6 +84,17 @@ function Board() {
     if (agents[node.id]) moveNode(node.id, node.position.x, node.position.y);
   };
 
+  const edges = useMemo(() => {
+    if (!connected) return initialEdges;
+    return Object.values(liveEdges).map((e) => ({
+      id: e.id,
+      source: e.from,
+      target: e.to,
+      type: "delegation" as const,
+      data: { state: e.state, task: e.task, result: e.result },
+    }));
+  }, [connected, liveEdges]);
+
   return (
     <div className="relative h-full w-full">
       <NavRail active="canvas" />
@@ -90,7 +102,7 @@ function Board() {
       <SpawnBar />
       <ReactFlow
         nodes={nodes}
-        edges={connected ? [] : initialEdges}
+        edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodeClick={onNodeClick}

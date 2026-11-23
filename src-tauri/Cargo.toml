@@ -1,0 +1,26 @@
+[package]
+name = "canvas-app"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Agent canvas — spatial board of live CLI coding agents"
+default-run = "canvas-app"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+canvasd = { path = "../crates/canvasd" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[features]
+# Tauri requires a `custom-protocol` feature for production builds.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

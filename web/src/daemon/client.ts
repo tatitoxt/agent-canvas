@@ -15,7 +15,21 @@ export type ServerMsg =
   | { type: "error"; agent_id: string | null; message: string }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
   | { type: "result"; edge_id: string; summary: string }
-  | { type: "snapshot"; agents: SnapshotAgent[]; layout: Record<string, [number, number]> };
+  | {
+      type: "snapshot";
+      agents: SnapshotAgent[];
+      delegations?: SnapshotDelegation[];
+      layout: Record<string, [number, number]>;
+    };
+
+export type SnapshotDelegation = {
+  edge_id: string;
+  from: string;
+  to: string;
+  task: string;
+  result?: string | null;
+  state: string;
+};
 
 export type Handlers = {
   onControl: (msg: ServerMsg) => void;
@@ -83,5 +97,9 @@ export class CanvasClient {
 
   moveNode(agentId: string, x: number, y: number) {
     this.send({ cmd: "move_node", agent_id: agentId, x, y });
+  }
+
+  delegate(from: string, name: string, command: string, task: string, cwd = ".") {
+    this.send({ cmd: "delegate", from, name, command, task, cwd });
   }
 }
