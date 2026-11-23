@@ -292,16 +292,32 @@ fn strip_ansi(s: &str) -> String {
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
         if c == '\u{1b}' {
-            if chars.peek() == Some(&'[') {
-                chars.next();
-                while let Some(&p) = chars.peek() {
+            match chars.peek() {
+                Some(&'[') => {
+                    // CSI: ESC [ params…final-byte.
                     chars.next();
-                    if p.is_ascii_alphabetic() || p == '@' {
-                        break;
+                    while let Some(&p) = chars.peek() {
+                        chars.next();
+                        if p.is_ascii_alphabetic() || p == '@' {
+                            break;
+                        }
                     }
                 }
-            } else {
-                chars.next();
+                Some(&']') => {
+                    // OSC: ESC ] … BEL or ESC \ terminator.
+                    chars.next();
+                    let mut prev = '\0';
+                    while let Some(&p) = chars.peek() {
+                        chars.next();
+                        if p == '\u{7}' || (prev == '\u{1b}' && p == '\\') {
+                            break;
+                        }
+                        prev = p;
+                    }
+                }
+                _ => {
+                    chars.next();
+                }
             }
         } else if c != '\r' && c != '\u{7}' {
             out.push(c);
