@@ -181,7 +181,7 @@ export function WorkspaceNode({
       style={{
         width: "100%",
         height: "100%",
-        borderRadius: 22,
+        borderRadius: 14,
         border: `1px solid ${selected ? "var(--cv-glass-shine)" : "rgba(255,255,255,0.07)"}`,
         background: "rgba(255,255,255,0.018)",
         position: "relative",

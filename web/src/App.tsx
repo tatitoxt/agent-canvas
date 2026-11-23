@@ -4,6 +4,8 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
+  useReactFlow,
+  type FinalConnectionState,
   type Node,
   type NodeMouseHandler,
   type OnNodeDrag,
@@ -11,6 +13,7 @@ import {
 import { AgentNode, OrchestratorNode, WorkspaceNode } from "./board/nodes";
 import { DelegationEdge } from "./board/edges";
 import { initialEdges, initialNodes } from "./board/mockData";
+import { DelegateDialog } from "./components/DelegateDialog";
 import { MissionStrip } from "./components/MissionStrip";
 import { NavRail } from "./components/NavRail";
 import { SpawnBar } from "./components/SpawnBar";
@@ -32,7 +35,9 @@ function Board() {
   const positions = useBoard((s) => s.positions);
   const moveNode = useBoard((s) => s.moveNode);
   const connected = useBoard((s) => s.connected);
+  const { screenToFlowPosition } = useReactFlow();
   const [openTerm, setOpenTerm] = useState<{ id: string; name: string } | null>(null);
+  const [delegateFrom, setDelegateFrom] = useState<string | null>(null);
 
   const counts = useMemo(() => {
     const c: Record<AgentStatus, number> = {
@@ -98,6 +103,16 @@ function Board() {
     }
   };
 
+  // Drag a source handle onto empty canvas → delegate dialog. Dropping on
+  // a node is reserved (incomplete connections are simply discarded).
+  const onConnectEnd = (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+    const from = connectionState.fromNode?.id;
+    if (!from || !agents[from]) return;
+    if (connectionState.isValid || connectionState.toNode) return;
+    void event; void screenToFlowPosition; // drop position reserved for placing the child node later
+    setDelegateFrom(from);
+  };
+
   const edges = useMemo(() => {
     if (!connected) return initialEdges;
     return Object.values(liveEdges).map((e) => ({
@@ -121,6 +136,7 @@ function Board() {
         edgeTypes={edgeTypes}
         onNodeClick={onNodeClick}
         onNodeDragStop={onNodeDragStop}
+        onConnectEnd={onConnectEnd}
         fitView
         fitViewOptions={{ padding: 0.18, maxZoom: 1.1 }}
         minZoom={0.15}
@@ -159,6 +175,9 @@ function Board() {
           name={openTerm.name}
           onClose={() => setOpenTerm(null)}
         />
+      )}
+      {delegateFrom && (
+        <DelegateDialog from={delegateFrom} onClose={() => setDelegateFrom(null)} />
       )}
     </div>
   );

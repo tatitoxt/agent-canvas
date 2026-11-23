@@ -13,21 +13,23 @@
    ============================================================ */
 
 :root {
-  /* base — dark warm neutral, alive (dot grid), not dead flat */
+  /* base — dark warm neutral, alive (dot grid), not dead flat
+     (Deska dark-warm is #0a0b0e; ours stays a hair warmer) */
   --cv-base: #0e0e10;
   --cv-dot: rgba(255, 255, 255, 0.045);
 
-  /* glass surfaces — you can see through them */
-  --cv-glass: rgba(255, 255, 255, 0.045);
-  --cv-glass-hi: rgba(255, 255, 255, 0.07);
-  --cv-glass-edge: rgba(255, 255, 255, 0.11);
-  --cv-glass-shine: rgba(255, 255, 255, 0.14);
-  --cv-blur: 22px;
-
   /* ink — warm whites */
   --cv-ink: #eceae6;
-  --cv-ink-dim: #a09b93;
-  --cv-ink-faint: #6b6760;
+  --cv-ink-dim: color-mix(in srgb, var(--cv-ink) 62%, transparent);
+  --cv-ink-faint: color-mix(in srgb, var(--cv-ink) 40%, transparent);
+
+  /* glass surfaces — color-mix steps of ink over base (Deska's
+     surface model: fg% mixed onto bg, themable from two tokens) */
+  --cv-glass: color-mix(in srgb, var(--cv-ink) 5%, var(--cv-base));
+  --cv-glass-hi: color-mix(in srgb, var(--cv-ink) 9%, var(--cv-base));
+  --cv-glass-edge: color-mix(in srgb, var(--cv-ink) 12%, transparent);
+  --cv-glass-shine: color-mix(in srgb, var(--cv-ink) 15%, transparent);
+  --cv-blur: 20px;
 
   /* one subtle accent — warm sand, felt in highlights not flat fills */
   --cv-accent: #c9a26b;
@@ -40,7 +42,9 @@
   --cv-done: #7ba389;
   --cv-idle: #86817a;
 
-  --cv-radius: 18px;
+  /* radii — Deska panel 12 / cluster 14 / pill 999 */
+  --cv-radius: 12px;
+  --cv-radius-region: 14px;
   --cv-radius-pill: 999px;
 
   color-scheme: dark;
