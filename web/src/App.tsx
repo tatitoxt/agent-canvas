@@ -1,21 +1,30 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Background,
   Controls,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
+  type Node,
+  type NodeMouseHandler,
 } from "@xyflow/react";
 import { AgentNode, OrchestratorNode } from "./board/nodes";
 import { DelegationEdge } from "./board/edges";
 import { initialEdges, initialNodes } from "./board/mockData";
 import { MissionStrip } from "./components/MissionStrip";
+import { SpawnBar } from "./components/SpawnBar";
+import { TerminalPanel } from "./components/TerminalPanel";
+import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
 
 const nodeTypes = { agent: AgentNode, orchestrator: OrchestratorNode };
 const edgeTypes = { delegation: DelegationEdge };
 
 function Board() {
+  const agents = useBoard((s) => s.agents);
+  const connected = useBoard((s) => s.connected);
+  const [openTerm, setOpenTerm] = useState<{ id: string; name: string } | null>(null);
+
   const counts = useMemo(() => {
     const c: Record<AgentStatus, number> = {
       working: 0,
@@ -27,17 +36,44 @@ function Board() {
     for (const n of initialNodes) {
       if (n.data.kind === "agent") c[n.data.status] += 1;
     }
+    for (const a of Object.values(agents)) {
+      const k = a.status === "exited" ? "done" : a.status;
+      if (k in c) c[k as AgentStatus] += 1;
+    }
     return c;
-  }, []);
+  }, [agents]);
+
+  const nodes = useMemo<Node<BoardNodeData>[]>(() => {
+    const live = Object.values(agents).map((a, i) => ({
+      id: a.id,
+      type: "agent" as const,
+      position: { x: 1420, y: 60 + i * 170 },
+      data: {
+        kind: "agent" as const,
+        name: a.name,
+        cli: "live",
+        status: a.status === "exited" ? ("done" as const) : a.status,
+        task: a.status === "exited" ? "session ended" : "live PTY — click to open",
+      },
+    }));
+    return [...initialNodes, ...live];
+  }, [agents]);
+
+  const onNodeClick: NodeMouseHandler = (_, node) => {
+    const a = agents[node.id];
+    if (a && a.status !== "exited") setOpenTerm({ id: a.id, name: a.name });
+  };
 
   return (
     <div className="relative h-full w-full">
       <MissionStrip counts={counts} />
+      <SpawnBar />
       <ReactFlow
-        nodes={initialNodes}
+        nodes={nodes}
         edges={initialEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        onNodeClick={onNodeClick}
         fitView
         fitViewOptions={{ padding: 0.18, maxZoom: 1.1 }}
         minZoom={0.15}
@@ -69,6 +105,14 @@ function Board() {
         />
         <Background gap={24} size={1} color="#1c2434" />
       </ReactFlow>
+      {connected === false && null}
+      {openTerm && (
+        <TerminalPanel
+          agentId={openTerm.id}
+          name={openTerm.name}
+          onClose={() => setOpenTerm(null)}
+        />
+      )}
     </div>
   );
 }
