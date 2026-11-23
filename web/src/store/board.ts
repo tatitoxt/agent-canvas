@@ -37,11 +37,14 @@ type BoardState = {
   workspaces: Record<string, LiveWorkspace>;
   /** Saved node positions — replayed from the daemon's layout table. */
   positions: Record<string, { x: number; y: number }>;
+  /** Drop position for a delegation child, keyed by parent agent id —
+   * applied when the delegation message names the child. */
+  pendingPositions: Record<string, { x: number; y: number }>;
   ptyListeners: Record<string, (bytes: Uint8Array) => void>;
   connect: (token: string) => void;
   spawn: (name: string, command: string, workspaceId?: string, permission?: string) => void;
   createWorkspace: (name: string, repo: string) => void;
-  delegate: (from: string, name: string, command: string, task: string, permission?: string) => void;
+  delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
   kill: (agentId: string) => void;
   moveNode: (agentId: string, x: number, y: number) => void;
   attachPty: (agentId: string, cb: (bytes: Uint8Array) => void) => void;
@@ -61,6 +64,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   edges: {},
   workspaces: {},
   positions: {},
+  pendingPositions: {},
   ptyListeners: {},
 
   connect: (token: string) => {
@@ -120,7 +124,14 @@ export const useBoard = create<BoardState>((set, get) => ({
               });
             }
             break;
-          case "delegation":
+          case "delegation": {
+            const pending = get().pendingPositions[msg.from];
+            if (pending) {
+              const next = { ...get().pendingPositions };
+              delete next[msg.from];
+              set({ pendingPositions: next });
+              get().moveNode(msg.to, pending.x, pending.y);
+            }
             set({
               edges: {
                 ...edges,
@@ -134,6 +145,7 @@ export const useBoard = create<BoardState>((set, get) => ({
               },
             });
             break;
+          }
           case "result": {
             const edge = edges[msg.edge_id];
             if (edge) {
@@ -207,8 +219,12 @@ export const useBoard = create<BoardState>((set, get) => ({
 
   createWorkspace: (name, repo) => client?.createWorkspace(name, repo),
 
-  delegate: (from, name, command, task, permission) =>
-    client?.delegate(from, name, command, task, ".", undefined, permission),
+  delegate: (from, name, command, task, permission, position) => {
+    if (position) {
+      set((s) => ({ pendingPositions: { ...s.pendingPositions, [from]: position } }));
+    }
+    client?.delegate(from, name, command, task, ".", undefined, permission);
+  },
 
   kill: (agentId) => client?.confirmDestructive(agentId, "kill"),
 

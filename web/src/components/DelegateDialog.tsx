@@ -15,9 +15,11 @@ const inputStyle: React.CSSProperties = {
 
 export function DelegateDialog({
   from,
+  at,
   onClose,
 }: {
   from: string;
+  at?: { x: number; y: number };
   onClose: () => void;
 }) {
   const delegate = useBoard((s) => s.delegate);
@@ -32,7 +34,7 @@ export function DelegateDialog({
 
   const submit = () => {
     if (!task.trim() || !command.trim()) return;
-    delegate(from, name.trim() || command.trim(), command.trim(), task.trim(), permission);
+    delegate(from, name.trim() || command.trim(), command.trim(), task.trim(), permission, at);
     onClose();
   };
 

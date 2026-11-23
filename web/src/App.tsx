@@ -39,7 +39,7 @@ function Board() {
   const connected = useBoard((s) => s.connected);
   const { screenToFlowPosition } = useReactFlow();
   const [openTerm, setOpenTerm] = useState<{ id: string; name: string } | null>(null);
-  const [delegateFrom, setDelegateFrom] = useState<string | null>(null);
+  const [delegateFrom, setDelegateFrom] = useState<{ from: string; at: { x: number; y: number } } | null>(null);
   const [nav, setNav] = useState("canvas");
 
   const counts = useMemo(() => {
@@ -113,8 +113,8 @@ function Board() {
     const from = connectionState.fromNode?.id;
     if (!from || !agents[from]) return;
     if (connectionState.isValid || connectionState.toNode) return;
-    void event; void screenToFlowPosition; // drop position reserved for placing the child node later
-    setDelegateFrom(from);
+    const { clientX, clientY } = "changedTouches" in event ? event.changedTouches[0] : event;
+    setDelegateFrom({ from, at: screenToFlowPosition({ x: clientX, y: clientY }) });
   };
 
   const edges = useMemo(() => {
@@ -193,7 +193,7 @@ function Board() {
         />
       )}
       {delegateFrom && (
-        <DelegateDialog from={delegateFrom} onClose={() => setDelegateFrom(null)} />
+        <DelegateDialog from={delegateFrom.from} at={delegateFrom.at} onClose={() => setDelegateFrom(null)} />
       )}
     </div>
   );
