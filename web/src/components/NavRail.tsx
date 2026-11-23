@@ -4,6 +4,7 @@ const ITEMS = [
   { key: "canvas", glyph: "◫", label: "Canvas" },
   { key: "inbox", glyph: "◱", label: "Inbox" },
   { key: "automations", glyph: "◈", label: "Automations" },
+  { key: "history", glyph: "↺", label: "History" },
   { key: "settings", glyph: "◌", label: "Settings" },
 ] as const;
 

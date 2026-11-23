@@ -494,8 +494,8 @@ fn snapshot(
         .delegations_snapshot()
         .unwrap_or_default()
         .into_iter()
-        .map(|(edge_id, from, to, task, result, state, files)| SnapshotDelegation {
-            edge_id, from, to, task, result, files: files.unwrap_or(0) as u32, state,
+        .map(|(edge_id, from, to, task, result, state, files, created_at, resolved_at)| SnapshotDelegation {
+            edge_id, from, to, task, result, files: files.unwrap_or(0) as u32, state, created_at, resolved_at,
         })
         .collect();
     let layout = state.store.layout_map().unwrap_or_default();

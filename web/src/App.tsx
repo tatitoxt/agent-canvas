@@ -20,6 +20,7 @@ import { SpawnBar } from "./components/SpawnBar";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { InboxPanel } from "./components/InboxPanel";
 import { AutomationsPanel } from "./components/AutomationsPanel";
+import { HistoryPanel } from "./components/HistoryPanel";
 import { CommandPalette } from "./components/CommandPalette";
 import { DelegationPanel } from "./components/DelegationPanel";
 import { SearchPanel } from "./components/SearchPanel";
@@ -247,6 +248,9 @@ function Board() {
         />
       )}
       {nav === "automations" && <AutomationsPanel />}
+      {nav === "history" && (
+        <HistoryPanel onOpenEdge={(id) => { setEdgeDetail(id); setNav("canvas"); }} />
+      )}
       {menu && (
         <ContextMenu
           x={menu.x}

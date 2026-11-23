@@ -53,6 +53,8 @@ export type SnapshotDelegation = {
   result?: string | null;
   files?: number;
   state: string;
+  created_at?: string | null;
+  resolved_at?: string | null;
 };
 
 export type AutomationDef = {

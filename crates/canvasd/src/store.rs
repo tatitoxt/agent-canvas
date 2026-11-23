@@ -11,7 +11,7 @@ use std::sync::Mutex;
 /// (id, name, command, worktree, status, workspace_id, permission, board_id)
 pub type AgentRow = (String, String, String, String, String, Option<String>, String, Option<String>);
 /// Row of the delegations table: (id, from, to, task, result, state,
-/// files_changed).
+/// files_changed, created_at, resolved_at).
 pub type DelegationRow = (
     String,
     String,
@@ -20,6 +20,8 @@ pub type DelegationRow = (
     Option<String>,
     String,
     Option<i64>,
+    Option<String>,
+    Option<String>,
 );
 /// Row of the automations table: (id, name, prompt, command, workspace_id,
 /// permission, idle_secs, on_approval, last_run_at).
@@ -310,7 +312,7 @@ impl Store {
     ) -> Result<Vec<DelegationRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
-            "SELECT id, from_node, to_node, task, result, state, files_changed FROM delegations ORDER BY created_at",
+            "SELECT id, from_node, to_node, task, result, state, files_changed, created_at, resolved_at FROM delegations ORDER BY created_at",
         )?;
         let rows = st.query_map([], |r| {
             Ok((
@@ -321,6 +323,8 @@ impl Store {
                 r.get(4)?,
                 r.get(5)?,
                 r.get(6)?,
+                r.get(7)?,
+                r.get(8)?,
             ))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)

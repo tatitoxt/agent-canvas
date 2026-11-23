@@ -213,6 +213,9 @@ pub struct SnapshotDelegation {
     /// Files the child changed in its worktree — what the edge produced.
     pub files: u32,
     pub state: String,
+    /// ISO timestamps — the history panel replays the graph over time.
+    pub created_at: Option<String>,
+    pub resolved_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

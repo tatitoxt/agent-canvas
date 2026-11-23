@@ -35,6 +35,8 @@ export type LiveEdge = {
   result?: string;
   files?: number;
   state: "delegated" | "returned" | "failed";
+  created_at?: string | null;
+  resolved_at?: string | null;
 };
 
 import type { AutomationDef } from "../daemon/client";
@@ -329,6 +331,8 @@ export const useBoard = create<BoardState>((set, get) => ({
                   result: d.result ?? undefined,
                   files: d.files,
                   state: d.state as LiveEdge["state"],
+                  created_at: d.created_at,
+                  resolved_at: d.resolved_at,
                 },
               ]),
             );

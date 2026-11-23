@@ -220,7 +220,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .delegations_snapshot()
                 .unwrap_or_default()
                 .into_iter()
-                .map(|(edge_id, from, to, task, result, state, files)| {
+                .map(|(edge_id, from, to, task, result, state, files, created_at, resolved_at)| {
                     protocol::SnapshotDelegation {
                         edge_id,
                         from,
@@ -229,6 +229,8 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                         result,
                         files: files.unwrap_or(0) as u32,
                         state,
+                        created_at,
+                        resolved_at,
                     }
                 })
                 .collect(),
