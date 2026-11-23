@@ -76,6 +76,9 @@ type BoardState = {
   setActiveBoard: (boardId: string) => void;
   createBoard: (name: string) => void;
   moveToBoard: (nodeId: string, boardId: string) => void;
+  renameNode: (nodeId: string, name: string) => void;
+  renameBoard: (boardId: string, name: string) => void;
+  deleteBoard: (boardId: string) => void;
   spawn: (name: string, command: string, workspaceId?: string, permission?: string) => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
@@ -390,6 +393,10 @@ export const useBoard = create<BoardState>((set, get) => ({
   createBoard: (name) => client?.createBoard(name),
 
   moveToBoard: (nodeId, boardId) => client?.moveToBoard(nodeId, boardId),
+
+  renameNode: (nodeId, name) => client?.renameNode(nodeId, name),
+  renameBoard: (boardId, name) => client?.renameBoard(boardId, name),
+  deleteBoard: (boardId) => client?.deleteBoard(boardId),
 
   spawn: (name, command, workspaceId, permission) =>
     client?.spawnAgent(name, command, ".", workspaceId, permission, get().activeBoard),

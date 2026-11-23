@@ -374,6 +374,33 @@ fn handle_client_msg(
                 }),
             }
         }
+        ClientMsg::RenameNode { node_id, name } => {
+            match state.store.node_renamed(&node_id, &name) {
+                Ok(true) => send_control(ServerMsg::NodeRenamed { node_id, name }),
+                _ => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: "no such node".to_string(),
+                }),
+            }
+        }
+        ClientMsg::RenameBoard { board_id, name } => {
+            match state.store.board_renamed(&board_id, &name) {
+                Ok(true) => send_control(ServerMsg::BoardRenamed { board_id, name }),
+                _ => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: "no such board".to_string(),
+                }),
+            }
+        }
+        ClientMsg::DeleteBoard { board_id } => {
+            match state.store.board_deleted(&board_id) {
+                Ok(true) => send_control(ServerMsg::BoardDeleted { board_id }),
+                _ => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: "board not empty or is main".to_string(),
+                }),
+            }
+        }
         ClientMsg::CreateWorkspace { name, repo, board_id } => {
             // Path validated on spawn side; a workspace is just a named
             // container + its repo.

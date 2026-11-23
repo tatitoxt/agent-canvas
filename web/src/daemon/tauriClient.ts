@@ -117,6 +117,18 @@ export class TauriCanvasClient {
     invoke("move_to_board", { nodeId, boardId }).catch(console.error);
   }
 
+  renameNode(nodeId: string, name: string) {
+    invoke("rename_node", { nodeId, name }).catch(console.error);
+  }
+
+  renameBoard(boardId: string, name: string) {
+    invoke("rename_board", { boardId, name }).catch(console.error);
+  }
+
+  deleteBoard(boardId: string) {
+    invoke("delete_board", { boardId }).catch(console.error);
+  }
+
   transcript(agentId: string) {
     void invoke("transcript", { agentId }).catch(console.error);
   }

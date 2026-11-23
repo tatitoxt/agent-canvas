@@ -198,6 +198,47 @@ impl Store {
         Ok(n > 0)
     }
 
+    /// Rename an agent or workspace node.
+    pub fn node_renamed(&self, node_id: &str, name: &str) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let n = conn.execute(
+            "UPDATE agents SET name = ?2 WHERE id = ?1",
+            (node_id, name),
+        )? + conn.execute(
+            "UPDATE workspaces SET name = ?2 WHERE id = ?1",
+            (node_id, name),
+        )?;
+        Ok(n > 0)
+    }
+
+    pub fn board_renamed(&self, board_id: &str, name: &str) -> Result<bool> {
+        let n = self.conn.lock().unwrap().execute(
+            "UPDATE boards SET name = ?2 WHERE id = ?1",
+            (board_id, name),
+        )?;
+        Ok(n > 0)
+    }
+
+    /// A board can only be deleted when it holds no nodes — same rule as
+    /// Deska Spaces so work is never silently discarded.
+    pub fn board_deleted(&self, board_id: &str) -> Result<bool> {
+        if board_id == "main" {
+            return Ok(false);
+        }
+        let conn = self.conn.lock().unwrap();
+        let used: i64 = conn.query_row(
+            "SELECT (SELECT COUNT(*) FROM agents WHERE board_id = ?1) +
+                    (SELECT COUNT(*) FROM workspaces WHERE board_id = ?1)",
+            (board_id,),
+            |r| r.get(0),
+        )?;
+        if used > 0 {
+            return Ok(false);
+        }
+        let n = conn.execute("DELETE FROM boards WHERE id = ?1", (board_id,))?;
+        Ok(n > 0)
+    }
+
     /// Board an agent lives on — a delegation child inherits its parent's.
     pub fn agent_board(&self, id: &str) -> Result<Option<String>> {
         let conn = self.conn.lock().unwrap();

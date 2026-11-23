@@ -159,6 +159,53 @@ fn move_to_board(
 }
 
 #[tauri::command]
+fn rename_node(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    node_id: String,
+    name: String,
+) -> Result<(), String> {
+    match state.store.node_renamed(&node_id, &name) {
+        Ok(true) => {
+            emit_control(&app, &ServerMsg::NodeRenamed { node_id, name });
+            Ok(())
+        }
+        _ => Err("no such node".to_string()),
+    }
+}
+
+#[tauri::command]
+fn rename_board(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    board_id: String,
+    name: String,
+) -> Result<(), String> {
+    match state.store.board_renamed(&board_id, &name) {
+        Ok(true) => {
+            emit_control(&app, &ServerMsg::BoardRenamed { board_id, name });
+            Ok(())
+        }
+        _ => Err("no such board".to_string()),
+    }
+}
+
+#[tauri::command]
+fn delete_board(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    board_id: String,
+) -> Result<(), String> {
+    match state.store.board_deleted(&board_id) {
+        Ok(true) => {
+            emit_control(&app, &ServerMsg::BoardDeleted { board_id });
+            Ok(())
+        }
+        _ => Err("board not empty or is main".to_string()),
+    }
+}
+
+#[tauri::command]
 fn create_workspace(
     app: AppHandle,
     state: State<'_, CanvasState>,
@@ -657,6 +704,9 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             spawn_agent,
             create_board,
+            rename_node,
+            rename_board,
+            delete_board,
             create_workspace,
             move_to_board,
             delegate,

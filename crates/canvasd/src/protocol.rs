@@ -36,6 +36,12 @@ pub enum ClientMsg {
     CreateBoard { name: String },
     /// Move an agent or workspace node to another board.
     MoveToBoard { node_id: String, board_id: String },
+    /// Rename an agent or workspace node.
+    RenameNode { node_id: String, name: String },
+    /// Rename a board.
+    RenameBoard { board_id: String, name: String },
+    /// Delete a board — refused while it still holds nodes.
+    DeleteBoard { board_id: String },
     PtyInput {
         agent_id: String,
         /// Base64-encoded bytes to write to the PTY.
@@ -161,6 +167,12 @@ pub enum ServerMsg {
     BoardCreated { board_id: String, name: String },
     /// A node (agent or workspace) changed boards.
     BoardMoved { node_id: String, board_id: String },
+    /// A node was renamed.
+    NodeRenamed { node_id: String, name: String },
+    /// A board was renamed.
+    BoardRenamed { board_id: String, name: String },
+    /// A board was deleted (only emitted for empty boards).
+    BoardDeleted { board_id: String },
     /// Board state replay sent once when a client connects: every agent the
     /// board knows (live and dead) plus saved node positions.
     Snapshot {

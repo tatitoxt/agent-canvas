@@ -20,11 +20,17 @@ export function ContextMenu({
 }) {
   const boards = useBoard((s) => s.boards);
   const moveToBoard = useBoard((s) => s.moveToBoard);
+  const renameNode = useBoard((s) => s.renameNode);
+  const currentName = useBoard(
+    (s) => s.agents[nodeId]?.name ?? s.workspaces[nodeId]?.name ?? "",
+  );
   const kill = useBoard((s) => s.kill);
   const current = useBoard(
     (s) => s.agents[nodeId]?.board_id ?? s.workspaces[nodeId]?.board_id ?? "main",
   );
   const [confirmKill, setConfirmKill] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState(currentName);
   const [boardsOpen, setBoardsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -74,6 +80,35 @@ export function ContextMenu({
       {isAgent && (
         <button style={item} onClick={() => { onOpenTerminal(); onClose(); }}>
           open terminal
+        </button>
+      )}
+      {renaming ? (
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && name.trim()) {
+              renameNode(nodeId, name.trim());
+              onClose();
+            }
+            if (e.key === "Escape") onClose();
+          }}
+          onBlur={() => setRenaming(false)}
+          style={{
+            ...item,
+            border: "1px solid var(--cv-glass-edge)",
+            background: "rgba(0,0,0,0.3)",
+            outline: "none",
+            width: "calc(100% - 24px)",
+            margin: "0 12px",
+            padding: "5px 0",
+            cursor: "text",
+          }}
+        />
+      ) : (
+        <button style={{ ...item, color: "var(--cv-ink-dim)" }} onClick={() => setRenaming(true)}>
+          rename…
         </button>
       )}
       <div style={{ position: "relative" }}>

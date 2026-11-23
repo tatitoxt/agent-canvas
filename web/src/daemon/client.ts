@@ -17,6 +17,9 @@ export type ServerMsg =
   | { type: "workspace_created"; workspace_id: string; name: string; repo: string; board_id?: string | null }
   | { type: "board_created"; board_id: string; name: string }
   | { type: "board_moved"; node_id: string; board_id: string }
+  | { type: "node_renamed"; node_id: string; name: string }
+  | { type: "board_renamed"; board_id: string; name: string }
+  | { type: "board_deleted"; board_id: string }
   | { type: "status"; agent_id: string; status: string }
   | { type: "activity"; agent_id: string; line: string }
   | { type: "diff"; agent_id: string; files: number; paths?: string[]; branch?: string }
@@ -129,6 +132,18 @@ export class CanvasClient {
 
   moveToBoard(nodeId: string, boardId: string) {
     this.send({ cmd: "move_to_board", node_id: nodeId, board_id: boardId });
+  }
+
+  renameNode(nodeId: string, name: string) {
+    this.send({ cmd: "rename_node", node_id: nodeId, name });
+  }
+
+  renameBoard(boardId: string, name: string) {
+    this.send({ cmd: "rename_board", board_id: boardId, name });
+  }
+
+  deleteBoard(boardId: string) {
+    this.send({ cmd: "delete_board", board_id: boardId });
   }
 
   /** Raw keystrokes into the agent's PTY. */
