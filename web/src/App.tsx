@@ -21,6 +21,7 @@ import { TerminalPanel } from "./components/TerminalPanel";
 import { InboxPanel } from "./components/InboxPanel";
 import { AutomationsPanel } from "./components/AutomationsPanel";
 import { CommandPalette } from "./components/CommandPalette";
+import { DelegationPanel } from "./components/DelegationPanel";
 import { Topbar } from "./components/Topbar";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
@@ -40,6 +41,7 @@ function Board() {
   const moveNode = useBoard((s) => s.moveNode);
   const connected = useBoard((s) => s.connected);
   const approvals = useBoard((s) => s.approvals);
+  const attention = useBoard((s) => s.attention);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const viewCmdN = useBoard((s) => s.viewCmdN);
   useEffect(() => {
@@ -49,6 +51,7 @@ function Board() {
   const [delegateFrom, setDelegateFrom] = useState<{ from: string; at: { x: number; y: number } } | null>(null);
   const [nav, setNav] = useState("canvas");
   const [palette, setPalette] = useState(false);
+  const [edgeDetail, setEdgeDetail] = useState<string | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -74,11 +77,15 @@ function Board() {
       }
     }
     for (const a of Object.values(agents)) {
-      const k = a.status === "exited" ? "done" : a.status;
+      const k = a.status === "exited"
+        ? "done"
+        : attention[a.id]
+          ? "blocked"
+          : a.status;
       if (k in c) c[k as AgentStatus] += 1;
     }
     return c;
-  }, [agents, connected]);
+  }, [agents, connected, attention]);
 
   const nodes = useMemo<Node<BoardNodeData>[]>(() => {
     const wsNodes: Node<BoardNodeData>[] = Object.values(workspaces).map((w) => ({
@@ -106,7 +113,11 @@ function Board() {
           cli: (a.command ?? "bash").split(/\s+/)[0].toLowerCase(),
           permission: a.permission,
           files: a.files,
-          status: a.status === "exited" ? ("done" as const) : a.status,
+          status: a.status === "exited"
+            ? ("done" as const)
+            : attention[a.id]
+              ? ("blocked" as const)
+              : a.status,
           task: a.status === "exited" ? "session ended" : (a.lastLine ?? "live PTY — click to open"),
           pendingApproval: approvals[a.id],
           branch: a.branch,
@@ -116,7 +127,7 @@ function Board() {
     // Mock board only renders in offline/demo mode — with a daemon the
     // canvas shows reality, not fixtures.
     return connected ? [...wsNodes, ...live] : [...initialNodes, ...live];
-  }, [agents, positions, connected, workspaces, approvals]);
+  }, [agents, positions, connected, workspaces, approvals, attention]);
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     const a = agents[node.id];
@@ -167,6 +178,8 @@ function Board() {
         onNodeClick={onNodeClick}
         onNodeDragStop={onNodeDragStop}
         onConnectEnd={onConnectEnd}
+        onEdgeClick={(_, edge) => setEdgeDetail(edge.id)}
+        onPaneClick={() => setEdgeDetail(null)}
         fitView
         fitViewOptions={{ padding: 0.18, maxZoom: 1.1 }}
         minZoom={0.15}
@@ -208,6 +221,13 @@ function Board() {
         />
       )}
       {nav === "automations" && <AutomationsPanel />}
+      {edgeDetail && liveEdges[edgeDetail] && (
+        <DelegationPanel
+          edgeId={edgeDetail}
+          onClose={() => setEdgeDetail(null)}
+          onOpenAgent={(id, name) => setOpenTerm({ id, name })}
+        />
+      )}
       {openTerm && (
         <TerminalPanel
           agentId={openTerm.id}
