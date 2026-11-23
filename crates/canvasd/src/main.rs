@@ -3,11 +3,9 @@
 //! Binds to 127.0.0.1 only. Every connection requires the per-launch session
 //! token (`?token=` on /ws, `Authorization: Bearer` on /api/*).
 
-mod agent;
-mod protocol;
-mod store;
-
-use agent::AgentManager;
+use canvasd::agent::AgentManager;
+use canvasd::protocol;
+use canvasd::store;
 use anyhow::Result;
 use axum::{
     extract::{
@@ -35,6 +33,8 @@ struct AppState {
     agents: Arc<AgentManager>,
     store: Arc<store::Store>,
     repo_root: PathBuf,
+    /// agent_id → delegation edge_id: which child still owes a CANVAS_RESULT.
+    pending_results: Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
 }
 
 /// Wire event: control (JSON) or raw PTY output (binary).
@@ -57,6 +57,44 @@ struct Health {
 
 async fn health() -> Json<Health> {
     Json(Health { status: "ok", version: env!("CARGO_PKG_VERSION") })
+}
+
+/// Spawn a PTY agent wired to the event bus + store. Used by both
+/// `spawn_agent` (standalone node) and `delegate` (edge-owned child).
+fn spawn_agent(state: &Arc<AppState>, name: &str, command: &str, cwd: &str) -> Result<String> {
+    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<(String, Vec<u8>)>();
+    let (exit_tx, mut exit_rx) = mpsc::unbounded_channel::<String>();
+    let ev = state.events.clone();
+    tokio::spawn(async move {
+        while let Some((id, bytes)) = out_rx.recv().await {
+            let _ = ev.send(Event::PtyOutput(id, bytes));
+        }
+    });
+    let ev2 = state.events.clone();
+    let store2 = state.store.clone();
+    let pending = state.pending_results.clone();
+    tokio::spawn(async move {
+        while let Some(id) = exit_rx.recv().await {
+            let _ = store2.agent_status(&id, "exited");
+            pending.lock().unwrap().remove(&id);
+            let _ = ev2.send(Event::Control(ServerMsg::Status {
+                agent_id: id,
+                status: AgentStatus::Exited,
+            }));
+        }
+    });
+    let id = state
+        .agents
+        .spawn(name, command, cwd, &state.repo_root, out_tx, exit_tx)?;
+    if let Err(e) = state.store.agent_spawned(
+        &id,
+        name,
+        command,
+        &format!(".canvas-worktrees/{id}"),
+    ) {
+        warn!(error = %e, "failed to persist agent");
+    }
+    Ok(id)
 }
 
 async fn ws_handler(
@@ -88,6 +126,15 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                     name,
                     command,
                     worktree,
+                })
+                .collect(),
+            delegations: state
+                .store
+                .delegations_snapshot()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(edge_id, from, to, task, result, state)| {
+                    protocol::SnapshotDelegation { edge_id, from, to, task, result, state }
                 })
                 .collect(),
             layout: state.store.layout_map().unwrap_or_default(),
@@ -183,45 +230,34 @@ fn handle_client_msg(
 
     match msg {
         ClientMsg::SpawnAgent { name, command, cwd } => {
-            // Channel for PTY output → broadcast events.
-            let (out_tx, mut out_rx) = mpsc::unbounded_channel::<(String, Vec<u8>)>();
-            let (exit_tx, mut exit_rx) = mpsc::unbounded_channel::<String>();
-            let ev = state.events.clone();
-            tokio::spawn(async move {
-                while let Some((id, bytes)) = out_rx.recv().await {
-                    let _ = ev.send(Event::PtyOutput(id, bytes));
-                }
-            });
-            let ev2 = state.events.clone();
-            let store2 = state.store.clone();
-            tokio::spawn(async move {
-                while let Some(id) = exit_rx.recv().await {
-                    let _ = store2.agent_status(&id, "exited");
-                    let _ = ev2.send(Event::Control(ServerMsg::Status {
-                        agent_id: id,
-                        status: AgentStatus::Exited,
-                    }));
-                }
-            });
-
-            match state.agents.spawn(
-                &name,
-                &command,
-                &cwd,
-                &state.repo_root,
-                out_tx,
-                exit_tx,
-            ) {
+            match spawn_agent(state, &name, &command, &cwd) {
+                Ok(id) => send_control(ServerMsg::Spawned { agent_id: id, name }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
+            }
+        }
+        ClientMsg::Delegate { from, name, command, task, cwd } => {
+            // A delegation IS a spawn + a persisted edge. The edge returns
+            // when the child's PTY prints `CANVAS_RESULT: <summary>`.
+            match spawn_agent(state, &name, &command, &cwd) {
                 Ok(id) => {
-                    if let Err(e) = state.store.agent_spawned(
-                        &id,
-                        &name,
-                        &command,
-                        &format!(".canvas-worktrees/{id}"),
-                    ) {
-                        warn!(error = %e, "failed to persist agent");
+                    let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
+                    if let Err(e) = state.store.delegation_created(&edge_id, &from, &id, &task) {
+                        warn!(error = %e, "failed to persist delegation");
                     }
-                    send_control(ServerMsg::Spawned { agent_id: id, name });
+                    state.pending_results.lock().unwrap().insert(id.clone(), edge_id.clone());
+                    send_control(ServerMsg::Spawned {
+                        agent_id: id.clone(),
+                        name,
+                    });
+                    send_control(ServerMsg::Delegation {
+                        edge_id,
+                        from,
+                        to: id,
+                        task,
+                    });
                 }
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: None,
@@ -338,6 +374,7 @@ async fn main() -> Result<()> {
         agents: Arc::new(AgentManager::new()),
         store,
         repo_root,
+        pending_results: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     });
 
     let api = Router::new()
@@ -362,12 +399,44 @@ async fn main() -> Result<()> {
         let agents = state.agents.clone();
         let ev = state.events.clone();
         let store = state.store.clone();
+        let pending = state.pending_results.clone();
         tokio::spawn(async move {
             let mut last: std::collections::HashMap<String, &'static str> =
                 std::collections::HashMap::new();
             let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
             loop {
                 tick.tick().await;
+                // Result-return pass: a delegation edge resolves when the
+                // child's PTY prints `CANVAS_RESULT: <summary>` on a line.
+                {
+                    let mut resolved: Vec<(String, String, String)> = Vec::new();
+                    {
+                        let map = pending.lock().unwrap();
+                        for (agent_id, edge_id) in map.iter() {
+                            let summary = agents.tail_text(agent_id).and_then(|tail| {
+                                tail.lines()
+                                    .rev()
+                                    .find_map(|l| l.trim().strip_prefix("CANVAS_RESULT:"))
+                                    .map(|s| s.trim().to_string())
+                            });
+                            if let Some(summary) = summary {
+                                resolved.push((
+                                    agent_id.clone(),
+                                    edge_id.clone(),
+                                    summary.trim().to_string(),
+                                ));
+                            }
+                        }
+                    }
+                    for (agent_id, edge_id, summary) in resolved {
+                        pending.lock().unwrap().remove(&agent_id);
+                        let _ = store.delegation_resolved(&edge_id, &summary);
+                        let _ = ev.send(Event::Control(ServerMsg::Result {
+                            edge_id,
+                            summary,
+                        }));
+                    }
+                }
                 for (id, status) in agents.statuses() {
                     if last.get(&id) != Some(&status) {
                         last.insert(id.clone(), status);
