@@ -65,7 +65,7 @@ pub enum ClientMsg {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMsg {
-    Spawned { agent_id: String, name: String, workspace_id: Option<String> },
+    Spawned { agent_id: String, name: String, command: String, workspace_id: Option<String> },
     Status { agent_id: String, status: AgentStatus },
     Error { agent_id: Option<String>, message: String },
     Delegation { edge_id: String, from: String, to: String, task: String },

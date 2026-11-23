@@ -6,6 +6,7 @@ import type { AgentStatus } from "../board/types";
 export type LiveAgent = {
   id: string;
   name: string;
+  command?: string;
   status: AgentStatus | "exited";
   workspace_id?: string | null;
 };
@@ -74,6 +75,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                 [msg.agent_id]: {
                   id: msg.agent_id,
                   name: msg.name,
+                  command: msg.command,
                   status: "working",
                   workspace_id: msg.workspace_id ?? null,
                 },
@@ -138,6 +140,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                 {
                   id: a.agent_id,
                   name: a.name,
+                  command: a.command,
                   status: a.status as LiveAgent["status"],
                   workspace_id: a.workspace_id ?? null,
                 },

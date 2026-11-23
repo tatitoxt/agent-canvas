@@ -18,6 +18,7 @@ import { MissionStrip } from "./components/MissionStrip";
 import { NavRail } from "./components/NavRail";
 import { SpawnBar } from "./components/SpawnBar";
 import { TerminalPanel } from "./components/TerminalPanel";
+import { Topbar } from "./components/Topbar";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
 
@@ -81,7 +82,7 @@ function Board() {
         data: {
           kind: "agent" as const,
           name: a.name,
-          cli: "live",
+          cli: (a.command ?? "bash").split(/\s+/)[0].toLowerCase(),
           status: a.status === "exited" ? ("done" as const) : a.status,
           task: a.status === "exited" ? "session ended" : "live PTY — click to open",
         },
@@ -127,6 +128,7 @@ function Board() {
   return (
     <div className="relative h-full w-full">
       <NavRail active="canvas" />
+      <Topbar />
       <MissionStrip counts={counts} />
       <SpawnBar />
       <ReactFlow

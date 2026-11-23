@@ -11,7 +11,7 @@ export type SnapshotAgent = {
 };
 
 export type ServerMsg =
-  | { type: "spawned"; agent_id: string; name: string; workspace_id?: string | null }
+  | { type: "spawned"; agent_id: string; name: string; command?: string; workspace_id?: string | null }
   | { type: "workspace_created"; workspace_id: string; name: string; repo: string }
   | { type: "status"; agent_id: string; status: string }
   | { type: "error"; agent_id: string | null; message: string }

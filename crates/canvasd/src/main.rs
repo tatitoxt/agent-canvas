@@ -272,7 +272,7 @@ fn handle_client_msg(
         }
         ClientMsg::SpawnAgent { name, command, cwd, workspace_id } => {
             match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref()) {
-                Ok(id) => send_control(ServerMsg::Spawned { agent_id: id, name, workspace_id }),
+                Ok(id) => send_control(ServerMsg::Spawned { agent_id: id, name, command, workspace_id }),
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: None,
                     message: e.to_string(),
@@ -292,6 +292,7 @@ fn handle_client_msg(
                     send_control(ServerMsg::Spawned {
                         agent_id: id.clone(),
                         name,
+                        command,
                         workspace_id: workspace_id.clone(),
                     });
                     send_control(ServerMsg::Delegation {
