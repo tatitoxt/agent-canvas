@@ -86,6 +86,7 @@ function Board() {
           name: a.name,
           cli: (a.command ?? "bash").split(/\s+/)[0].toLowerCase(),
           permission: a.permission,
+          files: a.files,
           status: a.status === "exited" ? ("done" as const) : a.status,
           task: a.status === "exited" ? "session ended" : (a.lastLine ?? "live PTY — click to open"),
         },

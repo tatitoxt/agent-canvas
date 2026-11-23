@@ -272,6 +272,11 @@ impl AgentManager {
         self.agents.lock().unwrap().keys().cloned().collect()
     }
 
+    /// Agent's worktree path — for the diff ticker (`git status`).
+    pub fn worktree(&self, id: &str) -> Option<PathBuf> {
+        self.agents.lock().unwrap().get(id).map(|a| a.worktree.clone())
+    }
+
     /// Rolling PTY tail as text, for the CANVAS_RESULT scanner.
     pub fn tail_text(&self, id: &str) -> Option<String> {
         self.agents
@@ -330,6 +335,17 @@ fn strip_ansi(s: &str) -> String {
         }
     }
     out
+}
+
+/// Files with uncommitted changes in a worktree — the node's "files
+/// changed" badge. Untracked files count too (`??` lines).
+pub fn dirty_file_count(worktree: &Path) -> u32 {
+    std::process::Command::new("git")
+        .args(["status", "--porcelain=v1"])
+        .current_dir(worktree)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).lines().count() as u32)
+        .unwrap_or(0)
 }
 
 fn uuid_like() -> String {

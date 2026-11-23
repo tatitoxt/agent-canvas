@@ -3,7 +3,7 @@
 //! Binds to 127.0.0.1 only. Every connection requires the per-launch session
 //! token (`?token=` on /ws, `Authorization: Bearer` on /api/*).
 
-use canvasd::agent::{last_visible_line, AgentManager};
+use canvasd::agent::{dirty_file_count, last_visible_line, AgentManager};
 use canvasd::protocol;
 use canvasd::store;
 use anyhow::Result;
@@ -456,9 +456,13 @@ async fn main() -> Result<()> {
                 std::collections::HashMap::new();
             let mut last_line: std::collections::HashMap<String, String> =
                 std::collections::HashMap::new();
+            let mut last_diff: std::collections::HashMap<String, u32> =
+                std::collections::HashMap::new();
             let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
+            let mut tick_n: u32 = 0;
             loop {
                 tick.tick().await;
+                tick_n = tick_n.wrapping_add(1);
                 // Result-return pass: a delegation edge resolves when the
                 // child's PTY prints `CANVAS_RESULT: <summary>` on a line.
                 {
@@ -501,6 +505,22 @@ async fn main() -> Result<()> {
                                 agent_id: id,
                                 line,
                             }));
+                        }
+                    }
+                }
+                // Diff pass (every 3rd tick): uncommitted file count per
+                // worktree — the node badge shows what the agent produced.
+                if tick_n % 3 == 0 {
+                    for id in agents.ids() {
+                        if let Some(wt) = agents.worktree(&id) {
+                            let files = dirty_file_count(&wt);
+                            if last_diff.get(&id) != Some(&files) {
+                                last_diff.insert(id.clone(), files);
+                                let _ = ev.send(Event::Control(ServerMsg::Diff {
+                                    agent_id: id,
+                                    files,
+                                }));
+                            }
                         }
                     }
                 }

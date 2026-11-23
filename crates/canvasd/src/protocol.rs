@@ -109,6 +109,9 @@ pub enum ServerMsg {
     /// line, ANSI-stripped. Deska's "background work" summaries: the node
     /// shows what the agent is doing without opening the terminal.
     Activity { agent_id: String, line: String },
+    /// Files with uncommitted changes in the agent's worktree — the
+    /// node's diff badge; what the delegation actually produced.
+    Diff { agent_id: String, files: u32 },
     Error { agent_id: Option<String>, message: String },
     Delegation { edge_id: String, from: String, to: String, task: String },
     Result { edge_id: String, summary: String },

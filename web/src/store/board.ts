@@ -9,6 +9,7 @@ export type LiveAgent = {
   command?: string;
   permission?: string;
   lastLine?: string;
+  files?: number;
   status: AgentStatus | "exited";
   workspace_id?: string | null;
 };
@@ -120,6 +121,16 @@ export const useBoard = create<BoardState>((set, get) => ({
                 agents: {
                   ...agents,
                   [msg.agent_id]: { ...agents[msg.agent_id], lastLine: msg.line },
+                },
+              });
+            }
+            break;
+          case "diff":
+            if (agents[msg.agent_id]) {
+              set({
+                agents: {
+                  ...agents,
+                  [msg.agent_id]: { ...agents[msg.agent_id], files: msg.files },
                 },
               });
             }

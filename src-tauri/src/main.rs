@@ -8,7 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use base64::Engine;
-use canvasd::agent::AgentManager;
+use canvasd::agent::{dirty_file_count, AgentManager};
 use canvasd::protocol::{AgentStatus, ServerMsg, SnapshotAgent, SnapshotDelegation};
 use canvasd::store::Store;
 use std::collections::HashMap;
@@ -291,13 +291,16 @@ fn main() {
                 pending_results: Mutex::new(HashMap::new()),
             });
 
-            // 1s ticker: derived statuses + CANVAS_RESULT returns.
+            // 1s ticker: derived statuses + CANVAS_RESULT returns + diffs.
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let mut last: HashMap<String, &'static str> = HashMap::new();
+                let mut last_diff: HashMap<String, u32> = HashMap::new();
                 let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
+                let mut tick_n: u32 = 0;
                 loop {
                     tick.tick().await;
+                    tick_n = tick_n.wrapping_add(1);
                     let state = handle.state::<CanvasState>();
 
                     // Result returns.
@@ -320,6 +323,22 @@ fn main() {
                         state.pending_results.lock().unwrap().remove(&agent_id);
                         let _ = state.store.delegation_resolved(&edge_id, &summary);
                         emit_control(&handle, &ServerMsg::Result { edge_id, summary });
+                    }
+
+                    // Diff pass (every 3rd tick): files changed per worktree.
+                    if tick_n % 3 == 0 {
+                        for id in state.agents.ids() {
+                            if let Some(wt) = state.agents.worktree(&id) {
+                                let files = dirty_file_count(&wt);
+                                if last_diff.get(&id) != Some(&files) {
+                                    last_diff.insert(id.clone(), files);
+                                    emit_control(
+                                        &handle,
+                                        &ServerMsg::Diff { agent_id: id, files },
+                                    );
+                                }
+                            }
+                        }
                     }
 
                     // Derived statuses.

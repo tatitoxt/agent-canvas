@@ -108,6 +108,14 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           >
             {STATUS_LABEL[data.status]}
           </span>
+          {data.files != null && data.files > 0 && (
+            <span
+              style={{ fontSize: 10, color: "var(--cv-ink-faint)", fontWeight: 500 }}
+              title="uncommitted changes in worktree"
+            >
+              {data.files} file{data.files === 1 ? "" : "s"}
+            </span>
+          )}
           {data.permission && data.permission !== "supervised" && (
             <span
               className="glass-pill"

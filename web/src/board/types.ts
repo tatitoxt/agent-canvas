@@ -8,6 +8,8 @@ export type AgentNodeData = {
   permission?: string;
   task?: string;
   lastOutput?: string;
+  /** Uncommitted files in the agent's worktree — the diff badge. */
+  files?: number;
 };
 
 export type OrchestratorNodeData = {
