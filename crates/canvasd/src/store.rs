@@ -117,6 +117,15 @@ impl Store {
         Ok(())
     }
 
+    /// An agent's permission level — used to clamp a delegation child's
+    /// level to at most its parent's.
+    pub fn agent_permission(&self, id: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare("SELECT permission FROM agents WHERE id = ?1")?;
+        let mut rows = st.query_map([id], |r| r.get::<_, String>(0))?;
+        Ok(rows.next().transpose()?)
+    }
+
     pub fn agent_status(&self, id: &str, status: &str) -> Result<()> {
         self.conn.lock().unwrap().execute(
             "UPDATE agents SET status = ?2, exited_at = CASE WHEN ?2 = 'exited' THEN datetime('now') ELSE exited_at END WHERE id = ?1",

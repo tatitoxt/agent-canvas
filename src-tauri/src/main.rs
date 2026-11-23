@@ -157,7 +157,9 @@ fn delegate(
     workspace_id: Option<String>,
     permission: Option<String>,
 ) -> Result<String, String> {
-    let level = canvasd::protocol::normalize_permission(permission.as_deref());
+    let parent_level = state.store.agent_permission(&from).ok().flatten();
+    let requested = canvasd::protocol::normalize_permission(permission.as_deref());
+    let level = canvasd::protocol::clamp_to_parent(requested, parent_level.as_deref());
     let id = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref(), level)?;
     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
     let _ = state.store.delegation_created(&edge_id, &from, &id, &task);

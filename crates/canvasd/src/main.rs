@@ -286,7 +286,9 @@ fn handle_client_msg(
         ClientMsg::Delegate { from, name, command, task, cwd, workspace_id, permission } => {
             // A delegation IS a spawn + a persisted edge. The edge returns
             // when the child's PTY prints `CANVAS_RESULT: <summary>`.
-            let level = protocol::normalize_permission(permission.as_deref());
+            let parent_level = state.store.agent_permission(&from).ok().flatten();
+            let requested = protocol::normalize_permission(permission.as_deref());
+            let level = protocol::clamp_to_parent(requested, parent_level.as_deref());
             match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level) {
                 Ok(id) => {
                     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);

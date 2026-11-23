@@ -26,10 +26,13 @@ export function DelegateDialog({
   const [name, setName] = useState(`${parent?.name ?? "agent"}-task`);
   const [command, setCommand] = useState("bash");
   const [task, setTask] = useState("");
+  // Children inherit the parent's permission level — a supervised parent
+  // can't spawn a more autonomous child than itself.
+  const [permission, setPermission] = useState(parent?.permission ?? "supervised");
 
   const submit = () => {
     if (!task.trim() || !command.trim()) return;
-    delegate(from, name.trim() || command.trim(), command.trim(), task.trim());
+    delegate(from, name.trim() || command.trim(), command.trim(), task.trim(), permission);
     onClose();
   };
 
@@ -76,6 +79,17 @@ export function DelegateDialog({
         value={task}
         onChange={(e) => setTask(e.target.value)}
       />
+      <select
+        style={{ ...inputStyle, cursor: "pointer" }}
+        value={permission}
+        onChange={(e) => setPermission(e.target.value)}
+        title="child permission level"
+      >
+        <option value="supervised">supervised</option>
+        <option value="auto_accept">auto-accept edits</option>
+        <option value="auto">auto</option>
+        <option value="full">full access</option>
+      </select>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button
           className="glass-pill"

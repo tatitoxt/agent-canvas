@@ -77,6 +77,29 @@ pub fn normalize_permission(level: Option<&str>) -> &'static str {
     }
 }
 
+fn permission_rank(level: &str) -> u8 {
+    match level {
+        "full" => 3,
+        "auto" => 2,
+        "auto_accept" => 1,
+        _ => 0,
+    }
+}
+
+/// A delegation child may never exceed its parent's level — a supervised
+/// agent can't spawn an autonomous one behind the operator's back.
+pub fn clamp_to_parent<'a>(requested: &'a str, parent: Option<&str>) -> &'a str {
+    match parent {
+        Some(p) if permission_rank(requested) > permission_rank(p) => match p {
+            "full" => "full",
+            "auto" => "auto",
+            "auto_accept" => "auto_accept",
+            _ => "supervised",
+        },
+        _ => requested,
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMsg {
