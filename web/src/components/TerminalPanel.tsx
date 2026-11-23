@@ -18,6 +18,10 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   const termFont = useBoard((s) => s.termFont);
   const [pos, setPos] = useState(DEFAULT_POS);
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+  // Voice dictation — Web Speech API is free/on-device-ish, unlike
+  // Deska's metered voice minutes. Dictates text into the PTY.
+  const [listening, setListening] = useState(false);
+  const recRef = useRef<any>(null);
 
   useEffect(() => {
     const term = new Terminal({
@@ -59,6 +63,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
       sub.dispose();
       detachPty(agentId);
       ro.disconnect();
+      recRef.current?.stop?.();
       term.dispose();
       termRef.current = null;
     };
@@ -71,6 +76,31 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
       term.refresh(0, Math.max(0, term.rows - 1));
     }
   }, [termFont]);
+
+  const toggleDictation = () => {
+    if (listening) {
+      recRef.current?.stop?.();
+      setListening(false);
+      return;
+    }
+    const SR =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = (e: any) => {
+      const text = e.results[e.results.length - 1][0].transcript;
+      if (text) {
+        useBoard.getState().sendInput(agentId, new TextEncoder().encode(text + " "));
+      }
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recRef.current = rec;
+    rec.start();
+    setListening(true);
+  };
 
   const popped = pos.x >= 0;
   const panelStyle: React.CSSProperties = popped
@@ -128,6 +158,20 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
           className="flex items-center gap-2"
           onPointerDown={(e) => e.stopPropagation()}
         >
+          <button
+            title={listening ? "stop dictation" : "dictate into this terminal"}
+            onClick={toggleDictation}
+            style={{
+              border: "none",
+              background: "transparent",
+              fontSize: 11,
+              cursor: "pointer",
+              color: listening ? "var(--cv-blocked)" : "var(--cv-ink-dim)",
+              animation: listening ? "pulse-dot 1.2s ease-in-out infinite" : "none",
+            }}
+          >
+            {listening ? "◉" : "🎙"}
+          </button>
           {confirmingKill ? (
             <>
               <span className="text-[10px] text-[var(--cv-blocked)]">confirm kill?</span>
