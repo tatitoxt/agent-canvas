@@ -108,6 +108,10 @@ export class TauriCanvasClient {
       console.error,
     );
   }
+
+  transcript(agentId: string) {
+    void invoke("transcript", { agentId }).catch(console.error);
+  }
 }
 
 export const isTauri = () =>

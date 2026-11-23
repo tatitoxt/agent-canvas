@@ -123,7 +123,7 @@ function Board() {
             : attention[a.id]
               ? ("blocked" as const)
               : a.status,
-          task: a.status === "exited" ? "session ended" : (a.lastLine ?? "live PTY — click to open"),
+          task: a.status === "exited" ? "session ended — transcript" : (a.lastLine ?? "live PTY — click to open"),
           pendingApproval: approvals[a.id],
           branch: a.branch,
         },
@@ -136,7 +136,7 @@ function Board() {
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     const a = agents[node.id];
-    if (a && a.status !== "exited") setOpenTerm({ id: a.id, name: a.name });
+    if (a) setOpenTerm({ id: a.id, name: a.name });
   };
 
   const onNodeDragStop: OnNodeDrag = (_, node) => {
@@ -221,7 +221,7 @@ function Board() {
         <InboxPanel
           onOpenAgent={(id) => {
             const a = agents[id];
-            if (a && a.status !== "exited") setOpenTerm({ id: a.id, name: a.name });
+            if (a) setOpenTerm({ id: a.id, name: a.name });
           }}
         />
       )}

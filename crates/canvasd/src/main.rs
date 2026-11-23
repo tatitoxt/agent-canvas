@@ -578,6 +578,19 @@ fn handle_client_msg(
                 }),
             }
         }
+        ClientMsg::Transcript { agent_id } => {
+            // Dead agents keep no live PTY — replay their on-disk
+            // transcript through the normal output channel.
+            match state.agents.scrollback(&agent_id) {
+                Some(buf) if !buf.is_empty() => {
+                    let _ = state.events.send(Event::PtyOutput(agent_id, buf));
+                }
+                _ => send_control(ServerMsg::Error {
+                    agent_id: Some(agent_id),
+                    message: "no transcript for agent".into(),
+                }),
+            }
+        }
     }
 }
 
@@ -644,10 +657,12 @@ async fn main() -> Result<()> {
     let (events, _) = broadcast::channel(512);
     let store = Arc::new(store::Store::open(&repo_root)?);
     store.mark_all_exited()?;
+    let agents = Arc::new(AgentManager::new());
+    agents.set_transcript_dir(repo_root.join(".canvas").join("transcripts"));
     let state = Arc::new(AppState {
         token: token.clone(),
         events,
-        agents: Arc::new(AgentManager::new()),
+        agents,
         store,
         repo_root,
         pending_results: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),

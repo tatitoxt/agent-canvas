@@ -36,12 +36,17 @@ export function TerminalPanel({ agentId, name, onClose }: Props) {
     term.open(hostRef.current!);
     fit.fit();
 
-    const { attachPty, detachPty, sendInput, ptyBuffer } = useBoard.getState();
+    const { attachPty, detachPty, sendInput, ptyBuffer, requestTranscript } = useBoard.getState();
     // Transcript: replay buffered scrollback so an opened terminal shows
     // history (daemon replay also feeds this buffer on reconnect).
     const history = ptyBuffer(agentId);
     if (history?.length) term.write(history);
     attachPty(agentId, (bytes) => term.write(bytes));
+    // Exited agent: pull its persisted transcript from the daemon — it
+    // arrives as PTY output through the listener just attached.
+    if (useBoard.getState().agents[agentId]?.status === "exited") {
+      requestTranscript(agentId);
+    }
     const sub = term.onData((d) => sendInput(agentId, new TextEncoder().encode(d)));
 
     const ro = new ResizeObserver(() => {

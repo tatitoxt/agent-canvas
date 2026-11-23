@@ -74,6 +74,8 @@ type BoardState = {
   ptyBuffer: (agentId: string) => Uint8Array | undefined;
   detachPty: (agentId: string) => void;
   sendInput: (agentId: string, bytes: Uint8Array) => void;
+  /** Ask the daemon to replay an exited agent's saved transcript. */
+  requestTranscript: (agentId: string) => void;
   bumpFont: (delta: number) => void;
   undoMove: () => boolean;
   requestView: () => void;
@@ -433,4 +435,6 @@ export const useBoard = create<BoardState>((set, get) => ({
     }),
 
   sendInput: (agentId, bytes) => client?.ptyInput(agentId, bytes),
+
+  requestTranscript: (agentId) => client?.transcript(agentId),
 }));

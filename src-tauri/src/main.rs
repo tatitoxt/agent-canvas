@@ -377,6 +377,23 @@ fn move_node(state: State<'_, CanvasState>, agent_id: String, x: f64, y: f64) ->
     state.store.save_node_position(&agent_id, x, y).map_err(|e| e.to_string())
 }
 
+/// Stream an exited agent's on-disk transcript back as PTY frames —
+/// opening a dead node's terminal shows its history, not a blank screen.
+#[tauri::command]
+fn transcript(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    agent_id: String,
+) -> Result<(), String> {
+    match state.agents.scrollback(&agent_id) {
+        Some(buf) if !buf.is_empty() => {
+            emit_pty(&app, &agent_id, &buf);
+            Ok(())
+        }
+        _ => Err("no transcript for agent".into()),
+    }
+}
+
 #[tauri::command]
 fn snapshot(
     app: AppHandle,
@@ -469,8 +486,10 @@ fn main() {
                 .unwrap_or_else(|_| std::env::current_dir().unwrap());
             let store = Arc::new(Store::open(&repo_root)?);
             store.mark_all_exited()?;
+            let agents = AgentManager::new();
+            agents.set_transcript_dir(repo_root.join(".canvas").join("transcripts"));
             app.manage(CanvasState {
-                agents: AgentManager::new(),
+                agents,
                 store,
                 repo_root,
                 pending_results: Mutex::new(HashMap::new()),
@@ -592,6 +611,7 @@ fn main() {
             create_automation,
             run_automation,
             delete_automation,
+            transcript,
             snapshot,
         ])
         .run(tauri::generate_context!())

@@ -105,6 +105,30 @@ pub struct AutoMeta {
 pub struct AgentManager {
     agents: Mutex<HashMap<AgentId, Agent>>,
     automation_meta: Mutex<HashMap<AgentId, AutoMeta>>,
+    transcript_dir: Mutex<PathBuf>,
+}
+
+/// Cap transcripts at ~1MB; when exceeded keep the newest 512KB.
+const TRANSCRIPT_CAP: u64 = 1_048_576;
+
+/// Append PTY output to the agent's transcript file — best effort, never
+/// fails the read loop.
+fn append_transcript(path: &Path, chunk: &[u8]) {
+    use std::io::Seek;
+    let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) else {
+        return;
+    };
+    let len = f.metadata().map(|m| m.len()).unwrap_or(0);
+    if len > TRANSCRIPT_CAP {
+        // Keep the tail half; a rewrite is rare (once per ~1MB of output).
+        if let Ok(data) = std::fs::read(path) {
+            let keep = &data[data.len().saturating_sub((TRANSCRIPT_CAP / 2) as usize)..];
+            let _ = f.set_len(0);
+            let _ = f.seek(std::io::SeekFrom::Start(0));
+            let _ = f.write_all(keep);
+        }
+    }
+    let _ = f.write_all(chunk);
 }
 
 /// Ensure `cwd` stays inside `repo_root`: reject absolute paths and `..`.
@@ -155,7 +179,19 @@ impl AgentManager {
         Self {
             agents: Mutex::new(HashMap::new()),
             automation_meta: Mutex::new(HashMap::new()),
+            transcript_dir: Mutex::new(
+                std::env::current_dir()
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join(".canvas")
+                    .join("transcripts"),
+            ),
         }
+    }
+
+    /// Where per-agent transcript files live (`<dir>/<agent_id>.bin`).
+    /// Overridable because the Tauri app's cwd is not the repo.
+    pub fn set_transcript_dir(&self, dir: impl Into<PathBuf>) {
+        *self.transcript_dir.lock().unwrap() = dir.into();
     }
 
     /// Spawn `command` in a PTY inside a fresh worktree of `repo_root`.
@@ -207,8 +243,11 @@ impl AgentManager {
         let last_for_reader = last_output_at.clone();
         let tail_for_reader = tail.clone();
         let id_for_reader = id.clone();
+        let transcript_dir = self.transcript_dir.lock().unwrap().clone();
         std::thread::spawn(move || {
             let mut buf = [0u8; 8192];
+            let _ = std::fs::create_dir_all(&transcript_dir);
+            let transcript_path = transcript_dir.join(format!("{}.bin", id_for_reader));
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => {
@@ -227,6 +266,7 @@ impl AgentManager {
                                 t.drain(..excess);
                             }
                         }
+                        append_transcript(&transcript_path, &buf[..n]);
                         if out_tx.send((id_for_reader.clone(), buf[..n].to_vec())).is_err() {
                             break;
                         }
@@ -305,13 +345,17 @@ impl AgentManager {
         }
     }
 
-    /// Rolling PTY scrollback (last ~64KB) for transcript replay.
+    /// Rolling PTY scrollback (last ~64KB) for transcript replay. Falls
+    /// back to the on-disk transcript for agents that already exited (or
+    /// lived under a previous daemon run).
     pub fn scrollback(&self, id: &str) -> Option<Vec<u8>> {
-        self.agents
-            .lock()
-            .unwrap()
-            .get(id)
-            .map(|a| a.tail.lock().unwrap().clone())
+        if let Some(a) = self.agents.lock().unwrap().get(id) {
+            return Some(a.tail.lock().unwrap().clone());
+        }
+        let path = self.transcript_dir.lock().unwrap().join(format!("{}.bin", id));
+        let data = std::fs::read(&path).ok()?;
+        let start = data.len().saturating_sub(65_536);
+        Some(data[start..].to_vec())
     }
 
     /// Agent ids that carry automation guardrails — the hang ticker scans

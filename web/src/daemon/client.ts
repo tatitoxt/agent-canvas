@@ -167,4 +167,10 @@ export class CanvasClient {
   delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string) {
     this.send({ cmd: "delegate", from, name, command, task, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null });
   }
+
+  /** Ask the daemon to replay an (exited) agent's saved transcript
+   * through the normal PTY output channel. */
+  transcript(agentId: string) {
+    this.send({ cmd: "transcript", agent_id: agentId });
+  }
 }

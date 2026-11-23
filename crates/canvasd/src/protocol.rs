@@ -85,6 +85,10 @@ pub enum ClientMsg {
     /// Run a saved automation once: spawns its agent and injects the prompt.
     RunAutomation { automation_id: String },
     DeleteAutomation { automation_id: String },
+    /// Stream an agent's saved transcript back as PtyOutput frames — for
+    /// reading dead agents' terminals after they exited or after a
+    /// daemon restart.
+    Transcript { agent_id: String },
 }
 
 /// Deska-style permission ladder, most → least restrictive. The level
