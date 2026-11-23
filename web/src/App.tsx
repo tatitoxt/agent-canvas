@@ -20,6 +20,7 @@ import { SpawnBar } from "./components/SpawnBar";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { InboxPanel } from "./components/InboxPanel";
 import { AutomationsPanel } from "./components/AutomationsPanel";
+import { CommandPalette } from "./components/CommandPalette";
 import { Topbar } from "./components/Topbar";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
@@ -47,6 +48,17 @@ function Board() {
   const [openTerm, setOpenTerm] = useState<{ id: string; name: string } | null>(null);
   const [delegateFrom, setDelegateFrom] = useState<{ from: string; at: { x: number; y: number } } | null>(null);
   const [nav, setNav] = useState("canvas");
+  const [palette, setPalette] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPalette((p) => !p);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const counts = useMemo(() => {
     const c: Record<AgentStatus, number> = {
@@ -201,6 +213,19 @@ function Board() {
           agentId={openTerm.id}
           name={openTerm.name}
           onClose={() => setOpenTerm(null)}
+        />
+      )}
+      {palette && (
+        <CommandPalette
+          onClose={() => setPalette(false)}
+          onNav={(k) => {
+            setNav(k);
+            setPalette(false);
+          }}
+          onOpenAgent={(id, name) => {
+            setOpenTerm({ id, name });
+            setPalette(false);
+          }}
         />
       )}
       {delegateFrom && (

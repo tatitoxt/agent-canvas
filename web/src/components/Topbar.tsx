@@ -87,7 +87,7 @@ export function Topbar() {
               setTimeout(() => setQrHint(""), 2400);
             }
           }}
-          placeholder={qrHint || "⌘ quick request · bigger text, undo, fit, clear done"}
+          placeholder={qrHint || "⌘ quick request · bigger text, undo, fit · ⌘K all commands"}
           title="Local short-requests — instant, no agent spawned"
           style={{
             width: 300,
