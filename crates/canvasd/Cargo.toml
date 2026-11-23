@@ -16,3 +16,5 @@ rand = "0.9"
 portable-pty = "0.9"
 rusqlite = { version = "0.32", features = ["bundled"] }
 anyhow = "1"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
