@@ -48,7 +48,7 @@ function cliMeta(cli: string) {
   return CLI_META[cli.toLowerCase()] ?? { mark: "▢", label: cli };
 }
 
-const ANSI_RE = /\u001b\[[0-9;?]*[a-zA-Z]|\u001b\][^\u0007]*\u0007|\u001b[()][0-9A-B]|\u001b[=>#]?[0-9]*.?/g;
+const ANSI_RE = /\u001b\[[0-9;?><=!$]*[a-zA-Z@]|\u001b\][^\u0007]*(?:\u0007|\u001b\\)|\u001b[()][0-9A-B]|\u001b[=>#]?[0-9]*.?/g;
 const decoder = new TextDecoder();
 
 /** Live tail of the agent's real PTY rendered inside the node — the
