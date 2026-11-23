@@ -306,7 +306,10 @@ export const useBoard = create<BoardState>((set, get) => ({
       onPty: (agentId: string, bytes: Uint8Array) => {
         get().ptyListeners[agentId]?.(bytes);
       },
-      onClose: () => set({ connected: false }),
+      onClose: () => {
+        client = null;
+        set({ connected: false });
+      },
     };
     // Inside Tauri there is no socket and no token — the app itself is the peer.
     client = isTauri() ? new TauriCanvasClient(handlers) : new CanvasClient(t, handlers);
