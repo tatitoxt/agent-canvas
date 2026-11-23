@@ -24,6 +24,8 @@ pub struct Agent {
     pub command: String,
     #[allow(dead_code)]
     pub worktree: PathBuf,
+    /// Permission ladder level — gates PTY input the operator must approve.
+    pub permission: String,
     writer: Mutex<Box<dyn Write + Send>>,
     master: Mutex<Box<dyn portable_pty::MasterPty + Send>>,
     child: Mutex<Box<dyn Child + Send + Sync>>,
@@ -144,12 +146,14 @@ impl AgentManager {
     /// Spawn `command` in a PTY inside a fresh worktree of `repo_root`.
     /// Returns the agent id; output frames stream through `out_tx` as
     /// `(agent_id, raw_bytes)`.
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         &self,
         name: &str,
         command: &str,
         cwd: &str,
         repo_root: &Path,
+        permission: &str,
         out_tx: mpsc::UnboundedSender<(AgentId, Vec<u8>)>,
         exit_tx: mpsc::UnboundedSender<AgentId>,
     ) -> Result<AgentId> {
@@ -219,6 +223,7 @@ impl AgentManager {
             name: name.to_string(),
             command: command.to_string(),
             worktree,
+            permission: permission.to_string(),
             writer: Mutex::new(writer),
             master: Mutex::new(pair.master),
             child: Mutex::new(child),
@@ -273,6 +278,11 @@ impl AgentManager {
     }
 
     /// Agent's worktree path — for the diff ticker (`git status`).
+    /// Permission level for a live agent — `None` if it already exited.
+    pub fn permission(&self, id: &str) -> Option<String> {
+        self.agents.lock().unwrap().get(id).map(|a| a.permission.clone())
+    }
+
     pub fn worktree(&self, id: &str) -> Option<PathBuf> {
         self.agents.lock().unwrap().get(id).map(|a| a.worktree.clone())
     }
@@ -311,6 +321,39 @@ pub fn canvas_result_line(tail: &str) -> Option<String> {
                 .map(|s| s.trim().to_string())
         })
         .filter(|s| !s.is_empty())
+}
+
+/// Destructive patterns gated on `supervised` agents: if the operator
+/// (or a script via `pty_input`) sends a command line containing one of
+/// these, the daemon holds it and asks for explicit approval instead of
+/// writing it to the PTY. Supervised means supervised.
+const SENSITIVE_PATTERNS: &[&str] = &[
+    "rm -rf", "rm -fr", "rm -r ",
+    "sudo ", "su -",
+    "git push -f", "git push --force", "git reset --hard", "git clean -f",
+    "drop table", "drop database", "truncate table",
+    "mkfs", "dd if=", "> /dev/",
+    "chmod -r", "chown -r",
+    "kill -9", "pkill -9", "killall",
+    "npm publish", "cargo publish", "gh release",
+    "shutdown", "reboot", ":(){ :|:& };:",
+];
+
+/// Returns the offending line (trimmed, ≤160 chars) when a PTY-input
+/// payload contains a gated command, else `None`.
+pub fn sensitive_line(payload: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(payload);
+    let clean = strip_ansi(&text);
+    for line in clean.lines() {
+        let l = line.trim().to_lowercase();
+        if l.len() < 3 {
+            continue;
+        }
+        if SENSITIVE_PATTERNS.iter().any(|p| l.contains(p)) {
+            return Some(l.chars().take(160).collect());
+        }
+    }
+    None
 }
 
 fn strip_ansi(s: &str) -> String {
@@ -377,6 +420,20 @@ mod tests {
         let tail = "$ echo 'CANVAS_RESULT: shipped it'\r\n\u{1b}[?2004l\rCANVAS_RESULT: shipped it\r\n$ ";
         assert_eq!(canvas_result_line(tail).as_deref(), Some("shipped it"));
         assert_eq!(canvas_result_line("$ echo hi\r\nhi\r\n$ "), None);
+    }
+
+    #[test]
+    fn sensitive_input_is_detected_through_escapes() {
+        assert_eq!(
+            sensitive_line(b"rm -rf ~/work\r").as_deref(),
+            Some("rm -rf ~/work")
+        );
+        assert!(sensitive_line(b"sudo apt install x\n").is_some());
+        assert!(sensitive_line(b"git push --force origin main\n").is_some());
+        assert!(sensitive_line(b"ls -la\n").is_none());
+        assert!(sensitive_line(b"git push origin feature\n").is_none());
+        // ANSI-wrapped input still matches (real PTYs interleave escapes).
+        assert!(sensitive_line("\u{1b}[?2004lrm -rf x\r".as_bytes()).is_some());
     }
 
     #[test]

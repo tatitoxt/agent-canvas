@@ -3,7 +3,7 @@
 //! Binds to 127.0.0.1 only. Every connection requires the per-launch session
 //! token (`?token=` on /ws, `Authorization: Bearer` on /api/*).
 
-use canvasd::agent::{canvas_result_line, dirty_file_count, last_visible_line, AgentManager};
+use canvasd::agent::{canvas_result_line, dirty_file_count, last_visible_line, sensitive_line, AgentManager};
 use canvasd::protocol;
 use canvasd::store;
 use anyhow::Result;
@@ -35,6 +35,34 @@ struct AppState {
     repo_root: PathBuf,
     /// agent_id → delegation edge_id: which child still owes a CANVAS_RESULT.
     pending_results: Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
+    /// agent_id → held PTY input bytes a supervised agent needs approval for.
+    pending_inputs: Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
+}
+
+/// Write PTY input honoring the supervised-input gate: `supervised`
+/// agents hold destructive-looking input until the operator approves.
+/// Returns true when the payload was written (or held) without error.
+fn gated_write(state: &Arc<AppState>, agent_id: &str, bytes: &[u8]) -> bool {
+    let supervised = state
+        .agents
+        .permission(agent_id)
+        .map(|p| p == "supervised")
+        .unwrap_or(false);
+    if supervised {
+        if let Some(line) = sensitive_line(bytes) {
+            state
+                .pending_inputs
+                .lock()
+                .unwrap()
+                .insert(agent_id.to_string(), bytes.to_vec());
+            let _ = state.events.send(Event::Control(ServerMsg::NeedsApproval {
+                agent_id: agent_id.to_string(),
+                line,
+            }));
+            return true;
+        }
+    }
+    state.agents.write(agent_id, bytes).is_ok()
 }
 
 /// Wire event: control (JSON) or raw PTY output (binary).
@@ -98,7 +126,7 @@ fn spawn_agent(
     };
     let id = state
         .agents
-        .spawn(name, command, cwd, &repo_root, out_tx, exit_tx)?;
+        .spawn(name, command, cwd, &repo_root, permission, out_tx, exit_tx)?;
     if let Err(e) = state.store.agent_spawned(
         &id,
         name,
@@ -231,12 +259,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 Some(Ok(Message::Binary(frame))) => {
                     // [id_len][agent_id][payload] — client typing into a PTY.
                     if let Some((id, payload)) = decode_pty_frame(&frame) {
-                        if let Err(e) = state.agents.write(id, payload) {
-                            send_control(ServerMsg::Error {
-                                agent_id: Some(id.to_string()),
-                                message: e.to_string(),
-                            });
-                        }
+                        let _ = gated_write(&state, id, payload);
                     }
                 }
                 Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) => {}
@@ -327,10 +350,10 @@ fn handle_client_msg(
         ClientMsg::PtyInput { agent_id, data } => {
             match base64::engine::general_purpose::STANDARD.decode(&data) {
                 Ok(bytes) => {
-                    if let Err(e) = state.agents.write(&agent_id, &bytes) {
+                    if !gated_write(state, &agent_id, &bytes) {
                         send_control(ServerMsg::Error {
                             agent_id: Some(agent_id),
-                            message: e.to_string(),
+                            message: "pty write failed".to_string(),
                         });
                     }
                 }
@@ -339,6 +362,30 @@ fn handle_client_msg(
                     message: format!("bad base64: {e}"),
                 }),
             }
+        }
+        ClientMsg::ApproveInput { agent_id } => {
+            let payload = state.pending_inputs.lock().unwrap().remove(&agent_id);
+            match payload {
+                Some(bytes) => {
+                    if let Err(e) = state.agents.write(&agent_id, &bytes) {
+                        send_control(ServerMsg::Error {
+                            agent_id: Some(agent_id),
+                            message: e.to_string(),
+                        });
+                    }
+                }
+                None => send_control(ServerMsg::Error {
+                    agent_id: Some(agent_id),
+                    message: "no pending input to approve".to_string(),
+                }),
+            }
+        }
+        ClientMsg::DenyInput { agent_id } => {
+            state.pending_inputs.lock().unwrap().remove(&agent_id);
+            send_control(ServerMsg::Error {
+                agent_id: Some(agent_id),
+                message: "input denied by operator".to_string(),
+            });
         }
         ClientMsg::PtyResize { agent_id, cols, rows } => {
             if let Err(e) = state.agents.resize(&agent_id, cols, rows) {
@@ -434,6 +481,7 @@ async fn main() -> Result<()> {
         store,
         repo_root,
         pending_results: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+        pending_inputs: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     });
 
     let api = Router::new()

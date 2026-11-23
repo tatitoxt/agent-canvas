@@ -2,6 +2,8 @@ export type AgentStatus = "working" | "waiting" | "blocked" | "done" | "idle";
 
 export type AgentNodeData = {
   kind: "agent";
+  /** Live agent id — needed by node-level actions (approve/deny). */
+  id?: string;
   name: string;
   cli: string;
   status: AgentStatus;
@@ -10,6 +12,8 @@ export type AgentNodeData = {
   lastOutput?: string;
   /** Uncommitted files in the agent's worktree — the diff badge. */
   files?: number;
+  /** Command line held by the supervised-input gate awaiting a decision. */
+  pendingApproval?: string;
 };
 
 export type OrchestratorNodeData = {

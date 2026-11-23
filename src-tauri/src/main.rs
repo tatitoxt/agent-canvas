@@ -8,7 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use base64::Engine;
-use canvasd::agent::{canvas_result_line, dirty_file_count, AgentManager};
+use canvasd::agent::{canvas_result_line, dirty_file_count, sensitive_line, AgentManager};
 use canvasd::protocol::{AgentStatus, ServerMsg, SnapshotAgent, SnapshotDelegation};
 use canvasd::store::Store;
 use std::collections::HashMap;
@@ -23,6 +23,7 @@ struct CanvasState {
     store: Arc<Store>,
     repo_root: PathBuf,
     pending_results: Mutex<HashMap<String, String>>, // agent_id → edge_id
+    pending_inputs: Mutex<HashMap<String, Vec<u8>>>, // agent_id → held PTY input
 }
 
 fn emit_control(app: &AppHandle, msg: &ServerMsg) {
@@ -85,7 +86,7 @@ fn spawn_wired(
     };
     let id = state
         .agents
-        .spawn(name, command, cwd, &repo_root, out_tx, exit_tx)
+        .spawn(name, command, cwd, &repo_root, permission, out_tx, exit_tx)
         .map_err(|e| e.to_string())?;
     if let Err(e) = state.store.agent_spawned(
         &id,
@@ -177,11 +178,43 @@ fn delegate(
 }
 
 #[tauri::command]
-fn pty_input(state: State<'_, CanvasState>, agent_id: String, data: String) -> Result<(), String> {
+fn pty_input(app: AppHandle, state: State<'_, CanvasState>, agent_id: String, data: String) -> Result<(), String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&data)
         .map_err(|e| e.to_string())?;
+    // Supervised-input gate: hold destructive-looking input for approval.
+    let supervised = state
+        .agents
+        .permission(&agent_id)
+        .map(|p| p == "supervised")
+        .unwrap_or(false);
+    if supervised {
+        if let Some(line) = sensitive_line(&bytes) {
+            state
+                .pending_inputs
+                .lock()
+                .unwrap()
+                .insert(agent_id.clone(), bytes);
+            emit_control(&app, &ServerMsg::NeedsApproval { agent_id, line });
+            return Ok(());
+        }
+    }
     state.agents.write(&agent_id, &bytes).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn approve_input(state: State<'_, CanvasState>, agent_id: String) -> Result<(), String> {
+    let bytes = state.pending_inputs.lock().unwrap().remove(&agent_id);
+    match bytes {
+        Some(b) => state.agents.write(&agent_id, &b).map_err(|e| e.to_string()),
+        None => Err("no pending input to approve".to_string()),
+    }
+}
+
+#[tauri::command]
+fn deny_input(state: State<'_, CanvasState>, agent_id: String) -> Result<(), String> {
+    state.pending_inputs.lock().unwrap().remove(&agent_id);
+    Ok(())
 }
 
 #[tauri::command]
@@ -289,6 +322,7 @@ fn main() {
                 store,
                 repo_root,
                 pending_results: Mutex::new(HashMap::new()),
+                pending_inputs: Mutex::new(HashMap::new()),
             });
 
             // 1s ticker: derived statuses + CANVAS_RESULT returns + diffs.
@@ -375,6 +409,8 @@ fn main() {
             create_workspace,
             delegate,
             pty_input,
+            approve_input,
+            deny_input,
             pty_resize,
             confirm_destructive,
             move_node,

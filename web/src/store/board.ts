@@ -42,12 +42,16 @@ type BoardState = {
   /** Drop position for a delegation child, keyed by parent agent id —
    * applied when the delegation message names the child. */
   pendingPositions: Record<string, { x: number; y: number }>;
+  /** agent_id → held command line awaiting operator approval (supervised). */
+  approvals: Record<string, string>;
   ptyListeners: Record<string, (bytes: Uint8Array) => void>;
   connect: (token: string) => void;
   spawn: (name: string, command: string, workspaceId?: string, permission?: string) => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
   kill: (agentId: string) => void;
+  approveInput: (agentId: string) => void;
+  denyInput: (agentId: string) => void;
   moveNode: (agentId: string, x: number, y: number) => void;
   attachPty: (agentId: string, cb: (bytes: Uint8Array) => void) => void;
   detachPty: (agentId: string) => void;
@@ -67,6 +71,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   workspaces: {},
   positions: {},
   pendingPositions: {},
+  approvals: {},
   ptyListeners: {},
 
   connect: (token: string) => {
@@ -135,6 +140,9 @@ export const useBoard = create<BoardState>((set, get) => ({
                 },
               });
             }
+            break;
+          case "needs_approval":
+            set({ approvals: { ...get().approvals, [msg.agent_id]: msg.line } });
             break;
           case "delegation": {
             const pending = get().pendingPositions[msg.from];
@@ -245,6 +253,20 @@ export const useBoard = create<BoardState>((set, get) => ({
   },
 
   kill: (agentId) => client?.confirmDestructive(agentId, "kill"),
+
+  approveInput: (agentId) => {
+    client?.approveInput(agentId);
+    const next = { ...get().approvals };
+    delete next[agentId];
+    set({ approvals: next });
+  },
+
+  denyInput: (agentId) => {
+    client?.denyInput(agentId);
+    const next = { ...get().approvals };
+    delete next[agentId];
+    set({ approvals: next });
+  },
 
   moveNode: (agentId, x, y) => {
     set((s) => ({ positions: { ...s.positions, [agentId]: { x, y } } }));

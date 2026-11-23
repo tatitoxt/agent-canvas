@@ -37,6 +37,7 @@ function Board() {
   const positions = useBoard((s) => s.positions);
   const moveNode = useBoard((s) => s.moveNode);
   const connected = useBoard((s) => s.connected);
+  const approvals = useBoard((s) => s.approvals);
   const { screenToFlowPosition } = useReactFlow();
   const [openTerm, setOpenTerm] = useState<{ id: string; name: string } | null>(null);
   const [delegateFrom, setDelegateFrom] = useState<{ from: string; at: { x: number; y: number } } | null>(null);
@@ -83,19 +84,21 @@ function Board() {
         ...(ws ? { parentId: ws.id, extent: "parent" as const } : {}),
         data: {
           kind: "agent" as const,
+          id: a.id,
           name: a.name,
           cli: (a.command ?? "bash").split(/\s+/)[0].toLowerCase(),
           permission: a.permission,
           files: a.files,
           status: a.status === "exited" ? ("done" as const) : a.status,
           task: a.status === "exited" ? "session ended" : (a.lastLine ?? "live PTY — click to open"),
+          pendingApproval: approvals[a.id],
         },
       };
     });
     // Mock board only renders in offline/demo mode — with a daemon the
     // canvas shows reality, not fixtures.
     return connected ? [...wsNodes, ...live] : [...initialNodes, ...live];
-  }, [agents, positions, connected, workspaces]);
+  }, [agents, positions, connected, workspaces, approvals]);
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     const a = agents[node.id];

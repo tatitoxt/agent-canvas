@@ -67,6 +67,14 @@ export class TauriCanvasClient {
     void invoke("move_node", { agentId, x, y }).catch(console.error);
   }
 
+  approveInput(agentId: string) {
+    void invoke("approve_input", { agentId }).catch(console.error);
+  }
+
+  denyInput(agentId: string) {
+    void invoke("deny_input", { agentId }).catch(console.error);
+  }
+
   delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string) {
     void invoke("delegate", { from, name, command, task, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null }).catch(
       console.error,

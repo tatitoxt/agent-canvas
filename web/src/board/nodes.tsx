@@ -1,4 +1,5 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
+import { useBoard } from "../store/board";
 import type {
   AgentNodeData,
   AgentStatus,
@@ -143,6 +144,70 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           }}
         >
           {data.task}
+        </div>
+      )}
+      {data.pendingApproval && (
+        <div
+          className="nodrag"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            marginTop: 10,
+            paddingTop: 9,
+            borderTop: "1px solid rgba(255,255,255,0.06)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10.5,
+              color: "var(--cv-waiting)",
+              fontWeight: 600,
+              marginBottom: 5,
+            }}
+          >
+            approve command?
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              fontFamily: "ui-monospace, SFMono-Regular, monospace",
+              color: "var(--cv-ink-dim)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              marginBottom: 7,
+            }}
+            title={data.pendingApproval}
+          >
+            {data.pendingApproval}
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              className="glass-pill"
+              style={{
+                fontSize: 10.5,
+                fontWeight: 600,
+                padding: "3px 12px",
+                color: "var(--cv-done)",
+                cursor: "pointer",
+              }}
+              onClick={() => data.id && useBoard.getState().approveInput(data.id)}
+            >
+              allow
+            </button>
+            <button
+              className="glass-pill"
+              style={{
+                fontSize: 10.5,
+                fontWeight: 600,
+                padding: "3px 12px",
+                color: "var(--cv-blocked)",
+                cursor: "pointer",
+              }}
+              onClick={() => data.id && useBoard.getState().denyInput(data.id)}
+            >
+              deny
+            </button>
+          </div>
         </div>
       )}
       <Handle type="source" position={Position.Right} />

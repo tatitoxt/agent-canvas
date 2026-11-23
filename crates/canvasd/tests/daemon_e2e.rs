@@ -283,3 +283,80 @@ async fn delegation_resolves_on_canvas_result() {
     assert_eq!(result["edge_id"].as_str().unwrap(), edge_id);
     assert!(result["summary"].as_str().unwrap().contains("shipped it"));
 }
+
+/// Scan binary PTY frames for `needle` (echoed input / command output)
+/// until the deadline; skips control messages.
+async fn collect_pty_until(ws: &mut Ws, timeout: Duration, needle: &[u8]) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match tokio::time::timeout(remaining, ws.next()).await {
+            Ok(Some(Ok(Message::Binary(b)))) => {
+                if b.windows(needle.len()).any(|w| w == needle) {
+                    return true;
+                }
+            }
+            Ok(Some(Ok(_))) => continue,
+            _ => return false,
+        }
+    }
+    false
+}
+
+#[tokio::test]
+async fn supervised_input_is_gated_until_approved() {
+    let d = Daemon::start();
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token)).await.unwrap();
+    // Drain the snapshot.
+    let _ = next_ctrl(&mut ws, Duration::from_secs(3)).await;
+
+    ws.send(Message::Text(
+        json!({"cmd":"spawn_agent","name":"sup","command":"bash","cwd":".","permission":"supervised"})
+            .to_string().into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |m| m["type"] == "spawned").await;
+    let agent_id = seen
+        .iter()
+        .find(|m| m["type"] == "spawned")
+        .unwrap()["agent_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Destructive input is held, not written.
+    ws.send(Message::Binary(pty_frame(&agent_id, b"rm -rf nope.txt\n").into()))
+        .await
+        .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(4), |m| m["type"] == "needs_approval").await;
+    let held = seen.iter().find(|m| m["type"] == "needs_approval");
+    assert!(held.is_some(), "supervised agent must gate destructive input");
+    assert!(held.unwrap()["line"].as_str().unwrap().contains("rm -rf"));
+
+    // Denied input never reaches the PTY; approving after a deny is a no-op.
+    ws.send(Message::Text(json!({"cmd":"deny_input","agent_id":agent_id}).to_string().into()))
+        .await
+        .unwrap();
+    ws.send(Message::Text(json!({"cmd":"approve_input","agent_id":agent_id}).to_string().into()))
+        .await
+        .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(3), |m| {
+        m["type"] == "error" && m["message"].as_str().unwrap_or("").contains("no pending input")
+    })
+    .await;
+    assert!(seen.iter().any(|m| m["type"] == "error"), "deny must drop the stashed input");
+
+    // Approved input is released to the PTY — bash echoes it back.
+    ws.send(Message::Binary(pty_frame(&agent_id, b"rm -rf nope.txt\n").into()))
+        .await
+        .unwrap();
+    let _ = collect_until(&mut ws, Duration::from_secs(4), |m| m["type"] == "needs_approval").await;
+    ws.send(Message::Text(json!({"cmd":"approve_input","agent_id":agent_id}).to_string().into()))
+        .await
+        .unwrap();
+    assert!(
+        collect_pty_until(&mut ws, Duration::from_secs(5), b"rm -rf nope.txt").await,
+        "approved input must reach the agent's PTY"
+    );
+}

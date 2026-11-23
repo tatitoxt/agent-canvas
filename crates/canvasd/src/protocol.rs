@@ -46,6 +46,11 @@ pub enum ClientMsg {
         agent_id: String,
         action: String,
     },
+    /// Supervised-input gate: writes the stashed payload the operator just
+    /// approved (the daemon holds one pending input per agent).
+    ApproveInput { agent_id: String },
+    /// Drops the stashed payload — the agent never receives it.
+    DenyInput { agent_id: String },
     /// Persist a node's canvas position (drag end).
     MoveNode {
         agent_id: String,
@@ -112,6 +117,9 @@ pub enum ServerMsg {
     /// Files with uncommitted changes in the agent's worktree — the
     /// node's diff badge; what the delegation actually produced.
     Diff { agent_id: String, files: u32 },
+    /// A supervised agent's PTY input matched a destructive pattern and
+    /// is held until ApproveInput/DenyInput.
+    NeedsApproval { agent_id: String, line: String },
     Error { agent_id: Option<String>, message: String },
     Delegation { edge_id: String, from: String, to: String, task: String },
     Result { edge_id: String, summary: String, files: u32 },

@@ -18,6 +18,7 @@ export type ServerMsg =
   | { type: "activity"; agent_id: string; line: string }
   | { type: "diff"; agent_id: string; files: number }
   | { type: "error"; agent_id: string | null; message: string }
+  | { type: "needs_approval"; agent_id: string; line: string }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
   | { type: "result"; edge_id: string; summary: string; files?: number }
   | {
@@ -114,6 +115,16 @@ export class CanvasClient {
 
   moveNode(agentId: string, x: number, y: number) {
     this.send({ cmd: "move_node", agent_id: agentId, x, y });
+  }
+
+  /** Supervised-input gate: release the held payload to the PTY. */
+  approveInput(agentId: string) {
+    this.send({ cmd: "approve_input", agent_id: agentId });
+  }
+
+  /** Supervised-input gate: drop the held payload — agent never sees it. */
+  denyInput(agentId: string) {
+    this.send({ cmd: "deny_input", agent_id: agentId });
   }
 
   delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string) {
