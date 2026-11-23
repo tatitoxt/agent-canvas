@@ -19,13 +19,26 @@ const buttonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
+/** Official agent CLIs offered by the picker — Deska-style agent chooser.
+ * "custom" keeps free-text for anything else (aider, scripts, …). */
+const AGENT_CHOICES = [
+  { cmd: "claude", label: "◆ Claude Code" },
+  { cmd: "codex", label: "◈ Codex" },
+  { cmd: "gemini", label: "✦ Gemini CLI" },
+  { cmd: "aider", label: "▣ Aider" },
+  { cmd: "cursor-agent", label: "◐ Cursor" },
+  { cmd: "bash", label: "›_ Terminal" },
+  { cmd: "custom", label: "… custom command" },
+];
+
 export function SpawnBar() {
   const connected = useBoard((s) => s.connected);
   const connect = useBoard((s) => s.connect);
   const spawn = useBoard((s) => s.spawn);
   const workspaces = useBoard((s) => s.workspaces);
   const createWorkspace = useBoard((s) => s.createWorkspace);
-  const [command, setCommand] = useState("bash");
+  const [choice, setChoice] = useState("claude");
+  const [command, setCommand] = useState("");
   const [name, setName] = useState("");
   const [wsId, setWsId] = useState("");
   const [permission, setPermission] = useState("supervised");
@@ -97,12 +110,27 @@ export function SpawnBar() {
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <input
-            style={{ ...inputStyle, width: 150 }}
-            placeholder="command (bash, claude…)"
-            value={command}
-            onChange={(e) => setCommand(e.target.value)}
-          />
+          <select
+            style={{ ...inputStyle, cursor: "pointer" }}
+            value={choice}
+            onChange={(e) => setChoice(e.target.value)}
+            title="agent CLI"
+          >
+            {AGENT_CHOICES.map((c) => (
+              <option key={c.cmd} value={c.cmd}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          {choice === "custom" && (
+            <input
+              style={{ ...inputStyle, width: 140 }}
+              placeholder="command"
+              value={command}
+              onChange={(e) => setCommand(e.target.value)}
+              autoFocus
+            />
+          )}
           <select
             style={{ ...inputStyle, color: wsId ? "var(--cv-ink)" : "var(--cv-ink-dim)", cursor: "pointer" }}
             value={wsId}
@@ -128,10 +156,11 @@ export function SpawnBar() {
           </select>
           <button
             className="glass-pill"
-            style={{ ...buttonStyle, color: "var(--cv-accent)", opacity: command.trim() ? 1 : 0.45 }}
-            disabled={!command.trim()}
+            style={{ ...buttonStyle, color: "var(--cv-accent)", opacity: (choice !== "custom" || command.trim()) ? 1 : 0.45 }}
+            disabled={choice === "custom" && !command.trim()}
             onClick={() => {
-              spawn(name.trim() || command.trim(), command.trim(), wsId || undefined, permission);
+              const cmd = choice === "custom" ? command.trim() : choice;
+              spawn(name.trim() || cmd, cmd, wsId || undefined, permission);
               setName("");
             }}
           >
