@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Controls,
   MiniMap,
@@ -38,7 +38,11 @@ function Board() {
   const moveNode = useBoard((s) => s.moveNode);
   const connected = useBoard((s) => s.connected);
   const approvals = useBoard((s) => s.approvals);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
+  const viewCmdN = useBoard((s) => s.viewCmdN);
+  useEffect(() => {
+    if (viewCmdN > 0) fitView({ padding: 0.18, maxZoom: 1.1, duration: 250 });
+  }, [viewCmdN, fitView]);
   const [openTerm, setOpenTerm] = useState<{ id: string; name: string } | null>(null);
   const [delegateFrom, setDelegateFrom] = useState<{ from: string; at: { x: number; y: number } } | null>(null);
   const [nav, setNav] = useState("canvas");

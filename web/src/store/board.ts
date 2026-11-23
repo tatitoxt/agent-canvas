@@ -46,6 +46,12 @@ type BoardState = {
   pendingPositions: Record<string, { x: number; y: number }>;
   /** agent_id → held command line awaiting operator approval (supervised). */
   approvals: Record<string, string>;
+  /** Terminal font size — adjustable via the local quick-request router. */
+  termFont: number;
+  /** Positions displaced by the last manual moves — for local "undo". */
+  moveHistory: Array<{ id: string; prev?: { x: number; y: number } }>;
+  /** Bump counter telling the canvas to run fitView (local "fit" request). */
+  viewCmdN: number;
   ptyListeners: Record<string, (bytes: Uint8Array) => void>;
   connect: (token: string) => void;
   spawn: (name: string, command: string, workspaceId?: string, permission?: string) => void;
@@ -58,6 +64,13 @@ type BoardState = {
   attachPty: (agentId: string, cb: (bytes: Uint8Array) => void) => void;
   detachPty: (agentId: string) => void;
   sendInput: (agentId: string, bytes: Uint8Array) => void;
+  bumpFont: (delta: number) => void;
+  undoMove: () => boolean;
+  requestView: () => void;
+  clearDone: () => number;
+  /** Local short-request router (Deska-style): runs instant commands
+   * client-side — no agent spawn, no token spend. Returns feedback text. */
+  quickRequest: (text: string) => string;
 };
 
 let client: DaemonTransport | null = null;
@@ -74,6 +87,9 @@ export const useBoard = create<BoardState>((set, get) => ({
   positions: {},
   pendingPositions: {},
   approvals: {},
+  termFont: 13,
+  moveHistory: [],
+  viewCmdN: 0,
   ptyListeners: {},
 
   connect: (token: string) => {
@@ -275,8 +291,64 @@ export const useBoard = create<BoardState>((set, get) => ({
   },
 
   moveNode: (agentId, x, y) => {
-    set((s) => ({ positions: { ...s.positions, [agentId]: { x, y } } }));
+    set((s) => ({
+      positions: { ...s.positions, [agentId]: { x, y } },
+      moveHistory: [...s.moveHistory.slice(-49), { id: agentId, prev: s.positions[agentId] }],
+    }));
     client?.moveNode(agentId, x, y);
+  },
+
+  bumpFont: (delta) =>
+    set((s) => ({ termFont: Math.min(22, Math.max(9, s.termFont + delta)) })),
+
+  undoMove: () => {
+    const { moveHistory, positions } = get();
+    const last = moveHistory[moveHistory.length - 1];
+    if (!last) return false;
+    const next = { ...positions };
+    if (last.prev) next[last.id] = last.prev;
+    else delete next[last.id];
+    if (last.prev) client?.moveNode(last.id, last.prev.x, last.prev.y);
+    set({ positions: next, moveHistory: moveHistory.slice(0, -1) });
+    return true;
+  },
+
+  requestView: () => set((s) => ({ viewCmdN: s.viewCmdN + 1 })),
+
+  clearDone: () => {
+    const { agents } = get();
+    const next = { ...agents };
+    let n = 0;
+    for (const [id, a] of Object.entries(agents))
+      if (a.status === "exited") {
+        delete next[id];
+        n++;
+      }
+    if (n) set({ agents: next });
+    return n;
+  },
+
+  quickRequest: (text) => {
+    const t = text.trim().toLowerCase();
+    const { bumpFont, undoMove, requestView, clearDone } = get();
+    if (/bigger|larger|increase|mas grande/.test(t)) {
+      bumpFont(1);
+      return `terminal font ${get().termFont}px`;
+    }
+    if (/smaller|shrink|decrease|mas chica/.test(t)) {
+      bumpFont(-1);
+      return `terminal font ${get().termFont}px`;
+    }
+    if (/undo|deshacer/.test(t)) return undoMove() ? "undid last move" : "nothing to undo";
+    if (/fit|reset view|zoom|overview/.test(t)) {
+      requestView();
+      return "fitted view";
+    }
+    if (/clear|clean|tidy/.test(t)) {
+      const n = clearDone();
+      return n ? `cleared ${n} finished agent${n === 1 ? "" : "s"}` : "nothing to clear";
+    }
+    return "try: bigger text · smaller text · undo · fit · clear done";
   },
 
   attachPty: (agentId, cb) =>

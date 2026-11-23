@@ -8,12 +8,14 @@ type Props = { agentId: string; name: string; onClose: () => void };
 
 export function TerminalPanel({ agentId, name, onClose }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const termRef = useRef<Terminal | null>(null);
   const [confirmingKill, setConfirmingKill] = useState(false);
   const kill = useBoard((s) => s.kill);
+  const termFont = useBoard((s) => s.termFont);
 
   useEffect(() => {
     const term = new Terminal({
-      fontSize: 13,
+      fontSize: useBoard.getState().termFont,
       fontFamily: "ui-monospace, Menlo, monospace",
       theme: {
         background: "#121214",
@@ -34,17 +36,26 @@ export function TerminalPanel({ agentId, name, onClose }: Props) {
 
     const ro = new ResizeObserver(() => {
       fit.fit();
-      useBoard.getState();
     });
     ro.observe(hostRef.current!);
+    termRef.current = term;
 
     return () => {
       sub.dispose();
       detachPty(agentId);
       ro.disconnect();
       term.dispose();
+      termRef.current = null;
     };
   }, [agentId]);
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (term && term.options.fontSize !== termFont) {
+      term.options.fontSize = termFont;
+      term.refresh(0, Math.max(0, term.rows - 1));
+    }
+  }, [termFont]);
 
   return (
     <div

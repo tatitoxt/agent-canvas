@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useBoard } from "../store/board";
 
 const pill: React.CSSProperties = {
@@ -28,6 +29,9 @@ export function Topbar() {
   const wsList = Object.values(workspaces);
   const liveAgents = Object.values(agents).filter((a) => a.status !== "exited");
   const pending = Object.values(edges).filter((e) => e.state === "delegated").length;
+  const quickRequest = useBoard((s) => s.quickRequest);
+  const [qr, setQr] = useState("");
+  const [qrHint, setQrHint] = useState("");
 
   return (
     <div
@@ -68,6 +72,33 @@ export function Topbar() {
             </span>
           </>
         )}
+      </div>
+      <div
+        className="glass-pill"
+        style={{ padding: "3px 12px", pointerEvents: "auto" }}
+      >
+        <input
+          value={qr}
+          onChange={(e) => setQr(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && qr.trim()) {
+              setQrHint(quickRequest(qr));
+              setQr("");
+              setTimeout(() => setQrHint(""), 2400);
+            }
+          }}
+          placeholder={qrHint || "⌘ quick request · bigger text, undo, fit, clear done"}
+          title="Local short-requests — instant, no agent spawned"
+          style={{
+            width: 300,
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            color: "var(--cv-ink)",
+            fontSize: 11,
+            fontFamily: "inherit",
+          }}
+        />
       </div>
       <div
         className="glass-pill"
