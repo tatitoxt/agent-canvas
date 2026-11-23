@@ -327,6 +327,40 @@ async fn main() -> Result<()> {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(4242);
+    // Status ticker: re-derive every agent's status each second and emit a
+    // Status event only when it changed (CLI-agnostic until real hooks land).
+    {
+        let agents = state.agents.clone();
+        let ev = state.events.clone();
+        let store = state.store.clone();
+        tokio::spawn(async move {
+            let mut last: std::collections::HashMap<String, &'static str> =
+                std::collections::HashMap::new();
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
+            loop {
+                tick.tick().await;
+                for (id, status) in agents.statuses() {
+                    if last.get(&id) != Some(&status) {
+                        last.insert(id.clone(), status);
+                        let _ = store.agent_status(&id, status);
+                        let s = match status {
+                            "working" => AgentStatus::Working,
+                            "waiting" => AgentStatus::Waiting,
+                            "blocked" => AgentStatus::Blocked,
+                            "done" => AgentStatus::Done,
+                            "exited" => AgentStatus::Exited,
+                            _ => AgentStatus::Idle,
+                        };
+                        let _ = ev.send(Event::Control(ServerMsg::Status {
+                            agent_id: id,
+                            status: s,
+                        }));
+                    }
+                }
+            }
+        });
+    }
+
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
     info!(%addr, "canvasd listening (localhost only)");

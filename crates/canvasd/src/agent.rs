@@ -8,7 +8,7 @@ use std::{
     collections::HashMap,
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 use tokio::sync::mpsc;
 use tracing::info;
@@ -27,6 +27,40 @@ pub struct Agent {
     writer: Mutex<Box<dyn Write + Send>>,
     master: Mutex<Box<dyn portable_pty::MasterPty + Send>>,
     child: Mutex<Box<dyn Child + Send + Sync>>,
+    /// Last PTY activity + rolling tail for status derivation. Shared with
+    /// the reader thread via Arc so output updates land on the live agent.
+    pub last_output_at: Arc<Mutex<std::time::Instant>>,
+    pub tail: Arc<Mutex<Vec<u8>>>,
+}
+
+impl Agent {
+    /// Derive a coarse status from PTY activity — CLI-agnostic. Where a CLI
+    /// exposes real hooks later, they override this.
+    pub fn derived_status(&self) -> &'static str {
+        if !self.is_alive() {
+            return "exited";
+        }
+        let quiet_for = self.last_output_at.lock().unwrap().elapsed();
+        if quiet_for < std::time::Duration::from_secs(2) {
+            return "working";
+        }
+        let tail = self.tail.lock().unwrap();
+        let text = String::from_utf8_lossy(&tail);
+        let last_line = text.lines().last().unwrap_or("").trim_end();
+        let promptish = last_line.ends_with('$')
+            || last_line.ends_with('#')
+            || last_line.ends_with('>')
+            || last_line.ends_with(":?")
+            || last_line.contains("(y/n)")
+            || last_line.contains("[Y/n]")
+            || last_line.contains("Allow")
+            || last_line.contains("approve");
+        if promptish {
+            "waiting"
+        } else {
+            "idle"
+        }
+    }
 }
 
 impl Agent {
@@ -143,6 +177,10 @@ impl AgentManager {
         let writer = pair.master.take_writer()?;
 
         let agent_id = id.clone();
+        let last_output_at = Arc::new(Mutex::new(std::time::Instant::now()));
+        let tail = Arc::new(Mutex::new(Vec::new()));
+        let last_for_reader = last_output_at.clone();
+        let tail_for_reader = tail.clone();
         let id_for_reader = id.clone();
         std::thread::spawn(move || {
             let mut buf = [0u8; 8192];
@@ -153,6 +191,15 @@ impl AgentManager {
                         break;
                     }
                     Ok(n) => {
+                        *last_for_reader.lock().unwrap() = std::time::Instant::now();
+                        {
+                            let mut t = tail_for_reader.lock().unwrap();
+                            t.extend_from_slice(&buf[..n]);
+                            let excess = t.len().saturating_sub(4096);
+                            if excess > 0 {
+                                t.drain(..excess);
+                            }
+                        }
                         if out_tx.send((id_for_reader.clone(), buf[..n].to_vec())).is_err() {
                             break;
                         }
@@ -169,6 +216,8 @@ impl AgentManager {
             writer: Mutex::new(writer),
             master: Mutex::new(pair.master),
             child: Mutex::new(child),
+            last_output_at,
+            tail,
         };
         self.agents.lock().unwrap().insert(agent_id.clone(), agent);
         info!(agent_id, name, command, "agent spawned");
@@ -200,6 +249,16 @@ impl AgentManager {
     #[allow(dead_code)]
     pub fn list(&self) -> Vec<AgentId> {
         self.agents.lock().unwrap().keys().cloned().collect()
+    }
+
+    /// Snapshot of `(agent_id, derived_status)` for the status ticker.
+    pub fn statuses(&self) -> Vec<(AgentId, &'static str)> {
+        self.agents
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(id, a)| (id.clone(), a.derived_status()))
+            .collect()
     }
 }
 

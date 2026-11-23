@@ -12,6 +12,7 @@
   --cv-waiting: #fbbf24;
   --cv-blocked: #f87171;
   --cv-done: #34d399;
+    --cv-idle: #8b93a7;
 }
 
 html,
