@@ -1,4 +1,5 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
+import { useMemo } from "react";
 import { useBoard } from "../store/board";
 import type {
   AgentNodeData,
@@ -45,6 +46,55 @@ const PERMISSION_LABEL: Record<string, string> = {
 
 function cliMeta(cli: string) {
   return CLI_META[cli.toLowerCase()] ?? { mark: "▢", label: cli };
+}
+
+const ANSI_RE = /\u001b\[[0-9;?]*[a-zA-Z]|\u001b\][^\u0007]*\u0007|\u001b[()][0-9A-B]|\u001b[=>#]?[0-9]*.?/g;
+const decoder = new TextDecoder();
+
+/** Live tail of the agent's real PTY rendered inside the node — the
+ * actual Claude Code / Codex / Gemini interface, like Deska's panels. */
+function MiniTerm({ agentId }: { agentId: string }) {
+  const buf = useBoard((s) => s.ptyBuffers[agentId]);
+  const lines = useMemo(() => {
+    if (!buf || buf.length === 0) return [];
+    const tail = buf.slice(Math.max(0, buf.length - 4000));
+    const text = decoder.decode(tail).replace(ANSI_RE, "").replace(/\r/g, "");
+    return text.split("\n").map((l) => l.trimEnd()).filter((l) => l.length > 0).slice(-5);
+  }, [buf]);
+  if (lines.length === 0) return null;
+  return (
+    <div
+      className="nodrag"
+      style={{
+        marginTop: 10,
+        padding: "7px 9px",
+        borderRadius: 8,
+        background: "rgba(0,0,0,0.35)",
+        border: "1px solid var(--cv-glass-edge)",
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+        fontSize: 9,
+        lineHeight: 1.5,
+        color: "rgba(236,234,230,0.72)",
+        overflow: "hidden",
+        whiteSpace: "pre",
+        textOverflow: "clip",
+        cursor: "default",
+      }}
+    >
+      {lines.map((l, i) => (
+        <div
+          key={i}
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            opacity: 0.45 + (0.55 * (i + 1)) / lines.length,
+          }}
+        >
+          {l.length > 46 ? l.slice(0, 46) : l}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
@@ -159,6 +209,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           {data.task}
         </div>
       )}
+      {data.id && <MiniTerm agentId={data.id} />}
       {data.pendingApproval && (
         <div
           className="nodrag"
