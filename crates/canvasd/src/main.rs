@@ -3,7 +3,7 @@
 //! Binds to 127.0.0.1 only. Every connection requires the per-launch session
 //! token (`?token=` on /ws, `Authorization: Bearer` on /api/*).
 
-use canvasd::agent::{canvas_result_line, dirty_file_count, last_visible_line, sensitive_line, worktree_branch, AgentManager};
+use canvasd::agent::{canvas_result_line, dirty_file_count, dirty_files, last_visible_line, sensitive_line, worktree_branch, AgentManager};
 use canvasd::protocol;
 use canvasd::store;
 use anyhow::Result;
@@ -697,7 +697,7 @@ async fn main() -> Result<()> {
                 std::collections::HashMap::new();
             let mut last_line: std::collections::HashMap<String, String> =
                 std::collections::HashMap::new();
-            let mut last_diff: std::collections::HashMap<String, (u32, String)> =
+            let mut last_diff: std::collections::HashMap<String, (Vec<String>, String)> =
                 std::collections::HashMap::new();
             let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
             let mut tick_n: u32 = 0;
@@ -758,13 +758,15 @@ async fn main() -> Result<()> {
                 if tick_n.is_multiple_of(3) {
                     for id in agents.ids() {
                         if let Some(wt) = agents.worktree(&id) {
-                            let files = dirty_file_count(&wt);
+                            let paths = dirty_files(&wt);
+                            let files = paths.len() as u32;
                             let branch = worktree_branch(&wt);
-                            if last_diff.get(&id) != Some(&(files, branch.clone())) {
-                                last_diff.insert(id.clone(), (files, branch.clone()));
+                            if last_diff.get(&id) != Some(&(paths.clone(), branch.clone())) {
+                                last_diff.insert(id.clone(), (paths.clone(), branch.clone()));
                                 let _ = ev.send(Event::Control(ServerMsg::Diff {
                                     agent_id: id,
                                     files,
+                                    paths,
                                     branch,
                                 }));
                             }

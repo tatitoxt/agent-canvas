@@ -108,6 +108,24 @@ export function DelegationPanel({
           </span>
         )}
       </div>
+      {(to?.paths?.length ?? 0) > 0 && (
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: 10.5,
+            fontFamily: "ui-monospace, monospace",
+            color: "var(--cv-ink-dim)",
+            maxHeight: 120,
+            overflowY: "auto",
+            lineHeight: 1.6,
+          }}
+        >
+          {to!.paths!.slice(0, 40).map((p) => (
+            <div key={p}>{p}</div>
+          ))}
+          {to!.paths!.length > 40 && <div>…{to!.paths!.length - 40} more</div>}
+        </div>
+      )}
     </div>
   );
 }

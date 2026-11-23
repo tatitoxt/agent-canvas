@@ -16,7 +16,7 @@ export type ServerMsg =
   | { type: "workspace_created"; workspace_id: string; name: string; repo: string }
   | { type: "status"; agent_id: string; status: string }
   | { type: "activity"; agent_id: string; line: string }
-  | { type: "diff"; agent_id: string; files: number; branch?: string }
+  | { type: "diff"; agent_id: string; files: number; paths?: string[]; branch?: string }
   | { type: "error"; agent_id: string | null; message: string }
   | { type: "needs_approval"; agent_id: string; line: string }
   | { type: "needs_attention"; agent_id: string; reason: string }

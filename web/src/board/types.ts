@@ -12,6 +12,8 @@ export type AgentNodeData = {
   lastOutput?: string;
   /** Uncommitted files in the agent's worktree — the diff badge. */
   files?: number;
+  /** Uncommitted file paths — badge tooltip. */
+  paths?: string[];
   /** Command line held by the supervised-input gate awaiting a decision. */
   pendingApproval?: string;
   /** Worktree branch — shown as a muted mono badge. */

@@ -118,6 +118,7 @@ function Board() {
           cli: (a.command ?? "bash").split(/\s+/)[0].toLowerCase(),
           permission: a.permission,
           files: a.files,
+          paths: a.paths,
           status: a.status === "exited"
             ? ("done" as const)
             : attention[a.id]

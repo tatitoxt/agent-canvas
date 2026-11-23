@@ -136,7 +136,7 @@ pub enum ServerMsg {
     Activity { agent_id: String, line: String },
     /// Files with uncommitted changes in the agent's worktree — the
     /// node's diff badge; what the delegation actually produced.
-    Diff { agent_id: String, files: u32, branch: String },
+    Diff { agent_id: String, files: u32, paths: Vec<String>, branch: String },
     /// A supervised agent's PTY input matched a destructive pattern and
     /// is held until ApproveInput/DenyInput.
     NeedsApproval { agent_id: String, line: String },

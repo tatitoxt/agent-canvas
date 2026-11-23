@@ -502,15 +502,31 @@ fn strip_ansi(s: &str) -> String {
     out
 }
 
-/// Files with uncommitted changes in a worktree — the node's "files
-/// changed" badge. Untracked files count too (`??` lines).
-pub fn dirty_file_count(worktree: &Path) -> u32 {
-    std::process::Command::new("git")
+/// Paths with uncommitted changes in a worktree — parsed from
+/// `git status --porcelain` (handles `??` and `old -> new` renames).
+pub fn dirty_files(worktree: &Path) -> Vec<String> {
+    let Ok(out) = std::process::Command::new("git")
         .args(["status", "--porcelain=v1"])
         .current_dir(worktree)
         .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).lines().count() as u32)
-        .unwrap_or(0)
+    else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| {
+            let path = l.get(3..)?.trim();
+            let path = path.split(" -> ").last().unwrap_or(path).trim_matches('"');
+            if path.is_empty() { None } else { Some(path.to_string()) }
+        })
+        .take(200)
+        .collect()
+}
+
+/// Files with uncommitted changes in a worktree — the node's "files
+/// changed" badge. Untracked files count too (`??` lines).
+pub fn dirty_file_count(worktree: &Path) -> u32 {
+    dirty_files(worktree).len() as u32
 }
 
 /// Current branch of the agent's worktree (`canvas/<name>-<id>`) — the

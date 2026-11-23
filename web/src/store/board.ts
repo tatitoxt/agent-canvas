@@ -10,6 +10,8 @@ export type LiveAgent = {
   permission?: string;
   lastLine?: string;
   files?: number;
+  /** Uncommitted file paths in the worktree (tooltip/detail list). */
+  paths?: string[];
   /** Worktree branch (`canvas/<name>-<id>`) — the node's branch badge. */
   branch?: string;
   status: AgentStatus | "exited";
@@ -205,6 +207,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                   [msg.agent_id]: {
                     ...agents[msg.agent_id],
                     files: msg.files,
+                    paths: msg.paths ?? agents[msg.agent_id].paths,
                     branch: msg.branch ?? agents[msg.agent_id].branch,
                   },
                 },

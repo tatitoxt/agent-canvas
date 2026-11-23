@@ -8,7 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use base64::Engine;
-use canvasd::agent::{canvas_result_line, dirty_file_count, sensitive_line, worktree_branch, AgentManager};
+use canvasd::agent::{canvas_result_line, dirty_file_count, dirty_files, sensitive_line, worktree_branch, AgentManager};
 use canvasd::protocol::{AgentStatus, ServerMsg, SnapshotAgent, SnapshotAutomation, SnapshotDelegation};
 use canvasd::store::Store;
 use std::collections::HashMap;
@@ -500,7 +500,7 @@ fn main() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let mut last: HashMap<String, &'static str> = HashMap::new();
-                let mut last_diff: HashMap<String, (u32, String)> = HashMap::new();
+                let mut last_diff: HashMap<String, (Vec<String>, String)> = HashMap::new();
                 let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
                 let mut tick_n: u32 = 0;
                 loop {
@@ -540,13 +540,14 @@ fn main() {
                     if tick_n.is_multiple_of(3) {
                         for id in state.agents.ids() {
                             if let Some(wt) = state.agents.worktree(&id) {
-                                let files = dirty_file_count(&wt);
+                                let paths = dirty_files(&wt);
+                                let files = paths.len() as u32;
                                 let branch = worktree_branch(&wt);
-                                if last_diff.get(&id) != Some(&(files, branch.clone())) {
-                                    last_diff.insert(id.clone(), (files, branch.clone()));
+                                if last_diff.get(&id) != Some(&(paths.clone(), branch.clone())) {
+                                    last_diff.insert(id.clone(), (paths.clone(), branch.clone()));
                                     emit_control(
                                         &handle,
-                                        &ServerMsg::Diff { agent_id: id, files, branch },
+                                        &ServerMsg::Diff { agent_id: id, files, paths, branch },
                                     );
                                 }
                             }
