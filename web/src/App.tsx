@@ -18,6 +18,7 @@ import { MissionStrip } from "./components/MissionStrip";
 import { NavRail } from "./components/NavRail";
 import { SpawnBar } from "./components/SpawnBar";
 import { TerminalPanel } from "./components/TerminalPanel";
+import { InboxPanel } from "./components/InboxPanel";
 import { Topbar } from "./components/Topbar";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
@@ -39,6 +40,7 @@ function Board() {
   const { screenToFlowPosition } = useReactFlow();
   const [openTerm, setOpenTerm] = useState<{ id: string; name: string } | null>(null);
   const [delegateFrom, setDelegateFrom] = useState<string | null>(null);
+  const [nav, setNav] = useState("canvas");
 
   const counts = useMemo(() => {
     const c: Record<AgentStatus, number> = {
@@ -128,7 +130,10 @@ function Board() {
 
   return (
     <div className="relative h-full w-full">
-      <NavRail active="canvas" />
+      <NavRail
+        active={nav}
+        onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
+      />
       <Topbar />
       <MissionStrip counts={counts} />
       <SpawnBar />
@@ -172,6 +177,14 @@ function Board() {
         />
       </ReactFlow>
       {connected === false && null}
+      {nav === "inbox" && (
+        <InboxPanel
+          onOpenAgent={(id) => {
+            const a = agents[id];
+            if (a && a.status !== "exited") setOpenTerm({ id: a.id, name: a.name });
+          }}
+        />
+      )}
       {openTerm && (
         <TerminalPanel
           agentId={openTerm.id}
