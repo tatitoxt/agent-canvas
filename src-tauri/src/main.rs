@@ -9,7 +9,7 @@
 
 use base64::Engine;
 use canvasd::agent::{canvas_result_line, dirty_file_count, sensitive_line, worktree_branch, AgentManager};
-use canvasd::protocol::{AgentStatus, ServerMsg, SnapshotAgent, SnapshotDelegation};
+use canvasd::protocol::{AgentStatus, ServerMsg, SnapshotAgent, SnapshotAutomation, SnapshotDelegation};
 use canvasd::store::Store;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -178,6 +178,115 @@ fn delegate(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
+fn create_automation(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    name: String,
+    prompt: String,
+    command: String,
+    workspace_id: Option<String>,
+    permission: Option<String>,
+    idle_secs: Option<u64>,
+    on_approval: Option<String>,
+) -> Result<String, String> {
+    let level = canvasd::protocol::normalize_permission(permission.as_deref());
+    let policy = if on_approval.as_deref() == Some("deny") { "deny" } else { "hold" };
+    let idle = idle_secs.unwrap_or(300).clamp(10, 86_400);
+    let id = uuid_v4ish();
+    state
+        .store
+        .automation_created(&id, &name, &prompt, &command, workspace_id.as_deref(), level, idle, policy)
+        .map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::AutomationSaved {
+        automation: SnapshotAutomation {
+            id: id.clone(),
+            name,
+            prompt,
+            command,
+            workspace_id,
+            permission: level.to_string(),
+            idle_secs: idle,
+            on_approval: policy.to_string(),
+            last_run_at: None,
+        },
+    });
+    Ok(id)
+}
+
+#[tauri::command]
+fn run_automation(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    automation_id: String,
+) -> Result<String, String> {
+    let (_, name, prompt, command, workspace_id, permission, idle_secs, on_approval, _) = state
+        .store
+        .automation_row(&automation_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "no such automation".to_string())?;
+    let id = spawn_wired(&app, &state, &name, &command, ".", workspace_id.as_deref(), &permission)?;
+    state
+        .agents
+        .set_automation(&id, idle_secs.max(0) as u64, on_approval == "deny");
+    let _ = state.store.automation_ran(&automation_id);
+    emit_control(&app, &ServerMsg::Spawned {
+        agent_id: id.clone(),
+        name,
+        command,
+        permission,
+        workspace_id,
+    });
+    // Inject the saved prompt — the kernel PTY buffer holds it until the
+    // CLI reads stdin, gated like operator input.
+    let bytes = format!("{prompt}\n");
+    if state
+        .agents
+        .permission(&id)
+        .map(|p| p == "supervised")
+        .unwrap_or(false)
+    {
+        if let Some(line) = sensitive_line(bytes.as_bytes()) {
+            if !state
+                .agents
+                .automation(&id)
+                .map(|m| m.deny_approvals)
+                .unwrap_or(false)
+            {
+                state
+                    .pending_inputs
+                    .lock()
+                    .unwrap()
+                    .insert(id.clone(), bytes.into_bytes());
+                emit_control(&app, &ServerMsg::NeedsApproval { agent_id: id.clone(), line });
+                return Ok(id);
+            }
+            emit_control(&app, &ServerMsg::NeedsAttention {
+                agent_id: id.clone(),
+                reason: format!("automation policy denied: {line}"),
+            });
+            return Ok(id);
+        }
+    }
+    state.agents.write(&id, bytes.as_bytes()).map_err(|e| e.to_string())?;
+    Ok(id)
+}
+
+#[tauri::command]
+fn delete_automation(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    automation_id: String,
+) -> Result<(), String> {
+    state
+        .store
+        .automation_deleted(&automation_id)
+        .map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::AutomationDeleted { automation_id });
+    Ok(())
+}
+
+#[tauri::command]
 fn pty_input(app: AppHandle, state: State<'_, CanvasState>, agent_id: String, data: String) -> Result<(), String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&data)
@@ -190,6 +299,20 @@ fn pty_input(app: AppHandle, state: State<'_, CanvasState>, agent_id: String, da
         .unwrap_or(false);
     if supervised {
         if let Some(line) = sensitive_line(&bytes) {
+            // Automation guardrail: a run whose approval policy is "deny"
+            // drops gated input instead of waiting on a human forever.
+            if state
+                .agents
+                .automation(&agent_id)
+                .map(|m| m.deny_approvals)
+                .unwrap_or(false)
+            {
+                emit_control(&app, &ServerMsg::NeedsAttention {
+                    agent_id,
+                    reason: format!("automation policy denied: {line}"),
+                });
+                return Ok(());
+            }
             state
                 .pending_inputs
                 .lock()
@@ -299,6 +422,16 @@ fn snapshot(state: State<'_, CanvasState>) -> Result<serde_json::Value, String> 
         "delegations": delegations,
         "workspaces": workspaces,
         "layout": layout,
+        "automations": state
+            .store
+            .automations_snapshot()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at)| SnapshotAutomation {
+                id, name, prompt, command, workspace_id, permission,
+                idle_secs: idle_secs.max(0) as u64, on_approval, last_run_at,
+            })
+            .collect::<Vec<_>>(),
         "approvals": state
             .pending_inputs
             .lock()
@@ -389,6 +522,28 @@ fn main() {
                         }
                     }
 
+                    // Automation guardrail pass: alert once when a run goes
+                    // silent past its idle limit (clears on fresh output).
+                    for id in state.agents.automation_ids() {
+                        if let (Some(meta), Some(silent)) = (
+                            state.agents.automation(&id),
+                            state.agents.silent_for(&id),
+                        ) {
+                            if silent >= meta.idle_secs && !meta.hang_notified {
+                                state.agents.set_hang_notified(&id, true);
+                                emit_control(
+                                    &handle,
+                                    &ServerMsg::NeedsAttention {
+                                        agent_id: id,
+                                        reason: format!("silent {}s (limit {}s)", silent, meta.idle_secs),
+                                    },
+                                );
+                            } else if silent < 5 && meta.hang_notified {
+                                state.agents.set_hang_notified(&id, false);
+                            }
+                        }
+                    }
+
                     // Derived statuses.
                     for (id, status) in state.agents.statuses() {
                         if last.get(&id) != Some(&status) {
@@ -422,6 +577,9 @@ fn main() {
             pty_resize,
             confirm_destructive,
             move_node,
+            create_automation,
+            run_automation,
+            delete_automation,
             snapshot,
         ])
         .run(tauri::generate_context!())

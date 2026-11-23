@@ -19,6 +19,7 @@ import { NavRail } from "./components/NavRail";
 import { SpawnBar } from "./components/SpawnBar";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { InboxPanel } from "./components/InboxPanel";
+import { AutomationsPanel } from "./components/AutomationsPanel";
 import { Topbar } from "./components/Topbar";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
@@ -194,6 +195,7 @@ function Board() {
           }}
         />
       )}
+      {nav === "automations" && <AutomationsPanel />}
       {openTerm && (
         <TerminalPanel
           agentId={openTerm.id}

@@ -75,6 +75,34 @@ export class TauriCanvasClient {
     void invoke("deny_input", { agentId }).catch(console.error);
   }
 
+  createAutomation(a: {
+    name: string;
+    prompt: string;
+    command: string;
+    workspace_id?: string;
+    permission?: string;
+    idle_secs?: number;
+    on_approval?: string;
+  }) {
+    void invoke("create_automation", {
+      name: a.name,
+      prompt: a.prompt,
+      command: a.command,
+      workspaceId: a.workspace_id ?? null,
+      permission: a.permission ?? null,
+      idleSecs: a.idle_secs ?? null,
+      onApproval: a.on_approval ?? null,
+    }).catch(console.error);
+  }
+
+  runAutomation(automationId: string) {
+    void invoke("run_automation", { automationId }).catch(console.error);
+  }
+
+  deleteAutomation(automationId: string) {
+    void invoke("delete_automation", { automationId }).catch(console.error);
+  }
+
   delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string) {
     void invoke("delegate", { from, name, command, task, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null }).catch(
       console.error,

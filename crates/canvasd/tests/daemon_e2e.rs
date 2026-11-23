@@ -360,3 +360,75 @@ async fn supervised_input_is_gated_until_approved() {
         "approved input must reach the agent's PTY"
     );
 }
+
+#[tokio::test]
+async fn automation_guardrails_fire() {
+    let d = Daemon::start();
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token)).await.unwrap();
+    let _ = next_ctrl(&mut ws, Duration::from_secs(3)).await;
+
+    // Save an automation: deny policy for gated input, 10s hang limit.
+    ws.send(Message::Text(
+        json!({
+            "cmd": "create_automation",
+            "name": "nightly",
+            "prompt": "sleep 30",
+            "command": "bash",
+            "workspace_id": null,
+            "permission": "supervised",
+            "idle_secs": 10,
+            "on_approval": "deny"
+        })
+        .to_string()
+        .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(4), |m| {
+        m["type"] == "automation_saved"
+    })
+    .await;
+    let auto_id = seen
+        .iter()
+        .find(|m| m["type"] == "automation_saved")
+        .unwrap()["automation"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Run it → agent spawns under automation meta.
+    ws.send(Message::Text(
+        json!({"cmd":"run_automation","automation_id":auto_id}).to_string().into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |m| m["type"] == "spawned").await;
+    let agent_id = seen
+        .iter()
+        .find(|m| m["type"] == "spawned")
+        .unwrap()["agent_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Deny policy: gated input surfaces as needs_attention, never needs_approval.
+    ws.send(Message::Binary(pty_frame(&agent_id, b"sudo rm -rf /\n").into()))
+        .await
+        .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(4), |m| {
+        m["type"] == "needs_attention" || m["type"] == "needs_approval"
+    })
+    .await;
+    assert!(seen.iter().any(|m| m["type"] == "needs_attention"));
+    assert!(!seen.iter().any(|m| m["type"] == "needs_approval"));
+
+    // Hang guardrail: agent goes silent; after idle_secs an alert fires once.
+    let seen = collect_until(&mut ws, Duration::from_secs(14), |m| {
+        m["type"] == "needs_attention" && m["reason"].as_str().unwrap_or("").contains("silent")
+    })
+    .await;
+    assert!(
+        seen.iter().any(|m| m["reason"].as_str().unwrap_or("").contains("silent")),
+        "idle agent must raise a hang alert"
+    );
+}

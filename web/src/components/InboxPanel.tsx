@@ -29,7 +29,13 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
   const agents = useBoard((s) => s.agents);
   const edges = useBoard((s) => s.edges);
   const approvals = useBoard((s) => s.approvals);
+  const attention = useBoard((s) => s.attention);
 
+  const alerts = Object.entries(attention).map(([id, reason]) => ({
+    id,
+    reason,
+    name: agents[id]?.name ?? id.slice(0, 8),
+  }));
   const held = Object.entries(approvals).map(([id, line]) => ({
     id,
     line,
@@ -41,7 +47,8 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
   const inFlight = Object.values(edges).filter((e) => e.state === "delegated");
   const done = Object.values(edges).filter((e) => e.state === "returned");
   const empty =
-    held.length === 0 && needsYou.length === 0 && inFlight.length === 0 && done.length === 0;
+    held.length === 0 && alerts.length === 0 && needsYou.length === 0 &&
+    inFlight.length === 0 && done.length === 0;
 
   return (
     <div
@@ -74,6 +81,17 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
           <div style={{ padding: "18px 12px", fontSize: 11.5, color: "var(--cv-ink-dim)" }}>
             Nothing needs you — agents are running or done.
           </div>
+        )}
+        {alerts.length > 0 && (
+          <>
+            <div style={{ ...groupLabel, color: "var(--cv-blocked)" }}>automation alerts</div>
+            {alerts.map((a) => (
+              <button key={a.id} style={rowStyle} className="inbox-row" onClick={() => onOpenAgent(a.id)}>
+                <span style={{ fontSize: 12, fontWeight: 600 }}>{a.name}</span>
+                <span style={{ fontSize: 11, color: "var(--cv-ink-dim)" }}>{a.reason}</span>
+              </button>
+            ))}
+          </>
         )}
         {held.length > 0 && (
           <>

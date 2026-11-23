@@ -20,6 +20,19 @@ pub type DelegationRow = (
     String,
     Option<i64>,
 );
+/// Row of the automations table: (id, name, prompt, command, workspace_id,
+/// permission, idle_secs, on_approval, last_run_at).
+pub type AutomationRow = (
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    String,
+    i64,
+    String,
+    Option<String>,
+);
 
 pub struct Store {
     conn: Mutex<Connection>,
@@ -86,6 +99,25 @@ impl Store {
             conn.execute_batch(
                 "ALTER TABLE delegations ADD COLUMN files_changed INTEGER;
                  PRAGMA user_version = 3;",
+            )?;
+        }
+        // v3 → v4: saved automations — a task the user runs on demand,
+        // with guardrails (hang limit + approval policy) like Deska's.
+        if version < 4 {
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS automations (
+                   id TEXT PRIMARY KEY,
+                   name TEXT NOT NULL,
+                   prompt TEXT NOT NULL,
+                   command TEXT NOT NULL,
+                   workspace_id TEXT,
+                   permission TEXT NOT NULL DEFAULT 'auto',
+                   idle_secs INTEGER NOT NULL DEFAULT 300,
+                   on_approval TEXT NOT NULL DEFAULT 'hold',
+                   last_run_at TEXT,
+                   created_at TEXT DEFAULT (datetime('now'))
+                 );
+                 PRAGMA user_version = 4;",
             )?;
         }
         Ok(Self { conn: Mutex::new(conn) })
@@ -226,6 +258,85 @@ impl Store {
             ))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Tuple: (id, name, prompt, command, workspace_id, permission,
+    /// idle_secs, on_approval, last_run_at).
+    #[allow(clippy::type_complexity)]
+    pub fn automation_created(
+        &self,
+        id: &str,
+        name: &str,
+        prompt: &str,
+        command: &str,
+        workspace_id: Option<&str>,
+        permission: &str,
+        idle_secs: u64,
+        on_approval: &str,
+    ) -> Result<()> {
+        self.conn.lock().unwrap().execute(
+            "INSERT INTO automations (id, name, prompt, command, workspace_id, permission, idle_secs, on_approval) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            (id, name, prompt, command, workspace_id, permission, idle_secs as i64, on_approval),
+        )?;
+        Ok(())
+    }
+
+    pub fn automation_row(&self, id: &str) -> Result<Option<AutomationRow>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare(
+            "SELECT id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at FROM automations WHERE id = ?1",
+        )?;
+        let mut rows = st.query_map([id], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get::<_, i64>(6)?,
+                r.get(7)?,
+                r.get(8)?,
+            ))
+        })?;
+        Ok(rows.next().transpose()?)
+    }
+
+    pub fn automations_snapshot(&self) -> Result<Vec<AutomationRow>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare(
+            "SELECT id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at FROM automations ORDER BY created_at",
+        )?;
+        let rows = st.query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get::<_, i64>(6)?,
+                r.get(7)?,
+                r.get(8)?,
+            ))
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn automation_ran(&self, id: &str) -> Result<()> {
+        self.conn.lock().unwrap().execute(
+            "UPDATE automations SET last_run_at = datetime('now') WHERE id = ?1",
+            (id,),
+        )?;
+        Ok(())
+    }
+
+    pub fn automation_deleted(&self, id: &str) -> Result<()> {
+        self.conn
+            .lock()
+            .unwrap()
+            .execute("DELETE FROM automations WHERE id = ?1", (id,))?;
+        Ok(())
     }
 
     pub fn layout_map(&self) -> Result<std::collections::HashMap<String, (f64, f64)>> {

@@ -69,6 +69,22 @@ pub enum ClientMsg {
         workspace_id: Option<String>,
         permission: Option<String>,
     },
+    /// Define an automation: a saved task that runs an agent with a prompt
+    /// and guardrails (idle hang limit + approval policy).
+    CreateAutomation {
+        name: String,
+        prompt: String,
+        command: String,
+        workspace_id: Option<String>,
+        permission: Option<String>,
+        /// Seconds of PTY silence before a `needs_attention` alert fires.
+        idle_secs: Option<u64>,
+        /// "hold" (default: wait for operator) or "deny" (drop gated input).
+        on_approval: Option<String>,
+    },
+    /// Run a saved automation once: spawns its agent and injects the prompt.
+    RunAutomation { automation_id: String },
+    DeleteAutomation { automation_id: String },
 }
 
 /// Deska-style permission ladder, most → least restrictive. The level
@@ -120,6 +136,11 @@ pub enum ServerMsg {
     /// A supervised agent's PTY input matched a destructive pattern and
     /// is held until ApproveInput/DenyInput.
     NeedsApproval { agent_id: String, line: String },
+    /// An automation guardrail fired: the agent hung past its idle limit
+    /// or hit a gated command its policy denied.
+    NeedsAttention { agent_id: String, reason: String },
+    AutomationSaved { automation: SnapshotAutomation },
+    AutomationDeleted { automation_id: String },
     Error { agent_id: Option<String>, message: String },
     Delegation { edge_id: String, from: String, to: String, task: String },
     Result { edge_id: String, summary: String, files: u32 },
@@ -134,7 +155,21 @@ pub enum ServerMsg {
         /// Held supervised inputs: agent_id → the line awaiting approval.
         /// Replayed so late-joining clients still see pending gates.
         approvals: std::collections::HashMap<String, String>,
+        automations: Vec<SnapshotAutomation>,
     },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SnapshotAutomation {
+    pub id: String,
+    pub name: String,
+    pub prompt: String,
+    pub command: String,
+    pub workspace_id: Option<String>,
+    pub permission: String,
+    pub idle_secs: u64,
+    pub on_approval: String,
+    pub last_run_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

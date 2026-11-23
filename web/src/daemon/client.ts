@@ -19,6 +19,9 @@ export type ServerMsg =
   | { type: "diff"; agent_id: string; files: number; branch?: string }
   | { type: "error"; agent_id: string | null; message: string }
   | { type: "needs_approval"; agent_id: string; line: string }
+  | { type: "needs_attention"; agent_id: string; reason: string }
+  | { type: "automation_saved"; automation: AutomationDef }
+  | { type: "automation_deleted"; automation_id: string }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
   | { type: "result"; edge_id: string; summary: string; files?: number }
   | {
@@ -28,6 +31,7 @@ export type ServerMsg =
       workspaces?: SnapshotWorkspace[];
       layout: Record<string, [number, number]>;
       approvals?: Record<string, string>;
+      automations?: AutomationDef[];
     };
 
 export type SnapshotWorkspace = {
@@ -44,6 +48,18 @@ export type SnapshotDelegation = {
   result?: string | null;
   files?: number;
   state: string;
+};
+
+export type AutomationDef = {
+  id: string;
+  name: string;
+  prompt: string;
+  command: string;
+  workspace_id?: string | null;
+  permission: string;
+  idle_secs: number;
+  on_approval: string;
+  last_run_at?: string | null;
 };
 
 export type Handlers = {
@@ -116,6 +132,26 @@ export class CanvasClient {
 
   moveNode(agentId: string, x: number, y: number) {
     this.send({ cmd: "move_node", agent_id: agentId, x, y });
+  }
+
+  createAutomation(a: {
+    name: string;
+    prompt: string;
+    command: string;
+    workspace_id?: string;
+    permission?: string;
+    idle_secs?: number;
+    on_approval?: string;
+  }) {
+    this.send({ cmd: "create_automation", ...a });
+  }
+
+  runAutomation(automationId: string) {
+    this.send({ cmd: "run_automation", automation_id: automationId });
+  }
+
+  deleteAutomation(automationId: string) {
+    this.send({ cmd: "delete_automation", automation_id: automationId });
   }
 
   /** Supervised-input gate: release the held payload to the PTY. */

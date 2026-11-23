@@ -32,6 +32,8 @@ export type LiveEdge = {
   state: "delegated" | "returned" | "failed";
 };
 
+import type { AutomationDef } from "../daemon/client";
+
 type DaemonTransport = CanvasClient | TauriCanvasClient;
 
 type BoardState = {
@@ -52,6 +54,10 @@ type BoardState = {
   moveHistory: Array<{ id: string; prev?: { x: number; y: number } }>;
   /** Bump counter telling the canvas to run fitView (local "fit" request). */
   viewCmdN: number;
+  /** Saved automations (Deska-style guardrailed task runs). */
+  automations: Record<string, AutomationDef>;
+  /** agent_id → latest automation guardrail alert (hang / denied policy). */
+  attention: Record<string, string>;
   ptyListeners: Record<string, (bytes: Uint8Array) => void>;
   connect: (token: string) => void;
   spawn: (name: string, command: string, workspaceId?: string, permission?: string) => void;
@@ -71,6 +77,17 @@ type BoardState = {
   /** Local short-request router (Deska-style): runs instant commands
    * client-side — no agent spawn, no token spend. Returns feedback text. */
   quickRequest: (text: string) => string;
+  createAutomation: (a: {
+    name: string;
+    prompt: string;
+    command: string;
+    workspace_id?: string;
+    permission?: string;
+    idle_secs?: number;
+    on_approval?: string;
+  }) => void;
+  runAutomation: (automationId: string) => void;
+  deleteAutomation: (automationId: string) => void;
 };
 
 let client: DaemonTransport | null = null;
@@ -90,6 +107,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   termFont: 13,
   moveHistory: [],
   viewCmdN: 0,
+  automations: {},
+  attention: {},
   ptyListeners: {},
 
   connect: (token: string) => {
@@ -141,14 +160,36 @@ export const useBoard = create<BoardState>((set, get) => ({
             break;
           case "activity":
             if (agents[msg.agent_id]) {
+              const attention = { ...get().attention };
+              delete attention[msg.agent_id];
               set({
                 agents: {
                   ...agents,
                   [msg.agent_id]: { ...agents[msg.agent_id], lastLine: msg.line },
                 },
+                attention,
               });
             }
             break;
+          case "needs_attention":
+            set({
+              attention: { ...get().attention, [msg.agent_id]: msg.reason },
+            });
+            break;
+          case "automation_saved":
+            set({
+              automations: {
+                ...get().automations,
+                [msg.automation.id]: msg.automation,
+              },
+            });
+            break;
+          case "automation_deleted": {
+            const next = { ...get().automations };
+            delete next[msg.automation_id];
+            set({ automations: next });
+            break;
+          }
           case "diff":
             if (agents[msg.agent_id]) {
               set({
@@ -242,7 +283,17 @@ export const useBoard = create<BoardState>((set, get) => ({
                 },
               ]),
             );
-            set({ agents, positions, edges, workspaces, approvals: msg.approvals ?? {} });
+            const automations = Object.fromEntries(
+              (msg.automations ?? []).map((a) => [a.id, a]),
+            );
+            set({
+              agents,
+              positions,
+              edges,
+              workspaces,
+              approvals: msg.approvals ?? {},
+              automations,
+            });
             break;
           }
           case "error":
@@ -327,6 +378,10 @@ export const useBoard = create<BoardState>((set, get) => ({
     if (n) set({ agents: next });
     return n;
   },
+
+  createAutomation: (a) => client?.createAutomation(a),
+  runAutomation: (automationId) => client?.runAutomation(automationId),
+  deleteAutomation: (automationId) => client?.deleteAutomation(automationId),
 
   quickRequest: (text) => {
     const t = text.trim().toLowerCase();

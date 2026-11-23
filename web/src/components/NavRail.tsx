@@ -3,7 +3,7 @@ import { useBoard } from "../store/board";
 const ITEMS = [
   { key: "canvas", glyph: "◫", label: "Canvas" },
   { key: "inbox", glyph: "◱", label: "Inbox" },
-  { key: "agents", glyph: "◈", label: "Agents" },
+  { key: "automations", glyph: "◈", label: "Automations" },
   { key: "settings", glyph: "◌", label: "Settings" },
 ] as const;
 

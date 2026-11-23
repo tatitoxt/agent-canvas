@@ -50,6 +50,20 @@ fn gated_write(state: &Arc<AppState>, agent_id: &str, bytes: &[u8]) -> bool {
         .unwrap_or(false);
     if supervised {
         if let Some(line) = sensitive_line(bytes) {
+            // Automation guardrail: a run whose approval policy is "deny"
+            // never waits on a human — the input is dropped and reported.
+            if state
+                .agents
+                .automation(agent_id)
+                .map(|m| m.deny_approvals)
+                .unwrap_or(false)
+            {
+                let _ = state.events.send(Event::Control(ServerMsg::NeedsAttention {
+                    agent_id: agent_id.to_string(),
+                    reason: format!("automation policy denied: {line}"),
+                }));
+                return true;
+            }
             state
                 .pending_inputs
                 .lock()
@@ -200,6 +214,13 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                         state,
                     }
                 })
+                .collect(),
+            automations: state
+                .store
+                .automations_snapshot()
+                .unwrap_or_default()
+                .into_iter()
+                .map(automation_to_snapshot)
                 .collect(),
             layout: state.store.layout_map().unwrap_or_default(),
             approvals: state
@@ -438,6 +459,131 @@ fn handle_client_msg(
                 warn!(error = %e, "failed to save node position");
             }
         }
+        ClientMsg::CreateAutomation {
+            name,
+            prompt,
+            command,
+            workspace_id,
+            permission,
+            idle_secs,
+            on_approval,
+        } => {
+            let level = protocol::normalize_permission(permission.as_deref());
+            let policy = match on_approval.as_deref() {
+                Some("deny") => "deny",
+                _ => "hold",
+            };
+            let idle = idle_secs.unwrap_or(300).clamp(10, 86_400);
+            let id = uuid_like();
+            match state.store.automation_created(
+                &id,
+                &name,
+                &prompt,
+                &command,
+                workspace_id.as_deref(),
+                level,
+                idle,
+                policy,
+            ) {
+                Ok(()) => send_control(ServerMsg::AutomationSaved {
+                    automation: protocol::SnapshotAutomation {
+                        id,
+                        name,
+                        prompt,
+                        command,
+                        workspace_id,
+                        permission: level.to_string(),
+                        idle_secs: idle,
+                        on_approval: policy.to_string(),
+                        last_run_at: None,
+                    },
+                }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
+            }
+        }
+        ClientMsg::RunAutomation { automation_id } => {
+            match state.store.automation_row(&automation_id) {
+                Ok(Some((_, name, prompt, command, workspace_id, permission, idle_secs, on_approval, _))) => {
+                    match spawn_agent(
+                        state,
+                        &name,
+                        &command,
+                        ".",
+                        workspace_id.as_deref(),
+                        &permission,
+                    ) {
+                        Ok(agent_id) => {
+                            state.agents.set_automation(
+                                &agent_id,
+                                idle_secs.max(0) as u64,
+                                on_approval == "deny",
+                            );
+                            let _ = state.store.automation_ran(&automation_id);
+                            send_control(ServerMsg::Spawned {
+                                agent_id: agent_id.clone(),
+                                name,
+                                command,
+                                permission,
+                                workspace_id,
+                            });
+                            // Inject the saved prompt into the fresh PTY —
+                            // gated, so a supervised run still gets a gate.
+                            let st = state.clone();
+                            let agent_id2 = agent_id;
+                            tokio::spawn(async move {
+                                tokio::time::sleep(
+                                    std::time::Duration::from_millis(800),
+                                )
+                                .await;
+                                gated_write(&st, &agent_id2, prompt.as_bytes());
+                                gated_write(&st, &agent_id2, b"\n");
+                            });
+                        }
+                        Err(e) => send_control(ServerMsg::Error {
+                            agent_id: None,
+                            message: e.to_string(),
+                        }),
+                    }
+                }
+                Ok(None) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: "no such automation".into(),
+                }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
+            }
+        }
+        ClientMsg::DeleteAutomation { automation_id } => {
+            match state.store.automation_deleted(&automation_id) {
+                Ok(()) => send_control(ServerMsg::AutomationDeleted { automation_id }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
+            }
+        }
+    }
+}
+
+/// DB row → wire shape for the automations snapshot.
+fn automation_to_snapshot(
+    (id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at): store::AutomationRow,
+) -> protocol::SnapshotAutomation {
+    protocol::SnapshotAutomation {
+        id,
+        name,
+        prompt,
+        command,
+        workspace_id,
+        permission,
+        idle_secs: idle_secs.max(0) as u64,
+        on_approval,
+        last_run_at,
     }
 }
 
@@ -464,6 +610,10 @@ fn generate_token() -> String {
     let mut buf = [0u8; 32];
     rand::rng().fill_bytes(&mut buf);
     buf.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn uuid_like() -> String {
+    uuid::Uuid::new_v4().simple().to_string()[..12].to_string()
 }
 
 #[tokio::main]
@@ -592,6 +742,24 @@ async fn main() -> Result<()> {
                                     branch,
                                 }));
                             }
+                        }
+                    }
+                }
+                // Automation guardrail pass: an automation-run agent silent
+                // past its idle limit fires one attention alert (cleared
+                // automatically when output resumes).
+                for id in agents.automation_ids() {
+                    if let (Some(meta), Some(silent)) =
+                        (agents.automation(&id), agents.silent_for(&id))
+                    {
+                        if silent >= meta.idle_secs && !meta.hang_notified {
+                            agents.set_hang_notified(&id, true);
+                            let _ = ev.send(Event::Control(ServerMsg::NeedsAttention {
+                                agent_id: id,
+                                reason: format!("silent {}s (limit {}s)", silent, meta.idle_secs),
+                            }));
+                        } else if silent < 5 && meta.hang_notified {
+                            agents.set_hang_notified(&id, false);
                         }
                     }
                 }

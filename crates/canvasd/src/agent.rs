@@ -91,8 +91,20 @@ impl Agent {
     }
 }
 
+/// Automation run policy attached to a spawned agent (Deska-style
+/// guardrails): how silent it may go before the operator is alerted, and
+/// whether approval prompts auto-deny instead of waiting forever.
+#[derive(Clone, Copy)]
+pub struct AutoMeta {
+    pub idle_secs: u64,
+    pub deny_approvals: bool,
+    /// Set once a hang alert fired; reset when output resumes.
+    pub hang_notified: bool,
+}
+
 pub struct AgentManager {
     agents: Mutex<HashMap<AgentId, Agent>>,
+    automation_meta: Mutex<HashMap<AgentId, AutoMeta>>,
 }
 
 /// Ensure `cwd` stays inside `repo_root`: reject absolute paths and `..`.
@@ -140,7 +152,10 @@ impl Default for AgentManager {
 
 impl AgentManager {
     pub fn new() -> Self {
-        Self { agents: Mutex::new(HashMap::new()) }
+        Self {
+            agents: Mutex::new(HashMap::new()),
+            automation_meta: Mutex::new(HashMap::new()),
+        }
     }
 
     /// Spawn `command` in a PTY inside a fresh worktree of `repo_root`.
@@ -252,9 +267,46 @@ impl AgentManager {
     pub fn kill(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.lock().unwrap();
         let agent = agents.remove(agent_id).context("no such agent")?;
+        drop(agents);
+        self.automation_meta.lock().unwrap().remove(agent_id);
         agent.kill();
         info!(agent_id, "agent killed");
         Ok(())
+    }
+
+    /// Attach automation guardrails to a live agent.
+    pub fn set_automation(&self, id: &str, idle_secs: u64, deny_approvals: bool) {
+        self.automation_meta.lock().unwrap().insert(
+            id.to_string(),
+            AutoMeta { idle_secs, deny_approvals, hang_notified: false },
+        );
+    }
+
+    /// The agent's automation policy, if it was spawned by a run.
+    pub fn automation(&self, id: &str) -> Option<AutoMeta> {
+        self.automation_meta.lock().unwrap().get(id).copied()
+    }
+
+    /// Hang detection for the ticker: seconds since the agent's last PTY
+    /// output — `None` for unknown agents.
+    pub fn silent_for(&self, id: &str) -> Option<u64> {
+        self.agents
+            .lock()
+            .unwrap()
+            .get(id)
+            .map(|a| a.last_output_at.lock().unwrap().elapsed().as_secs())
+    }
+
+    pub fn set_hang_notified(&self, id: &str, notified: bool) {
+        if let Some(m) = self.automation_meta.lock().unwrap().get_mut(id) {
+            m.hang_notified = notified;
+        }
+    }
+
+    /// Agent ids that carry automation guardrails — the hang ticker scans
+    /// only these.
+    pub fn automation_ids(&self) -> Vec<AgentId> {
+        self.automation_meta.lock().unwrap().keys().cloned().collect()
     }
 
     #[allow(dead_code)]
