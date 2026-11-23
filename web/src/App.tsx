@@ -59,6 +59,10 @@ function Board() {
   const [edgeDetail, setEdgeDetail] = useState<string | null>(null);
   const [search, setSearch] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  // Connect on load when a token is present — no manual "connect" click.
+  useEffect(() => {
+    useBoard.getState().connect("");
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
