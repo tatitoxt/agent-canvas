@@ -378,7 +378,19 @@ fn move_node(state: State<'_, CanvasState>, agent_id: String, x: f64, y: f64) ->
 }
 
 #[tauri::command]
-fn snapshot(state: State<'_, CanvasState>) -> Result<serde_json::Value, String> {
+fn snapshot(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+) -> Result<serde_json::Value, String> {
+    // Transcript replay: buffered PTY scrollback so a reopened terminal
+    // shows history instead of a blank screen.
+    for id in state.agents.list() {
+        if let Some(buf) = state.agents.scrollback(&id) {
+            if !buf.is_empty() {
+                emit_pty(&app, &id, &buf);
+            }
+        }
+    }
     let live: HashMap<String, &str> = state.agents.statuses().into_iter().collect();
     let agents: Vec<SnapshotAgent> = state
         .store

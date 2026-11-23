@@ -59,6 +59,9 @@ type BoardState = {
   /** agent_id → latest automation guardrail alert (hang / denied policy). */
   attention: Record<string, string>;
   ptyListeners: Record<string, (bytes: Uint8Array) => void>;
+  /** Rolling PTY scrollback per agent (~64KB) — transcript shown when a
+   * terminal opens, and rebuilt from the daemon's replay on reconnect. */
+  ptyBuffers: Record<string, Uint8Array>;
   connect: (token: string) => void;
   spawn: (name: string, command: string, workspaceId?: string, permission?: string) => void;
   createWorkspace: (name: string, repo: string) => void;
@@ -68,6 +71,7 @@ type BoardState = {
   denyInput: (agentId: string) => void;
   moveNode: (agentId: string, x: number, y: number) => void;
   attachPty: (agentId: string, cb: (bytes: Uint8Array) => void) => void;
+  ptyBuffer: (agentId: string) => Uint8Array | undefined;
   detachPty: (agentId: string) => void;
   sendInput: (agentId: string, bytes: Uint8Array) => void;
   bumpFont: (delta: number) => void;
@@ -110,6 +114,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   automations: {},
   attention: {},
   ptyListeners: {},
+  ptyBuffers: {},
 
   connect: (token: string) => {
     const t = token || TOKEN;
@@ -304,6 +309,13 @@ export const useBoard = create<BoardState>((set, get) => ({
         }
       },
       onPty: (agentId: string, bytes: Uint8Array) => {
+        const prev = get().ptyBuffers[agentId];
+        const merged = new Uint8Array((prev?.length ?? 0) + bytes.length);
+        if (prev) merged.set(prev, 0);
+        merged.set(bytes, prev?.length ?? 0);
+        const capped =
+          merged.length > 65_536 ? merged.subarray(merged.length - 65_536) : merged;
+        set({ ptyBuffers: { ...get().ptyBuffers, [agentId]: capped } });
         get().ptyListeners[agentId]?.(bytes);
       },
       onClose: () => {
@@ -408,6 +420,8 @@ export const useBoard = create<BoardState>((set, get) => ({
     }
     return "try: bigger text · smaller text · undo · fit · clear done";
   },
+
+  ptyBuffer: (agentId) => get().ptyBuffers[agentId],
 
   attachPty: (agentId, cb) =>
     set((s) => ({ ptyListeners: { ...s.ptyListeners, [agentId]: cb } })),

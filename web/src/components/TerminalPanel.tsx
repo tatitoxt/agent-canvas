@@ -36,7 +36,11 @@ export function TerminalPanel({ agentId, name, onClose }: Props) {
     term.open(hostRef.current!);
     fit.fit();
 
-    const { attachPty, detachPty, sendInput } = useBoard.getState();
+    const { attachPty, detachPty, sendInput, ptyBuffer } = useBoard.getState();
+    // Transcript: replay buffered scrollback so an opened terminal shows
+    // history (daemon replay also feeds this buffer on reconnect).
+    const history = ptyBuffer(agentId);
+    if (history?.length) term.write(history);
     attachPty(agentId, (bytes) => term.write(bytes));
     const sub = term.onData((d) => sendInput(agentId, new TextEncoder().encode(d)));
 

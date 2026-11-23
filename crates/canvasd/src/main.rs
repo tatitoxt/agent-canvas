@@ -236,6 +236,17 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
         if let Ok(text) = serde_json::to_string(&snapshot) {
             let _ = socket.send(Message::Text(text.into())).await;
         }
+        // Transcript replay: buffered PTY scrollback so a reconnected
+        // terminal shows its history instead of a blank screen.
+        for id in state.agents.list() {
+            if let Some(buf) = state.agents.scrollback(&id) {
+                if !buf.is_empty() {
+                    let _ = socket
+                        .send(Message::Binary(encode_pty_frame(&id, &buf).into()))
+                        .await;
+                }
+            }
+        }
     }
 
     // Fan-out task: broadcast events → socket (JSON for control, binary for PTY).

@@ -220,7 +220,9 @@ impl AgentManager {
                         {
                             let mut t = tail_for_reader.lock().unwrap();
                             t.extend_from_slice(&buf[..n]);
-                            let excess = t.len().saturating_sub(4096);
+                            // 64KB scrollback: doubles as the transcript
+                            // replayed to clients on (re)connect.
+                            let excess = t.len().saturating_sub(65_536);
                             if excess > 0 {
                                 t.drain(..excess);
                             }
@@ -301,6 +303,15 @@ impl AgentManager {
         if let Some(m) = self.automation_meta.lock().unwrap().get_mut(id) {
             m.hang_notified = notified;
         }
+    }
+
+    /// Rolling PTY scrollback (last ~64KB) for transcript replay.
+    pub fn scrollback(&self, id: &str) -> Option<Vec<u8>> {
+        self.agents
+            .lock()
+            .unwrap()
+            .get(id)
+            .map(|a| a.tail.lock().unwrap().clone())
     }
 
     /// Agent ids that carry automation guardrails — the hang ticker scans

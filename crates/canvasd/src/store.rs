@@ -263,6 +263,7 @@ impl Store {
     /// Tuple: (id, name, prompt, command, workspace_id, permission,
     /// idle_secs, on_approval, last_run_at).
     #[allow(clippy::type_complexity)]
+    #[allow(clippy::too_many_arguments)]
     pub fn automation_created(
         &self,
         id: &str,
