@@ -36,21 +36,66 @@ impl Store {
                created_at TEXT NOT NULL DEFAULT (datetime('now')),
                resolved_at TEXT
              );
+             CREATE TABLE IF NOT EXISTS workspaces (
+               id TEXT PRIMARY KEY,
+               name TEXT NOT NULL,
+               repo TEXT NOT NULL,
+               created_at TEXT NOT NULL DEFAULT (datetime('now'))
+             );
              CREATE TABLE IF NOT EXISTS layout (
                node_id TEXT PRIMARY KEY,
                x REAL NOT NULL,
                y REAL NOT NULL
              );",
         )?;
+        // Migrations: v0 → v1 adds agents.workspace_id (agents live inside
+        // user-created workspaces that coexist on one canvas).
+        let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+        if version < 1 {
+            conn.execute_batch(
+                "ALTER TABLE agents ADD COLUMN workspace_id TEXT REFERENCES workspaces(id);
+                 PRAGMA user_version = 1;",
+            )?;
+        }
         Ok(Self { conn: Mutex::new(conn) })
     }
 
-    pub fn agent_spawned(&self, id: &str, name: &str, command: &str, worktree: &str) -> Result<()> {
+    pub fn agent_spawned(
+        &self,
+        id: &str,
+        name: &str,
+        command: &str,
+        worktree: &str,
+        workspace_id: Option<&str>,
+    ) -> Result<()> {
         self.conn.lock().unwrap().execute(
-            "INSERT INTO agents (id, name, command, worktree) VALUES (?1, ?2, ?3, ?4)",
-            (id, name, command, worktree),
+            "INSERT INTO agents (id, name, command, worktree, workspace_id) VALUES (?1, ?2, ?3, ?4, ?5)",
+            (id, name, command, worktree, workspace_id),
         )?;
         Ok(())
+    }
+
+    pub fn workspace_created(&self, id: &str, name: &str, repo: &str) -> Result<()> {
+        self.conn.lock().unwrap().execute(
+            "INSERT INTO workspaces (id, name, repo) VALUES (?1, ?2, ?3)",
+            (id, name, repo),
+        )?;
+        Ok(())
+    }
+
+    /// Repo path for a workspace — agents spawn inside their workspace's repo.
+    pub fn workspace_repo(&self, id: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare("SELECT repo FROM workspaces WHERE id = ?1")?;
+        let mut rows = st.query_map([id], |r| r.get::<_, String>(0))?;
+        Ok(rows.next().transpose()?)
+    }
+
+    pub fn workspaces_snapshot(&self) -> Result<Vec<(String, String, String)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare("SELECT id, name, repo FROM workspaces ORDER BY created_at")?;
+        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     /// Every PTY dies with the daemon — on boot, mark anything not already
@@ -106,13 +151,16 @@ impl Store {
 
     /// Agents seen by this board, newest last — replayed to new clients so
     /// the canvas shows pre-existing agents, not just ones spawned live.
-    pub fn agents_snapshot(&self) -> Result<Vec<(String, String, String, String, String)>> {
+    /// Tuple: (id, name, command, worktree, status, workspace_id).
+    pub fn agents_snapshot(
+        &self,
+    ) -> Result<Vec<(String, String, String, String, String, Option<String>)>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
-            "SELECT id, name, command, worktree, status FROM agents ORDER BY created_at",
+            "SELECT id, name, command, worktree, status, workspace_id FROM agents ORDER BY created_at",
         )?;
         let rows = st.query_map([], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }

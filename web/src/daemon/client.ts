@@ -7,10 +7,12 @@ export type SnapshotAgent = {
   command: string;
   worktree: string;
   status: string;
+  workspace_id?: string | null;
 };
 
 export type ServerMsg =
-  | { type: "spawned"; agent_id: string; name: string }
+  | { type: "spawned"; agent_id: string; name: string; workspace_id?: string | null }
+  | { type: "workspace_created"; workspace_id: string; name: string; repo: string }
   | { type: "status"; agent_id: string; status: string }
   | { type: "error"; agent_id: string | null; message: string }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
@@ -19,8 +21,15 @@ export type ServerMsg =
       type: "snapshot";
       agents: SnapshotAgent[];
       delegations?: SnapshotDelegation[];
+      workspaces?: SnapshotWorkspace[];
       layout: Record<string, [number, number]>;
     };
+
+export type SnapshotWorkspace = {
+  workspace_id: string;
+  name: string;
+  repo: string;
+};
 
 export type SnapshotDelegation = {
   edge_id: string;
@@ -77,8 +86,12 @@ export class CanvasClient {
     return new Promise((res) => this.ws.addEventListener("open", () => res(), { once: true }));
   }
 
-  spawnAgent(name: string, command: string, cwd = ".") {
-    this.send({ cmd: "spawn_agent", name, command, cwd });
+  spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string) {
+    this.send({ cmd: "spawn_agent", name, command, cwd, workspace_id: workspaceId ?? null });
+  }
+
+  createWorkspace(name: string, repo: string) {
+    this.send({ cmd: "create_workspace", name, repo });
   }
 
   /** Raw keystrokes into the agent's PTY. */
@@ -99,7 +112,7 @@ export class CanvasClient {
     this.send({ cmd: "move_node", agent_id: agentId, x, y });
   }
 
-  delegate(from: string, name: string, command: string, task: string, cwd = ".") {
-    this.send({ cmd: "delegate", from, name, command, task, cwd });
+  delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string) {
+    this.send({ cmd: "delegate", from, name, command, task, cwd, workspace_id: workspaceId ?? null });
   }
 }

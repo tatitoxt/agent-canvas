@@ -49,6 +49,7 @@ fn spawn_wired(
     name: &str,
     command: &str,
     cwd: &str,
+    workspace_id: Option<&str>,
 ) -> Result<String, String> {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<(String, Vec<u8>)>();
     let (exit_tx, mut exit_rx) = mpsc::unbounded_channel::<String>();
@@ -75,15 +76,22 @@ fn spawn_wired(
         }
     });
 
+    let repo_root = match workspace_id
+        .and_then(|w| state.store.workspace_repo(w).ok().flatten())
+    {
+        Some(repo) => PathBuf::from(repo),
+        None => state.repo_root.clone(),
+    };
     let id = state
         .agents
-        .spawn(name, command, cwd, &state.repo_root, out_tx, exit_tx)
+        .spawn(name, command, cwd, &repo_root, out_tx, exit_tx)
         .map_err(|e| e.to_string())?;
     if let Err(e) = state.store.agent_spawned(
         &id,
         name,
         command,
         &format!(".canvas-worktrees/{id}"),
+        workspace_id,
     ) {
         warn!(error = %e, "failed to persist agent");
     }
@@ -97,10 +105,40 @@ fn spawn_agent(
     name: String,
     command: String,
     cwd: String,
+    workspace_id: Option<String>,
 ) -> Result<String, String> {
-    let id = spawn_wired(&app, &state, &name, &command, &cwd)?;
-    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name });
+    let id = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref())?;
+    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, workspace_id });
     Ok(id)
+}
+
+#[tauri::command]
+fn create_workspace(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    name: String,
+    repo: String,
+) -> Result<String, String> {
+    let id = uuid_v4ish();
+    state
+        .store
+        .workspace_created(&id, &name, &repo)
+        .map_err(|e| e.to_string())?;
+    emit_control(
+        &app,
+        &ServerMsg::WorkspaceCreated { workspace_id: id.clone(), name, repo },
+    );
+    Ok(id)
+}
+
+fn uuid_v4ish() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let rand: u64 = rand::random();
+    format!("{:x}{:x}", nanos, rand)[..12].to_string()
 }
 
 #[tauri::command]
@@ -112,8 +150,9 @@ fn delegate(
     command: String,
     task: String,
     cwd: String,
+    workspace_id: Option<String>,
 ) -> Result<String, String> {
-    let id = spawn_wired(&app, &state, &name, &command, &cwd)?;
+    let id = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref())?;
     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
     let _ = state.store.delegation_created(&edge_id, &from, &id, &task);
     state
@@ -121,7 +160,7 @@ fn delegate(
         .lock()
         .unwrap()
         .insert(id.clone(), edge_id.clone());
-    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name });
+    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, workspace_id });
     emit_control(
         &app,
         &ServerMsg::Delegation { edge_id, from, to: id, task },
@@ -182,12 +221,24 @@ fn snapshot(state: State<'_, CanvasState>) -> Result<serde_json::Value, String> 
         .agents_snapshot()
         .map_err(|e| e.to_string())?
         .into_iter()
-        .map(|(id, name, command, worktree, status)| SnapshotAgent {
+        .map(|(id, name, command, worktree, status, workspace_id)| SnapshotAgent {
             status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
             agent_id: id,
             name,
             command,
             worktree,
+            workspace_id,
+        })
+        .collect();
+    let workspaces: Vec<canvasd::protocol::SnapshotWorkspace> = state
+        .store
+        .workspaces_snapshot()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(workspace_id, name, repo)| canvasd::protocol::SnapshotWorkspace {
+            workspace_id,
+            name,
+            repo,
         })
         .collect();
     let delegations: Vec<SnapshotDelegation> = state
@@ -204,6 +255,7 @@ fn snapshot(state: State<'_, CanvasState>) -> Result<serde_json::Value, String> 
         "type": "snapshot",
         "agents": agents,
         "delegations": delegations,
+        "workspaces": workspaces,
         "layout": layout,
     }))
 }
@@ -286,6 +338,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             spawn_agent,
+            create_workspace,
             delegate,
             pty_input,
             pty_resize,

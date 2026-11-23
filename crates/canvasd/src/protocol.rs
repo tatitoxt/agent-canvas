@@ -14,6 +14,15 @@ pub enum ClientMsg {
         command: String,
         /// Working directory inside the board's repository.
         cwd: String,
+        /// Workspace container this agent belongs to (none = loose node).
+        workspace_id: Option<String>,
+    },
+    /// Create a workspace container — user-defined project groupings that
+    /// coexist spatially on the same canvas.
+    CreateWorkspace {
+        name: String,
+        /// Absolute path to the repo this workspace runs agents in.
+        repo: String,
     },
     PtyInput {
         agent_id: String,
@@ -49,24 +58,34 @@ pub enum ClientMsg {
         command: String,
         task: String,
         cwd: String,
+        workspace_id: Option<String>,
     },
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMsg {
-    Spawned { agent_id: String, name: String },
+    Spawned { agent_id: String, name: String, workspace_id: Option<String> },
     Status { agent_id: String, status: AgentStatus },
     Error { agent_id: Option<String>, message: String },
     Delegation { edge_id: String, from: String, to: String, task: String },
     Result { edge_id: String, summary: String },
+    WorkspaceCreated { workspace_id: String, name: String, repo: String },
     /// Board state replay sent once when a client connects: every agent the
     /// board knows (live and dead) plus saved node positions.
     Snapshot {
         agents: Vec<SnapshotAgent>,
         delegations: Vec<SnapshotDelegation>,
+        workspaces: Vec<SnapshotWorkspace>,
         layout: std::collections::HashMap<String, (f64, f64)>,
     },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SnapshotWorkspace {
+    pub workspace_id: String,
+    pub name: String,
+    pub repo: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -86,6 +105,7 @@ pub struct SnapshotAgent {
     pub command: String,
     pub worktree: String,
     pub status: String,
+    pub workspace_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

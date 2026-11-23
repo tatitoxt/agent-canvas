@@ -61,7 +61,15 @@ async fn health() -> Json<Health> {
 
 /// Spawn a PTY agent wired to the event bus + store. Used by both
 /// `spawn_agent` (standalone node) and `delegate` (edge-owned child).
-fn spawn_agent(state: &Arc<AppState>, name: &str, command: &str, cwd: &str) -> Result<String> {
+/// A workspace-scoped agent runs inside that workspace's repo, not the
+/// daemon's default board repo.
+fn spawn_agent(
+    state: &Arc<AppState>,
+    name: &str,
+    command: &str,
+    cwd: &str,
+    workspace_id: Option<&str>,
+) -> Result<String> {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<(String, Vec<u8>)>();
     let (exit_tx, mut exit_rx) = mpsc::unbounded_channel::<String>();
     let ev = state.events.clone();
@@ -83,14 +91,19 @@ fn spawn_agent(state: &Arc<AppState>, name: &str, command: &str, cwd: &str) -> R
             }));
         }
     });
+    let repo_root = match workspace_id.and_then(|w| state.store.workspace_repo(w).ok().flatten()) {
+        Some(repo) => PathBuf::from(repo),
+        None => state.repo_root.clone(),
+    };
     let id = state
         .agents
-        .spawn(name, command, cwd, &state.repo_root, out_tx, exit_tx)?;
+        .spawn(name, command, cwd, &repo_root, out_tx, exit_tx)?;
     if let Err(e) = state.store.agent_spawned(
         &id,
         name,
         command,
         &format!(".canvas-worktrees/{id}"),
+        workspace_id,
     ) {
         warn!(error = %e, "failed to persist agent");
     }
@@ -120,12 +133,24 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
         let snapshot = ServerMsg::Snapshot {
             agents: agents
                 .into_iter()
-                .map(|(id, name, command, worktree, status)| protocol::SnapshotAgent {
+                .map(|(id, name, command, worktree, status, workspace_id)| protocol::SnapshotAgent {
                     status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
                     agent_id: id,
                     name,
                     command,
                     worktree,
+                    workspace_id,
+                })
+                .collect(),
+            workspaces: state
+                .store
+                .workspaces_snapshot()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(workspace_id, name, repo)| protocol::SnapshotWorkspace {
+                    workspace_id,
+                    name,
+                    repo,
                 })
                 .collect(),
             delegations: state
@@ -229,19 +254,35 @@ fn handle_client_msg(
     };
 
     match msg {
-        ClientMsg::SpawnAgent { name, command, cwd } => {
-            match spawn_agent(state, &name, &command, &cwd) {
-                Ok(id) => send_control(ServerMsg::Spawned { agent_id: id, name }),
+        ClientMsg::CreateWorkspace { name, repo } => {
+            // Path validated on spawn side; a workspace is just a named
+            // container + its repo.
+            let id = uuid::Uuid::new_v4().simple().to_string()[..12].to_string();
+            match state.store.workspace_created(&id, &name, &repo) {
+                Ok(()) => send_control(ServerMsg::WorkspaceCreated {
+                    workspace_id: id,
+                    name,
+                    repo,
+                }),
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: None,
                     message: e.to_string(),
                 }),
             }
         }
-        ClientMsg::Delegate { from, name, command, task, cwd } => {
+        ClientMsg::SpawnAgent { name, command, cwd, workspace_id } => {
+            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref()) {
+                Ok(id) => send_control(ServerMsg::Spawned { agent_id: id, name, workspace_id }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
+            }
+        }
+        ClientMsg::Delegate { from, name, command, task, cwd, workspace_id } => {
             // A delegation IS a spawn + a persisted edge. The edge returns
             // when the child's PTY prints `CANVAS_RESULT: <summary>`.
-            match spawn_agent(state, &name, &command, &cwd) {
+            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref()) {
                 Ok(id) => {
                     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
                     if let Err(e) = state.store.delegation_created(&edge_id, &from, &id, &task) {
@@ -251,6 +292,7 @@ fn handle_client_msg(
                     send_control(ServerMsg::Spawned {
                         agent_id: id.clone(),
                         name,
+                        workspace_id: workspace_id.clone(),
                     });
                     send_control(ServerMsg::Delegation {
                         edge_id,

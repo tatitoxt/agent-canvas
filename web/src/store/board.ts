@@ -7,6 +7,13 @@ export type LiveAgent = {
   id: string;
   name: string;
   status: AgentStatus | "exited";
+  workspace_id?: string | null;
+};
+
+export type LiveWorkspace = {
+  id: string;
+  name: string;
+  repo: string;
 };
 
 export type LiveEdge = {
@@ -24,11 +31,13 @@ type BoardState = {
   connected: boolean;
   agents: Record<string, LiveAgent>;
   edges: Record<string, LiveEdge>;
+  workspaces: Record<string, LiveWorkspace>;
   /** Saved node positions — replayed from the daemon's layout table. */
   positions: Record<string, { x: number; y: number }>;
   ptyListeners: Record<string, (bytes: Uint8Array) => void>;
   connect: (token: string) => void;
-  spawn: (name: string, command: string) => void;
+  spawn: (name: string, command: string, workspaceId?: string) => void;
+  createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string) => void;
   kill: (agentId: string) => void;
   moveNode: (agentId: string, x: number, y: number) => void;
@@ -47,6 +56,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   connected: false,
   agents: {},
   edges: {},
+  workspaces: {},
   positions: {},
   ptyListeners: {},
 
@@ -61,7 +71,24 @@ export const useBoard = create<BoardState>((set, get) => ({
             set({
               agents: {
                 ...agents,
-                [msg.agent_id]: { id: msg.agent_id, name: msg.name, status: "working" },
+                [msg.agent_id]: {
+                  id: msg.agent_id,
+                  name: msg.name,
+                  status: "working",
+                  workspace_id: msg.workspace_id ?? null,
+                },
+              },
+            });
+            break;
+          case "workspace_created":
+            set({
+              workspaces: {
+                ...get().workspaces,
+                [msg.workspace_id]: {
+                  id: msg.workspace_id,
+                  name: msg.name,
+                  repo: msg.repo,
+                },
               },
             });
             break;
@@ -108,7 +135,18 @@ export const useBoard = create<BoardState>((set, get) => ({
             const agents = Object.fromEntries(
               msg.agents.map((a) => [
                 a.agent_id,
-                { id: a.agent_id, name: a.name, status: a.status as LiveAgent["status"] },
+                {
+                  id: a.agent_id,
+                  name: a.name,
+                  status: a.status as LiveAgent["status"],
+                  workspace_id: a.workspace_id ?? null,
+                },
+              ]),
+            );
+            const workspaces = Object.fromEntries(
+              (msg.workspaces ?? []).map((w) => [
+                w.workspace_id,
+                { id: w.workspace_id, name: w.name, repo: w.repo },
               ]),
             );
             const positions = Object.fromEntries(
@@ -127,7 +165,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                 },
               ]),
             );
-            set({ agents, positions, edges });
+            set({ agents, positions, edges, workspaces });
             break;
           }
           case "error":
@@ -147,7 +185,10 @@ export const useBoard = create<BoardState>((set, get) => ({
     void client.whenOpen().then(() => set({ connected: true }));
   },
 
-  spawn: (name, command) => client?.spawnAgent(name, command),
+  spawn: (name, command, workspaceId) =>
+    client?.spawnAgent(name, command, ".", workspaceId),
+
+  createWorkspace: (name, repo) => client?.createWorkspace(name, repo),
 
   delegate: (from, name, command, task) =>
     client?.delegate(from, name, command, task),

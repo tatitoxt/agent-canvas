@@ -28,6 +28,7 @@ const edgeTypes = { delegation: DelegationEdge };
 function Board() {
   const agents = useBoard((s) => s.agents);
   const liveEdges = useBoard((s) => s.edges);
+  const workspaces = useBoard((s) => s.workspaces);
   const positions = useBoard((s) => s.positions);
   const moveNode = useBoard((s) => s.moveNode);
   const connected = useBoard((s) => s.connected);
@@ -54,13 +55,24 @@ function Board() {
   }, [agents, connected]);
 
   const nodes = useMemo<Node<BoardNodeData>[]>(() => {
+    const wsNodes: Node<BoardNodeData>[] = Object.values(workspaces).map((w) => ({
+      id: w.id,
+      type: "workspace" as const,
+      position: positions[w.id] ?? { x: 60, y: 60 },
+      style: { width: 900, height: 540 },
+      data: { kind: "workspace" as const, name: w.name, repo: w.repo },
+    }));
     let i = 0;
     const live = Object.values(agents).map((a) => {
-      const position = positions[a.id] ?? { x: 1420, y: 60 + i++ * 170 };
+      const ws = a.workspace_id ? workspaces[a.workspace_id] : undefined;
+      const position = positions[a.id] ??
+        (ws ? { x: 60 + (i % 3) * 300, y: 80 + Math.floor(i / 3) * 190 } : { x: 1100, y: 60 + i * 170 });
+      i += 1;
       return {
         id: a.id,
         type: "agent" as const,
         position,
+        ...(ws ? { parentId: ws.id, extent: "parent" as const } : {}),
         data: {
           kind: "agent" as const,
           name: a.name,
@@ -72,8 +84,8 @@ function Board() {
     });
     // Mock board only renders in offline/demo mode — with a daemon the
     // canvas shows reality, not fixtures.
-    return connected ? live : [...initialNodes, ...live];
-  }, [agents, positions, connected]);
+    return connected ? [...wsNodes, ...live] : [...initialNodes, ...live];
+  }, [agents, positions, connected, workspaces]);
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     const a = agents[node.id];
@@ -81,7 +93,9 @@ function Board() {
   };
 
   const onNodeDragStop: OnNodeDrag = (_, node) => {
-    if (agents[node.id]) moveNode(node.id, node.position.x, node.position.y);
+    if (agents[node.id] || workspaces[node.id]) {
+      moveNode(node.id, node.position.x, node.position.y);
+    }
   };
 
   const edges = useMemo(() => {
