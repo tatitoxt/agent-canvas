@@ -1,34 +1,58 @@
 import type { AgentStatus } from "../board/types";
+import { useBoard } from "../store/board";
 
 type Props = { counts: Record<AgentStatus, number> };
 
 const ITEMS: { key: AgentStatus; label: string; color: string }[] = [
-  { key: "working", label: "running", color: "var(--cv-working)" },
+  { key: "working", label: "working", color: "var(--cv-working)" },
   { key: "waiting", label: "needs you", color: "var(--cv-waiting)" },
   { key: "blocked", label: "blocked", color: "var(--cv-blocked)" },
   { key: "done", label: "done", color: "var(--cv-done)" },
 ];
 
+/** Quiet top-center status strip — one glass pill, dots + counts only. */
 export function MissionStrip({ counts }: Props) {
+  const connected = useBoard((s) => s.connected);
   return (
-    <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between border-b border-[var(--cv-border)] bg-[var(--cv-base)]/85 px-5 py-3 backdrop-blur">
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-bold tracking-wide">AGENT CANVAS</span>
-        <span className="rounded-md bg-[var(--cv-surface-2)] px-2 py-0.5 text-[11px] text-[var(--cv-ink-dim)]">
-          prototype · mock data
+    <div
+      className="glass-pill"
+      style={{
+        position: "absolute",
+        top: 14,
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 15,
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+        padding: "8px 18px",
+      }}
+    >
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 650,
+          letterSpacing: 0.3,
+          marginRight: 2,
+        }}
+      >
+        canvas
+      </span>
+      {ITEMS.map(({ key, label, color }) => (
+        <span
+          key={key}
+          style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11 }}
+        >
+          <span className="status-dot" style={{ background: color }} />
+          <span style={{ fontWeight: 600, color }}>{counts[key] ?? 0}</span>
+          <span style={{ color: "var(--cv-ink-faint)" }}>{label}</span>
         </span>
-      </div>
-      <div className="flex items-center gap-4">
-        {ITEMS.map(({ key, label, color }) => (
-          <div key={key} className="flex items-center gap-1.5 text-xs">
-            <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-            <span className="font-semibold" style={{ color }}>
-              {counts[key] ?? 0}
-            </span>
-            <span className="text-[var(--cv-ink-dim)]">{label}</span>
-          </div>
-        ))}
-      </div>
-    </header>
+      ))}
+      {!connected && (
+        <span style={{ fontSize: 10.5, color: "var(--cv-ink-faint)" }}>
+          demo
+        </span>
+      )}
+    </div>
   );
 }

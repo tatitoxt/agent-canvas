@@ -117,6 +117,20 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    /// Delegation edges seen by this board — replayed on connect.
+    pub fn delegations_snapshot(
+        &self,
+    ) -> Result<Vec<(String, String, String, String, Option<String>, String)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare(
+            "SELECT id, from_node, to_node, task, result, state FROM delegations ORDER BY created_at",
+        )?;
+        let rows = st.query_map([], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     pub fn layout_map(&self) -> Result<std::collections::HashMap<String, (f64, f64)>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare("SELECT node_id, x, y FROM layout")?;

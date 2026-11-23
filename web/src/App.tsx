@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  Background,
   Controls,
   MiniMap,
   ReactFlow,
@@ -9,16 +8,21 @@ import {
   type NodeMouseHandler,
   type OnNodeDrag,
 } from "@xyflow/react";
-import { AgentNode, OrchestratorNode } from "./board/nodes";
+import { AgentNode, OrchestratorNode, WorkspaceNode } from "./board/nodes";
 import { DelegationEdge } from "./board/edges";
 import { initialEdges, initialNodes } from "./board/mockData";
 import { MissionStrip } from "./components/MissionStrip";
+import { NavRail } from "./components/NavRail";
 import { SpawnBar } from "./components/SpawnBar";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
 
-const nodeTypes = { agent: AgentNode, orchestrator: OrchestratorNode };
+const nodeTypes = {
+  agent: AgentNode,
+  orchestrator: OrchestratorNode,
+  workspace: WorkspaceNode,
+};
 const edgeTypes = { delegation: DelegationEdge };
 
 function Board() {
@@ -81,6 +85,7 @@ function Board() {
 
   return (
     <div className="relative h-full w-full">
+      <NavRail active="canvas" />
       <MissionStrip counts={counts} />
       <SpawnBar />
       <ReactFlow
@@ -102,24 +107,24 @@ function Board() {
           pannable
           zoomable
           className="!bg-[var(--cv-base)]"
-          maskColor="rgba(11,14,20,0.7)"
+          maskColor="rgba(14,14,16,0.7)"
           nodeColor={(n) => {
             const data = n.data as Partial<BoardNodeData>;
-            if (data.kind === "orchestrator") return "#22d3ee";
+            if (data.kind === "orchestrator") return "#c9a26b";
+            if (data.kind === "workspace") return "#1d1d20";
             if (data.kind === "agent" && data.status) {
               const map: Record<AgentStatus, string> = {
-                working: "#38bdf8",
-                waiting: "#fbbf24",
-                blocked: "#f87171",
-                done: "#34d399",
-                idle: "#8b94a7",
+                working: "#7d9cb8",
+                waiting: "#c2a15e",
+                blocked: "#b06a5e",
+                done: "#7ba389",
+                idle: "#86817a",
               };
-              return map[data.status] ?? "#232c3d";
+              return map[data.status] ?? "#33333a";
             }
-            return "#232c3d";
+            return "#33333a";
           }}
         />
-        <Background gap={24} size={1} color="#1c2434" />
       </ReactFlow>
       {connected === false && null}
       {openTerm && (

@@ -12,10 +12,20 @@ export type AgentNodeData = {
 export type OrchestratorNodeData = {
   kind: "orchestrator";
   name: string;
-  activeDelegations: number;
+  delegations: number;
 };
 
-export type BoardNodeData = AgentNodeData | OrchestratorNodeData;
+/** A container agents live inside — several coexist on one canvas. */
+export type WorkspaceNodeData = {
+  kind: "workspace";
+  name: string;
+  repo: string;
+};
+
+export type BoardNodeData =
+  | AgentNodeData
+  | OrchestratorNodeData
+  | WorkspaceNodeData;
 
 export type DelegationEdgeData = {
   task?: string;

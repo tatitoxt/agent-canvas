@@ -1,17 +1,32 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { BoardNodeData, DelegationEdgeData } from "./types";
 
+/**
+ * Demo board (offline mode): two workspaces coexisting — one orchestrated
+ * feature build, one independent solo session.
+ */
 export const initialNodes: Node<BoardNodeData>[] = [
+  {
+    id: "ws-1",
+    type: "workspace",
+    position: { x: 0, y: 0 },
+    style: { width: 1060, height: 560 },
+    data: { kind: "workspace", name: "cartfull", repo: "~/repos/cartfull" },
+  },
   {
     id: "orch",
     type: "orchestrator",
-    position: { x: 40, y: 260 },
-    data: { kind: "orchestrator", name: "Atlas", activeDelegations: 3 },
+    position: { x: 36, y: 240 },
+    parentId: "ws-1",
+    extent: "parent",
+    data: { kind: "orchestrator", name: "Atlas", delegations: 3 },
   },
   {
     id: "a1",
     type: "agent",
-    position: { x: 520, y: 40 },
+    position: { x: 400, y: 60 },
+    parentId: "ws-1",
+    extent: "parent",
     data: {
       kind: "agent",
       name: "builder-1",
@@ -23,19 +38,37 @@ export const initialNodes: Node<BoardNodeData>[] = [
   {
     id: "a2",
     type: "agent",
-    position: { x: 520, y: 220 },
+    position: { x: 400, y: 230 },
+    parentId: "ws-1",
+    extent: "parent",
     data: {
       kind: "agent",
       name: "tests-1",
       cli: "codex",
       status: "waiting",
-      task: "Needs approval: delete fixtures?",
+      task: "Allow deleting the fixtures directory? (yes/no)",
+    },
+  },
+  {
+    id: "a5",
+    type: "agent",
+    position: { x: 780, y: 60 },
+    parentId: "ws-1",
+    extent: "parent",
+    data: {
+      kind: "agent",
+      name: "review-1",
+      cli: "claude-code",
+      status: "working",
+      task: "Review builder-1 diff",
     },
   },
   {
     id: "a3",
     type: "agent",
-    position: { x: 520, y: 400 },
+    position: { x: 400, y: 400 },
+    parentId: "ws-1",
+    extent: "parent",
     data: {
       kind: "agent",
       name: "docs-1",
@@ -45,27 +78,24 @@ export const initialNodes: Node<BoardNodeData>[] = [
     },
   },
   {
-    id: "a4",
-    type: "agent",
-    position: { x: 520, y: 580 },
-    data: {
-      kind: "agent",
-      name: "audit-1",
-      cli: "aider",
-      status: "blocked",
-      task: "Merge conflict in billing.ts",
-    },
+    id: "ws-2",
+    type: "workspace",
+    position: { x: 1140, y: 60 },
+    style: { width: 400, height: 300 },
+    data: { kind: "workspace", name: "notes-app", repo: "~/repos/notes" },
   },
   {
-    id: "a5",
+    id: "b1",
     type: "agent",
-    position: { x: 960, y: 130 },
+    position: { x: 48, y: 80 },
+    parentId: "ws-2",
+    extent: "parent",
     data: {
       kind: "agent",
-      name: "review-1",
-      cli: "claude-code",
-      status: "working",
-      task: "Review builder-1 diff",
+      name: "solo-1",
+      cli: "aider",
+      status: "idle",
+      task: "Waiting at prompt",
     },
   },
 ];
@@ -91,13 +121,6 @@ export const initialEdges: Edge<DelegationEdgeData>[] = [
     target: "orch",
     type: "delegation",
     data: { state: "returned", result: "docs updated, 12 pages" },
-  },
-  {
-    id: "e-orch-a4",
-    source: "orch",
-    target: "a4",
-    type: "delegation",
-    data: { state: "failed", task: "Audit merge" },
   },
   {
     id: "e-a1-a5",

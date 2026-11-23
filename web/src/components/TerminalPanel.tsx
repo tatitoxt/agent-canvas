@@ -16,10 +16,10 @@ export function TerminalPanel({ agentId, name, onClose }: Props) {
       fontSize: 13,
       fontFamily: "ui-monospace, Menlo, monospace",
       theme: {
-        background: "#0b0e14",
-        foreground: "#e6e9f0",
-        cursor: "#22d3ee",
-        selectionBackground: "#232c3d",
+        background: "#121214",
+        foreground: "#eceae6",
+        cursor: "#c9a26b",
+        selectionBackground: "rgba(255,255,255,0.12)",
       },
       convertEol: true,
     });
@@ -47,9 +47,30 @@ export function TerminalPanel({ agentId, name, onClose }: Props) {
   }, [agentId]);
 
   return (
-    <div className="absolute bottom-0 right-0 z-20 m-4 flex h-72 w-[34rem] flex-col overflow-hidden rounded-xl border border-[var(--cv-border)] bg-[var(--cv-base)] shadow-2xl">
-      <div className="flex items-center justify-between border-b border-[var(--cv-border)] bg-[var(--cv-surface)] px-3 py-1.5">
-        <span className="text-xs font-semibold">{name}</span>
+    <div
+      className="glass"
+      style={{
+        position: "absolute",
+        bottom: 16,
+        right: 16,
+        zIndex: 20,
+        display: "flex",
+        flexDirection: "column",
+        height: 300,
+        width: "36rem",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "8px 14px",
+          borderBottom: "1px solid rgba(255,255,255,0.07)",
+        }}
+      >
+        <span style={{ fontSize: 12, fontWeight: 600 }}>{name}</span>
         <div className="flex items-center gap-2">
           {confirmingKill ? (
             <>
@@ -84,7 +105,7 @@ export function TerminalPanel({ agentId, name, onClose }: Props) {
           </button>
         </div>
       </div>
-      <div ref={hostRef} className="min-h-0 flex-1 p-1" />
+      <div ref={hostRef} className="min-h-0 flex-1" />
     </div>
   );
 }

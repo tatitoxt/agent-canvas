@@ -40,6 +40,16 @@ pub enum ClientMsg {
         x: f64,
         y: f64,
     },
+    /// Spawn an agent AS a delegation edge: `from` is the delegating node id
+    /// ("orchestrator" or an agent id). The edge carries `task` down and the
+    /// child's `CANVAS_RESULT:` PTY line back as the Result event.
+    Delegate {
+        from: String,
+        name: String,
+        command: String,
+        task: String,
+        cwd: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -48,16 +58,25 @@ pub enum ServerMsg {
     Spawned { agent_id: String, name: String },
     Status { agent_id: String, status: AgentStatus },
     Error { agent_id: Option<String>, message: String },
-    #[allow(dead_code)] // emitted by the orchestration layer (P2)
     Delegation { edge_id: String, from: String, to: String, task: String },
-    #[allow(dead_code)] // emitted by the orchestration layer (P2)
     Result { edge_id: String, summary: String },
     /// Board state replay sent once when a client connects: every agent the
     /// board knows (live and dead) plus saved node positions.
     Snapshot {
         agents: Vec<SnapshotAgent>,
+        delegations: Vec<SnapshotDelegation>,
         layout: std::collections::HashMap<String, (f64, f64)>,
     },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SnapshotDelegation {
+    pub edge_id: String,
+    pub from: String,
+    pub to: String,
+    pub task: String,
+    pub result: Option<String>,
+    pub state: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

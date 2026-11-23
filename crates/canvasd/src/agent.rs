@@ -260,6 +260,15 @@ impl AgentManager {
             .map(|(id, a)| (id.clone(), a.derived_status()))
             .collect()
     }
+
+    /// Rolling PTY tail as text, for the CANVAS_RESULT scanner.
+    pub fn tail_text(&self, id: &str) -> Option<String> {
+        self.agents
+            .lock()
+            .unwrap()
+            .get(id)
+            .map(|a| String::from_utf8_lossy(&a.tail.lock().unwrap()).to_string())
+    }
 }
 
 fn uuid_like() -> String {

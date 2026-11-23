@@ -1,6 +1,16 @@
 import { useState } from "react";
 import { useBoard } from "../store/board";
 
+const inputStyle: React.CSSProperties = {
+  background: "var(--cv-glass-hi)",
+  border: "1px solid var(--cv-glass-edge)",
+  borderRadius: 999,
+  padding: "6px 12px",
+  fontSize: 12,
+  color: "var(--cv-ink)",
+  outline: "none",
+};
+
 export function SpawnBar() {
   const connected = useBoard((s) => s.connected);
   const connect = useBoard((s) => s.connect);
@@ -9,12 +19,34 @@ export function SpawnBar() {
   const [name, setName] = useState("");
 
   return (
-    <div className="absolute left-1/2 top-14 z-10 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-[var(--cv-border)] bg-[var(--cv-surface)]/95 px-3 py-2 backdrop-blur">
+    <div
+      className="glass-pill"
+      style={{
+        position: "absolute",
+        left: "50%",
+        bottom: 22,
+        transform: "translateX(-50%)",
+        zIndex: 15,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "8px 10px 8px 16px",
+      }}
+    >
       {!connected ? (
         <>
-          <span className="text-xs text-[var(--cv-ink-dim)]">daemon offline</span>
+          <span style={{ fontSize: 11.5, color: "var(--cv-ink-dim)" }}>
+            daemon offline
+          </span>
           <button
-            className="rounded-md bg-[var(--cv-accent)]/15 px-3 py-1 text-xs font-semibold text-[var(--cv-accent)]"
+            className="glass-pill"
+            style={{
+              padding: "6px 14px",
+              fontSize: 11.5,
+              fontWeight: 600,
+              color: "var(--cv-ink)",
+              cursor: "pointer",
+            }}
             onClick={() => connect("")}
           >
             connect
@@ -23,19 +55,27 @@ export function SpawnBar() {
       ) : (
         <>
           <input
-            className="w-28 rounded-md border border-[var(--cv-border)] bg-transparent px-2 py-1 text-xs outline-none"
+            style={{ ...inputStyle, width: 110 }}
             placeholder="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
           <input
-            className="w-44 rounded-md border border-[var(--cv-border)] bg-transparent px-2 py-1 text-xs outline-none"
+            style={{ ...inputStyle, width: 160 }}
             placeholder="command (bash, claude…)"
             value={command}
             onChange={(e) => setCommand(e.target.value)}
           />
           <button
-            className="rounded-md bg-[var(--cv-accent)]/15 px-3 py-1 text-xs font-semibold text-[var(--cv-accent)] disabled:opacity-40"
+            className="glass-pill"
+            style={{
+              padding: "6px 16px",
+              fontSize: 12,
+              fontWeight: 600,
+              color: "var(--cv-accent)",
+              cursor: "pointer",
+              opacity: command.trim() ? 1 : 0.45,
+            }}
             disabled={!command.trim()}
             onClick={() => {
               spawn(name.trim() || command.trim(), command.trim());
