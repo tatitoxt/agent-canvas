@@ -22,6 +22,7 @@ import { InboxPanel } from "./components/InboxPanel";
 import { AutomationsPanel } from "./components/AutomationsPanel";
 import { CommandPalette } from "./components/CommandPalette";
 import { DelegationPanel } from "./components/DelegationPanel";
+import { SearchPanel } from "./components/SearchPanel";
 import { Topbar } from "./components/Topbar";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
@@ -52,11 +53,15 @@ function Board() {
   const [nav, setNav] = useState("canvas");
   const [palette, setPalette] = useState(false);
   const [edgeDetail, setEdgeDetail] = useState<string | null>(null);
+  const [search, setSearch] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPalette((p) => !p);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setSearch((s) => !s);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -233,6 +238,15 @@ function Board() {
           agentId={openTerm.id}
           name={openTerm.name}
           onClose={() => setOpenTerm(null)}
+        />
+      )}
+      {search && (
+        <SearchPanel
+          onClose={() => setSearch(false)}
+          onOpenAgent={(id, name) => {
+            setOpenTerm({ id, name });
+            setSearch(false);
+          }}
         />
       )}
       {palette && (
