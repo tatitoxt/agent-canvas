@@ -8,9 +8,9 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { useBoard } from "../store/board";
 
-type Props = { agentId: string; name: string; onClose: () => void };
+type Props = { agentId: string; name: string; index?: number; onClose: () => void };
 
-export function TerminalPanel({ agentId, name, onClose }: Props) {
+export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const [confirmingKill, setConfirmingKill] = useState(false);
@@ -75,7 +75,7 @@ export function TerminalPanel({ agentId, name, onClose }: Props) {
   const popped = pos.x >= 0;
   const panelStyle: React.CSSProperties = popped
     ? { position: "absolute", left: pos.x, top: pos.y, zIndex: 20 }
-    : { position: "absolute", bottom: 16, right: 16, zIndex: 20 };
+    : { position: "absolute", bottom: 16 + index * 28, right: 16 + index * 28, zIndex: 20 };
 
   const onHeaderDown = (e: React.PointerEvent) => {
     const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();

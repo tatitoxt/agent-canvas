@@ -52,7 +52,10 @@ function Board() {
   useEffect(() => {
     if (viewCmdN > 0) fitView({ padding: 0.18, maxZoom: 1.1, duration: 250 });
   }, [viewCmdN, fitView]);
-  const [openTerm, setOpenTerm] = useState<{ id: string; name: string } | null>(null);
+  const [openTerms, setOpenTerms] = useState<Array<{ id: string; name: string }>>([]);
+  const openTerm = (t: { id: string; name: string }) =>
+    setOpenTerms((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]));
+  const closeTerm = (id: string) => setOpenTerms((ts) => ts.filter((x) => x.id !== id));
   const [delegateFrom, setDelegateFrom] = useState<{ from: string; at: { x: number; y: number } } | null>(null);
   const [nav, setNav] = useState("canvas");
   const [palette, setPalette] = useState(false);
@@ -151,7 +154,7 @@ function Board() {
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     const a = agents[node.id];
-    if (a) setOpenTerm({ id: a.id, name: a.name });
+    if (a) openTerm({ id: a.id, name: a.name });
   };
 
   const onNodeContextMenu: NodeMouseHandler = (ev, node) => {
@@ -247,7 +250,7 @@ function Board() {
         <InboxPanel
           onOpenAgent={(id) => {
             const a = agents[id];
-            if (a) setOpenTerm({ id: a.id, name: a.name });
+            if (a) openTerm({ id: a.id, name: a.name });
           }}
         />
       )}
@@ -263,7 +266,7 @@ function Board() {
           isAgent={!!agents[menu.id]}
           onOpenTerminal={() => {
             const a = agents[menu.id];
-            if (a) setOpenTerm({ id: a.id, name: a.name });
+            if (a) openTerm({ id: a.id, name: a.name });
           }}
           onClose={() => setMenu(null)}
         />
@@ -272,21 +275,23 @@ function Board() {
         <DelegationPanel
           edgeId={edgeDetail}
           onClose={() => setEdgeDetail(null)}
-          onOpenAgent={(id, name) => setOpenTerm({ id, name })}
+          onOpenAgent={(id, name) => openTerm({ id, name })}
         />
       )}
-      {openTerm && (
+      {openTerms.map((t, i) => (
         <TerminalPanel
-          agentId={openTerm.id}
-          name={openTerm.name}
-          onClose={() => setOpenTerm(null)}
+          key={t.id}
+          agentId={t.id}
+          name={t.name}
+          index={i}
+          onClose={() => closeTerm(t.id)}
         />
-      )}
+      ))}
       {search && (
         <SearchPanel
           onClose={() => setSearch(false)}
           onOpenAgent={(id, name) => {
-            setOpenTerm({ id, name });
+            openTerm({ id, name });
             setSearch(false);
           }}
         />
@@ -299,7 +304,7 @@ function Board() {
             setPalette(false);
           }}
           onOpenAgent={(id, name) => {
-            setOpenTerm({ id, name });
+            openTerm({ id, name });
             setPalette(false);
           }}
         />
