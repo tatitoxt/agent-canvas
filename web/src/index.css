@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+:root {
+  --cv-base: #0b0e14;
+  --cv-surface: #131824;
+  --cv-surface-2: #1a2130;
+  --cv-border: #232c3d;
+  --cv-ink: #e6e9f0;
+  --cv-ink-dim: #8b94a7;
+  --cv-accent: #22d3ee;
+  --cv-working: #38bdf8;
+  --cv-waiting: #fbbf24;
+  --cv-blocked: #f87171;
+  --cv-done: #34d399;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--cv-base);
+  color: var(--cv-ink);
+  font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  overflow: hidden;
+}
+
+.react-flow {
+  background:
+    radial-gradient(circle at 1px 1px, #1c2434 1px, transparent 0) 0 0 / 24px 24px,
+    var(--cv-base);
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+@keyframes edge-flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+.edge-task {
+  stroke-dasharray: 6 6;
+  animation: edge-flow 0.9s linear infinite;
+}
+
+@keyframes node-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--halo);
+  }
+  50% {
+    box-shadow: 0 0 18px 2px var(--halo);
+  }
+}
+
+.node-working,
+.node-waiting {
+  animation: node-pulse 2.4s ease-in-out infinite;
+}
+
+.node-waiting {
+  animation-duration: 1.6s;
+}
+
+.react-flow__minimap {
+  border: 1px solid var(--cv-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.react-flow__controls button {
+  background: var(--cv-surface);
+  border-bottom: 1px solid var(--cv-border);
+  fill: var(--cv-ink-dim);
+}
+
+.react-flow__controls button:hover {
+  background: var(--cv-surface-2);
+}
