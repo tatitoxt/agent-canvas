@@ -53,6 +53,16 @@ impl Store {
         Ok(())
     }
 
+    /// Every PTY dies with the daemon — on boot, mark anything not already
+    /// exited as exited so stale "waiting"/"working" never replay as live.
+    pub fn mark_all_exited(&self) -> Result<()> {
+        self.conn.lock().unwrap().execute(
+            "UPDATE agents SET status = 'exited', exited_at = COALESCE(exited_at, datetime('now')) WHERE status != 'exited'",
+            (),
+        )?;
+        Ok(())
+    }
+
     pub fn agent_status(&self, id: &str, status: &str) -> Result<()> {
         self.conn.lock().unwrap().execute(
             "UPDATE agents SET status = ?2, exited_at = CASE WHEN ?2 = 'exited' THEN datetime('now') ELSE exited_at END WHERE id = ?1",
@@ -85,7 +95,6 @@ impl Store {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn save_node_position(&self, node_id: &str, x: f64, y: f64) -> Result<()> {
         self.conn.lock().unwrap().execute(
             "INSERT INTO layout (node_id, x, y) VALUES (?1, ?2, ?3)
@@ -93,5 +102,25 @@ impl Store {
             (node_id, x, y),
         )?;
         Ok(())
+    }
+
+    /// Agents seen by this board, newest last — replayed to new clients so
+    /// the canvas shows pre-existing agents, not just ones spawned live.
+    pub fn agents_snapshot(&self) -> Result<Vec<(String, String, String, String, String)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare(
+            "SELECT id, name, command, worktree, status FROM agents ORDER BY created_at",
+        )?;
+        let rows = st.query_map([], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn layout_map(&self) -> Result<std::collections::HashMap<String, (f64, f64)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare("SELECT node_id, x, y FROM layout")?;
+        let rows = st.query_map([], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get(2)?))))?;
+        Ok(rows.collect::<rusqlite::Result<std::collections::HashMap<_, _>>>()?)
     }
 }

@@ -74,6 +74,29 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
     let mut rx = state.events.subscribe();
     info!("websocket client connected");
 
+    // Replay board state: every agent this board knows (live status for the
+    // ones still running) plus saved node positions.
+    if let Ok(agents) = state.store.agents_snapshot() {
+        let live: std::collections::HashMap<String, &str> =
+            state.agents.statuses().into_iter().collect();
+        let snapshot = ServerMsg::Snapshot {
+            agents: agents
+                .into_iter()
+                .map(|(id, name, command, worktree, status)| protocol::SnapshotAgent {
+                    status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
+                    agent_id: id,
+                    name,
+                    command,
+                    worktree,
+                })
+                .collect(),
+            layout: state.store.layout_map().unwrap_or_default(),
+        };
+        if let Ok(text) = serde_json::to_string(&snapshot) {
+            let _ = socket.send(Message::Text(text.into())).await;
+        }
+    }
+
     // Fan-out task: broadcast events → socket (JSON for control, binary for PTY).
     let (out_tx, mut out_rx) = mpsc::channel::<Message>(256);
     let writer_state = state.clone();
@@ -194,7 +217,7 @@ fn handle_client_msg(
                         &id,
                         &name,
                         &command,
-                        &id, // worktree path resolved inside manager; id suffices for now
+                        &format!(".canvas-worktrees/{id}"),
                     ) {
                         warn!(error = %e, "failed to persist agent");
                     }
@@ -259,6 +282,11 @@ fn handle_client_msg(
                 message: "kill requires confirm_destructive".into(),
             });
         }
+        ClientMsg::MoveNode { agent_id, x, y } => {
+            if let Err(e) = state.store.save_node_position(&agent_id, x, y) {
+                warn!(error = %e, "failed to save node position");
+            }
+        }
     }
 }
 
@@ -303,6 +331,7 @@ async fn main() -> Result<()> {
     let token = generate_token();
     let (events, _) = broadcast::channel(512);
     let store = Arc::new(store::Store::open(&repo_root)?);
+    store.mark_all_exited()?;
     let state = Arc::new(AppState {
         token: token.clone(),
         events,

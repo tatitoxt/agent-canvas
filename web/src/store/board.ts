@@ -11,10 +11,13 @@ export type LiveAgent = {
 type BoardState = {
   connected: boolean;
   agents: Record<string, LiveAgent>;
+  /** Saved node positions — replayed from the daemon's layout table. */
+  positions: Record<string, { x: number; y: number }>;
   ptyListeners: Record<string, (bytes: Uint8Array) => void>;
   connect: (token: string) => void;
   spawn: (name: string, command: string) => void;
   kill: (agentId: string) => void;
+  moveNode: (agentId: string, x: number, y: number) => void;
   attachPty: (agentId: string, cb: (bytes: Uint8Array) => void) => void;
   detachPty: (agentId: string) => void;
   sendInput: (agentId: string, bytes: Uint8Array) => void;
@@ -29,6 +32,7 @@ const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
 export const useBoard = create<BoardState>((set, get) => ({
   connected: false,
   agents: {},
+  positions: {},
   ptyListeners: {},
 
   connect: (token: string) => {
@@ -59,6 +63,19 @@ export const useBoard = create<BoardState>((set, get) => ({
               });
             }
             break;
+          case "snapshot": {
+            const agents = Object.fromEntries(
+              msg.agents.map((a) => [
+                a.agent_id,
+                { id: a.agent_id, name: a.name, status: a.status as LiveAgent["status"] },
+              ]),
+            );
+            const positions = Object.fromEntries(
+              Object.entries(msg.layout).map(([id, [x, y]]) => [id, { x, y }]),
+            );
+            set({ agents, positions });
+            break;
+          }
           case "error":
             console.error("[canvasd]", msg.message);
             break;
@@ -77,6 +94,11 @@ export const useBoard = create<BoardState>((set, get) => ({
   spawn: (name, command) => client?.spawnAgent(name, command),
 
   kill: (agentId) => client?.confirmDestructive(agentId, "kill"),
+
+  moveNode: (agentId, x, y) => {
+    set((s) => ({ positions: { ...s.positions, [agentId]: { x, y } } }));
+    client?.moveNode(agentId, x, y);
+  },
 
   attachPty: (agentId, cb) =>
     set((s) => ({ ptyListeners: { ...s.ptyListeners, [agentId]: cb } })),

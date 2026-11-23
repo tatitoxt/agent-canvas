@@ -7,6 +7,7 @@ import {
   ReactFlowProvider,
   type Node,
   type NodeMouseHandler,
+  type OnNodeDrag,
 } from "@xyflow/react";
 import { AgentNode, OrchestratorNode } from "./board/nodes";
 import { DelegationEdge } from "./board/edges";
@@ -22,6 +23,8 @@ const edgeTypes = { delegation: DelegationEdge };
 
 function Board() {
   const agents = useBoard((s) => s.agents);
+  const positions = useBoard((s) => s.positions);
+  const moveNode = useBoard((s) => s.moveNode);
   const connected = useBoard((s) => s.connected);
   const [openTerm, setOpenTerm] = useState<{ id: string; name: string } | null>(null);
 
@@ -33,35 +36,47 @@ function Board() {
       done: 0,
       idle: 0,
     };
-    for (const n of initialNodes) {
-      if (n.data.kind === "agent") c[n.data.status] += 1;
+    if (!connected) {
+      for (const n of initialNodes) {
+        if (n.data.kind === "agent") c[n.data.status] += 1;
+      }
     }
     for (const a of Object.values(agents)) {
       const k = a.status === "exited" ? "done" : a.status;
       if (k in c) c[k as AgentStatus] += 1;
     }
     return c;
-  }, [agents]);
+  }, [agents, connected]);
 
   const nodes = useMemo<Node<BoardNodeData>[]>(() => {
-    const live = Object.values(agents).map((a, i) => ({
-      id: a.id,
-      type: "agent" as const,
-      position: { x: 1420, y: 60 + i * 170 },
-      data: {
-        kind: "agent" as const,
-        name: a.name,
-        cli: "live",
-        status: a.status === "exited" ? ("done" as const) : a.status,
-        task: a.status === "exited" ? "session ended" : "live PTY — click to open",
-      },
-    }));
-    return [...initialNodes, ...live];
-  }, [agents]);
+    let i = 0;
+    const live = Object.values(agents).map((a) => {
+      const position = positions[a.id] ?? { x: 1420, y: 60 + i++ * 170 };
+      return {
+        id: a.id,
+        type: "agent" as const,
+        position,
+        data: {
+          kind: "agent" as const,
+          name: a.name,
+          cli: "live",
+          status: a.status === "exited" ? ("done" as const) : a.status,
+          task: a.status === "exited" ? "session ended" : "live PTY — click to open",
+        },
+      };
+    });
+    // Mock board only renders in offline/demo mode — with a daemon the
+    // canvas shows reality, not fixtures.
+    return connected ? live : [...initialNodes, ...live];
+  }, [agents, positions, connected]);
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     const a = agents[node.id];
     if (a && a.status !== "exited") setOpenTerm({ id: a.id, name: a.name });
+  };
+
+  const onNodeDragStop: OnNodeDrag = (_, node) => {
+    if (agents[node.id]) moveNode(node.id, node.position.x, node.position.y);
   };
 
   return (
@@ -70,10 +85,11 @@ function Board() {
       <SpawnBar />
       <ReactFlow
         nodes={nodes}
-        edges={initialEdges}
+        edges={connected ? [] : initialEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodeClick={onNodeClick}
+        onNodeDragStop={onNodeDragStop}
         fitView
         fitViewOptions={{ padding: 0.18, maxZoom: 1.1 }}
         minZoom={0.15}

@@ -34,6 +34,12 @@ pub enum ClientMsg {
         agent_id: String,
         action: String,
     },
+    /// Persist a node's canvas position (drag end).
+    MoveNode {
+        agent_id: String,
+        x: f64,
+        y: f64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -46,6 +52,21 @@ pub enum ServerMsg {
     Delegation { edge_id: String, from: String, to: String, task: String },
     #[allow(dead_code)] // emitted by the orchestration layer (P2)
     Result { edge_id: String, summary: String },
+    /// Board state replay sent once when a client connects: every agent the
+    /// board knows (live and dead) plus saved node positions.
+    Snapshot {
+        agents: Vec<SnapshotAgent>,
+        layout: std::collections::HashMap<String, (f64, f64)>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SnapshotAgent {
+    pub agent_id: String,
+    pub name: String,
+    pub command: String,
+    pub worktree: String,
+    pub status: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

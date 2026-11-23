@@ -1,12 +1,21 @@
 // Typed WebSocket client for canvasd.
 // Control frames: JSON text. PTY frames: binary [id_len][id][payload].
 
+export type SnapshotAgent = {
+  agent_id: string;
+  name: string;
+  command: string;
+  worktree: string;
+  status: string;
+};
+
 export type ServerMsg =
   | { type: "spawned"; agent_id: string; name: string }
   | { type: "status"; agent_id: string; status: string }
   | { type: "error"; agent_id: string | null; message: string }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
-  | { type: "result"; edge_id: string; summary: string };
+  | { type: "result"; edge_id: string; summary: string }
+  | { type: "snapshot"; agents: SnapshotAgent[]; layout: Record<string, [number, number]> };
 
 export type Handlers = {
   onControl: (msg: ServerMsg) => void;
@@ -70,5 +79,9 @@ export class CanvasClient {
   /** The only way to kill: explicit destructive confirmation. */
   confirmDestructive(agentId: string, action: "kill") {
     this.send({ cmd: "confirm_destructive", agent_id: agentId, action });
+  }
+
+  moveNode(agentId: string, x: number, y: number) {
+    this.send({ cmd: "move_node", agent_id: agentId, x, y });
   }
 }
