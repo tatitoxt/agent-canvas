@@ -3,7 +3,7 @@
 //! Binds to 127.0.0.1 only. Every connection requires the per-launch session
 //! token (`?token=` on /ws, `Authorization: Bearer` on /api/*).
 
-use canvasd::agent::AgentManager;
+use canvasd::agent::{last_visible_line, AgentManager};
 use canvasd::protocol;
 use canvasd::store;
 use anyhow::Result;
@@ -452,6 +452,8 @@ async fn main() -> Result<()> {
         tokio::spawn(async move {
             let mut last: std::collections::HashMap<String, &'static str> =
                 std::collections::HashMap::new();
+            let mut last_line: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
             let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
             loop {
                 tick.tick().await;
@@ -484,6 +486,20 @@ async fn main() -> Result<()> {
                             edge_id,
                             summary,
                         }));
+                    }
+                }
+                // Activity pass: broadcast the agent's latest PTY line
+                // when it changed — the node card previews live output.
+                for id in agents.ids() {
+                    let line = agents.tail_text(&id).and_then(|t| last_visible_line(&t));
+                    if let Some(line) = line {
+                        if last_line.get(&id) != Some(&line) {
+                            last_line.insert(id.clone(), line.clone());
+                            let _ = ev.send(Event::Control(ServerMsg::Activity {
+                                agent_id: id,
+                                line,
+                            }));
+                        }
                     }
                 }
                 for (id, status) in agents.statuses() {

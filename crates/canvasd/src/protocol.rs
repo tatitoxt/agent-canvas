@@ -82,6 +82,10 @@ pub fn normalize_permission(level: Option<&str>) -> &'static str {
 pub enum ServerMsg {
     Spawned { agent_id: String, name: String, command: String, permission: String, workspace_id: Option<String> },
     Status { agent_id: String, status: AgentStatus },
+    /// Live one-line activity preview — the agent's latest non-empty PTY
+    /// line, ANSI-stripped. Deska's "background work" summaries: the node
+    /// shows what the agent is doing without opening the terminal.
+    Activity { agent_id: String, line: String },
     Error { agent_id: Option<String>, message: String },
     Delegation { edge_id: String, from: String, to: String, task: String },
     Result { edge_id: String, summary: String },

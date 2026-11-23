@@ -15,6 +15,7 @@ export type ServerMsg =
   | { type: "spawned"; agent_id: string; name: string; command?: string; permission?: string; workspace_id?: string | null }
   | { type: "workspace_created"; workspace_id: string; name: string; repo: string }
   | { type: "status"; agent_id: string; status: string }
+  | { type: "activity"; agent_id: string; line: string }
   | { type: "error"; agent_id: string | null; message: string }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
   | { type: "result"; edge_id: string; summary: string }

@@ -85,7 +85,7 @@ function Board() {
           cli: (a.command ?? "bash").split(/\s+/)[0].toLowerCase(),
           permission: a.permission,
           status: a.status === "exited" ? ("done" as const) : a.status,
-          task: a.status === "exited" ? "session ended" : "live PTY — click to open",
+          task: a.status === "exited" ? "session ended" : (a.lastLine ?? "live PTY — click to open"),
         },
       };
     });

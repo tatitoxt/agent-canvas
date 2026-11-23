@@ -261,6 +261,11 @@ impl AgentManager {
             .collect()
     }
 
+    /// Live agent ids — for the activity ticker.
+    pub fn ids(&self) -> Vec<String> {
+        self.agents.lock().unwrap().keys().cloned().collect()
+    }
+
     /// Rolling PTY tail as text, for the CANVAS_RESULT scanner.
     pub fn tail_text(&self, id: &str) -> Option<String> {
         self.agents
@@ -271,6 +276,40 @@ impl AgentManager {
     }
 }
 
+/// Last non-empty PTY line with ANSI sequences stripped — the one-line
+/// preview the node card shows (Deska-style background summaries).
+pub fn last_visible_line(tail: &str) -> Option<String> {
+    tail.lines()
+        .rev()
+        .map(strip_ansi)
+        .map(|l| l.trim().to_string())
+        .find(|l| !l.is_empty())
+        .map(|l| l.chars().take(160).collect())
+}
+
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                while let Some(&p) = chars.peek() {
+                    chars.next();
+                    if p.is_ascii_alphabetic() || p == '@' {
+                        break;
+                    }
+                }
+            } else {
+                chars.next();
+            }
+        } else if c != '\r' && c != '\u{7}' {
+            out.push(c);
+        }
+    }
+    out
+}
+
 fn uuid_like() -> String {
     uuid::Uuid::new_v4().simple().to_string()[..12].to_string()
 }
@@ -278,6 +317,12 @@ fn uuid_like() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ansi_stripping_yields_last_visible_line() {
+        let tail = "\u{1b}[32mok\u{1b}[0m\r\n\u{1b}[1mworking…\u{1b}[0m\n";
+        assert_eq!(last_visible_line(tail).as_deref(), Some("working…"));
+    }
 
     #[test]
     fn rejects_unsafe_cwd() {
