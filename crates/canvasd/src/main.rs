@@ -69,6 +69,7 @@ fn spawn_agent(
     command: &str,
     cwd: &str,
     workspace_id: Option<&str>,
+    permission: &str,
 ) -> Result<String> {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<(String, Vec<u8>)>();
     let (exit_tx, mut exit_rx) = mpsc::unbounded_channel::<String>();
@@ -104,6 +105,7 @@ fn spawn_agent(
         command,
         &format!(".canvas-worktrees/{id}"),
         workspace_id,
+        permission,
     ) {
         warn!(error = %e, "failed to persist agent");
     }
@@ -133,12 +135,13 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
         let snapshot = ServerMsg::Snapshot {
             agents: agents
                 .into_iter()
-                .map(|(id, name, command, worktree, status, workspace_id)| protocol::SnapshotAgent {
+                .map(|(id, name, command, worktree, status, workspace_id, permission)| protocol::SnapshotAgent {
                     status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
                     agent_id: id,
                     name,
                     command,
                     worktree,
+                    permission,
                     workspace_id,
                 })
                 .collect(),
@@ -270,19 +273,21 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::SpawnAgent { name, command, cwd, workspace_id } => {
-            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref()) {
-                Ok(id) => send_control(ServerMsg::Spawned { agent_id: id, name, command, workspace_id }),
+        ClientMsg::SpawnAgent { name, command, cwd, workspace_id, permission } => {
+            let level = protocol::normalize_permission(permission.as_deref());
+            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level) {
+                Ok(id) => send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id }),
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: None,
                     message: e.to_string(),
                 }),
             }
         }
-        ClientMsg::Delegate { from, name, command, task, cwd, workspace_id } => {
+        ClientMsg::Delegate { from, name, command, task, cwd, workspace_id, permission } => {
             // A delegation IS a spawn + a persisted edge. The edge returns
             // when the child's PTY prints `CANVAS_RESULT: <summary>`.
-            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref()) {
+            let level = protocol::normalize_permission(permission.as_deref());
+            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level) {
                 Ok(id) => {
                     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
                     if let Err(e) = state.store.delegation_created(&edge_id, &from, &id, &task) {
@@ -293,6 +298,7 @@ fn handle_client_msg(
                         agent_id: id.clone(),
                         name,
                         command,
+                        permission: level.to_string(),
                         workspace_id: workspace_id.clone(),
                     });
                     send_control(ServerMsg::Delegation {

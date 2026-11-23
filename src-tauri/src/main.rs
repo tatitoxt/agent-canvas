@@ -50,6 +50,7 @@ fn spawn_wired(
     command: &str,
     cwd: &str,
     workspace_id: Option<&str>,
+    permission: &str,
 ) -> Result<String, String> {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<(String, Vec<u8>)>();
     let (exit_tx, mut exit_rx) = mpsc::unbounded_channel::<String>();
@@ -92,6 +93,7 @@ fn spawn_wired(
         command,
         &format!(".canvas-worktrees/{id}"),
         workspace_id,
+        permission,
     ) {
         warn!(error = %e, "failed to persist agent");
     }
@@ -106,9 +108,11 @@ fn spawn_agent(
     command: String,
     cwd: String,
     workspace_id: Option<String>,
+    permission: Option<String>,
 ) -> Result<String, String> {
-    let id = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref())?;
-    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, workspace_id });
+    let level = canvasd::protocol::normalize_permission(permission.as_deref());
+    let id = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref(), level)?;
+    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id });
     Ok(id)
 }
 
@@ -151,8 +155,10 @@ fn delegate(
     task: String,
     cwd: String,
     workspace_id: Option<String>,
+    permission: Option<String>,
 ) -> Result<String, String> {
-    let id = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref())?;
+    let level = canvasd::protocol::normalize_permission(permission.as_deref());
+    let id = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref(), level)?;
     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
     let _ = state.store.delegation_created(&edge_id, &from, &id, &task);
     state
@@ -160,7 +166,7 @@ fn delegate(
         .lock()
         .unwrap()
         .insert(id.clone(), edge_id.clone());
-    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, workspace_id });
+    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id });
     emit_control(
         &app,
         &ServerMsg::Delegation { edge_id, from, to: id, task },
@@ -221,12 +227,13 @@ fn snapshot(state: State<'_, CanvasState>) -> Result<serde_json::Value, String> 
         .agents_snapshot()
         .map_err(|e| e.to_string())?
         .into_iter()
-        .map(|(id, name, command, worktree, status, workspace_id)| SnapshotAgent {
+        .map(|(id, name, command, worktree, status, workspace_id, permission)| SnapshotAgent {
             status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
             agent_id: id,
             name,
             command,
             worktree,
+            permission,
             workspace_id,
         })
         .collect();

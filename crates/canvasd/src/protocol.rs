@@ -16,6 +16,9 @@ pub enum ClientMsg {
         cwd: String,
         /// Workspace container this agent belongs to (none = loose node).
         workspace_id: Option<String>,
+        /// Permission ladder level: "supervised" | "auto_accept" | "auto" | "full".
+        /// Unknown/None values normalize to "supervised" (most restrictive).
+        permission: Option<String>,
     },
     /// Create a workspace container — user-defined project groupings that
     /// coexist spatially on the same canvas.
@@ -59,13 +62,25 @@ pub enum ClientMsg {
         task: String,
         cwd: String,
         workspace_id: Option<String>,
+        permission: Option<String>,
     },
+}
+
+/// Deska-style permission ladder, most → least restrictive. The level
+/// gates what an agent may do without a human confirm in the loop.
+pub fn normalize_permission(level: Option<&str>) -> &'static str {
+    match level {
+        Some("full" | "full_access") => "full",
+        Some("auto") => "auto",
+        Some("auto_accept" | "auto-accept") => "auto_accept",
+        _ => "supervised",
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMsg {
-    Spawned { agent_id: String, name: String, command: String, workspace_id: Option<String> },
+    Spawned { agent_id: String, name: String, command: String, permission: String, workspace_id: Option<String> },
     Status { agent_id: String, status: AgentStatus },
     Error { agent_id: Option<String>, message: String },
     Delegation { edge_id: String, from: String, to: String, task: String },
@@ -105,6 +120,7 @@ pub struct SnapshotAgent {
     pub command: String,
     pub worktree: String,
     pub status: String,
+    pub permission: String,
     pub workspace_id: Option<String>,
 }
 

@@ -7,11 +7,12 @@ export type SnapshotAgent = {
   command: string;
   worktree: string;
   status: string;
+  permission?: string;
   workspace_id?: string | null;
 };
 
 export type ServerMsg =
-  | { type: "spawned"; agent_id: string; name: string; command?: string; workspace_id?: string | null }
+  | { type: "spawned"; agent_id: string; name: string; command?: string; permission?: string; workspace_id?: string | null }
   | { type: "workspace_created"; workspace_id: string; name: string; repo: string }
   | { type: "status"; agent_id: string; status: string }
   | { type: "error"; agent_id: string | null; message: string }
@@ -86,8 +87,8 @@ export class CanvasClient {
     return new Promise((res) => this.ws.addEventListener("open", () => res(), { once: true }));
   }
 
-  spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string) {
-    this.send({ cmd: "spawn_agent", name, command, cwd, workspace_id: workspaceId ?? null });
+  spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string) {
+    this.send({ cmd: "spawn_agent", name, command, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null });
   }
 
   createWorkspace(name: string, repo: string) {
@@ -112,7 +113,7 @@ export class CanvasClient {
     this.send({ cmd: "move_node", agent_id: agentId, x, y });
   }
 
-  delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string) {
-    this.send({ cmd: "delegate", from, name, command, task, cwd, workspace_id: workspaceId ?? null });
+  delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string) {
+    this.send({ cmd: "delegate", from, name, command, task, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null });
   }
 }

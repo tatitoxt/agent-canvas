@@ -7,6 +7,7 @@ export type LiveAgent = {
   id: string;
   name: string;
   command?: string;
+  permission?: string;
   status: AgentStatus | "exited";
   workspace_id?: string | null;
 };
@@ -37,9 +38,9 @@ type BoardState = {
   positions: Record<string, { x: number; y: number }>;
   ptyListeners: Record<string, (bytes: Uint8Array) => void>;
   connect: (token: string) => void;
-  spawn: (name: string, command: string, workspaceId?: string) => void;
+  spawn: (name: string, command: string, workspaceId?: string, permission?: string) => void;
   createWorkspace: (name: string, repo: string) => void;
-  delegate: (from: string, name: string, command: string, task: string) => void;
+  delegate: (from: string, name: string, command: string, task: string, permission?: string) => void;
   kill: (agentId: string) => void;
   moveNode: (agentId: string, x: number, y: number) => void;
   attachPty: (agentId: string, cb: (bytes: Uint8Array) => void) => void;
@@ -76,6 +77,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                   id: msg.agent_id,
                   name: msg.name,
                   command: msg.command,
+                  permission: msg.permission ?? "supervised",
                   status: "working",
                   workspace_id: msg.workspace_id ?? null,
                 },
@@ -141,6 +143,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                   id: a.agent_id,
                   name: a.name,
                   command: a.command,
+                  permission: a.permission ?? "supervised",
                   status: a.status as LiveAgent["status"],
                   workspace_id: a.workspace_id ?? null,
                 },
@@ -188,13 +191,13 @@ export const useBoard = create<BoardState>((set, get) => ({
     void client.whenOpen().then(() => set({ connected: true }));
   },
 
-  spawn: (name, command, workspaceId) =>
-    client?.spawnAgent(name, command, ".", workspaceId),
+  spawn: (name, command, workspaceId, permission) =>
+    client?.spawnAgent(name, command, ".", workspaceId, permission),
 
   createWorkspace: (name, repo) => client?.createWorkspace(name, repo),
 
-  delegate: (from, name, command, task) =>
-    client?.delegate(from, name, command, task),
+  delegate: (from, name, command, task, permission) =>
+    client?.delegate(from, name, command, task, ".", undefined, permission),
 
   kill: (agentId) => client?.confirmDestructive(agentId, "kill"),
 

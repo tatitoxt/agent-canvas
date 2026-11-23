@@ -35,6 +35,13 @@ const CLI_META: Record<string, { mark: string; label: string }> = {
   live: { mark: "›_", label: "Terminal" },
 };
 
+const PERMISSION_LABEL: Record<string, string> = {
+  supervised: "supervised",
+  auto_accept: "auto-accept",
+  auto: "auto",
+  full: "full access",
+};
+
 function cliMeta(cli: string) {
   return CLI_META[cli.toLowerCase()] ?? { mark: "▢", label: cli };
 }
@@ -101,6 +108,15 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           >
             {STATUS_LABEL[data.status]}
           </span>
+          {data.permission && data.permission !== "supervised" && (
+            <span
+              className="glass-pill"
+              style={{ fontSize: 9.5, padding: "2px 7px", color: "var(--cv-accent)" }}
+              title="permission level"
+            >
+              {PERMISSION_LABEL[data.permission] ?? data.permission}
+            </span>
+          )}
         </div>
       </div>
       {data.task && (

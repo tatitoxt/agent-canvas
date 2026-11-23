@@ -28,6 +28,7 @@ export function SpawnBar() {
   const [command, setCommand] = useState("bash");
   const [name, setName] = useState("");
   const [wsId, setWsId] = useState("");
+  const [permission, setPermission] = useState("supervised");
   const [makingWs, setMakingWs] = useState(false);
   const [wsName, setWsName] = useState("");
   const [wsRepo, setWsRepo] = useState("");
@@ -114,12 +115,23 @@ export function SpawnBar() {
               </option>
             ))}
           </select>
+          <select
+            style={{ ...inputStyle, cursor: "pointer", color: permission === "supervised" ? "var(--cv-ink-dim)" : "var(--cv-accent)" }}
+            value={permission}
+            onChange={(e) => setPermission(e.target.value)}
+            title="permission level — what the agent may do without asking"
+          >
+            <option value="supervised">supervised</option>
+            <option value="auto_accept">auto-accept edits</option>
+            <option value="auto">auto</option>
+            <option value="full">full access</option>
+          </select>
           <button
             className="glass-pill"
             style={{ ...buttonStyle, color: "var(--cv-accent)", opacity: command.trim() ? 1 : 0.45 }}
             disabled={!command.trim()}
             onClick={() => {
-              spawn(name.trim() || command.trim(), command.trim(), wsId || undefined);
+              spawn(name.trim() || command.trim(), command.trim(), wsId || undefined, permission);
               setName("");
             }}
           >

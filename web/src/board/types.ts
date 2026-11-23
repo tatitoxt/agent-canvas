@@ -5,6 +5,7 @@ export type AgentNodeData = {
   name: string;
   cli: string;
   status: AgentStatus;
+  permission?: string;
   task?: string;
   lastOutput?: string;
 };

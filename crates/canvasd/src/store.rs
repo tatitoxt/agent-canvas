@@ -57,6 +57,14 @@ impl Store {
                  PRAGMA user_version = 1;",
             )?;
         }
+        // v1 → v2: per-agent permission level (Deska-style ladder; default
+        // most restrictive so old rows never silently gain autonomy).
+        if version < 2 {
+            conn.execute_batch(
+                "ALTER TABLE agents ADD COLUMN permission TEXT NOT NULL DEFAULT 'supervised';
+                 PRAGMA user_version = 2;",
+            )?;
+        }
         Ok(Self { conn: Mutex::new(conn) })
     }
 
@@ -67,10 +75,11 @@ impl Store {
         command: &str,
         worktree: &str,
         workspace_id: Option<&str>,
+        permission: &str,
     ) -> Result<()> {
         self.conn.lock().unwrap().execute(
-            "INSERT INTO agents (id, name, command, worktree, workspace_id) VALUES (?1, ?2, ?3, ?4, ?5)",
-            (id, name, command, worktree, workspace_id),
+            "INSERT INTO agents (id, name, command, worktree, workspace_id, permission) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (id, name, command, worktree, workspace_id, permission),
         )?;
         Ok(())
     }
@@ -151,16 +160,16 @@ impl Store {
 
     /// Agents seen by this board, newest last — replayed to new clients so
     /// the canvas shows pre-existing agents, not just ones spawned live.
-    /// Tuple: (id, name, command, worktree, status, workspace_id).
+    /// Tuple: (id, name, command, worktree, status, workspace_id, permission).
     pub fn agents_snapshot(
         &self,
-    ) -> Result<Vec<(String, String, String, String, String, Option<String>)>> {
+    ) -> Result<Vec<(String, String, String, String, String, Option<String>, String)>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
-            "SELECT id, name, command, worktree, status, workspace_id FROM agents ORDER BY created_at",
+            "SELECT id, name, command, worktree, status, workspace_id, permission FROM agents ORDER BY created_at",
         )?;
         let rows = st.query_map([], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
