@@ -12,7 +12,9 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
   const connected = useBoard((s) => s.connected);
   const agents = useBoard((s) => s.agents);
   const edges = useBoard((s) => s.edges);
+  const approvals = useBoard((s) => s.approvals);
   const inboxCount =
+    Object.keys(approvals).length +
     Object.values(agents).filter((a) => a.status === "waiting" || a.status === "blocked").length +
     Object.values(edges).filter((e) => e.state === "delegated").length;
   return (

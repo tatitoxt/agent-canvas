@@ -28,13 +28,20 @@ const groupLabel: React.CSSProperties = {
 export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void }) {
   const agents = useBoard((s) => s.agents);
   const edges = useBoard((s) => s.edges);
+  const approvals = useBoard((s) => s.approvals);
 
+  const held = Object.entries(approvals).map(([id, line]) => ({
+    id,
+    line,
+    name: agents[id]?.name ?? id.slice(0, 8),
+  }));
   const needsYou = Object.values(agents).filter(
     (a) => a.status === "waiting" || a.status === "blocked",
   );
   const inFlight = Object.values(edges).filter((e) => e.state === "delegated");
   const done = Object.values(edges).filter((e) => e.state === "returned");
-  const empty = needsYou.length === 0 && inFlight.length === 0 && done.length === 0;
+  const empty =
+    held.length === 0 && needsYou.length === 0 && inFlight.length === 0 && done.length === 0;
 
   return (
     <div
@@ -67,6 +74,45 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
           <div style={{ padding: "18px 12px", fontSize: 11.5, color: "var(--cv-ink-dim)" }}>
             Nothing needs you — agents are running or done.
           </div>
+        )}
+        {held.length > 0 && (
+          <>
+            <div style={{ ...groupLabel, color: "var(--cv-waiting)" }}>approve commands</div>
+            {held.map((h) => (
+              <div key={h.id} style={{ ...rowStyle, cursor: "default" }}>
+                <span style={{ fontSize: 12, fontWeight: 600 }}>{h.name}</span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "var(--cv-ink-dim)",
+                    fontFamily: "ui-monospace, SFMono-Regular, monospace",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={h.line}
+                >
+                  {h.line}
+                </span>
+                <span style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                  <button
+                    className="glass-pill"
+                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 11px", color: "var(--cv-done)", cursor: "pointer", border: "none" }}
+                    onClick={() => useBoard.getState().approveInput(h.id)}
+                  >
+                    allow
+                  </button>
+                  <button
+                    className="glass-pill"
+                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 11px", color: "var(--cv-blocked)", cursor: "pointer", border: "none" }}
+                    onClick={() => useBoard.getState().denyInput(h.id)}
+                  >
+                    deny
+                  </button>
+                </span>
+              </div>
+            ))}
+          </>
         )}
         {needsYou.length > 0 && (
           <>
