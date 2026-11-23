@@ -84,12 +84,33 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
         )}
         {alerts.length > 0 && (
           <>
-            <div style={{ ...groupLabel, color: "var(--cv-blocked)" }}>automation alerts</div>
-            {alerts.map((a) => (
-              <button key={a.id} style={rowStyle} className="inbox-row" onClick={() => onOpenAgent(a.id)}>
-                <span style={{ fontSize: 12, fontWeight: 600 }}>{a.name}</span>
-                <span style={{ fontSize: 11, color: "var(--cv-ink-dim)" }}>{a.reason}</span>
+            <div style={{ ...groupLabel, color: "var(--cv-blocked)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>automation alerts</span>
+              <button
+                style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", fontSize: 10, cursor: "pointer" }}
+                onClick={() => useBoard.getState().dismissAlert("*")}
+              >
+                clear all
               </button>
+            </div>
+            {alerts.map((a) => (
+              <div key={a.id} style={{ ...rowStyle, cursor: "default", position: "relative" }}>
+                <button
+                  style={{ position: "absolute", right: 8, top: 8, background: "none", border: "none", color: "var(--cv-ink-faint)", fontSize: 11, cursor: "pointer" }}
+                  title="dismiss"
+                  onClick={() => useBoard.getState().dismissAlert(a.id)}
+                >
+                  ×
+                </button>
+                <button
+                  style={{ ...rowStyle, padding: 0 }}
+                  className="inbox-row"
+                  onClick={() => onOpenAgent(a.id)}
+                >
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>{a.name}</span>
+                  <span style={{ fontSize: 11, color: "var(--cv-ink-dim)", paddingRight: 14 }}>{a.reason}</span>
+                </button>
+              </div>
             ))}
           </>
         )}
@@ -158,7 +179,15 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
         )}
         {done.length > 0 && (
           <>
-            <div style={groupLabel}>returned</div>
+            <div style={{ ...groupLabel, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>returned</span>
+              <button
+                style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", fontSize: 10, cursor: "pointer" }}
+                onClick={() => useBoard.getState().clearReturned()}
+              >
+                clear
+              </button>
+            </div>
             {done.map((e) => (
               <button key={e.id} style={rowStyle} className="inbox-row" onClick={() => onOpenAgent(e.to)}>
                 <span style={{ fontSize: 12, fontWeight: 600 }}>{e.task}</span>

@@ -89,6 +89,10 @@ type BoardState = {
   kill: (agentId: string) => void;
   approveInput: (agentId: string) => void;
   denyInput: (agentId: string) => void;
+  /** Dismiss one automation alert row (or every alert with id "*"). */
+  dismissAlert: (agentId: string) => void;
+  /** Clear returned delegation rows from the inbox. */
+  clearReturned: () => void;
   moveNode: (agentId: string, x: number, y: number) => void;
   attachPty: (agentId: string, cb: (bytes: Uint8Array) => void) => void;
   ptyBuffer: (agentId: string) => Uint8Array | undefined;
@@ -443,6 +447,23 @@ export const useBoard = create<BoardState>((set, get) => ({
     const next = { ...get().approvals };
     delete next[agentId];
     set({ approvals: next });
+  },
+
+  dismissAlert: (agentId) => {
+    const next = { ...get().attention };
+    if (agentId === "*") {
+      set({ attention: {} });
+    } else {
+      delete next[agentId];
+      set({ attention: next });
+    }
+  },
+
+  clearReturned: () => {
+    const edges = Object.fromEntries(
+      Object.entries(get().edges).filter(([, e]) => e.state !== "returned"),
+    );
+    set({ edges });
   },
 
   moveNode: (agentId, x, y) => {
