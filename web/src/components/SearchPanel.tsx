@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useBoard } from "../store/board";
 
 // ANSI escape sequences stripped for display + matching.
-const ansi = /\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*\x07/g;
+const ansi = /\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*\x07/g;
 const clean = (s: string) => s.replace(ansi, " ").replace(/\s+/g, " ").trim();
 
 /** ⌘F on-device search across every agent's PTY scrollback — Deska's
@@ -25,10 +25,9 @@ export function SearchPanel({
     const q = query.trim().toLowerCase();
     if (!q) return [];
     const out: Array<{ id: string; name: string; status: string; snippet: string }> = [];
-    for (const [id, buf] of Object.entries(ptyBuffers)) {
-      const a = agents[id];
-      if (!a) continue;
-      const text = clean(new TextDecoder().decode(buf));
+    for (const a of Object.values(agents)) {
+      const buf = ptyBuffers[a.id];
+      const text = buf ? clean(new TextDecoder().decode(buf)) : "";
       const at = text.toLowerCase().indexOf(q);
       if (at === -1 && !a.name.toLowerCase().includes(q) && !(a.lastLine ?? "").toLowerCase().includes(q)) {
         continue;
@@ -37,7 +36,7 @@ export function SearchPanel({
         at === -1
           ? (a.lastLine ?? "")
           : `…${text.slice(Math.max(0, at - 60), at + 90)}…`;
-      out.push({ id, name: a.name, status: a.status, snippet });
+      out.push({ id: a.id, name: a.name, status: a.status, snippet });
     }
     return out;
   }, [query, ptyBuffers, agents]);
