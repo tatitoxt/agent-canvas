@@ -171,7 +171,7 @@ fn delegate(
     emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id });
     emit_control(
         &app,
-        &ServerMsg::Delegation { edge_id, from, to: id, task },
+        &ServerMsg::Delegation { edge_id, from, to: id.clone(), task },
     );
     Ok(id)
 }

@@ -6,6 +6,12 @@ use rusqlite::Connection;
 use std::path::Path;
 use std::sync::Mutex;
 
+/// Row of the agents table: (id, name, command, worktree, status,
+/// workspace_id, permission).
+pub type AgentRow = (String, String, String, String, String, Option<String>, String);
+/// Row of the delegations table: (id, from, to, task, result, state).
+pub type DelegationRow = (String, String, String, String, Option<String>, String);
+
 pub struct Store {
     conn: Mutex<Connection>,
 }
@@ -172,7 +178,7 @@ impl Store {
     /// Tuple: (id, name, command, worktree, status, workspace_id, permission).
     pub fn agents_snapshot(
         &self,
-    ) -> Result<Vec<(String, String, String, String, String, Option<String>, String)>> {
+    ) -> Result<Vec<AgentRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
             "SELECT id, name, command, worktree, status, workspace_id, permission FROM agents ORDER BY created_at",
@@ -186,7 +192,7 @@ impl Store {
     /// Delegation edges seen by this board — replayed on connect.
     pub fn delegations_snapshot(
         &self,
-    ) -> Result<Vec<(String, String, String, String, Option<String>, String)>> {
+    ) -> Result<Vec<DelegationRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
             "SELECT id, from_node, to_node, task, result, state FROM delegations ORDER BY created_at",

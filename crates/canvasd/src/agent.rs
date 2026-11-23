@@ -130,6 +130,12 @@ fn ensure_worktree(repo_root: &Path, agent_id: &str, branch: &str) -> Result<Pat
     Ok(dir)
 }
 
+impl Default for AgentManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AgentManager {
     pub fn new() -> Self {
         Self { agents: Mutex::new(HashMap::new()) }
