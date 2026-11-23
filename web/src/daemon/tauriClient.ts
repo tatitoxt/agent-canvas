@@ -113,6 +113,10 @@ export class TauriCanvasClient {
     invoke("create_board", { name }).catch(console.error);
   }
 
+  moveToBoard(nodeId: string, boardId: string) {
+    invoke("move_to_board", { nodeId, boardId }).catch(console.error);
+  }
+
   transcript(agentId: string) {
     void invoke("transcript", { agentId }).catch(console.error);
   }

@@ -142,6 +142,23 @@ fn create_board(
 }
 
 #[tauri::command]
+fn move_to_board(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    node_id: String,
+    board_id: String,
+) -> Result<(), String> {
+    match state.store.node_moved_to_board(&node_id, &board_id) {
+        Ok(true) => {
+            emit_control(&app, &ServerMsg::BoardMoved { node_id, board_id });
+            Ok(())
+        }
+        Ok(false) => Err("no such node".to_string()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
 fn create_workspace(
     app: AppHandle,
     state: State<'_, CanvasState>,
@@ -641,6 +658,7 @@ fn main() {
             spawn_agent,
             create_board,
             create_workspace,
+            move_to_board,
             delegate,
             pty_input,
             approve_input,

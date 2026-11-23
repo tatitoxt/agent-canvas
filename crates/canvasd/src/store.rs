@@ -182,6 +182,20 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    /// Move a node (agent or workspace) to another board. Returns whether
+    /// any row was updated.
+    pub fn node_moved_to_board(&self, node_id: &str, board_id: &str) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let n = conn.execute(
+            "UPDATE agents SET board_id = ?2 WHERE id = ?1",
+            (node_id, board_id),
+        )? + conn.execute(
+            "UPDATE workspaces SET board_id = ?2 WHERE id = ?1",
+            (node_id, board_id),
+        )?;
+        Ok(n > 0)
+    }
+
     /// Board an agent lives on — a delegation child inherits its parent's.
     pub fn agent_board(&self, id: &str) -> Result<Option<String>> {
         let conn = self.conn.lock().unwrap();

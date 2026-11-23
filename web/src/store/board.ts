@@ -73,6 +73,7 @@ type BoardState = {
   connect: (token: string) => void;
   setActiveBoard: (boardId: string) => void;
   createBoard: (name: string) => void;
+  moveToBoard: (nodeId: string, boardId: string) => void;
   spawn: (name: string, command: string, workspaceId?: string, permission?: string) => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
@@ -171,6 +172,26 @@ export const useBoard = create<BoardState>((set, get) => ({
               boards: { ...get().boards, [msg.board_id]: msg.name },
             });
             break;
+          case "board_moved": {
+            const a = get().agents[msg.node_id];
+            const w = get().workspaces[msg.node_id];
+            if (a) {
+              set({
+                agents: {
+                  ...get().agents,
+                  [msg.node_id]: { ...a, board_id: msg.board_id },
+                },
+              });
+            } else if (w) {
+              set({
+                workspaces: {
+                  ...get().workspaces,
+                  [msg.node_id]: { ...w, board_id: msg.board_id },
+                },
+              });
+            }
+            break;
+          }
           case "status":
             if (agents[msg.agent_id]) {
               set({
@@ -363,6 +384,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   setActiveBoard: (boardId) => set({ activeBoard: boardId }),
 
   createBoard: (name) => client?.createBoard(name),
+
+  moveToBoard: (nodeId, boardId) => client?.moveToBoard(nodeId, boardId),
 
   spawn: (name, command, workspaceId, permission) =>
     client?.spawnAgent(name, command, ".", workspaceId, permission, get().activeBoard),

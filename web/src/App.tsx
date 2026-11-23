@@ -25,6 +25,7 @@ import { DelegationPanel } from "./components/DelegationPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { Topbar } from "./components/Topbar";
 import { BoardTabs } from "./components/BoardTabs";
+import { ContextMenu } from "./components/ContextMenu";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
 
@@ -56,6 +57,7 @@ function Board() {
   const [palette, setPalette] = useState(false);
   const [edgeDetail, setEdgeDetail] = useState<string | null>(null);
   const [search, setSearch] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -147,6 +149,12 @@ function Board() {
     if (a) setOpenTerm({ id: a.id, name: a.name });
   };
 
+  const onNodeContextMenu: NodeMouseHandler = (ev, node) => {
+    ev.preventDefault();
+    if (!agents[node.id] && !workspaces[node.id]) return;
+    setMenu({ x: ev.clientX, y: ev.clientY, id: node.id });
+  };
+
   const onNodeDragStop: OnNodeDrag = (_, node) => {
     if (agents[node.id] || workspaces[node.id]) {
       moveNode(node.id, node.position.x, node.position.y);
@@ -196,6 +204,7 @@ function Board() {
         onNodeDragStop={onNodeDragStop}
         onConnectEnd={onConnectEnd}
         onEdgeClick={(_, edge) => setEdgeDetail(edge.id)}
+        onNodeContextMenu={onNodeContextMenu}
         onPaneClick={() => setEdgeDetail(null)}
         fitView
         fitViewOptions={{ padding: 0.18, maxZoom: 1.1 }}
@@ -238,6 +247,19 @@ function Board() {
         />
       )}
       {nav === "automations" && <AutomationsPanel />}
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          nodeId={menu.id}
+          isAgent={!!agents[menu.id]}
+          onOpenTerminal={() => {
+            const a = agents[menu.id];
+            if (a) setOpenTerm({ id: a.id, name: a.name });
+          }}
+          onClose={() => setMenu(null)}
+        />
+      )}
       {edgeDetail && liveEdges[edgeDetail] && (
         <DelegationPanel
           edgeId={edgeDetail}

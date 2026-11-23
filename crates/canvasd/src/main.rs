@@ -359,6 +359,19 @@ fn handle_client_msg(
                 }),
             }
         }
+        ClientMsg::MoveToBoard { node_id, board_id } => {
+            match state.store.node_moved_to_board(&node_id, &board_id) {
+                Ok(true) => send_control(ServerMsg::BoardMoved { node_id, board_id }),
+                Ok(false) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: "no such node".to_string(),
+                }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
+            }
+        }
         ClientMsg::CreateWorkspace { name, repo, board_id } => {
             // Path validated on spawn side; a workspace is just a named
             // container + its repo.

@@ -34,6 +34,8 @@ pub enum ClientMsg {
     /// Create a named board — a separate canvas with its own agents,
     /// workspaces and edges (Deska "Spaces").
     CreateBoard { name: String },
+    /// Move an agent or workspace node to another board.
+    MoveToBoard { node_id: String, board_id: String },
     PtyInput {
         agent_id: String,
         /// Base64-encoded bytes to write to the PTY.
@@ -157,6 +159,8 @@ pub enum ServerMsg {
     Result { edge_id: String, summary: String, files: u32 },
     WorkspaceCreated { workspace_id: String, name: String, repo: String, board_id: Option<String> },
     BoardCreated { board_id: String, name: String },
+    /// A node (agent or workspace) changed boards.
+    BoardMoved { node_id: String, board_id: String },
     /// Board state replay sent once when a client connects: every agent the
     /// board knows (live and dead) plus saved node positions.
     Snapshot {
