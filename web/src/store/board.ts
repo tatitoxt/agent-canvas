@@ -79,6 +79,9 @@ type BoardState = {
   renameNode: (nodeId: string, name: string) => void;
   renameBoard: (boardId: string, name: string) => void;
   deleteBoard: (boardId: string) => void;
+  /** agent_id → latest fetched unified diff text. */
+  diffTexts: Record<string, string>;
+  requestDiff: (agentId: string) => void;
   spawn: (name: string, command: string, workspaceId?: string, permission?: string) => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
@@ -397,6 +400,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   renameNode: (nodeId, name) => client?.renameNode(nodeId, name),
   renameBoard: (boardId, name) => client?.renameBoard(boardId, name),
   deleteBoard: (boardId) => client?.deleteBoard(boardId),
+  diffTexts: {},
+  requestDiff: (agentId) => client?.diffDetail(agentId),
 
   spawn: (name, command, workspaceId, permission) =>
     client?.spawnAgent(name, command, ".", workspaceId, permission, get().activeBoard),

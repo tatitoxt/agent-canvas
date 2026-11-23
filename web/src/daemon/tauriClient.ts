@@ -129,6 +129,10 @@ export class TauriCanvasClient {
     invoke("delete_board", { boardId }).catch(console.error);
   }
 
+  diffDetail(agentId: string) {
+    invoke("diff_detail", { agentId }).catch(console.error);
+  }
+
   transcript(agentId: string) {
     void invoke("transcript", { agentId }).catch(console.error);
   }

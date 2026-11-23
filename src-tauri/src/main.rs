@@ -8,7 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use base64::Engine;
-use canvasd::agent::{canvas_result_line, dirty_file_count, dirty_files, sensitive_line, worktree_branch, AgentManager};
+use canvasd::agent::{canvas_result_line, dirty_diff, dirty_file_count, dirty_files, sensitive_line, worktree_branch, AgentManager};
 use canvasd::protocol::{AgentStatus, ServerMsg, SnapshotAgent, SnapshotAutomation, SnapshotDelegation};
 use canvasd::store::Store;
 use std::collections::HashMap;
@@ -487,6 +487,32 @@ fn transcript(
 }
 
 #[tauri::command]
+fn diff_detail(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    agent_id: String,
+) -> Result<(), String> {
+    let wt = state
+        .agents
+        .worktree(&agent_id)
+        .or_else(|| {
+            state
+                .store
+                .agent_worktree(&agent_id)
+                .ok()
+                .flatten()
+                .map(std::path::PathBuf::from)
+        });
+    match wt {
+        Some(wt) => {
+            emit_control(&app, &ServerMsg::DiffDetail { agent_id, diff: dirty_diff(&wt) });
+            Ok(())
+        }
+        None => Err("no such agent".into()),
+    }
+}
+
+#[tauri::command]
 fn snapshot(
     app: AppHandle,
     state: State<'_, CanvasState>,
@@ -720,6 +746,7 @@ fn main() {
             run_automation,
             delete_automation,
             transcript,
+            diff_detail,
             snapshot,
         ])
         .run(tauri::generate_context!())

@@ -3,7 +3,7 @@
 //! Binds to 127.0.0.1 only. Every connection requires the per-launch session
 //! token (`?token=` on /ws, `Authorization: Bearer` on /api/*).
 
-use canvasd::agent::{canvas_result_line, dirty_file_count, dirty_files, last_visible_line, sensitive_line, worktree_branch, AgentManager};
+use canvasd::agent::{canvas_result_line, dirty_diff, dirty_file_count, dirty_files, last_visible_line, sensitive_line, worktree_branch, AgentManager};
 use canvasd::protocol;
 use canvasd::store;
 use anyhow::Result;
@@ -666,6 +666,32 @@ fn handle_client_msg(
                 _ => send_control(ServerMsg::Error {
                     agent_id: Some(agent_id),
                     message: "no transcript for agent".into(),
+                }),
+            }
+        }
+        ClientMsg::DiffDetail { agent_id } => {
+            // Live agents come from the manager; exited agents fall back
+            // to their persisted worktree path so a done node's diff is
+            // still readable.
+            let wt = state
+                .agents
+                .worktree(&agent_id)
+                .or_else(|| {
+                    state
+                        .store
+                        .agent_worktree(&agent_id)
+                        .ok()
+                        .flatten()
+                        .map(std::path::PathBuf::from)
+                });
+            match wt {
+                Some(wt) => send_control(ServerMsg::DiffDetail {
+                    agent_id,
+                    diff: dirty_diff(&wt),
+                }),
+                None => send_control(ServerMsg::Error {
+                    agent_id: Some(agent_id),
+                    message: "no such agent".into(),
                 }),
             }
         }

@@ -523,6 +523,33 @@ pub fn dirty_files(worktree: &Path) -> Vec<String> {
         .collect()
 }
 
+/// Unified diff of uncommitted work in a worktree — what the delegation
+/// edge actually produced. Includes untracked files via `git add -N` so
+/// new files show up; capped so a huge diff can't flood the socket.
+pub fn dirty_diff(worktree: &Path) -> String {
+    // Intent-to-add makes `git diff` cover untracked files too.
+    let _ = std::process::Command::new("git")
+        .args(["add", "-N", "."])
+        .current_dir(worktree)
+        .output();
+    let Ok(out) = std::process::Command::new("git")
+        .args(["diff", "--no-color", "--no-ext-diff", "HEAD"])
+        .current_dir(worktree)
+        .output()
+    else {
+        return String::new();
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    const CAP: usize = 96_000;
+    if text.len() > CAP {
+        let mut cut = text[..CAP].to_string();
+        cut.push_str("\n… diff truncated\n");
+        cut
+    } else {
+        text.into_owned()
+    }
+}
+
 /// Files with uncommitted changes in a worktree — the node's "files
 /// changed" badge. Untracked files count too (`??` lines).
 pub fn dirty_file_count(worktree: &Path) -> u32 {

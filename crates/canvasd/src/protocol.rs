@@ -104,6 +104,8 @@ pub enum ClientMsg {
     /// reading dead agents' terminals after they exited or after a
     /// daemon restart.
     Transcript { agent_id: String },
+    /// Full unified diff of the agent's uncommitted worktree changes.
+    DiffDetail { agent_id: String },
 }
 
 /// Deska-style permission ladder, most → least restrictive. The level
@@ -173,6 +175,8 @@ pub enum ServerMsg {
     BoardRenamed { board_id: String, name: String },
     /// A board was deleted (only emitted for empty boards).
     BoardDeleted { board_id: String },
+    /// Unified diff text for one agent's worktree (DiffDetail answer).
+    DiffDetail { agent_id: String, diff: String },
     /// Board state replay sent once when a client connects: every agent the
     /// board knows (live and dead) plus saved node positions.
     Snapshot {

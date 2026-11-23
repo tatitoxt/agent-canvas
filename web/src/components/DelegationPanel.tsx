@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useBoard } from "../store/board";
 
 const field: React.CSSProperties = {
@@ -125,6 +126,58 @@ export function DelegationPanel({
           ))}
           {to!.paths!.length > 40 && <div>…{to!.paths!.length - 40} more</div>}
         </div>
+      )}
+      {to && (edge.files ?? 0) > 0 && (
+        <DiffBlock agentId={edge.to} />
+      )}
+    </div>
+  );
+}
+
+/** Expandable unified diff of what the child produced — the edge's
+ * payload rendered, not just counted. Fetched on demand from the daemon. */
+function DiffBlock({ agentId }: { agentId: string }) {
+  const [open, setOpen] = useState(false);
+  const diff = useBoard((s) => s.diffTexts[agentId]);
+  const requestDiff = useBoard((s) => s.requestDiff);
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button
+        onClick={() => {
+          const next = !open;
+          setOpen(next);
+          if (next) requestDiff(agentId);
+        }}
+        style={{
+          border: "none",
+          background: "transparent",
+          color: "var(--cv-accent)",
+          fontSize: 11,
+          cursor: "pointer",
+          padding: 0,
+        }}
+      >
+        {open ? "hide diff ▾" : "view diff ▸"}
+      </button>
+      {open && (
+        <pre
+          style={{
+            marginTop: 6,
+            fontSize: 10,
+            fontFamily: "ui-monospace, SFMono-Regular, monospace",
+            color: "var(--cv-ink-dim)",
+            background: "rgba(0,0,0,0.3)",
+            border: "1px solid var(--cv-glass-edge)",
+            borderRadius: 8,
+            padding: "8px 10px",
+            maxHeight: 240,
+            overflow: "auto",
+            whiteSpace: "pre",
+            lineHeight: 1.5,
+          }}
+        >
+          {diff ?? "loading…"}
+        </pre>
       )}
     </div>
   );

@@ -20,6 +20,7 @@ export type ServerMsg =
   | { type: "node_renamed"; node_id: string; name: string }
   | { type: "board_renamed"; board_id: string; name: string }
   | { type: "board_deleted"; board_id: string }
+  | { type: "diff_detail"; agent_id: string; diff: string }
   | { type: "status"; agent_id: string; status: string }
   | { type: "activity"; agent_id: string; line: string }
   | { type: "diff"; agent_id: string; files: number; paths?: string[]; branch?: string }
@@ -144,6 +145,10 @@ export class CanvasClient {
 
   deleteBoard(boardId: string) {
     this.send({ cmd: "delete_board", board_id: boardId });
+  }
+
+  diffDetail(agentId: string) {
+    this.send({ cmd: "diff_detail", agent_id: agentId });
   }
 
   /** Raw keystrokes into the agent's PTY. */

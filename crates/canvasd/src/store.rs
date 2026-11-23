@@ -239,6 +239,15 @@ impl Store {
         Ok(n > 0)
     }
 
+    /// Worktree path of any agent row (live or dead) — DiffDetail falls
+    /// back here for agents whose PTY already exited.
+    pub fn agent_worktree(&self, id: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare("SELECT worktree FROM agents WHERE id = ?1")?;
+        let mut rows = st.query_map([id], |r| r.get::<_, String>(0))?;
+        Ok(rows.next().transpose()?)
+    }
+
     /// Board an agent lives on — a delegation child inherits its parent's.
     pub fn agent_board(&self, id: &str) -> Result<Option<String>> {
         let conn = self.conn.lock().unwrap();
