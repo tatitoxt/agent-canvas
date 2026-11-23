@@ -323,6 +323,11 @@ export const useBoard = create<BoardState>((set, get) => ({
       onClose: () => {
         client = null;
         set({ connected: false });
+        // Auto-reconnect: a daemon restart or a page sleep shouldn't
+        // strand the board in offline mode until a manual click.
+        setTimeout(() => {
+          if (!client && !isTauri()) get().connect(t);
+        }, 2_500);
       },
     };
     // Inside Tauri there is no socket and no token — the app itself is the peer.
