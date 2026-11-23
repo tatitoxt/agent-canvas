@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+
+/** Where the floating terminal panel sits — default bottom-right (Deska-style
+ * dock position) until the user pops it out by dragging the header. */
+const DEFAULT_POS = { x: -1, y: -1 }; // sentinel: anchored, not popped out
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
@@ -12,6 +16,8 @@ export function TerminalPanel({ agentId, name, onClose }: Props) {
   const [confirmingKill, setConfirmingKill] = useState(false);
   const kill = useBoard((s) => s.kill);
   const termFont = useBoard((s) => s.termFont);
+  const [pos, setPos] = useState(DEFAULT_POS);
+  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
 
   useEffect(() => {
     const term = new Terminal({
@@ -57,14 +63,36 @@ export function TerminalPanel({ agentId, name, onClose }: Props) {
     }
   }, [termFont]);
 
+  const popped = pos.x >= 0;
+  const panelStyle: React.CSSProperties = popped
+    ? { position: "absolute", left: pos.x, top: pos.y, zIndex: 20 }
+    : { position: "absolute", bottom: 16, right: 16, zIndex: 20 };
+
+  const onHeaderDown = (e: React.PointerEvent) => {
+    const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+    dragRef.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    const move = (ev: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      setPos({
+        x: Math.max(0, Math.min(window.innerWidth - 120, ev.clientX - d.dx)),
+        y: Math.max(48, Math.min(window.innerHeight - 60, ev.clientY - d.dy)),
+      });
+    };
+    const up = () => {
+      dragRef.current = null;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
   return (
     <div
       className="glass"
       style={{
-        position: "absolute",
-        bottom: 16,
-        right: 16,
-        zIndex: 20,
+        ...panelStyle,
         display: "flex",
         flexDirection: "column",
         height: 300,
@@ -73,16 +101,24 @@ export function TerminalPanel({ agentId, name, onClose }: Props) {
       }}
     >
       <div
+        onPointerDown={onHeaderDown}
+        title={popped ? "drag to move" : "drag to pop out onto the canvas"}
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           padding: "8px 14px",
           borderBottom: "1px solid rgba(255,255,255,0.07)",
+          cursor: "grab",
+          userSelect: "none",
+          touchAction: "none",
         }}
       >
         <span style={{ fontSize: 12, fontWeight: 600 }}>{name}</span>
-        <div className="flex items-center gap-2">
+        <div
+          className="flex items-center gap-2"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           {confirmingKill ? (
             <>
               <span className="text-[10px] text-[var(--cv-blocked)]">confirm kill?</span>
