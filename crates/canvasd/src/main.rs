@@ -3,7 +3,7 @@
 //! Binds to 127.0.0.1 only. Every connection requires the per-launch session
 //! token (`?token=` on /ws, `Authorization: Bearer` on /api/*).
 
-use canvasd::agent::{dirty_file_count, last_visible_line, AgentManager};
+use canvasd::agent::{canvas_result_line, dirty_file_count, last_visible_line, AgentManager};
 use canvasd::protocol;
 use canvasd::store;
 use anyhow::Result;
@@ -470,12 +470,9 @@ async fn main() -> Result<()> {
                     {
                         let map = pending.lock().unwrap();
                         for (agent_id, edge_id) in map.iter() {
-                            let summary = agents.tail_text(agent_id).and_then(|tail| {
-                                tail.lines()
-                                    .rev()
-                                    .find_map(|l| l.trim().strip_prefix("CANVAS_RESULT:"))
-                                    .map(|s| s.trim().to_string())
-                            });
+                            let summary = agents
+                                .tail_text(agent_id)
+                                .and_then(|t| canvas_result_line(&t));
                             if let Some(summary) = summary {
                                 resolved.push((
                                     agent_id.clone(),
@@ -510,7 +507,7 @@ async fn main() -> Result<()> {
                 }
                 // Diff pass (every 3rd tick): uncommitted file count per
                 // worktree — the node badge shows what the agent produced.
-                if tick_n % 3 == 0 {
+                if tick_n.is_multiple_of(3) {
                     for id in agents.ids() {
                         if let Some(wt) = agents.worktree(&id) {
                             let files = dirty_file_count(&wt);

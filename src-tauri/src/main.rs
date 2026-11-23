@@ -8,7 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use base64::Engine;
-use canvasd::agent::{dirty_file_count, AgentManager};
+use canvasd::agent::{canvas_result_line, dirty_file_count, AgentManager};
 use canvasd::protocol::{AgentStatus, ServerMsg, SnapshotAgent, SnapshotDelegation};
 use canvasd::store::Store;
 use std::collections::HashMap;
@@ -308,12 +308,10 @@ fn main() {
                     {
                         let map = state.pending_results.lock().unwrap();
                         for (agent_id, edge_id) in map.iter() {
-                            let summary = state.agents.tail_text(agent_id).and_then(|tail| {
-                                tail.lines()
-                                    .rev()
-                                    .find_map(|l| l.trim().strip_prefix("CANVAS_RESULT:"))
-                                    .map(|s| s.trim().to_string())
-                            });
+                            let summary = state
+                                .agents
+                                .tail_text(agent_id)
+                                .and_then(|t| canvas_result_line(&t));
                             if let Some(s) = summary {
                                 resolved.push((agent_id.clone(), edge_id.clone(), s));
                             }
@@ -326,7 +324,7 @@ fn main() {
                     }
 
                     // Diff pass (every 3rd tick): files changed per worktree.
-                    if tick_n % 3 == 0 {
+                    if tick_n.is_multiple_of(3) {
                         for id in state.agents.ids() {
                             if let Some(wt) = state.agents.worktree(&id) {
                                 let files = dirty_file_count(&wt);

@@ -1,0 +1,285 @@
+//! End-to-end: boot a real `canvasd` binary, drive it over the real
+//! WebSocket protocol, and assert control events, auth and worktree
+//! isolation. Runs against the shipped protocol, not mocks.
+
+use futures_util::{SinkExt, StreamExt};
+use serde_json::{json, Value};
+use std::io::{BufRead, BufReader};
+use std::net::TcpListener;
+use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
+use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::MaybeTlsStream;
+
+type Ws = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
+
+struct Daemon {
+    child: Child,
+    port: u16,
+    token: String,
+    repo: std::path::PathBuf,
+}
+
+impl Daemon {
+    /// Boot canvasd on an ephemeral port inside a fresh git repo.
+    fn start() -> Self {
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let repo = std::env::temp_dir().join(format!(
+            "canvasd-e2e-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        ));
+        let _ = std::fs::remove_dir_all(&repo);
+        std::fs::create_dir_all(&repo).unwrap();
+        Command::new("git").args(["init", "-q"]).current_dir(&repo).output().unwrap();
+        std::fs::write(repo.join("seed.txt"), "seed").unwrap();
+        Command::new("git").args(["add", "."]).current_dir(&repo).output().unwrap();
+        Command::new("git")
+            .args(["commit", "-qm", "seed"])
+            .current_dir(&repo)
+            .env("GIT_AUTHOR_NAME", "e2e")
+            .env("GIT_AUTHOR_EMAIL", "e2e@canvas")
+            .env("GIT_COMMITTER_NAME", "e2e")
+            .env("GIT_COMMITTER_EMAIL", "e2e@canvas")
+            .output()
+            .unwrap();
+
+        let mut child = Command::new(env!("CARGO_BIN_EXE_canvasd"))
+            .env("CANVASD_PORT", port.to_string())
+            .env("CANVAS_REPO", &repo)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("spawn canvasd");
+        let stdout = child.stdout.take().unwrap();
+        let mut lines = BufReader::new(stdout).lines();
+        let mut token = String::new();
+        // Token is printed on stdout at startup: `CANVASD_TOKEN=<hex>`.
+        for _ in 0..50 {
+            let line = lines.next().unwrap().unwrap();
+            if let Some(t) = line.strip_prefix("CANVASD_TOKEN=") {
+                token = t.trim().to_string();
+                break;
+            }
+        }
+        assert!(!token.is_empty(), "canvasd never printed its session token");
+        Self { child, port, token, repo }
+    }
+
+    fn ws_url(&self, token: &str) -> String {
+        format!("ws://127.0.0.1:{}/ws?token={}", self.port, token)
+    }
+}
+
+impl Drop for Daemon {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = std::fs::remove_dir_all(&self.repo);
+    }
+}
+
+/// Next JSON control message within `timeout`, skipping binary PTY
+/// frames. `None` means the stream ended (a quiet stretch is retried
+/// until the deadline, not treated as the end).
+async fn next_ctrl(ws: &mut Ws, timeout: Duration) -> Option<Value> {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let msg = match tokio::time::timeout(remaining, ws.next()).await {
+            Err(_) => return None, // timed out, no frame in the whole window
+            Ok(None) => return None, // stream ended
+            Ok(Some(Err(_))) => return None,
+            Ok(Some(Ok(m))) => m,
+        };
+        if let Message::Text(text) = msg {
+            return serde_json::from_str(&text).ok();
+        }
+        // Binary PTY frames are skipped.
+    }
+    None
+}
+
+/// Collect control messages until `pred` matches or the deadline passes;
+/// returns every message seen (for asserting sequences). Quiet stretches
+/// keep waiting — ticks arrive every 1-3s; only a dead stream stops early.
+async fn collect_until(
+    ws: &mut Ws,
+    timeout: Duration,
+    pred: impl Fn(&Value) -> bool,
+) -> Vec<Value> {
+    let deadline = Instant::now() + timeout;
+    let mut seen = Vec::new();
+    while Instant::now() < deadline {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match next_ctrl(ws, remaining).await {
+            Some(m) => {
+                let hit = pred(&m);
+                seen.push(m);
+                if hit {
+                    break;
+                }
+            }
+            None => break,
+        }
+    }
+    seen
+}
+
+fn pty_frame(agent_id: &str, data: &[u8]) -> Vec<u8> {
+    let id = agent_id.as_bytes();
+    let mut buf = Vec::with_capacity(1 + id.len() + data.len());
+    buf.push(id.len() as u8);
+    buf.extend_from_slice(id);
+    buf.extend_from_slice(data);
+    buf
+}
+
+#[tokio::test]
+async fn rejects_bad_token() {
+    let d = Daemon::start();
+    let r = tokio_tungstenite::connect_async(d.ws_url("nope")).await;
+    assert!(r.is_err(), "a wrong session token must not upgrade to WS");
+}
+
+#[tokio::test]
+async fn end_to_end_agent_lifecycle() {
+    let d = Daemon::start();
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .expect("ws connect");
+
+    // First control message on connect is the board snapshot.
+    let snap = next_ctrl(&mut ws, Duration::from_secs(5)).await.unwrap();
+    assert_eq!(snap["type"], "snapshot");
+
+    // Create a workspace; agents spawned into it run in ITS repo.
+    ws.send(Message::Text(
+        json!({"cmd":"create_workspace","name":"e2e-ws","repo":d.repo.to_str().unwrap()})
+            .to_string().into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(3), |m| {
+        m["type"] == "workspace_created"
+    })
+    .await;
+    let ws_id = seen
+        .iter()
+        .find(|m| m["type"] == "workspace_created")
+        .unwrap()["workspace_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Spawn a bash agent inside the workspace.
+    ws.send(Message::Text(
+        json!({
+            "cmd": "spawn_agent", "name": "e2e-agent", "command": "bash",
+            "cwd": ".", "workspace_id": ws_id, "permission": "auto"
+        })
+        .to_string().into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |m| m["type"] == "spawned").await;
+    let agent_id = seen
+        .iter()
+        .find(|m| m["type"] == "spawned")
+        .unwrap()["agent_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Write a file inside the agent's PTY; the diff ticker should report it.
+    ws.send(Message::Binary(pty_frame(&agent_id, b"echo x > made.txt\n").into()))
+        .await
+        .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(12), |m| {
+        m["type"] == "diff" && m["files"].as_u64().unwrap_or(0) >= 1
+    })
+    .await;
+    assert!(
+        seen.iter().any(|m| m["type"] == "diff" && m["files"].as_u64().unwrap_or(0) >= 1),
+        "expected a diff event reporting the file the agent created; saw {seen:?}"
+    );
+    // The file must exist inside the agent's own worktree, not the repo root.
+    let worktree = d.repo.join(".canvas-worktrees").join(&agent_id);
+    assert!(worktree.join("made.txt").exists(), "agent wrote outside its worktree?");
+
+    // Kill is gated: bare kill_agent is refused, confirm_destructive executes.
+    ws.send(Message::Text(
+        json!({"cmd":"kill_agent","agent_id":agent_id}).to_string().into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(3), |m| {
+        m["type"] == "error" && m["message"].as_str().unwrap_or("").contains("confirm_destructive")
+    })
+    .await;
+    assert!(seen.iter().any(|m| m["type"] == "error"), "bare kill must be refused");
+
+    ws.send(Message::Text(
+        json!({"cmd":"confirm_destructive","agent_id":agent_id,"action":"kill"}).to_string().into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |m| {
+        m["type"] == "status" && m["status"] == "exited"
+    })
+    .await;
+    assert!(
+        seen.iter().any(|m| m["type"] == "status" && m["status"] == "exited"),
+        "confirmed kill must exit the agent"
+    );
+}
+
+#[tokio::test]
+async fn delegation_resolves_on_canvas_result() {
+    let d = Daemon::start();
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .expect("ws connect");
+    let snap = next_ctrl(&mut ws, Duration::from_secs(5)).await.unwrap();
+    assert_eq!(snap["type"], "snapshot");
+
+    ws.send(Message::Text(
+        json!({
+            "cmd": "delegate", "from": "orchestrator", "name": "child",
+            "command": "bash", "task": "prove it", "cwd": ".",
+            "workspace_id": null, "permission": "full"
+        })
+        .to_string().into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |m| m["type"] == "delegation").await;
+    let child = seen
+        .iter()
+        .find(|m| m["type"] == "spawned")
+        .expect("delegation spawns a child agent")["agent_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let edge_id = seen
+        .iter()
+        .find(|m| m["type"] == "delegation")
+        .unwrap()["edge_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Child prints the protocol line; the tail scanner resolves the edge.
+    ws.send(Message::Binary(pty_frame(&child, b"echo 'CANVAS_RESULT: shipped it'\n").into()))
+        .await
+        .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(8), |m| m["type"] == "result").await;
+    let result = seen.iter().find(|m| m["type"] == "result").expect("edge must resolve");
+    assert_eq!(result["edge_id"].as_str().unwrap(), edge_id);
+    assert!(result["summary"].as_str().unwrap().contains("shipped it"));
+}

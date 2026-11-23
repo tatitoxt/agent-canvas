@@ -298,6 +298,21 @@ pub fn last_visible_line(tail: &str) -> Option<String> {
         .map(|l| l.chars().take(160).collect())
 }
 
+/// `CANVAS_RESULT: <summary>` from a child PTY — the delegation edge's
+/// return value. ANSI-stripped first: real PTYs wrap output in escape
+/// sequences (bracketed paste, colors), so a raw prefix match misses.
+pub fn canvas_result_line(tail: &str) -> Option<String> {
+    tail.lines()
+        .rev()
+        .map(strip_ansi)
+        .find_map(|l| {
+            l.trim()
+                .strip_prefix("CANVAS_RESULT:")
+                .map(|s| s.trim().to_string())
+        })
+        .filter(|s| !s.is_empty())
+}
+
 fn strip_ansi(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
@@ -355,6 +370,14 @@ fn uuid_like() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn canvas_result_survives_pty_escapes() {
+        // Real PTYs wrap output: bracketed-paste end + \r precede the line.
+        let tail = "$ echo 'CANVAS_RESULT: shipped it'\r\n\u{1b}[?2004l\rCANVAS_RESULT: shipped it\r\n$ ";
+        assert_eq!(canvas_result_line(tail).as_deref(), Some("shipped it"));
+        assert_eq!(canvas_result_line("$ echo hi\r\nhi\r\n$ "), None);
+    }
 
     #[test]
     fn ansi_stripping_yields_last_visible_line() {
