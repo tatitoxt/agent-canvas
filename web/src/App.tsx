@@ -24,6 +24,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { DelegationPanel } from "./components/DelegationPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { Topbar } from "./components/Topbar";
+import { BoardTabs } from "./components/BoardTabs";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
 
@@ -41,6 +42,7 @@ function Board() {
   const positions = useBoard((s) => s.positions);
   const moveNode = useBoard((s) => s.moveNode);
   const connected = useBoard((s) => s.connected);
+  const activeBoard = useBoard((s) => s.activeBoard);
   const approvals = useBoard((s) => s.approvals);
   const attention = useBoard((s) => s.attention);
   const { screenToFlowPosition, fitView } = useReactFlow();
@@ -82,6 +84,7 @@ function Board() {
       }
     }
     for (const a of Object.values(agents)) {
+      if ((a.board_id ?? "main") !== activeBoard) continue;
       const k = a.status === "exited"
         ? "done"
         : attention[a.id]
@@ -90,10 +93,12 @@ function Board() {
       if (k in c) c[k as AgentStatus] += 1;
     }
     return c;
-  }, [agents, connected, attention]);
+  }, [agents, connected, attention, activeBoard]);
 
   const nodes = useMemo<Node<BoardNodeData>[]>(() => {
-    const wsNodes: Node<BoardNodeData>[] = Object.values(workspaces).map((w) => ({
+    const wsNodes: Node<BoardNodeData>[] = Object.values(workspaces)
+      .filter((w) => (w.board_id ?? "main") === activeBoard)
+      .map((w) => ({
       id: w.id,
       type: "workspace" as const,
       position: positions[w.id] ?? { x: 60, y: 60 },
@@ -101,7 +106,9 @@ function Board() {
       data: { kind: "workspace" as const, name: w.name, repo: w.repo },
     }));
     let i = 0;
-    const live = Object.values(agents).map((a) => {
+    const live = Object.values(agents)
+      .filter((a) => (a.board_id ?? "main") === activeBoard)
+      .map((a) => {
       const ws = a.workspace_id ? workspaces[a.workspace_id] : undefined;
       const position = positions[a.id] ??
         (ws ? { x: 60 + (i % 3) * 300, y: 80 + Math.floor(i / 3) * 190 } : { x: 1100, y: 60 + i * 170 });
@@ -133,7 +140,7 @@ function Board() {
     // Mock board only renders in offline/demo mode — with a daemon the
     // canvas shows reality, not fixtures.
     return connected ? [...wsNodes, ...live] : [...initialNodes, ...live];
-  }, [agents, positions, connected, workspaces, approvals, attention]);
+  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard]);
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     const a = agents[node.id];
@@ -158,14 +165,17 @@ function Board() {
 
   const edges = useMemo(() => {
     if (!connected) return initialEdges;
-    return Object.values(liveEdges).map((e) => ({
+    // An edge is visible when its delegating node is on this board.
+    return Object.values(liveEdges)
+      .filter((e) => (agents[e.from]?.board_id ?? "main") === activeBoard)
+      .map((e) => ({
       id: e.id,
       source: e.from,
       target: e.to,
       type: "delegation" as const,
       data: { state: e.state, task: e.task, result: e.result, files: e.files },
     }));
-  }, [connected, liveEdges]);
+  }, [connected, liveEdges, agents, activeBoard]);
 
   return (
     <div className="relative h-full w-full">
@@ -174,6 +184,7 @@ function Board() {
         onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
       />
       <Topbar />
+      <BoardTabs />
       <MissionStrip counts={counts} />
       <SpawnBar />
       <ReactFlow

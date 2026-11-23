@@ -112,7 +112,8 @@ fn spawn_agent(
     cwd: &str,
     workspace_id: Option<&str>,
     permission: &str,
-) -> Result<String> {
+    board_id: Option<&str>,
+) -> Result<(String, Option<String>)> {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<(String, Vec<u8>)>();
     let (exit_tx, mut exit_rx) = mpsc::unbounded_channel::<String>();
     let ev = state.events.clone();
@@ -141,6 +142,12 @@ fn spawn_agent(
     let id = state
         .agents
         .spawn(name, command, cwd, &repo_root, permission, out_tx, exit_tx)?;
+    // Board: explicit, else the workspace's board, else 'main'.
+    let board = board_id
+        .map(|b| b.to_string())
+        .or_else(|| {
+            workspace_id.and_then(|w| state.store.workspace_board(w).ok().flatten())
+        });
     if let Err(e) = state.store.agent_spawned(
         &id,
         name,
@@ -148,10 +155,11 @@ fn spawn_agent(
         &format!(".canvas-worktrees/{id}"),
         workspace_id,
         permission,
+        board.as_deref(),
     ) {
         warn!(error = %e, "failed to persist agent");
     }
-    Ok(id)
+    Ok((id, board))
 }
 
 async fn ws_handler(
@@ -175,9 +183,16 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
         let live: std::collections::HashMap<String, &str> =
             state.agents.statuses().into_iter().collect();
         let snapshot = ServerMsg::Snapshot {
+            boards: state
+                .store
+                .boards_snapshot()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(board_id, name)| protocol::SnapshotBoard { board_id, name })
+                .collect(),
             agents: agents
                 .into_iter()
-                .map(|(id, name, command, worktree, status, workspace_id, permission)| protocol::SnapshotAgent {
+                .map(|(id, name, command, worktree, status, workspace_id, permission, board_id)| protocol::SnapshotAgent {
                     status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
                     agent_id: id,
                     name,
@@ -185,6 +200,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                     worktree,
                     permission,
                     workspace_id,
+                    board_id,
                 })
                 .collect(),
             workspaces: state
@@ -192,10 +208,11 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .workspaces_snapshot()
                 .unwrap_or_default()
                 .into_iter()
-                .map(|(workspace_id, name, repo)| protocol::SnapshotWorkspace {
+                .map(|(workspace_id, name, repo, board_id)| protocol::SnapshotWorkspace {
                     workspace_id,
                     name,
                     repo,
+                    board_id,
                 })
                 .collect(),
             delegations: state
@@ -329,15 +346,12 @@ fn handle_client_msg(
     };
 
     match msg {
-        ClientMsg::CreateWorkspace { name, repo } => {
-            // Path validated on spawn side; a workspace is just a named
-            // container + its repo.
-            let id = uuid::Uuid::new_v4().simple().to_string()[..12].to_string();
-            match state.store.workspace_created(&id, &name, &repo) {
-                Ok(()) => send_control(ServerMsg::WorkspaceCreated {
-                    workspace_id: id,
+        ClientMsg::CreateBoard { name } => {
+            let id = uuid_like();
+            match state.store.board_created(&id, &name) {
+                Ok(()) => send_control(ServerMsg::BoardCreated {
+                    board_id: id,
                     name,
-                    repo,
                 }),
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: None,
@@ -345,10 +359,27 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::SpawnAgent { name, command, cwd, workspace_id, permission } => {
+        ClientMsg::CreateWorkspace { name, repo, board_id } => {
+            // Path validated on spawn side; a workspace is just a named
+            // container + its repo.
+            let id = uuid::Uuid::new_v4().simple().to_string()[..12].to_string();
+            match state.store.workspace_created(&id, &name, &repo, board_id.as_deref()) {
+                Ok(()) => send_control(ServerMsg::WorkspaceCreated {
+                    workspace_id: id,
+                    name,
+                    repo,
+                    board_id,
+                }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
+            }
+        }
+        ClientMsg::SpawnAgent { name, command, cwd, workspace_id, permission, board_id } => {
             let level = protocol::normalize_permission(permission.as_deref());
-            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level) {
-                Ok(id) => send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id }),
+            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, board_id.as_deref()) {
+                Ok((id, board)) => send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id, board_id: board }),
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: None,
                     message: e.to_string(),
@@ -361,8 +392,10 @@ fn handle_client_msg(
             let parent_level = state.store.agent_permission(&from).ok().flatten();
             let requested = protocol::normalize_permission(permission.as_deref());
             let level = protocol::clamp_to_parent(requested, parent_level.as_deref());
-            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level) {
-                Ok(id) => {
+            // The child lands on its parent's board (or its workspace's).
+            let parent_board = state.store.agent_board(&from).ok().flatten();
+            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, parent_board.as_deref()) {
+                Ok((id, board)) => {
                     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
                     if let Err(e) = state.store.delegation_created(&edge_id, &from, &id, &task) {
                         warn!(error = %e, "failed to persist delegation");
@@ -374,6 +407,7 @@ fn handle_client_msg(
                         command,
                         permission: level.to_string(),
                         workspace_id: workspace_id.clone(),
+                        board_id: board,
                     });
                     send_control(ServerMsg::Delegation {
                         edge_id,
@@ -525,8 +559,9 @@ fn handle_client_msg(
                         ".",
                         workspace_id.as_deref(),
                         &permission,
+                        None,
                     ) {
-                        Ok(agent_id) => {
+                        Ok((agent_id, run_board)) => {
                             state.agents.set_automation(
                                 &agent_id,
                                 idle_secs.max(0) as u64,
@@ -539,6 +574,7 @@ fn handle_client_msg(
                                 command,
                                 permission,
                                 workspace_id,
+                                board_id: run_board,
                             });
                             // Inject the saved prompt into the fresh PTY —
                             // gated, so a supervised run still gets a gate.

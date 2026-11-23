@@ -37,14 +37,14 @@ export class TauriCanvasClient {
     return Promise.resolve();
   }
 
-  spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string) {
-    void invoke("spawn_agent", { name, command, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null }).catch(
+  spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string) {
+    void invoke("spawn_agent", { name, command, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null, boardId: boardId ?? null }).catch(
       console.error,
     );
   }
 
-  createWorkspace(name: string, repo: string) {
-    void invoke("create_workspace", { name, repo }).catch(console.error);
+  createWorkspace(name: string, repo: string, boardId?: string) {
+    void invoke("create_workspace", { name, repo, boardId: boardId ?? null }).catch(console.error);
   }
 
   ptyInput(agentId: string, bytes: Uint8Array) {
@@ -107,6 +107,10 @@ export class TauriCanvasClient {
     void invoke("delegate", { from, name, command, task, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null }).catch(
       console.error,
     );
+  }
+
+  createBoard(name: string) {
+    invoke("create_board", { name }).catch(console.error);
   }
 
   transcript(agentId: string) {

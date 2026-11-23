@@ -8,7 +8,8 @@ use std::sync::Mutex;
 
 /// Row of the agents table: (id, name, command, worktree, status,
 /// workspace_id, permission).
-pub type AgentRow = (String, String, String, String, String, Option<String>, String);
+/// (id, name, command, worktree, status, workspace_id, permission, board_id)
+pub type AgentRow = (String, String, String, String, String, Option<String>, String, Option<String>);
 /// Row of the delegations table: (id, from, to, task, result, state,
 /// files_changed).
 pub type DelegationRow = (
@@ -120,6 +121,24 @@ impl Store {
                  PRAGMA user_version = 4;",
             )?;
         }
+        // v4 → v5: named boards — separate canvases each with their own
+        // agents/workspaces/edges (Deska "Spaces"). Every existing node
+        // backfills to 'main'.
+        if version < 5 {
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS boards (
+                   id TEXT PRIMARY KEY,
+                   name TEXT NOT NULL,
+                   created_at TEXT DEFAULT (datetime('now'))
+                 );
+                 INSERT OR IGNORE INTO boards (id, name) VALUES ('main', 'Main');
+                 ALTER TABLE agents ADD COLUMN board_id TEXT;
+                 ALTER TABLE workspaces ADD COLUMN board_id TEXT;
+                 UPDATE agents SET board_id = 'main' WHERE board_id IS NULL;
+                 UPDATE workspaces SET board_id = 'main' WHERE board_id IS NULL;
+                 PRAGMA user_version = 5;",
+            )?;
+        }
         Ok(Self { conn: Mutex::new(conn) })
     }
 
@@ -131,20 +150,52 @@ impl Store {
         worktree: &str,
         workspace_id: Option<&str>,
         permission: &str,
+        board_id: Option<&str>,
     ) -> Result<()> {
         self.conn.lock().unwrap().execute(
-            "INSERT INTO agents (id, name, command, worktree, workspace_id, permission) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            (id, name, command, worktree, workspace_id, permission),
+            "INSERT INTO agents (id, name, command, worktree, workspace_id, permission, board_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, COALESCE(?7, 'main'))",
+            (id, name, command, worktree, workspace_id, permission, board_id),
         )?;
         Ok(())
     }
 
-    pub fn workspace_created(&self, id: &str, name: &str, repo: &str) -> Result<()> {
+    pub fn workspace_created(&self, id: &str, name: &str, repo: &str, board_id: Option<&str>) -> Result<()> {
         self.conn.lock().unwrap().execute(
-            "INSERT INTO workspaces (id, name, repo) VALUES (?1, ?2, ?3)",
-            (id, name, repo),
+            "INSERT INTO workspaces (id, name, repo, board_id) VALUES (?1, ?2, ?3, COALESCE(?4, 'main'))",
+            (id, name, repo, board_id),
         )?;
         Ok(())
+    }
+
+    pub fn board_created(&self, id: &str, name: &str) -> Result<()> {
+        self.conn.lock().unwrap().execute(
+            "INSERT INTO boards (id, name) VALUES (?1, ?2)",
+            (id, name),
+        )?;
+        Ok(())
+    }
+
+    pub fn boards_snapshot(&self) -> Result<Vec<(String, String)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare("SELECT id, name FROM boards ORDER BY created_at")?;
+        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Board an agent lives on — a delegation child inherits its parent's.
+    pub fn agent_board(&self, id: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare("SELECT board_id FROM agents WHERE id = ?1")?;
+        let mut rows = st.query_map([id], |r| r.get::<_, Option<String>>(0))?;
+        Ok(rows.next().transpose()?.flatten())
+    }
+
+    /// Board a workspace node lives on — spawned agents inherit it.
+    pub fn workspace_board(&self, id: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare("SELECT board_id FROM workspaces WHERE id = ?1")?;
+        let mut rows = st.query_map([id], |r| r.get::<_, Option<String>>(0))?;
+        Ok(rows.next().transpose()?.flatten())
     }
 
     /// Repo path for a workspace — agents spawn inside their workspace's repo.
@@ -155,10 +206,11 @@ impl Store {
         Ok(rows.next().transpose()?)
     }
 
-    pub fn workspaces_snapshot(&self) -> Result<Vec<(String, String, String)>> {
+    /// Tuple: (id, name, repo, board_id).
+    pub fn workspaces_snapshot(&self) -> Result<Vec<(String, String, String, Option<String>)>> {
         let conn = self.conn.lock().unwrap();
-        let mut st = conn.prepare("SELECT id, name, repo FROM workspaces ORDER BY created_at")?;
-        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        let mut st = conn.prepare("SELECT id, name, repo, board_id FROM workspaces ORDER BY created_at")?;
+        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
@@ -230,10 +282,10 @@ impl Store {
     ) -> Result<Vec<AgentRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
-            "SELECT id, name, command, worktree, status, workspace_id, permission FROM agents ORDER BY created_at",
+            "SELECT id, name, command, worktree, status, workspace_id, permission, board_id FROM agents ORDER BY created_at",
         )?;
         let rows = st.query_map([], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }

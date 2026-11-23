@@ -16,12 +16,15 @@ export type LiveAgent = {
   branch?: string;
   status: AgentStatus | "exited";
   workspace_id?: string | null;
+  /** Canvas board this agent lives on (Deska "Spaces"). */
+  board_id?: string | null;
 };
 
 export type LiveWorkspace = {
   id: string;
   name: string;
   repo: string;
+  board_id?: string | null;
 };
 
 export type LiveEdge = {
@@ -41,6 +44,9 @@ type DaemonTransport = CanvasClient | TauriCanvasClient;
 type BoardState = {
   connected: boolean;
   agents: Record<string, LiveAgent>;
+  /** Board id → name (multiple canvases); "main" always exists. */
+  boards: Record<string, string>;
+  activeBoard: string;
   edges: Record<string, LiveEdge>;
   workspaces: Record<string, LiveWorkspace>;
   /** Saved node positions — replayed from the daemon's layout table. */
@@ -65,6 +71,8 @@ type BoardState = {
    * terminal opens, and rebuilt from the daemon's replay on reconnect. */
   ptyBuffers: Record<string, Uint8Array>;
   connect: (token: string) => void;
+  setActiveBoard: (boardId: string) => void;
+  createBoard: (name: string) => void;
   spawn: (name: string, command: string, workspaceId?: string, permission?: string) => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
@@ -107,6 +115,8 @@ const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
 export const useBoard = create<BoardState>((set, get) => ({
   connected: false,
   agents: {},
+  boards: { main: "Main" },
+  activeBoard: "main",
   edges: {},
   workspaces: {},
   positions: {},
@@ -138,6 +148,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                   permission: msg.permission ?? "supervised",
                   status: "working",
                   workspace_id: msg.workspace_id ?? null,
+                  board_id: msg.board_id ?? "main",
                 },
               },
             });
@@ -150,8 +161,14 @@ export const useBoard = create<BoardState>((set, get) => ({
                   id: msg.workspace_id,
                   name: msg.name,
                   repo: msg.repo,
+                  board_id: msg.board_id ?? "main",
                 },
               },
+            });
+            break;
+          case "board_created":
+            set({
+              boards: { ...get().boards, [msg.board_id]: msg.name },
             });
             break;
           case "status":
@@ -267,13 +284,14 @@ export const useBoard = create<BoardState>((set, get) => ({
                   permission: a.permission ?? "supervised",
                   status: a.status as LiveAgent["status"],
                   workspace_id: a.workspace_id ?? null,
+                  board_id: a.board_id ?? "main",
                 },
               ]),
             );
             const workspaces = Object.fromEntries(
               (msg.workspaces ?? []).map((w) => [
                 w.workspace_id,
-                { id: w.workspace_id, name: w.name, repo: w.repo },
+                { id: w.workspace_id, name: w.name, repo: w.repo, board_id: w.board_id ?? "main" },
               ]),
             );
             const positions = Object.fromEntries(
@@ -296,6 +314,9 @@ export const useBoard = create<BoardState>((set, get) => ({
             const automations = Object.fromEntries(
               (msg.automations ?? []).map((a) => [a.id, a]),
             );
+            const boards = Object.fromEntries(
+              (msg.boards ?? []).map((b) => [b.board_id, b.name]),
+            );
             set({
               agents,
               positions,
@@ -303,6 +324,7 @@ export const useBoard = create<BoardState>((set, get) => ({
               workspaces,
               approvals: msg.approvals ?? {},
               automations,
+              boards: { main: "Main", ...boards },
             });
             break;
           }
@@ -338,10 +360,14 @@ export const useBoard = create<BoardState>((set, get) => ({
     void client.whenOpen().then(() => set({ connected: true }));
   },
 
-  spawn: (name, command, workspaceId, permission) =>
-    client?.spawnAgent(name, command, ".", workspaceId, permission),
+  setActiveBoard: (boardId) => set({ activeBoard: boardId }),
 
-  createWorkspace: (name, repo) => client?.createWorkspace(name, repo),
+  createBoard: (name) => client?.createBoard(name),
+
+  spawn: (name, command, workspaceId, permission) =>
+    client?.spawnAgent(name, command, ".", workspaceId, permission, get().activeBoard),
+
+  createWorkspace: (name, repo) => client?.createWorkspace(name, repo, get().activeBoard),
 
   delegate: (from, name, command, task, permission, position) => {
     if (position) {

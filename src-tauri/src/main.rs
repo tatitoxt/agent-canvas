@@ -52,7 +52,8 @@ fn spawn_wired(
     cwd: &str,
     workspace_id: Option<&str>,
     permission: &str,
-) -> Result<String, String> {
+    board_id: Option<&str>,
+) -> Result<(String, Option<String>), String> {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<(String, Vec<u8>)>();
     let (exit_tx, mut exit_rx) = mpsc::unbounded_channel::<String>();
 
@@ -88,6 +89,12 @@ fn spawn_wired(
         .agents
         .spawn(name, command, cwd, &repo_root, permission, out_tx, exit_tx)
         .map_err(|e| e.to_string())?;
+    // Board: explicit, else the workspace's board, else 'main'.
+    let board = board_id
+        .map(|b| b.to_string())
+        .or_else(|| {
+            workspace_id.and_then(|w| state.store.workspace_board(w).ok().flatten())
+        });
     if let Err(e) = state.store.agent_spawned(
         &id,
         name,
@@ -95,10 +102,11 @@ fn spawn_wired(
         &format!(".canvas-worktrees/{id}"),
         workspace_id,
         permission,
+        board.as_deref(),
     ) {
         warn!(error = %e, "failed to persist agent");
     }
-    Ok(id)
+    Ok((id, board))
 }
 
 #[tauri::command]
@@ -110,10 +118,26 @@ fn spawn_agent(
     cwd: String,
     workspace_id: Option<String>,
     permission: Option<String>,
+    board_id: Option<String>,
 ) -> Result<String, String> {
     let level = canvasd::protocol::normalize_permission(permission.as_deref());
-    let id = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref(), level)?;
-    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id });
+    let (id, board) = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref(), level, board_id.as_deref())?;
+    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board });
+    Ok(id)
+}
+
+#[tauri::command]
+fn create_board(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    name: String,
+) -> Result<String, String> {
+    let id = uuid_v4ish();
+    state
+        .store
+        .board_created(&id, &name)
+        .map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::BoardCreated { board_id: id.clone(), name });
     Ok(id)
 }
 
@@ -123,15 +147,16 @@ fn create_workspace(
     state: State<'_, CanvasState>,
     name: String,
     repo: String,
+    board_id: Option<String>,
 ) -> Result<String, String> {
     let id = uuid_v4ish();
     state
         .store
-        .workspace_created(&id, &name, &repo)
+        .workspace_created(&id, &name, &repo, board_id.as_deref())
         .map_err(|e| e.to_string())?;
     emit_control(
         &app,
-        &ServerMsg::WorkspaceCreated { workspace_id: id.clone(), name, repo },
+        &ServerMsg::WorkspaceCreated { workspace_id: id.clone(), name, repo, board_id },
     );
     Ok(id)
 }
@@ -161,7 +186,9 @@ fn delegate(
     let parent_level = state.store.agent_permission(&from).ok().flatten();
     let requested = canvasd::protocol::normalize_permission(permission.as_deref());
     let level = canvasd::protocol::clamp_to_parent(requested, parent_level.as_deref());
-    let id = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref(), level)?;
+    // The child lands on its parent's board (or its workspace's).
+    let parent_board = state.store.agent_board(&from).ok().flatten();
+    let (id, board) = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref(), level, parent_board.as_deref())?;
     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
     let _ = state.store.delegation_created(&edge_id, &from, &id, &task);
     state
@@ -169,7 +196,7 @@ fn delegate(
         .lock()
         .unwrap()
         .insert(id.clone(), edge_id.clone());
-    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id });
+    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board });
     emit_control(
         &app,
         &ServerMsg::Delegation { edge_id, from, to: id.clone(), task },
@@ -225,7 +252,7 @@ fn run_automation(
         .automation_row(&automation_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "no such automation".to_string())?;
-    let id = spawn_wired(&app, &state, &name, &command, ".", workspace_id.as_deref(), &permission)?;
+    let (id, run_board) = spawn_wired(&app, &state, &name, &command, ".", workspace_id.as_deref(), &permission, None)?;
     state
         .agents
         .set_automation(&id, idle_secs.max(0) as u64, on_approval == "deny");
@@ -236,6 +263,7 @@ fn run_automation(
         command,
         permission,
         workspace_id,
+        board_id: run_board,
     });
     // Inject the saved prompt — the kernel PTY buffer holds it until the
     // CLI reads stdin, gated like operator input.
@@ -414,7 +442,7 @@ fn snapshot(
         .agents_snapshot()
         .map_err(|e| e.to_string())?
         .into_iter()
-        .map(|(id, name, command, worktree, status, workspace_id, permission)| SnapshotAgent {
+        .map(|(id, name, command, worktree, status, workspace_id, permission, board_id)| SnapshotAgent {
             status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
             agent_id: id,
             name,
@@ -422,6 +450,7 @@ fn snapshot(
             worktree,
             permission,
             workspace_id,
+            board_id,
         })
         .collect();
     let workspaces: Vec<canvasd::protocol::SnapshotWorkspace> = state
@@ -429,11 +458,19 @@ fn snapshot(
         .workspaces_snapshot()
         .unwrap_or_default()
         .into_iter()
-        .map(|(workspace_id, name, repo)| canvasd::protocol::SnapshotWorkspace {
+        .map(|(workspace_id, name, repo, board_id)| canvasd::protocol::SnapshotWorkspace {
             workspace_id,
             name,
             repo,
+            board_id,
         })
+        .collect();
+    let boards: Vec<canvasd::protocol::SnapshotBoard> = state
+        .store
+        .boards_snapshot()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(board_id, name)| canvasd::protocol::SnapshotBoard { board_id, name })
         .collect();
     let delegations: Vec<SnapshotDelegation> = state
         .store
@@ -447,6 +484,7 @@ fn snapshot(
     let layout = state.store.layout_map().unwrap_or_default();
     Ok(serde_json::json!({
         "type": "snapshot",
+        "boards": boards,
         "agents": agents,
         "delegations": delegations,
         "workspaces": workspaces,
@@ -601,6 +639,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             spawn_agent,
+            create_board,
             create_workspace,
             delegate,
             pty_input,

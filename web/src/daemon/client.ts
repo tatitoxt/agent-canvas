@@ -9,11 +9,13 @@ export type SnapshotAgent = {
   status: string;
   permission?: string;
   workspace_id?: string | null;
+  board_id?: string | null;
 };
 
 export type ServerMsg =
-  | { type: "spawned"; agent_id: string; name: string; command?: string; permission?: string; workspace_id?: string | null }
-  | { type: "workspace_created"; workspace_id: string; name: string; repo: string }
+  | { type: "spawned"; agent_id: string; name: string; command?: string; permission?: string; workspace_id?: string | null; board_id?: string | null }
+  | { type: "workspace_created"; workspace_id: string; name: string; repo: string; board_id?: string | null }
+  | { type: "board_created"; board_id: string; name: string }
   | { type: "status"; agent_id: string; status: string }
   | { type: "activity"; agent_id: string; line: string }
   | { type: "diff"; agent_id: string; files: number; paths?: string[]; branch?: string }
@@ -26,6 +28,7 @@ export type ServerMsg =
   | { type: "result"; edge_id: string; summary: string; files?: number }
   | {
       type: "snapshot";
+      boards?: { board_id: string; name: string }[];
       agents: SnapshotAgent[];
       delegations?: SnapshotDelegation[];
       workspaces?: SnapshotWorkspace[];
@@ -38,6 +41,7 @@ export type SnapshotWorkspace = {
   workspace_id: string;
   name: string;
   repo: string;
+  board_id?: string | null;
 };
 
 export type SnapshotDelegation = {
@@ -108,12 +112,16 @@ export class CanvasClient {
     return new Promise((res) => this.ws.addEventListener("open", () => res(), { once: true }));
   }
 
-  spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string) {
-    this.send({ cmd: "spawn_agent", name, command, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null });
+  spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string) {
+    this.send({ cmd: "spawn_agent", name, command, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null, board_id: boardId ?? null });
   }
 
-  createWorkspace(name: string, repo: string) {
-    this.send({ cmd: "create_workspace", name, repo });
+  createWorkspace(name: string, repo: string, boardId?: string) {
+    this.send({ cmd: "create_workspace", name, repo, board_id: boardId ?? null });
+  }
+
+  createBoard(name: string) {
+    this.send({ cmd: "create_board", name });
   }
 
   /** Raw keystrokes into the agent's PTY. */

@@ -19,6 +19,8 @@ pub enum ClientMsg {
         /// Permission ladder level: "supervised" | "auto_accept" | "auto" | "full".
         /// Unknown/None values normalize to "supervised" (most restrictive).
         permission: Option<String>,
+        /// Canvas board this node lives on; None = the default "main" board.
+        board_id: Option<String>,
     },
     /// Create a workspace container — user-defined project groupings that
     /// coexist spatially on the same canvas.
@@ -26,7 +28,12 @@ pub enum ClientMsg {
         name: String,
         /// Absolute path to the repo this workspace runs agents in.
         repo: String,
+        /// Board the workspace node appears on; None = "main".
+        board_id: Option<String>,
     },
+    /// Create a named board — a separate canvas with its own agents,
+    /// workspaces and edges (Deska "Spaces").
+    CreateBoard { name: String },
     PtyInput {
         agent_id: String,
         /// Base64-encoded bytes to write to the PTY.
@@ -128,7 +135,7 @@ pub fn clamp_to_parent<'a>(requested: &'a str, parent: Option<&str>) -> &'a str 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMsg {
-    Spawned { agent_id: String, name: String, command: String, permission: String, workspace_id: Option<String> },
+    Spawned { agent_id: String, name: String, command: String, permission: String, workspace_id: Option<String>, board_id: Option<String> },
     Status { agent_id: String, status: AgentStatus },
     /// Live one-line activity preview — the agent's latest non-empty PTY
     /// line, ANSI-stripped. Deska's "background work" summaries: the node
@@ -148,10 +155,12 @@ pub enum ServerMsg {
     Error { agent_id: Option<String>, message: String },
     Delegation { edge_id: String, from: String, to: String, task: String },
     Result { edge_id: String, summary: String, files: u32 },
-    WorkspaceCreated { workspace_id: String, name: String, repo: String },
+    WorkspaceCreated { workspace_id: String, name: String, repo: String, board_id: Option<String> },
+    BoardCreated { board_id: String, name: String },
     /// Board state replay sent once when a client connects: every agent the
     /// board knows (live and dead) plus saved node positions.
     Snapshot {
+        boards: Vec<SnapshotBoard>,
         agents: Vec<SnapshotAgent>,
         delegations: Vec<SnapshotDelegation>,
         workspaces: Vec<SnapshotWorkspace>,
@@ -177,10 +186,17 @@ pub struct SnapshotAutomation {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct SnapshotBoard {
+    pub board_id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct SnapshotWorkspace {
     pub workspace_id: String,
     pub name: String,
     pub repo: String,
+    pub board_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -204,6 +220,7 @@ pub struct SnapshotAgent {
     pub status: String,
     pub permission: String,
     pub workspace_id: Option<String>,
+    pub board_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
