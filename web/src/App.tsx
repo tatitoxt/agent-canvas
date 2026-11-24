@@ -589,7 +589,21 @@ function Board() {
     setMenu({ x: ev.clientX, y: ev.clientY, id });
   };
 
-  const onNodeDragStop: OnNodeDrag = (_, node) => {
+  const onNodeDragStop: OnNodeDrag = (event, node) => {
+    // Deska-style: dropping an agent card on a board tab moves it there.
+    if (agents[node.id]) {
+      const pt =
+        "changedTouches" in event && event.changedTouches.length
+          ? event.changedTouches[0]
+          : (event as MouseEvent);
+      const el = document.elementFromPoint(pt.clientX, pt.clientY);
+      const tab = el?.closest?.("[data-board-tab]");
+      const target = tab?.getAttribute("data-board-tab");
+      if (target && target !== (agents[node.id].board_id ?? "main")) {
+        useBoard.getState().moveToBoard(node.id, target);
+        return;
+      }
+    }
     if (node.id.startsWith("shape-")) {
       moveShape(node.id, node.position.x, node.position.y);
     } else if (node.id.startsWith("panel-")) {

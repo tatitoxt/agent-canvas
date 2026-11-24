@@ -71,6 +71,7 @@ export function BoardTabs() {
         ) : (
           <button
             key={id}
+            data-board-tab={id}
             onClick={() => setActiveBoard(id)}
             onDoubleClick={() => {
               setRenamingId(id);
