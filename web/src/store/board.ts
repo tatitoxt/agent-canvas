@@ -27,6 +27,16 @@ export type LiveAgent = {
   output_bytes?: number;
 };
 
+/** OS-level notification when the tab isn't focused (agent awaiting input). */
+export function sysNotify(title: string, body: string) {
+  try {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    if (!document.hidden) return; // looking at the board already
+    const n = new Notification(title, { body, icon: "/canvas-mark.png", tag: `${title}:${body}` });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch { /* unsupported context */ }
+}
+
 export type LiveWorkspace = {
   id: string;
   name: string;
@@ -594,9 +604,12 @@ export const useBoard = create<BoardState>((set, get) => ({
               });
             }
             break;
-          case "needs_approval":
+          case "needs_approval": {
             set({ approvals: { ...get().approvals, [msg.agent_id]: msg.line } });
+            const name = get().agents[msg.agent_id]?.name ?? msg.agent_id;
+            sysNotify(`${name} needs approval`, msg.line);
             break;
+          }
           case "permission_changed": {
             const a = get().agents;
             if (a[msg.agent_id]) {
@@ -637,6 +650,8 @@ export const useBoard = create<BoardState>((set, get) => ({
           case "result": {
             const edge = edges[msg.edge_id];
             if (edge) {
+              const to = get().agents[edge.to]?.name ?? edge.to;
+              sysNotify(`${to} returned`, msg.summary ?? "delegation done");
               set({
                 edges: {
                   ...edges,
