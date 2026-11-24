@@ -51,3 +51,28 @@ jobs:
         working-directory: web
       - run: cargo check
         working-directory: src-tauri
+
+  # Same check on Linux: the GTK/WebKitGTK system libs are the part that
+  # actually varies, so install them exactly as the build guide says.
+  tauri-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev \
+            libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev \
+            libssl-dev libxdo-dev pkg-config file
+      - run: npm ci
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+      - run: cargo check
+        working-directory: src-tauri

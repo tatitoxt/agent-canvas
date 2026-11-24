@@ -488,14 +488,23 @@ pub fn last_visible_line(tail: &str) -> Option<String> {
 /// `CANVAS_RESULT: <summary>` from a child PTY — the delegation edge's
 /// return value. ANSI-stripped first: real PTYs wrap output in escape
 /// sequences (bracketed paste, colors), so a raw prefix match misses.
+/// `\r` inside a line is a cursor return (prompt redraw before the real
+/// output) — only the last segment is what the screen actually shows.
 pub fn canvas_result_line(tail: &str) -> Option<String> {
     tail.lines()
         .rev()
-        .map(strip_ansi)
         .find_map(|l| {
-            l.trim()
-                .strip_prefix("CANVAS_RESULT:")
-                .map(|s| s.trim().to_string())
+            // Check the last non-empty \r-segment BEFORE stripping:
+            // strip_ansi drops carriage returns, which would fuse a redrawn
+            // prompt with the real output. Only the final segment is what
+            // the screen actually shows — a result overwritten by later
+            // output on the same line doesn't count, while a CRLF-writing
+            // child leaves \r\r\n and its empty tail must be skipped.
+            l.split('\r')
+                .map(strip_ansi)
+                .rev()
+                .find(|s| !s.trim().is_empty())
+                .and_then(|s| s.trim().strip_prefix("CANVAS_RESULT:").map(|v| v.trim().to_string()))
         })
         .filter(|s| !s.is_empty())
 }
@@ -652,6 +661,17 @@ mod tests {
         // Real PTYs wrap output: bracketed-paste end + \r precede the line.
         let tail = "$ echo 'CANVAS_RESULT: shipped it'\r\n\u{1b}[?2004l\rCANVAS_RESULT: shipped it\r\n$ ";
         assert_eq!(canvas_result_line(tail).as_deref(), Some("shipped it"));
+        // A real shell prints its prompt, then \r-overwrites with output —
+        // the visible line is only what follows the last carriage return.
+        let tail = "user@box:~/repo$ \u{1b}[?2004l\rCANVAS_RESULT: shipped it\r\nuser@box:~/repo$ ";
+        assert_eq!(canvas_result_line(tail).as_deref(), Some("shipped it"));
+        // A child that writes CRLF gets its LF expanded again by the PTY
+        // (\r\r\n on the wire): the empty last segment must not hide it.
+        let tail = "user@box:~/repo$ \rCANVAS_RESULT: shipped it\r\r\nuser@box:~/repo$ ";
+        assert_eq!(canvas_result_line(tail).as_deref(), Some("shipped it"));
+        // Result-looking text overwritten by later output on the same
+        // line is not a result — the screen no longer shows it.
+        assert_eq!(canvas_result_line("x \rCANVAS_RESULT: stale\rnext output"), None);
         assert_eq!(canvas_result_line("$ echo hi\r\nhi\r\n$ "), None);
     }
 
