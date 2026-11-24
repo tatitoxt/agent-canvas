@@ -281,7 +281,7 @@ type BoardState = {
    * client-side — no agent spawn, no token spend. Returns feedback text. */
   quickRequest: (text: string) => string;
   /** THREAD — the board-commander chat log + intent runner. */
-  threadLog: { role: "you" | "thread"; text: string }[];
+  threadLog: ThreadLine[];
   threadSend: (text: string) => void;
   navRequest: { key: string; n: number } | null;
   requestNav: (key: string) => void;
