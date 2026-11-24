@@ -1,7 +1,8 @@
-import { memo } from "react";
+import { memo, useContext } from "react";
 import { NodeResizer, type NodeProps } from "@xyflow/react";
 import { useBoard } from "../store/board";
 import { TermHost } from "../components/TermHost";
+import { PanelActionsCtx } from "../components/panelCtx";
 import { CliMark } from "../components/CliMark";
 import { STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "./nodes";
 import type { AgentStatus } from "./types";
@@ -12,6 +13,7 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
   const n = useBoard((s) => s.termNodes[s.activeBoard]?.[id]);
   const agentId = id.slice(5); // term-<agentId>
   const agent = useBoard((s) => s.agents[agentId]);
+  const actions = useContext(PanelActionsCtx);
   if (!n) return null;
   const status = (agent?.status === "exited" ? "done" : agent?.status ?? "idle") as AgentStatus;
   const cli = (agent?.command ?? "bash").split(/\s+/)[0].toLowerCase();
@@ -121,8 +123,11 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
         </button>
         <button
           className="nodrag"
-          title="Put back — close the card (terminal stays in the drawer when reopened)"
-          onClick={() => useBoard.getState().closeTermNode(id)}
+          title="Put back — card closes, terminal returns to the drawer"
+          onClick={() => {
+            useBoard.getState().closeTermNode(id);
+            actions?.openTerm?.({ id: agentId, name: agent?.name ?? "terminal" });
+          }}
           style={{
             width: 20,
             height: 20,
