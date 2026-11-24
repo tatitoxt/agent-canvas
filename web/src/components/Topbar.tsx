@@ -106,22 +106,25 @@ export function Topbar({
 
   // ── Deska "Panels" switcher: every open window on the board, grouped by
   // the region rect its center sits in. Click focuses the card.
-  type PanelItem = { id: string; icon: string; label: string; hint: string; cx: number; cy: number };
+  type PanelItem = { id: string; icon: string; label: string; sub?: string; hint: string; cx: number; cy: number };
   const panelItems: PanelItem[] = [];
-  for (const a of Object.values(agents)) {
-    if ((a.board_id ?? "main") !== activeBoard) continue;
+  // Same ordering the board uses for "Terminal N" titles so the switcher
+  // matches what the card header shows.
+  const boardAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard);
+  const termNo = new Map(boardAgents.map((a, i) => [a.id, i + 1]));
+  boardAgents.forEach((a) => {
     const p = positions[a.id] ?? { x: 0, y: 0 };
     const done = a.status === "exited";
-    panelItems.push({ id: a.id, icon: "bot", label: a.name, hint: `${done ? "done" : a.status} — click to focus`, cx: p.x + 180, cy: p.y + 110 });
-  }
+    panelItems.push({ id: a.id, icon: "terminal", label: `Terminal ${termNo.get(a.id)}`, sub: a.name !== "Terminal" ? a.name : undefined, hint: `${a.name} · ${done ? "done" : a.status} — click to focus`, cx: p.x + 180, cy: p.y + 110 });
+  });
   for (const [id, o] of Object.entries(orchestrators)) {
     if (o.board !== activeBoard) continue;
     const p = positions[id] ?? { x: 0, y: 0 };
     panelItems.push({ id, icon: "orchestrator", label: o.name, hint: "orchestrator — click to focus", cx: p.x + 180, cy: p.y + 110 });
   }
   for (const [id, n] of Object.entries(termNodes[activeBoard] ?? {})) {
-    const ag = agents[id.slice(5)];
-    panelItems.push({ id, icon: "terminal", label: ag ? `${ag.name} — terminal` : "Terminal", hint: "popped-out terminal — click to focus", cx: n.x + n.w / 2, cy: n.y + n.h / 2 });
+    const no = termNo.get(id.slice(5));
+    panelItems.push({ id, icon: "terminal", label: no ? `Terminal ${no}` : "Terminal", sub: "popped out", hint: "popped-out terminal — click to focus", cx: n.x + n.w / 2, cy: n.y + n.h / 2 });
   }
   for (const [id, n] of Object.entries(panelNodes[activeBoard] ?? {})) {
     const meta = PANEL_META[id.slice(6)];
@@ -422,6 +425,7 @@ export function Topbar({
                     >
                       <Icon name={it.icon} size={13} color="var(--cv-ink-dim)" />
                       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{it.label}</span>
+                      {it.sub && <span style={{ fontSize: 9, color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 90 }}>{it.sub}</span>}
                     </button>,
                   )}
                 </div>
@@ -438,6 +442,7 @@ export function Topbar({
                 >
                   <Icon name={it.icon} size={13} color="var(--cv-ink-dim)" />
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{it.label}</span>
+                  {it.sub && <span style={{ fontSize: 9, color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 90 }}>{it.sub}</span>}
                 </button>,
               )}
             </>
