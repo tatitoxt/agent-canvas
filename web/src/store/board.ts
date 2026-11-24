@@ -1082,16 +1082,32 @@ export const useBoard = create<BoardState>((set, get) => ({
     // have spaces ("Terminal 1"), so match the longest name prefix.
     if (t.startsWith("@")) {
       const rest = t.slice(1);
-      const target = Object.values(get().agents)
-        .filter((a) => (a.board_id ?? "main") === get().activeBoard)
-        .sort((a, b) => b.name.length - a.name.length)
-        .find((a) => rest.toLowerCase().startsWith(a.name.toLowerCase() + " "));
+      const boardAgents = Object.values(get().agents).filter(
+        (a) => (a.board_id ?? "main") === get().activeBoard,
+      );
+      // Cards display "Terminal N" — N is the index in this same ordering —
+      // so "@Terminal 4 …" addresses the 4th agent, not a name match.
+      const tm = rest.match(/^terminal\s+(\d+)\s+(.*)$/is);
+      let target: (typeof boardAgents)[number] | undefined;
+      let labelLen = 0;
+      if (tm) {
+        target = boardAgents[parseInt(tm[1], 10) - 1];
+        labelLen = rest.indexOf(tm[2]);
+      } else {
+        const hit = [...boardAgents]
+          .sort((a, b) => b.name.length - a.name.length)
+          .find((a) => rest.toLowerCase().startsWith(a.name.toLowerCase() + " "));
+        if (hit) {
+          target = hit;
+          labelLen = hit.name.length;
+        }
+      }
       if (!target) {
         reply(`no agent matches "${rest.split(/\s+/)[0]}…" on this board`);
       } else if (target.status === "exited") {
         reply(`${target.name} already exited`);
       } else {
-        const msg = rest.slice(target.name.length).trim();
+        const msg = rest.slice(labelLen).trim();
         if (!msg) reply(`@${target.name} needs a message`);
         else {
           get().sendInput(target.id, new TextEncoder().encode(msg + "\n"));
