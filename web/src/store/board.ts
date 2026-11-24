@@ -1378,6 +1378,13 @@ export const useBoard = create<BoardState>((set, get) => ({
         return;
       }
     }
+    const nb = low.match(/^new\s+(?:board|space)\s+(.+)$/);
+    if (nb) {
+      const name = nb[1].replace(/[?.\s]+$/, "").trim();
+      get().createBoard(name);
+      reply(`created space "${name}"`);
+      return;
+    }
     const bm = low.match(/^(?:board|space|switch(?:\s+to)?)\s+(.+)$/);
     if (bm) {
       const q = bm[1].replace(/[?.\s]+$/, "").replace(/^(?:board|space)\s+/, "").trim();
