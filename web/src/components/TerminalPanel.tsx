@@ -7,6 +7,9 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { useBoard } from "../store/board";
+import { CliMark } from "./CliMark";
+import { STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "../board/nodes";
+import type { AgentStatus } from "../board/types";
 
 type Props = { agentId: string; name: string; index?: number; onClose: () => void };
 
@@ -25,6 +28,18 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   // Fullscreen: the complete terminal view (banner, tools, model, input
   // line) like a standalone TUI window — toggled by the ⤢ button.
   const [maxed, setMaxed] = useState(false);
+
+  // Card-style header info: Terminal N · status · CLI mark + label.
+  const agent = useBoard((s) => s.agents[agentId]);
+  const activeBoard = useBoard((s) => s.activeBoard);
+  const agentsMap = useBoard((s) => s.agents);
+  const termNo = Object.keys(agentsMap)
+    .filter((id) => (agentsMap[id].board_id ?? "main") === activeBoard)
+    .indexOf(agentId) + 1;
+  const status = (agent?.status === "exited" ? "done" : agent?.status ?? "idle") as AgentStatus;
+  const cli = (agent?.command ?? "bash").split(/\s+/)[0].toLowerCase();
+  const meta = cliMeta(cli);
+  const statusColor = STATUS_COLOR[status];
 
   useEffect(() => {
     const term = new Terminal({
@@ -181,7 +196,65 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
           touchAction: "none",
         }}
       >
-        <span style={{ fontSize: 12, fontWeight: 600 }}>{name}</span>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 12,
+            fontWeight: 600,
+            minWidth: 0,
+          }}
+        >
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 20,
+              height: 20,
+              borderRadius: 5,
+              border: "1px solid rgba(120,150,190,0.45)",
+              color: "#7cb9ff",
+              fontSize: 11,
+              flex: "none",
+            }}
+          >
+            ›_
+          </span>
+          <span style={{ color: "var(--cv-ink)", whiteSpace: "nowrap" }}>
+            {termNo > 0 ? `Terminal ${termNo}` : name}
+          </span>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              fontSize: 11,
+              fontWeight: 600,
+              color: statusColor,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <StatusBars color={statusColor} />
+            {STATUS_LABEL[status]}
+          </span>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              marginLeft: "auto",
+              fontSize: 11.5,
+              fontWeight: 600,
+              color: "var(--cv-ink-dim)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <CliMark cli={cli} color={meta.color} size={13} />
+            {meta.label}
+          </span>
+        </span>
         <div
           className="flex items-center gap-2"
           onPointerDown={(e) => e.stopPropagation()}

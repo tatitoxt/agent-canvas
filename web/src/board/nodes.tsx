@@ -11,7 +11,7 @@ import type {
   WebNodeData,
 } from "./types";
 
-const STATUS_COLOR: Record<AgentStatus, string> = {
+export const STATUS_COLOR: Record<AgentStatus, string> = {
   working: "var(--cv-working)",
   waiting: "var(--cv-waiting)",
   blocked: "var(--cv-blocked)",
@@ -19,7 +19,7 @@ const STATUS_COLOR: Record<AgentStatus, string> = {
   idle: "var(--cv-idle)",
 };
 
-const STATUS_LABEL: Record<AgentStatus, string> = {
+export const STATUS_LABEL: Record<AgentStatus, string> = {
   working: "running",
   waiting: "waiting",
   blocked: "blocked",
@@ -61,7 +61,7 @@ const PERMISSION_LABEL: Record<string, string> = {
   full: "full access",
 };
 
-function cliMeta(cli: string) {
+export function cliMeta(cli: string) {
   return CLI_META[cli.toLowerCase()] ?? { mark: "▢", label: cli, color: "#9a968e" };
 }
 
@@ -121,7 +121,7 @@ function MiniTerm({ agentId }: { agentId: string }) {
 
 /** Deska's signal bars — three rising bars in the status color, shown in
  * front of "Cursor running". A real glyph, not a colored square. */
-function StatusBars({ color }: { color: string }) {
+export function StatusBars({ color }: { color: string }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "flex-end", gap: 2, height: 10 }}>
       {[4, 7, 10].map((h) => (
