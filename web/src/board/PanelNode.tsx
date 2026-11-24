@@ -57,6 +57,25 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
         <span style={{ flex: 1 }} />
         <button
           className="nodrag"
+          title={n.collapsed ? "Expand" : "Collapse"}
+          onClick={() => useBoard.getState().collapsePanelNode(id)}
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: 6,
+            border: "none",
+            background: "transparent",
+            color: "var(--cv-ink-faint)",
+            fontSize: 12,
+            cursor: "pointer",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          {n.collapsed ? "▸" : "–"}
+        </button>
+        <button
+          className="nodrag"
           title="Dock to the right edge of the view"
           onClick={() => {
             const { screenToFlowPosition } = rf;
@@ -101,9 +120,11 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
           ×
         </button>
       </div>
-      <div className="nodrag nowheel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-        {def.render()}
-      </div>
+      {!n.collapsed && (
+        <div className="nodrag nowheel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          {def.render()}
+        </div>
+      )}
     </div>
   );
 });

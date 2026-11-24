@@ -297,11 +297,12 @@ type BoardState = {
   /** Tool panels living ON the canvas as nodes (Deska "Add to board") —
    * each renders the live panel UI inside a card: movable, resizable,
    * closable. Keyed per board; node id is `panel-<key>`. */
-  panelNodes: Record<string, Record<string, { panel: string; x: number; y: number; w: number; h: number }>>;
+  panelNodes: Record<string, Record<string, { panel: string; x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number }>>;
   openPanelNode: (panel: string, pos?: { x: number; y: number }, size?: { w: number; h: number }) => void;
   closePanelNode: (id: string) => void;
   movePanelNode: (id: string, x: number, y: number) => void;
   resizePanelNode: (id: string, w: number, h: number) => void;
+  collapsePanelNode: (id: string) => void;
   studioDocNow: () => void;
   closeStudioDoc: () => void;
   artifactDelete: (artifactId: string) => void;
@@ -992,6 +993,18 @@ export const useBoard = create<BoardState>((set, get) => ({
     const n = get().panelNodes[board]?.[id];
     if (!n) return;
     const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: { ...n, w, h } } };
+    localStorage.setItem("cv-panelnodes", JSON.stringify(next));
+    set({ panelNodes: next });
+  },
+  collapsePanelNode: (id) => {
+    const board = get().activeBoard;
+    const n = get().panelNodes[board]?.[id];
+    if (!n) return;
+    // Collapse to the title bar, remembering the expanded height to restore.
+    const m = n.collapsed
+      ? { ...n, collapsed: false, h: n.expandH ?? n.h }
+      : { ...n, collapsed: true, expandH: n.h, h: 34 };
+    const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: m } };
     localStorage.setItem("cv-panelnodes", JSON.stringify(next));
     set({ panelNodes: next });
   },
