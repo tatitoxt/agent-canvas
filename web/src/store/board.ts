@@ -1584,7 +1584,12 @@ export const useBoard = create<BoardState>((set, get) => ({
       const n = clearDone();
       return n ? `cleared ${n} finished agent${n === 1 ? "" : "s"}` : "nothing to clear";
     }
-    return "try: bigger text · smaller text · undo · fit · tidy · close panels · clear done";
+    if (/^(new |spawn |open )?terminal/.test(t)) {
+      get().setPendingTermPos({ x: 240 + Math.random() * 560, y: 120 + Math.random() * 240 });
+      get().spawn("terminal", "bash");
+      return "spawning a terminal";
+    }
+    return "try: bigger text · smaller text · undo · fit · tidy · close panels · clear done · new terminal";
   },
 
   threadLog: loadThreadLog(),
