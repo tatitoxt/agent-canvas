@@ -29,11 +29,12 @@ const actionBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 
-/** Inline markdown → Obsidian-style runs: **bold**, `code`, [[wiki links]]
- * (clickable, amber like real Obsidian) and [md](url) links. */
+/** Inline markdown → Obsidian-style runs: **bold**, *italic*, `code`,
+ * ==highlight==, ~~strike~~, [[wiki links]] (clickable, amber like real
+ * Obsidian) and [md](url) links. */
 function mdInline(text: string, onLink?: (name: string) => void): React.ReactNode[] {
   const out: React.ReactNode[] = [];
-  const re = /(\[\[[^\]|]+(?:\|[^\]]*)?\]\]|\[[^\]]+\]\([^)]*\)|\*\*[^*]+\*\*|`[^`]+`)/g;
+  const re = /(\[\[[^\]|]+(?:\|[^\]]*)?\]\]|\[[^\]]+\]\([^)]*\)|\*\*[^*]+\*\*|\*[^*\n]+\*|==[^=]+==|~~[^~]+~~|`[^`]+`)/g;
   let last = 0, k = 0;
   for (const m of text.matchAll(re)) {
     if (m.index! > last) out.push(text.slice(last, m.index));
@@ -68,6 +69,16 @@ function mdInline(text: string, onLink?: (name: string) => void): React.ReactNod
       }
     } else if (t.startsWith("**")) {
       out.push(<strong key={k++} style={{ color: "var(--cv-ink)", fontWeight: 700 }}>{t.slice(2, -2)}</strong>);
+    } else if (t.startsWith("*")) {
+      out.push(<em key={k++} style={{ color: "var(--cv-ink)" }}>{t.slice(1, -1)}</em>);
+    } else if (t.startsWith("==")) {
+      out.push(
+        <mark key={k++} style={{ background: "color-mix(in srgb, var(--cv-accent) 30%, transparent)", color: "var(--cv-ink)", borderRadius: 3, padding: "0 2px" }}>
+          {t.slice(2, -2)}
+        </mark>,
+      );
+    } else if (t.startsWith("~~")) {
+      out.push(<s key={k++} style={{ opacity: 0.6 }}>{t.slice(2, -2)}</s>);
     } else {
       out.push(
         <code key={k++} style={{ background: "rgba(255,255,255,0.07)", borderRadius: 4, padding: "0 4px", fontSize: "0.92em", fontFamily: "ui-monospace, monospace" }}>
