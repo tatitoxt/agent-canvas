@@ -160,6 +160,11 @@ type BoardState = {
   /** Local short-request router (Deska-style): runs instant commands
    * client-side — no agent spawn, no token spend. Returns feedback text. */
   quickRequest: (text: string) => string;
+  /** THREAD — the board-commander chat log + intent runner. */
+  threadLog: { role: "you" | "thread"; text: string }[];
+  threadSend: (text: string) => void;
+  navRequest: { key: string; n: number } | null;
+  requestNav: (key: string) => void;
   createAutomation: (a: {
     name: string;
     prompt: string;
@@ -967,6 +972,89 @@ export const useBoard = create<BoardState>((set, get) => ({
       return n ? `cleared ${n} finished agent${n === 1 ? "" : "s"}` : "nothing to clear";
     }
     return "try: bigger text · smaller text · undo · fit · clear done";
+  },
+
+  threadLog: [],
+  navRequest: null,
+  requestNav: (key) => set((s) => ({ navRequest: { key, n: (s.navRequest?.n ?? 0) + 1 } })),
+
+  /** Symvibe's THREAD — the built-in board commander. Deterministic
+   * intent parsing; falls back to quickRequest for local commands. */
+  threadSend: (text) => {
+    const t = text.trim();
+    if (!t) return;
+    set((s) => ({ threadLog: [...s.threadLog.slice(-60), { role: "you", text: t }] }));
+    const reply = (r: string) =>
+      set((s) => ({ threadLog: [...s.threadLog.slice(-60), { role: "thread", text: r }] }));
+    const low = t.toLowerCase();
+    const WORDN: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+    const sm = low.match(/^(?:spawn|deploy)\s+(?:(\d+)|(one|two|three|four|five|six))\s+([\w-]+?)(?:\s+(?:agents?|consoles?|terminals?))?$/);
+    if (sm) {
+      const n = sm[1] ? parseInt(sm[1], 10) : WORDN[sm[2]];
+      const cli = sm[3].replace(/s$/, "");
+      for (let i = 0; i < Math.min(Math.max(n, 1), 8); i++) {
+        get().spawn(n > 1 ? `${cli}-${i + 1}` : cli, cli);
+      }
+      reply(`spawned ${Math.min(Math.max(n, 1), 8)} × ${cli}`);
+      return;
+    }
+    if (/^kill all/.test(low)) {
+      const board = get().activeBoard;
+      const ids = Object.values(get().agents).filter((a) => a.board_id === board).map((a) => a.id);
+      for (const id of ids) get().kill(id);
+      reply(`killed ${ids.length} agent${ids.length === 1 ? "" : "s"}`);
+      return;
+    }
+    if (/^pause/.test(low)) {
+      get().pauseAll(get().activeBoard);
+      reply("paused every agent on this board");
+      return;
+    }
+    if (/^resume/.test(low)) {
+      get().resumeAll(get().activeBoard);
+      reply("resumed every agent");
+      return;
+    }
+    const pm = low.match(/^(?:apply|use|load) preset\s+(.+)$/);
+    if (pm) {
+      const presets = get().presets[get().activeBoard] ?? {};
+      const hit = Object.keys(presets).find((k) => k.toLowerCase() === pm[1].trim());
+      if (hit) {
+        get().applyPreset(hit);
+        reply(`applied preset "${hit}"`);
+      } else {
+        reply(`no preset "${pm[1].trim()}" on this board`);
+      }
+      return;
+    }
+    const sp = low.match(/^save preset\s+(.+)$/);
+    if (sp) {
+      get().savePreset(sp[1].trim());
+      reply(`saved preset "${sp[1].trim()}"`);
+      return;
+    }
+    const PANELS = ["inbox", "automations", "loops", "presets", "history", "accounts", "memory", "notes", "artifacts", "vault", "skills", "settings", "canvas"];
+    const om = low.match(/^(?:open|show|go to)\s+([\w\s]+?)$/);
+    if (om) {
+      const hit = PANELS.find((p) => om[1].trim().startsWith(p));
+      if (hit) {
+        get().requestNav(hit);
+        reply(`opened ${hit}`);
+        return;
+      }
+    }
+    if (/whole board|fit view|zoom out|overview/.test(low)) {
+      get().requestView();
+      reply("fitted the whole board");
+      return;
+    }
+    if (/summari|digest|recap/.test(low)) {
+      get().studioDocNow();
+      reply("built the board dossier");
+      return;
+    }
+    const r = get().quickRequest(t);
+    reply(r.startsWith("try:") ? `can't parse that — ${r}` : r);
   },
 
   ptyBuffer: (agentId) => get().ptyBuffers[agentId],

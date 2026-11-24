@@ -2,6 +2,7 @@ import { useBoard } from "../store/board";
 
 const ITEMS = [
   { key: "canvas", glyph: "◫", label: "Canvas" },
+  { key: "thread", glyph: "⧉", label: "Thread" },
   { key: "inbox", glyph: "◱", label: "Inbox" },
   { key: "automations", glyph: "◈", label: "Automations" },
   { key: "loops", glyph: "⟳", label: "Loops" },

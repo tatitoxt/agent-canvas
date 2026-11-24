@@ -27,6 +27,7 @@ import { InboxPanel } from "./components/InboxPanel";
 import { AutomationsPanel } from "./components/AutomationsPanel";
 import { LoopsPanel } from "./components/LoopsPanel";
 import { PresetsPanel } from "./components/PresetsPanel";
+import { ThreadPanel } from "./components/ThreadPanel";
 import { AccountsPanel } from "./components/AccountsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { NotesPanel } from "./components/NotesPanel";
@@ -140,6 +141,10 @@ function Board() {
   useEffect(() => {
     if (viewCmdN > 0) fitView({ padding: 0.18, maxZoom: 1.1, duration: 250 });
   }, [viewCmdN, fitView]);
+  const navRequest = useBoard((s) => s.navRequest);
+  useEffect(() => {
+    if (navRequest) setNav(navRequest.key);
+  }, [navRequest]);
   const [openTerms, setOpenTerms] = useState<Array<{ id: string; name: string }>>([]);
   const openTerm = (t: { id: string; name: string }) =>
     setOpenTerms((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]));
@@ -632,6 +637,7 @@ function Board() {
       {nav === "automations" && <AutomationsPanel />}
       {nav === "loops" && <LoopsPanel />}
       {nav === "presets" && <PresetsPanel />}
+      {nav === "thread" && <ThreadPanel />}
       {nav === "accounts" && <AccountsPanel />}
       {nav === "memory" && <MemoryPanel />}
       {nav === "notes" && <NotesPanel />}
