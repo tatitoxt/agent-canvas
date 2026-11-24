@@ -1392,6 +1392,11 @@ export const useBoard = create<BoardState>((set, get) => ({
       reply(`created space "${name}"`);
       return;
     }
+    if (/^new task\b/.test(low)) {
+      get().focusSpawn();
+      reply("spawn chooser is on the Orchestrator card");
+      return;
+    }
     const bm = low.match(/^(?:board|space|switch(?:\s+to)?)\s+(.+)$/);
     if (bm) {
       const q = bm[1].replace(/[?.\s]+$/, "").replace(/^(?:board|space)\s+/, "").trim();
