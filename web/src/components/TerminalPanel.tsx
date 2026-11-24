@@ -285,7 +285,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             <button
               key={label}
               title={`send ${label === "↵" ? "enter" : label === "^C" ? "ctrl+c" : label} to the PTY`}
-              onClick={() => sendInput(agentId, new TextEncoder().encode(seq))}
+              onClick={() => useBoard.getState().sendInput(agentId, new TextEncoder().encode(seq))}
               style={{
                 border: "none",
                 background: "transparent",
