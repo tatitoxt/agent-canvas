@@ -130,18 +130,28 @@ function parseAnsiLine(raw: string): AnsiSpan[] {
 
 /** Live tail of the agent's real PTY rendered inside the node — the
  * actual Claude Code / Codex / Gemini interface, like Deska's panels. */
+const MODEL_RE =
+  /(opus[\s\d.]*|sonnet[\s\d.]*|haiku[\s\d.]*|gpt-[\w.-]+|gemini-[\w.-]+|o\d[a-z0-9.-]*|kimi-[\w.-]+|qwen[\w.-]*|deepseek[\w.-]*|minimax[\w.-]*|mistral[\w.-]*|codex[\w.-]*mini[\w.-]*)/i;
+
 function MiniTerm({ agentId }: { agentId: string }) {
   const buf = useBoard((s) => s.ptyBuffers[agentId]);
-  const lines = useMemo(() => {
-    if (!buf || buf.length === 0) return [];
+  const { lines, model } = useMemo(() => {
+    if (!buf || buf.length === 0) return { lines: [] as { spans: AnsiSpan[]; text: string }[], model: undefined as string | undefined };
     const tail = buf.slice(Math.max(0, buf.length - 4000));
     const text = decoder.decode(tail).replace(/\r/g, "");
-    return text
+    const parsed = text
       .split("\n")
       .map(parseAnsiLine)
       .map((spans) => ({ spans, text: spans.map((p) => p.text).join("") }))
       .filter((l) => l.text.trim().length > 0)
       .slice(-5);
+    // Last model mention in the tail — the real model the CLI announced.
+    let model: string | undefined;
+    for (let i = parsed.length - 1; i >= 0; i--) {
+      const m = parsed[i].text.match(MODEL_RE);
+      if (m) { model = m[0]; break; }
+    }
+    return { lines: parsed, model };
   }, [buf]);
   if (lines.length === 0) return null;
   return (
@@ -180,6 +190,20 @@ function MiniTerm({ agentId }: { agentId: string }) {
           ))}
         </div>
       ))}
+      {model && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginTop: 3,
+            fontSize: 8.5,
+            color: "var(--cv-ink-faint)",
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          }}
+        >
+          {model}
+        </div>
+      )}
     </div>
   );
 }
@@ -204,58 +228,54 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       }}
     >
       <Handle type="target" position={Position.Left} />
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      {/* Deska-style header: name · status · cli mark+label */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <div
           style={{
-            width: 30,
-            height: 30,
+            fontSize: 13.5,
+            fontWeight: 600,
+            letterSpacing: -0.1,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            minWidth: 0,
             flex: "none",
-            display: "grid",
-            placeItems: "center",
-            borderRadius: 9,
-            fontSize: 13,
-            color: meta.color,
-            background: `color-mix(in srgb, ${meta.color} 12%, var(--cv-glass-hi))`,
-            border: `1px solid color-mix(in srgb, ${meta.color} 30%, var(--cv-glass-edge))`,
-            boxShadow: "inset 0 1px 0 var(--cv-glass-shine)",
+            maxWidth: "46%",
           }}
         >
-          {meta.mark}
+          {data.name}
         </div>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div
-            style={{
-              fontSize: 13.5,
-              fontWeight: 600,
-              letterSpacing: -0.1,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {data.name}
-          </div>
-          <div style={{ fontSize: 11, color: meta.color, marginTop: 1, opacity: 0.9 }}>
-            {meta.label}
-            {data.accountLabel && (
-              <span style={{ color: "var(--cv-accent)" }}> · @{data.accountLabel}</span>
-            )}
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span
-            className="status-dot"
-            style={{ background: STATUS_COLOR[data.status] }}
-          />
-          <span
-            style={{
-              fontSize: 10.5,
-              color: STATUS_COLOR[data.status],
-              fontWeight: 500,
-            }}
-          >
-            {STATUS_LABEL[data.status]}
-          </span>
+        <span
+          className="status-dot"
+          style={{ background: STATUS_COLOR[data.status], flex: "none" }}
+        />
+        <span
+          style={{
+            fontSize: 11,
+            color: STATUS_COLOR[data.status],
+            fontWeight: 500,
+            flex: "none",
+          }}
+        >
+          {STATUS_LABEL[data.status]}
+        </span>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            marginLeft: "auto",
+            minWidth: 0,
+          }}
+        >
+          {data.files != null && data.files > 0 && (
+            <span
+              style={{ fontSize: 10, color: "var(--cv-ink-faint)", fontWeight: 500 }}
+              title={data.paths?.length ? data.paths.join("\n") : "uncommitted changes in worktree"}
+            >
+              {data.files} file{data.files === 1 ? "" : "s"}
+            </span>
+          )}
           {data.branch && (
             <span
               style={{
@@ -269,14 +289,38 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
               ⎇ {data.branch}
             </span>
           )}
-          {data.files != null && data.files > 0 && (
-            <span
-              style={{ fontSize: 10, color: "var(--cv-ink-faint)", fontWeight: 500 }}
-              title={data.paths?.length ? data.paths.join("\n") : "uncommitted changes in worktree"}
-            >
-              {data.files} file{data.files === 1 ? "" : "s"}
+          {data.accountLabel && (
+            <span style={{ fontSize: 10, color: "var(--cv-accent)" }} title="account">
+              @{data.accountLabel}
             </span>
           )}
+          <div
+            style={{
+              width: 22,
+              height: 22,
+              flex: "none",
+              display: "grid",
+              placeItems: "center",
+              borderRadius: 6,
+              fontSize: 11,
+              color: meta.color,
+              background: `color-mix(in srgb, ${meta.color} 14%, var(--cv-glass-hi))`,
+              border: `1px solid color-mix(in srgb, ${meta.color} 30%, var(--cv-glass-edge))`,
+            }}
+            title={meta.label}
+          >
+            {meta.mark}
+          </div>
+          <span
+            style={{
+              fontSize: 11,
+              color: meta.color,
+              fontWeight: 500,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {meta.label}
+          </span>
           {data.permission && data.permission !== "supervised" && (
             <span
               className="glass-pill"
