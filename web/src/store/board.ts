@@ -978,12 +978,24 @@ export const useBoard = create<BoardState>((set, get) => ({
     } catch { /* file:// or odd embeds */ }
   },
 
-  createBoard: (name) => client?.createBoard(name),
+  createBoard: (name) => {
+    if (!client) { get().notify("daemon offline"); return; }
+    client.createBoard(name);
+  },
 
-  moveToBoard: (nodeId, boardId) => client?.moveToBoard(nodeId, boardId),
+  moveToBoard: (nodeId, boardId) => {
+    if (!client) { get().notify("daemon offline"); return; }
+    client.moveToBoard(nodeId, boardId);
+  },
 
-  renameNode: (nodeId, name) => client?.renameNode(nodeId, name),
-  renameBoard: (boardId, name) => client?.renameBoard(boardId, name),
+  renameNode: (nodeId, name) => {
+    if (!client) { get().notify("daemon offline"); return; }
+    client.renameNode(nodeId, name);
+  },
+  renameBoard: (boardId, name) => {
+    if (!client) { get().notify("daemon offline"); return; }
+    client.renameBoard(boardId, name);
+  },
   deleteBoard: (boardId) => client?.deleteBoard(boardId),
   deleteEdge: (edgeId) => client?.deleteDelegation(edgeId),
   deleteWorkspace: (workspaceId) => client?.deleteWorkspace(workspaceId),
@@ -1006,7 +1018,10 @@ export const useBoard = create<BoardState>((set, get) => ({
   noteUpsert: (noteId, col, text, pos, due) =>
     client?.noteUpsert(noteId, get().activeBoard ?? undefined, col, text, pos, due),
   noteDelete: (noteId) => client?.noteDelete(noteId),
-  gitPush: (agentId) => client?.gitPush(agentId),
+  gitPush: (agentId) => {
+    if (!client) { get().notify("daemon offline"); return; }
+    client.gitPush(agentId);
+  },
   notify: (text) => set({ notice: text }),
   vaultList: (dir) => {
     set({ vaultDir: dir });
@@ -1233,7 +1248,10 @@ export const useBoard = create<BoardState>((set, get) => ({
     client?.delegate(from, name, command, task, ".", undefined, permission, undefined, boardId);
   },
 
-  kill: (agentId) => client?.confirmDestructive(agentId, "kill"),
+  kill: (agentId) => {
+    if (!client) { get().notify("daemon offline"); return; }
+    client.confirmDestructive(agentId, "kill");
+  },
 
   handoff: (agentId, cli) => {
     const a = get().agents[agentId];
