@@ -1461,6 +1461,27 @@ export const useBoard = create<BoardState>((set, get) => ({
       );
       return;
     }
+    const shm = low.match(/^(?:share|publish)\s+(.+)$/);
+    if (shm) {
+      const q = shm[1].replace(/[?.\s]+$/, "").trim();
+      const hit = Object.values(get().artifacts).find(
+        (a) => a.title.toLowerCase().includes(q),
+      );
+      if (!hit?.text) {
+        reply(`no artifact "${q}" with contents`);
+        return;
+      }
+      void import("../lib/share").then(async ({ shareArtifactPdf }) => {
+        const url = await shareArtifactPdf(hit.title.replace(/^PDF — /, ""), hit.text ?? "");
+        if (url) {
+          void navigator.clipboard.writeText(url).catch(() => {});
+          reply(`published "${hit.title}" → ${url} (copied — live while the app runs)`);
+        } else {
+          reply("share needs the daemon on :4242");
+        }
+      });
+      return;
+    }
     const ob = low.match(/^obsidian\s+(.+)$/);
     if (ob) {
       const text = t.replace(/^obsidian\s+/i, "").trim();
@@ -1609,7 +1630,7 @@ export const useBoard = create<BoardState>((set, get) => ({
           "approve/deny Terminal N · spawn <cli> · kill Terminal N · kill all · " +
           "pause/resume · board/new board <name> · apply/save preset <n> · " +
           "open <panel> · focus <name> · gather · hide chrome · " +
-          "obsidian <note> · pdf <topic> · clear thread · status · summary",
+          "obsidian <note> · pdf <topic> · share <artifact> · clear thread · status · summary",
       );
       return;
     }

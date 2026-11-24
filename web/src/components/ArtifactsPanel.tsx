@@ -3,6 +3,7 @@ import { useBoard } from "../store/board";
 import { useReactFlow } from "@xyflow/react";
 import { cleanPinSpot } from "./PinBtn";
 import { downloadPdf } from "../lib/pdf";
+import { shareArtifactPdf } from "../lib/share";
 import { Icon } from "./icons";
 
 /** Each artifact kind gets its own symbol + muted color (Deska-style
@@ -38,6 +39,7 @@ export function ArtifactsPanel() {
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [query, setQuery] = useState("");
+  const [shared, setShared] = useState<Record<string, string>>({});
 
   const list = Object.values(artifacts)
     .filter((a) => a.board_id === (activeBoard ?? "main"))
@@ -289,6 +291,28 @@ export function ArtifactsPanel() {
                 <Icon name="pin" size={11} />
                 board
               </button>
+              {a.text && (
+                <button
+                  title={shared[a.artifact_id] ? `link copied — ${shared[a.artifact_id]}` : "publish — get a link anyone can open while the app runs"}
+                  style={{
+                    border: "none",
+                    background: "none",
+                    cursor: "pointer",
+                    color: shared[a.artifact_id] ? "#7ba389" : "var(--cv-ink-dim)",
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                  onClick={async () => {
+                    const url = await shareArtifactPdf(a.title.replace(/^PDF — /, ""), a.text ?? "");
+                    if (url) {
+                      await navigator.clipboard.writeText(url).catch(() => {});
+                      setShared((m) => ({ ...m, [a.artifact_id]: url }));
+                    }
+                  }}
+                >
+                  <Icon name="link" size={13} />
+                </button>
+              )}
               {a.kind === "pdf" && a.text && (
                 <button
                   title="download PDF again"

@@ -40,6 +40,9 @@ struct AppState {
     pending_results: Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
     /// agent_id → held PTY input bytes a supervised agent needs approval for.
     pending_inputs: Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
+    /// Published artifacts: share id → (title, mime, bytes). Served at
+    /// /share/{id} without auth — the 128-bit id is the capability.
+    shares: Arc<std::sync::Mutex<std::collections::HashMap<String, (String, String, Vec<u8>)>>>,
 }
 
 /// Write PTY input honoring the supervised-input gate: `supervised`
@@ -148,6 +151,57 @@ async fn github_proxy(
         axum::body::Body::from(body),
     )
         .into_response()
+}
+
+#[derive(Debug, Deserialize)]
+struct ShareIn {
+    title: String,
+    mime: String,
+    b64: String,
+}
+
+/// POST /api/share — publish an artifact so anyone with the link can open it
+/// while the daemon runs (Deska's "publish by link"). Body is base64 bytes,
+/// capped at 8 MB.
+async fn share_create(
+    State(state): State<Arc<AppState>>,
+    Json(input): Json<ShareIn>,
+) -> axum::response::Response {
+    let body = match base64::engine::general_purpose::STANDARD.decode(&input.b64) {
+        Ok(b) if b.len() <= 8 * 1024 * 1024 => b,
+        Ok(_) => return (StatusCode::PAYLOAD_TOO_LARGE, "share too large").into_response(),
+        Err(_) => return (StatusCode::BAD_REQUEST, "bad base64").into_response(),
+    };
+    let id = uuid::Uuid::new_v4().simple().to_string()[..16].to_string();
+    let title = if input.title.trim().is_empty() { "artifact".to_string() } else { input.title };
+    let mime = if input.mime.trim().is_empty() { "application/octet-stream".to_string() } else { input.mime };
+    state.shares.lock().unwrap().insert(id.clone(), (title, mime, body));
+    Json(serde_json::json!({ "id": id, "url": format!("/share/{id}") })).into_response()
+}
+
+/// GET /share/{id} — public endpoint (no token): the unguessable id is the
+/// capability. Streams the stored bytes with their mime type.
+async fn share_get(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> axum::response::Response {
+    let doc = state.shares.lock().unwrap().get(&id).cloned();
+    match doc {
+        Some((title, mime, body)) => (
+            [
+                (header::CONTENT_TYPE, mime),
+                (
+                    header::CONTENT_DISPOSITION,
+                    format!("inline; filename=\"{}.{}\"",
+                        title.replace('"', ""),
+                        if title.ends_with(".pdf") { "" } else { "pdf" }),
+                ),
+            ],
+            axum::body::Body::from(body),
+        )
+            .into_response(),
+        None => (StatusCode::NOT_FOUND, "share not found — it lives only while the app runs").into_response(),
+    }
 }
 
 /// Spawn a PTY agent wired to the event bus + store. Used by both
@@ -1466,11 +1520,13 @@ async fn main() -> Result<()> {
         repo_url,
         pending_results: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         pending_inputs: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+        shares: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     });
 
     let api = Router::new()
         .route("/health", get(health))
         .route("/github/{*rest}", get(github_proxy))
+        .route("/share", axum::routing::post(share_create))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
@@ -1478,6 +1534,7 @@ async fn main() -> Result<()> {
 
     let app = Router::new()
         .route("/ws", get(ws_handler))
+        .route("/share/{id}", get(share_get))
         .nest("/api", api)
         // The Vite dev origin (:5174) calls the daemon cross-origin —
         // outermost layer so CORS answers preflights before auth runs.
