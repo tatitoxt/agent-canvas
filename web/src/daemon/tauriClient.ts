@@ -38,6 +38,9 @@ export class TauriCanvasClient {
   whenOpen(): Promise<void> {
     return Promise.resolve();
   }
+  isClosed(): boolean {
+    return false;
+  }
 
   spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string, accountId?: string, initialInput?: string) {
     void invoke("spawn_agent", { name, command, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null, boardId: boardId ?? null, accountId: accountId ?? null, initialInput: initialInput ?? null }).catch(

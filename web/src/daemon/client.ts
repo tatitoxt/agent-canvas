@@ -190,6 +190,12 @@ export class CanvasClient {
     return new Promise((res) => this.ws.addEventListener("open", () => res(), { once: true }));
   }
 
+  /** True once the socket is fully closed — a dead client must not block
+   * connect(), or the board would be stuck offline forever. */
+  isClosed(): boolean {
+    return this.ws.readyState === WebSocket.CLOSED;
+  }
+
   spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string, accountId?: string, initialInput?: string) {
     this.send({ cmd: "spawn_agent", name, command, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null, board_id: boardId ?? null, account_id: accountId ?? null, initial_input: initialInput ?? null });
   }

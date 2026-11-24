@@ -440,6 +440,9 @@ export const useBoard = create<BoardState>((set, get) => ({
 
   connect: (token: string) => {
     const t = token || TOKEN;
+    // A client whose socket already closed is dead weight — drop it so a
+    // manual "connect" click (or the auto-reconnect timer) can retry.
+    if (client && client.isClosed()) client = null;
     if (client || (!t && !isTauri())) return;
     const handlers = {
       onControl: (msg: ServerMsg) => {
