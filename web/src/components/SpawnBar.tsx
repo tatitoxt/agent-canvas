@@ -65,6 +65,7 @@ export function SpawnBar() {
   const [permission, setPermission] = useState("supervised");
   const [acctId, setAcctId] = useState("");
   const [task, setTask] = useState("");
+  const [count, setCount] = useState(1);
   const acctOptions = Object.values(accounts).filter((a) => a.cli === choice);
   const wrap = useRef<HTMLDivElement>(null);
 
@@ -191,6 +192,31 @@ export function SpawnBar() {
                 onChange={(e) => setTask(e.target.value)}
                 title="Quick request — typed into the terminal a few seconds after the CLI starts"
               />
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ fontSize: 10, color: "var(--cv-ink-dim)", flex: 1 }} title="parallel tasks — each worker runs the same prompt in its own git worktree">
+                  parallel workers · own worktree each
+                </span>
+                {[1, 2, 3, 4].map((n) => (
+                  <button
+                    key={n}
+                    title={`spawn ${n} worker${n > 1 ? "s" : ""} on the same task`}
+                    onClick={() => setCount(n)}
+                    style={{
+                      width: 22,
+                      height: 20,
+                      borderRadius: 6,
+                      border: `1px solid ${count === n ? "var(--cv-accent)" : "var(--cv-glass-edge)"}`,
+                      background: count === n ? "color-mix(in srgb, var(--cv-accent) 18%, transparent)" : "var(--cv-glass-hi)",
+                      color: count === n ? "var(--cv-accent)" : "var(--cv-ink-dim)",
+                      fontSize: 10,
+                      fontWeight: 650,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
               <button
                 style={{
                   height: 32,
@@ -208,12 +234,26 @@ export function SpawnBar() {
                 disabled={!canSpawn}
                 onClick={() => {
                   const cmd = choice === "custom" ? command.trim() : choice;
-                  spawn(cmd, cmd, wsId || undefined, permission, acctId || undefined, task.trim() || undefined);
+                  const t = task.trim();
+                  for (let i = 0; i < count; i++) {
+                    const brief = count > 1 && t
+                      ? `You are worker ${i + 1} of ${count} on a parallel task — each worker has its own worktree, work independently.\n\n${t}`
+                      : t || undefined;
+                    spawn(
+                      count > 1 ? `${cmd}-p${i + 1}` : cmd,
+                      cmd,
+                      wsId || undefined,
+                      permission,
+                      acctId || undefined,
+                      brief,
+                    );
+                  }
                   setTask("");
+                  setCount(1);
                   setOpen(false);
                 }}
               >
-                + spawn
+                {count > 1 ? `+ spawn ×${count}` : "+ spawn"}
               </button>
             </>
           )}

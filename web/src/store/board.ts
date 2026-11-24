@@ -1495,6 +1495,24 @@ export const useBoard = create<BoardState>((set, get) => ({
       );
       return;
     }
+    const parm = low.match(/^parallel\s+(\d+)\s+(\w+)\s+(.+)$/);
+    if (parm) {
+      const n = Math.min(parseInt(parm[1], 10), 4);
+      const cmd = parm[2];
+      const task = parm[3];
+      for (let i = 0; i < n; i++) {
+        get().spawn(
+          `${cmd}-p${i + 1}`,
+          cmd,
+          undefined,
+          undefined,
+          undefined,
+          `You are worker ${i + 1} of ${n} on a parallel task — each worker has its own worktree, work independently.\n\n${task}`,
+        );
+      }
+      reply(`spawned ${n} ${cmd} workers on "${task.slice(0, 60)}" — each in its own worktree`);
+      return;
+    }
     const hoff = low.match(/^handoff\s+(.+?)(?:\s+to\s+(\w+))?\s*$/);
     if (hoff) {
       const q = hoff[1].replace(/[?.\s]+$/, "").trim();
@@ -1686,7 +1704,7 @@ export const useBoard = create<BoardState>((set, get) => ({
           "approve/deny Terminal N · spawn <cli> · kill Terminal N · kill all · " +
           "pause/resume · board/new board <name> · apply/save preset <n> · " +
           "open <panel> · focus <name> · gather · hide chrome · " +
-          "obsidian <note> · pdf <topic> · share <artifact> · handoff <agent> · status · summary",
+          "obsidian <note> · pdf <topic> · share <artifact> · handoff <agent> · parallel N <cli> <task> · status · summary",
       );
       return;
     }
