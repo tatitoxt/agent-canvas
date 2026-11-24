@@ -281,6 +281,35 @@ fn delete_board(
 }
 
 #[tauri::command]
+fn session_digest(app: AppHandle, state: State<'_, CanvasState>) -> Result<(), String> {
+    let rows = state.store.agents_snapshot().map_err(|e| e.to_string())?;
+    let mut md = String::from("# Session digest\n\n");
+    for (id, name, command, _wt, status, _ws, _perm, _bd, acct) in &rows {
+        md.push_str(&format!("## {name} (`{command}`) — {status}"));
+        if let Some(l) = acct {
+            md.push_str(&format!(" · @{l}"));
+        }
+        md.push_str("\n");
+        let tail = state
+            .agents
+            .scrollback(id)
+            .map(|b| String::from_utf8_lossy(&b).to_string())
+            .unwrap_or_default();
+        let lines: Vec<String> = tail
+            .lines()
+            .filter_map(canvasd::agent::last_visible_line)
+            .filter(|l| !l.is_empty())
+            .collect();
+        for l in lines.iter().rev().take(6).rev() {
+            md.push_str(&format!("    {l}\n"));
+        }
+        md.push_str("\n");
+    }
+    emit_control(&app, &ServerMsg::SessionDigest { text: md });
+    Ok(())
+}
+
+#[tauri::command]
 fn memory_read(state: State<'_, CanvasState>, node_id: String) -> Result<String, String> {
     Ok(std::fs::read_to_string(memory_path(&state, &node_id)).unwrap_or_default())
 }
@@ -931,6 +960,7 @@ fn main() {
             delete_workspace,
             memory_read,
             memory_write,
+            session_digest,
             create_workspace,
             move_to_board,
             delegate,

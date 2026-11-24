@@ -42,6 +42,7 @@ export type ServerMsg =
   | { type: "account_created"; account_id: string; cli: string; label: string }
   | { type: "account_deleted"; account_id: string }
   | { type: "memory"; node_id: string; text: string }
+  | { type: "session_digest"; text: string }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
   | { type: "result"; edge_id: string; summary: string; files?: number }
   | {
@@ -137,6 +138,10 @@ export class CanvasClient {
 
   spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string, accountId?: string) {
     this.send({ cmd: "spawn_agent", name, command, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null, board_id: boardId ?? null, account_id: accountId ?? null });
+  }
+
+  digest() {
+    this.send({ cmd: "digest" });
   }
 
   memoryRead(nodeId: string) {

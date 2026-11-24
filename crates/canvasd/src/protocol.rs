@@ -45,6 +45,8 @@ pub enum ClientMsg {
     RenameBoard { board_id: String, name: String },
     /// Delete a board — refused while it still holds nodes.
     DeleteBoard { board_id: String },
+    /// A digest of every agent: status, files touched, transcript tail.
+    Digest,
     /// Read a node's memory file — "main" is the board repo's memory,
     /// a workspace id reads that workspace's repo memory.
     MemoryRead { node_id: String },
@@ -219,6 +221,8 @@ pub enum ServerMsg {
     AccountDeleted { account_id: String },
     /// Memory file contents (MemoryRead answer).
     Memory { node_id: String, text: String },
+    /// Session digest markdown (Digest answer).
+    SessionDigest { text: String },
 }
 
 #[derive(Debug, Clone, Serialize)]

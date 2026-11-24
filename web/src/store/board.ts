@@ -58,6 +58,8 @@ type BoardState = {
   accounts: Record<string, { account_id: string; cli: string; label: string }>;
   /** node_id ("main" or a workspace id) → memory.md text. */
   memories: Record<string, string>;
+  /** Last "lose nothing" digest markdown, when requested. */
+  digest: string | null;
   /** Saved node positions — replayed from the daemon's layout table. */
   positions: Record<string, { x: number; y: number }>;
   /** Drop position for a delegation child, keyed by parent agent id —
@@ -95,6 +97,8 @@ type BoardState = {
   deleteAccount: (accountId: string) => void;
   memoryRead: (nodeId: string) => void;
   memoryWrite: (nodeId: string, text: string) => void;
+  digestNow: () => void;
+  closeDigest: () => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
   kill: (agentId: string) => void;
@@ -147,6 +151,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   workspaces: {},
   accounts: {},
   memories: {},
+  digest: null,
   positions: {},
   pendingPositions: {},
   approvals: {},
@@ -396,6 +401,9 @@ export const useBoard = create<BoardState>((set, get) => ({
             });
             break;
           }
+          case "session_digest":
+            set({ digest: msg.text });
+            break;
           case "memory": {
             set((st) => ({ memories: { ...st.memories, [msg.node_id]: msg.text } }));
             break;
@@ -465,6 +473,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   createAccount: (cli, label) => client?.createAccount(cli, label),
   deleteAccount: (accountId) => client?.deleteAccount(accountId),
   memoryRead: (nodeId) => client?.memoryRead(nodeId),
+  digestNow: () => client?.digest(),
+  closeDigest: () => set({ digest: null }),
   memoryWrite: (nodeId, text) => {
     client?.memoryWrite(nodeId, text);
     set((st) => ({ memories: { ...st.memories, [nodeId]: text } }));

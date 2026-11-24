@@ -112,6 +112,10 @@ export class TauriCanvasClient {
     );
   }
 
+  digest() {
+    void invoke("session_digest").catch(console.error);
+  }
+
   memoryRead(nodeId: string) {
     void invoke("memory_read", { nodeId })
       .then((text) =>

@@ -744,6 +744,33 @@ fn handle_client_msg(
                 }),
             }
         }
+        ClientMsg::Digest => {
+            let rows = state.store.agents_snapshot().unwrap_or_default();
+            let mut md = String::from("# Session digest\n\n");
+            for (id, name, command, _wt, status, _ws, _perm, _bd, acct) in &rows {
+                md.push_str(&format!("## {name} (`{command}`) — {status}"));
+                if let Some(l) = acct {
+                    md.push_str(&format!(" · @{l}"));
+                }
+                md.push_str("\n");
+                let tail = state
+                    .agents
+                    .scrollback(id)
+                    .map(|b| String::from_utf8_lossy(&b).to_string())
+                    .unwrap_or_default();
+                let lines: Vec<String> = tail
+                    .lines()
+                    .map(canvasd::agent::last_visible_line)
+                    .flatten()
+                    .filter(|l| !l.is_empty())
+                    .collect();
+                for l in lines.iter().rev().take(6).rev() {
+                    md.push_str(&format!("    {l}\n"));
+                }
+                md.push_str("\n");
+            }
+            send_control(ServerMsg::SessionDigest { text: md });
+        }
         ClientMsg::MemoryRead { node_id } => {
             let path = memory_path(state, &node_id);
             let text = std::fs::read_to_string(&path).unwrap_or_default();

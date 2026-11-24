@@ -25,6 +25,7 @@ import { InboxPanel } from "./components/InboxPanel";
 import { AutomationsPanel } from "./components/AutomationsPanel";
 import { AccountsPanel } from "./components/AccountsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
+import { DigestPanel } from "./components/DigestPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { CommandPalette } from "./components/CommandPalette";
 import { DelegationPanel } from "./components/DelegationPanel";
@@ -242,6 +243,25 @@ function Board() {
       <MissionStrip counts={counts} />
       <button
         className="glass-pill"
+        title="digest of every session (lose nothing)"
+        onClick={() => useBoard.getState().digestNow()}
+        style={{
+          position: "absolute",
+          right: 16,
+          bottom: 116,
+          zIndex: 20,
+          fontSize: 11,
+          fontWeight: 600,
+          padding: "6px 14px",
+          cursor: "pointer",
+          border: "none",
+          color: "var(--cv-ink)",
+        }}
+      >
+        ≡ digest
+      </button>
+      <button
+        className="glass-pill"
         title="export the canvas as PNG"
         onClick={() => void shotCanvas()}
         style={{
@@ -315,6 +335,7 @@ function Board() {
       {nav === "automations" && <AutomationsPanel />}
       {nav === "accounts" && <AccountsPanel />}
       {nav === "memory" && <MemoryPanel />}
+      <DigestPanel />
       {nav === "history" && (
         <HistoryPanel onOpenEdge={(id) => { setEdgeDetail(id); setNav("canvas"); }} />
       )}
