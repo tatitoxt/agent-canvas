@@ -44,7 +44,7 @@ fn emit_pty(app: &AppHandle, agent_id: &str, bytes: &[u8]) {
 
 /// Memory file for a node: the board repo's `.canvas/memory.md`, or the
 /// workspace's repo memory when node_id is a workspace.
-fn memory_path(state: &State<'_, CanvasState>, node_id: &str) -> PathBuf {
+fn memory_path(state: &CanvasState, node_id: &str) -> PathBuf {
     let repo = if node_id == "main" {
         state.repo_root.clone()
     } else {
@@ -64,7 +64,7 @@ fn memory_path(state: &State<'_, CanvasState>, node_id: &str) -> PathBuf {
 #[allow(clippy::too_many_arguments)]
 fn spawn_wired(
     app: &AppHandle,
-    state: &State<'_, CanvasState>,
+    state: &CanvasState,
     name: &str,
     command: &str,
     cwd: &str,
@@ -164,7 +164,7 @@ fn spawn_agent(
     account_id: Option<String>,
 ) -> Result<String, String> {
     let level = canvasd::protocol::normalize_permission(permission.as_deref());
-    let (id, board) = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref(), level, board_id.as_deref(), account_id.as_deref())?;
+    let (id, board) = spawn_wired(&app, state.inner(), &name, &command, &cwd, workspace_id.as_deref(), level, board_id.as_deref(), account_id.as_deref())?;
     emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board });
     Ok(id)
 }
@@ -502,12 +502,12 @@ fn session_digest(app: AppHandle, state: State<'_, CanvasState>) -> Result<(), S
 
 #[tauri::command]
 fn memory_read(state: State<'_, CanvasState>, node_id: String) -> Result<String, String> {
-    Ok(std::fs::read_to_string(memory_path(&state, &node_id)).unwrap_or_default())
+    Ok(std::fs::read_to_string(memory_path(state.inner(), &node_id)).unwrap_or_default())
 }
 
 #[tauri::command]
 fn memory_write(app: AppHandle, state: State<'_, CanvasState>, node_id: String, text: String) -> Result<(), String> {
-    let path = memory_path(&state, &node_id);
+    let path = memory_path(state.inner(), &node_id);
     if let Some(p) = path.parent() {
         let _ = std::fs::create_dir_all(p);
     }
@@ -581,7 +581,7 @@ fn delegate(
     // The child lands on the requested board, else its parent's
     // (orchestrator nodes aren't agents — they carry theirs over).
     let parent_board = board_id.or(state.store.agent_board(&from).ok().flatten());
-    let (id, board) = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref(), level, parent_board.as_deref(), account_id.as_deref())?;
+    let (id, board) = spawn_wired(&app, state.inner(), &name, &command, &cwd, workspace_id.as_deref(), level, parent_board.as_deref(), account_id.as_deref())?;
     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
     let _ = state.store.delegation_created(&edge_id, &from, &id, &task);
     state
@@ -660,7 +660,7 @@ fn create_loop(
     pattern: Option<String>,
 ) -> Result<String, String> {
     let trigger = match trigger.as_str() {
-        "idle" | "match" => trigger,
+        "idle" | "match" => trigger.as_str(),
         _ => "interval",
     };
     let interval = interval_secs.map(|v| v.clamp(30, 86_400));
@@ -1078,6 +1078,25 @@ fn snapshot(
         .map(|(account_id, cli, label)| canvasd::protocol::SnapshotAccount { account_id, cli, label })
         .collect();
     let layout = state.store.layout_map().unwrap_or_default();
+    let agent_names: std::collections::HashMap<String, String> = state
+        .store
+        .agents_snapshot()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|a| (a.0, a.1))
+        .collect();
+    let artifacts = state
+        .store
+        .artifacts_snapshot()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(artifact_id, board_id, agent_id, kind, title, path, text, created_at)| {
+            let agent_name = agent_id.as_ref().and_then(|a| agent_names.get(a).cloned());
+            canvasd::protocol::SnapshotArtifact {
+                artifact_id, board_id, agent_id, agent_name, kind, title, path, text, created_at,
+            }
+        })
+        .collect::<Vec<_>>();
     Ok(serde_json::json!({
         "type": "snapshot",
         "boards": boards,
@@ -1086,27 +1105,7 @@ fn snapshot(
         "delegations": delegations,
         "workspaces": workspaces,
         "layout": layout,
-        "artifacts": {
-            let names: std::collections::HashMap<String, String> = state
-                .store
-                .agents_snapshot()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|a| (a.0, a.1))
-                .collect();
-            state
-                .store
-                .artifacts_snapshot()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(artifact_id, board_id, agent_id, kind, title, path, text, created_at)| {
-                    let agent_name = agent_id.as_ref().and_then(|a| names.get(a).cloned());
-                    canvasd::protocol::SnapshotArtifact {
-                        artifact_id, board_id, agent_id, agent_name, kind, title, path, text, created_at,
-                    }
-                })
-                .collect::<Vec<_>>()
-        },
+        "artifacts": artifacts,
         "notes": state
             .store
             .all_notes()
