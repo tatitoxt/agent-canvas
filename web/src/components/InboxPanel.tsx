@@ -206,12 +206,29 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
           <>
             <div style={groupLabel}>needs you</div>
             {needsYou.map((a) => (
-              <button key={a.id} style={rowStyle} className="inbox-row" onClick={() => onOpenAgent(a.id)}>
-                <span style={{ fontSize: 12, fontWeight: 600 }}>{a.name}</span>
-                <span style={{ fontSize: 11, color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {a.lastLine ?? (a.status === "blocked" ? "blocked" : "waiting for input")}
-                </span>
-              </button>
+              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button style={{ ...rowStyle, flex: 1 }} className="inbox-row" onClick={() => onOpenAgent(a.id)}>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>{a.name}</span>
+                  <span style={{ fontSize: 11, color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {a.lastLine ?? (a.status === "blocked" ? "blocked" : "waiting for input")}
+                  </span>
+                </button>
+                {(["↵", "y", "n", "esc"] as const).map((k) => (
+                  <button
+                    key={k}
+                    className="glass-pill"
+                    title={`type ${k === "↵" ? "enter" : k === "esc" ? "escape" : `'${k}'`} into ${a.name}'s terminal`}
+                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", cursor: "pointer", border: "none", color: "var(--cv-ink-dim)", fontFamily: "ui-monospace, monospace", flexShrink: 0 }}
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      const seq = k === "↵" ? "\r" : k === "esc" ? "\x1b" : k;
+                      useBoard.getState().sendInput(a.id, new TextEncoder().encode(seq));
+                    }}
+                  >
+                    {k}
+                  </button>
+                ))}
+              </div>
             ))}
           </>
         )}
