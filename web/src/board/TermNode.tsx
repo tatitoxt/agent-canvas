@@ -7,6 +7,9 @@ import { CliMark } from "../components/CliMark";
 import { STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "./nodes";
 import type { AgentStatus } from "./types";
 
+// CSI + OSC escape sequences — good enough to copy a readable transcript.
+const ANSI = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[\[\]()#;?]*[0-9;]*[ -\/]*[@-~]/g;
+
 /** A live terminal popped out of the bottom drawer onto the canvas —
  * a real card: movable, resizable, collapsible, closable (Deska window). */
 export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
@@ -117,6 +120,31 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
           {meta.label}
         </span>
         <span style={{ flex: 1 }} />
+        <button
+          className="nodrag"
+          title="Copy transcript to clipboard"
+          onClick={() => {
+            const buf = useBoard.getState().ptyBuffer(agentId);
+            if (!buf) { useBoard.getState().notify("nothing to copy yet"); return; }
+            const text = new TextDecoder().decode(buf).replace(ANSI, "");
+            void navigator.clipboard?.writeText(text).catch(() => {});
+            useBoard.getState().notify("transcript copied");
+          }}
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: 6,
+            border: "none",
+            background: "transparent",
+            color: "var(--cv-ink-faint)",
+            fontSize: 12,
+            cursor: "pointer",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          ⧉
+        </button>
         <button
           className="nodrag"
           title={n.collapsed ? "Expand" : "Collapse"}
