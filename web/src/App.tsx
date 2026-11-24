@@ -380,6 +380,9 @@ function Board() {
         } else if (e.key === "1") {
           e.preventDefault();
           zoomTo(1, { duration: 300 });
+        } else if (e.key === "t") {
+          e.preventDefault();
+          useBoard.getState().requestTidy();
         }
       }
     };
