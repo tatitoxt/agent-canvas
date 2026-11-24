@@ -12,20 +12,12 @@ import { GitHubPanel } from "./GitHubPanel";
 import { NotesPanel } from "./NotesPanel";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { VaultPanel } from "./VaultPanel";
-import { CalendarPanel } from "./CalendarPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { SkillsPanel } from "./SkillsPanel";
 import { HistoryPanel } from "./HistoryPanel";
+import { PANEL_META, type PanelMeta } from "./panelMeta";
 
-export interface PanelDef {
-  title: string;
-  icon?: string;
-  img?: string;
-  /** default node size + where it first drops (flow-space offset hint) */
-  w: number;
-  h: number;
-  minW?: number;
-  minH?: number;
+export interface PanelDef extends PanelMeta {
   render: () => React.ReactNode;
 }
 
@@ -46,21 +38,20 @@ function HistoryNode() {
 /** Every tool panel, renderable inside a canvas node — Deska "Add to
  * board". The panel keeps its own UI; the node adds title bar + close. */
 export const PANEL_DEFS: Record<string, PanelDef> = {
-  inbox: { title: "Inbox", icon: "bell", w: 320, h: 440, render: () => <InboxNode /> },
-  automations: { title: "Automations", icon: "zap", w: 340, h: 440, render: () => <AutomationsPanel /> },
-  loops: { title: "Loops", icon: "loops", w: 320, h: 400, render: () => <LoopsPanel /> },
-  presets: { title: "Presets", icon: "presets", w: 320, h: 400, render: () => <PresetsPanel /> },
-  thread: { title: "Thread", icon: "thread", w: 340, h: 460, render: () => <ThreadPanel /> },
-  accounts: { title: "Accounts", icon: "accounts", w: 320, h: 400, render: () => <AccountsPanel /> },
-  usage: { title: "Juice", icon: "juice", w: 320, h: 400, render: () => <UsagePanel /> },
-  memory: { title: "Memory", icon: "memory", w: 320, h: 420, render: () => <MemoryPanel /> },
-  prs: { title: "Pull requests", icon: "github", w: 360, h: 440, render: () => <GitHubPanel kind="prs" /> },
-  issues: { title: "Issues", icon: "issue", w: 360, h: 440, render: () => <GitHubPanel kind="issues" /> },
-  notes: { title: "Dex Tickets", icon: "ticket", w: 320, h: 420, render: () => <NotesPanel /> },
-  artifacts: { title: "Artifacts", icon: "artifacts", w: 360, h: 440, render: () => <ArtifactsPanel /> },
-  vault: { title: "Obsidian", img: "/obsidian.svg", w: 460, h: 520, minW: 320, minH: 280, render: () => <VaultPanel /> },
-  calendar: { title: "Calendar", icon: "calendar", w: 340, h: 440, render: () => <CalendarPanel /> },
-  settings: { title: "Settings", icon: "settings", w: 360, h: 480, render: () => <SettingsPanel /> },
-  skills: { title: "Skills", icon: "skills", w: 340, h: 440, render: () => <SkillsPanel /> },
-  history: { title: "Tasks", icon: "tasks", w: 360, h: 440, render: () => <HistoryNode /> },
+  inbox: { ...PANEL_META.inbox, render: () => <InboxNode /> },
+  automations: { ...PANEL_META.automations, render: () => <AutomationsPanel /> },
+  loops: { ...PANEL_META.loops, render: () => <LoopsPanel /> },
+  presets: { ...PANEL_META.presets, render: () => <PresetsPanel /> },
+  thread: { ...PANEL_META.thread, render: () => <ThreadPanel /> },
+  accounts: { ...PANEL_META.accounts, render: () => <AccountsPanel /> },
+  usage: { ...PANEL_META.usage, render: () => <UsagePanel /> },
+  memory: { ...PANEL_META.memory, render: () => <MemoryPanel /> },
+  prs: { ...PANEL_META.prs, render: () => <GitHubPanel kind="prs" /> },
+  issues: { ...PANEL_META.issues, render: () => <GitHubPanel kind="issues" /> },
+  notes: { ...PANEL_META.notes, render: () => <NotesPanel /> },
+  artifacts: { ...PANEL_META.artifacts, render: () => <ArtifactsPanel /> },
+  vault: { ...PANEL_META.vault, render: () => <VaultPanel /> },
+  settings: { ...PANEL_META.settings, render: () => <SettingsPanel /> },
+  skills: { ...PANEL_META.skills, render: () => <SkillsPanel /> },
+  history: { ...PANEL_META.history, render: () => <HistoryNode /> },
 };

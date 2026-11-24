@@ -61,6 +61,7 @@ export interface ToolsMenuActions {
   onStudio: () => void;
   onDraw: () => void;
   onRegion: () => void;
+  onMission: () => void;
   drawOn: boolean;
   regionOn: boolean;
 }

@@ -55,20 +55,14 @@ export function SpawnBar() {
   const connected = useBoard((s) => s.connected);
   const connect = useBoard((s) => s.connect);
   const spawn = useBoard((s) => s.spawn);
-  const workspaces = useBoard((s) => s.workspaces);
-  const accounts = useBoard((s) => s.accounts);
   // The chooser has no permanent button — it opens from the
   // orchestrator's + or the rail's New Task.
   const open = useBoard((s) => s.spawnOpen);
   const setOpen = useBoard((s) => s.setSpawnOpen);
   const [choice, setChoice] = useState("claude");
   const [command, setCommand] = useState("");
-  const [wsId, setWsId] = useState("");
   const [permission, setPermission] = useState("supervised");
-  const [acctId, setAcctId] = useState("");
-  const [task, setTask] = useState("");
   const [count, setCount] = useState(1);
-  const acctOptions = Object.values(accounts).filter((a) => a.cli === choice);
   const wrap = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -182,55 +176,31 @@ export function SpawnBar() {
                   autoFocus
                 />
               )}
-              <select
-                style={{ ...inputStyle, cursor: "pointer", color: wsId ? "var(--cv-ink)" : "var(--cv-ink-dim)" }}
-                value={wsId}
-                onChange={(e) => setWsId(e.target.value)}
-                title="workspace"
-              >
-                <option value="">no workspace</option>
-                {Object.values(workspaces).map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }} title="permission level — what the agent may do without asking">
+                {(["supervised", "auto", "full"] as const).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPermission(p)}
+                    style={{
+                      flex: 1,
+                      height: 22,
+                      borderRadius: 7,
+                      border: `1px solid ${permission === p ? "var(--cv-accent)" : "var(--cv-glass-edge)"}`,
+                      background: permission === p ? "color-mix(in srgb, var(--cv-accent) 16%, transparent)" : "transparent",
+                      color: permission === p ? "var(--cv-accent)" : "var(--cv-ink-dim)",
+                      fontSize: 9.5,
+                      fontWeight: 650,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    {p}
+                  </button>
                 ))}
-              </select>
-              <select
-                style={{ ...inputStyle, cursor: "pointer", color: permission === "supervised" ? "var(--cv-ink-dim)" : "var(--cv-accent)" }}
-                value={permission}
-                onChange={(e) => setPermission(e.target.value)}
-                title="permission level — what the agent may do without asking"
-              >
-                <option value="supervised">supervised</option>
-                <option value="auto_accept">auto-accept edits</option>
-                <option value="auto">auto</option>
-                <option value="full">full access</option>
-              </select>
-              {acctOptions.length > 0 && (
-                <select
-                  style={{ ...inputStyle, cursor: "pointer", color: acctId ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}
-                  value={acctId}
-                  onChange={(e) => setAcctId(e.target.value)}
-                  title="which sign-in this agent uses — two accounts of the same CLI can run side by side"
-                >
-                  <option value="">default account</option>
-                  {acctOptions.map((a) => (
-                    <option key={a.account_id} value={a.account_id}>
-                      @{a.label}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <input
-                style={inputStyle}
-                placeholder="initial task (optional) — typed in after boot"
-                value={task}
-                onChange={(e) => setTask(e.target.value)}
-                title="Quick request — typed into the terminal a few seconds after the CLI starts"
-              />
+              </div>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ fontSize: 10, color: "var(--cv-ink-dim)", flex: 1 }} title="parallel tasks — each worker runs the same prompt in its own git worktree">
-                  parallel workers · own worktree each
+                <span style={{ fontSize: 10, color: "var(--cv-ink-dim)", flex: 1 }} title="parallel workers — each runs in its own git worktree">
+                  workers · own worktree each
                 </span>
                 {[1, 2, 3, 4].map((n) => (
                   <button
@@ -270,21 +240,18 @@ export function SpawnBar() {
                 disabled={!canSpawn}
                 onClick={() => {
                   const cmd = choice === "custom" ? command.trim() : choice;
-                  const t = task.trim();
                   for (let i = 0; i < count; i++) {
-                    const brief = count > 1 && t
-                      ? `You are worker ${i + 1} of ${count} on a parallel task — each worker has its own worktree, work independently.\n\n${t}`
-                      : t || undefined;
                     spawn(
                       count > 1 ? `${cmd}-p${i + 1}` : cmd,
                       cmd,
-                      wsId || undefined,
+                      undefined,
                       permission,
-                      acctId || undefined,
-                      brief,
+                      undefined,
+                      count > 1
+                        ? `You are worker ${i + 1} of ${count} on a parallel task — each worker has its own worktree, work independently.`
+                        : undefined,
                     );
                   }
-                  setTask("");
                   setCount(1);
                   setOpen(false);
                 }}

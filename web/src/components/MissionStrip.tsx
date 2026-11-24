@@ -1,8 +1,12 @@
-import { useState } from "react";
 import type { AgentStatus } from "../board/types";
 import { useBoard } from "../store/board";
 
-type Props = { counts: Record<AgentStatus, number> };
+type Props = {
+  counts: Record<AgentStatus, number>;
+  /** Controlled open state — the topbar map button drives it. */
+  open: boolean;
+  onToggle: () => void;
+};
 
 const ITEMS: { key: AgentStatus; label: string; color: string }[] = [
   { key: "working", label: "working", color: "var(--cv-working)" },
@@ -14,12 +18,12 @@ const ITEMS: { key: AgentStatus; label: string; color: string }[] = [
 /** Quiet top-center status strip — clicking it unfolds into the mission
  * map: every agent on the board grouped by who is working / resting /
  * needs you, with the last thing each was doing. */
-export function MissionStrip({ counts }: Props) {
+export function MissionStrip({ counts, open, onToggle }: Props) {
   const connected = useBoard((s) => s.connected);
   const agents = useBoard((s) => s.agents);
   const activeBoard = useBoard((s) => s.activeBoard);
   const attention = useBoard((s) => s.attention);
-  const [open, setOpen] = useState(false);
+  const setOpen = onToggle;
 
   const grouped = (st: AgentStatus | "blocked") =>
     Object.values(agents).filter(
@@ -43,7 +47,7 @@ export function MissionStrip({ counts }: Props) {
       className="glass-pill"
       style={{
         position: "absolute",
-        top: 14,
+        top: 56,
         left: "50%",
         transform: "translateX(-50%)",
         zIndex: 15,
@@ -53,7 +57,7 @@ export function MissionStrip({ counts }: Props) {
         padding: "8px 18px",
         cursor: "pointer",
       }}
-      onClick={() => setOpen((o) => !o)}
+      onClick={() => setOpen()}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
         <span style={{ fontSize: 12, fontWeight: 650, letterSpacing: 0.3, marginRight: 2 }}>

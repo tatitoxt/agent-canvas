@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { CanvasClient, type ServerMsg } from "../daemon/client";
 import { isTauri, TauriCanvasClient } from "../daemon/tauriClient";
 import type { AgentStatus } from "../board/types";
+import { PANEL_META } from "../components/panelMeta";
 
 export type LiveAgent = {
   id: string;
@@ -1122,7 +1123,8 @@ export const useBoard = create<BoardState>((set, get) => ({
     const id = `panel-${panel}`;
     const existing = get().panelNodes[board]?.[id];
     if (existing) { get().requestFocus(id); return; }
-    const def = size ?? { w: 320, h: 420 };
+    const meta = PANEL_META[panel];
+    const def = size ?? { w: meta?.w ?? 340, h: meta?.h ?? 440 };
     const m = { ...(get().panelNodes[board] ?? {}), [id]: { panel, x: pos?.x ?? 380 + Math.random() * 120, y: pos?.y ?? 140 + Math.random() * 80, ...def } };
     const next = { ...get().panelNodes, [board]: m };
     localStorage.setItem("cv-panelnodes", JSON.stringify(next));
@@ -1784,7 +1786,6 @@ export const useBoard = create<BoardState>((set, get) => ({
       "dex tickets": "notes", tickets: "notes", ticket: "notes", notes: "notes",
       artifacts: "artifacts", artifact: "artifacts",
       obsidian: "vault", vault: "vault", files: "vault",
-      calendar: "calendar",
       settings: "settings", setting: "settings",
       skills: "skills", skill: "skills",
       tasks: "history", history: "history",

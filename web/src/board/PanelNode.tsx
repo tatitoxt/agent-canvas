@@ -80,8 +80,10 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
           title="Dock to the right edge of the view"
           onClick={() => {
             const { screenToFlowPosition } = rf;
-            const p = screenToFlowPosition({ x: window.innerWidth - (n.w + 20), y: 20 });
-            useBoard.getState().movePanelNode(id, p.x, p.y);
+            // Flow-space right edge of the view; the card's left edge is that
+            // minus its own (flow-unit) width — zoom-independent.
+            const edge = screenToFlowPosition({ x: window.innerWidth - 16, y: 84 });
+            useBoard.getState().movePanelNode(id, edge.x - n.w, edge.y);
           }}
           style={{
             width: 20,

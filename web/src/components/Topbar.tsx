@@ -52,6 +52,19 @@ const sectionLabel: React.CSSProperties = {
   padding: "8px 10px 3px",
 };
 
+const miniInput: React.CSSProperties = {
+  background: "var(--cv-glass-hi)",
+  border: "1px solid var(--cv-glass-edge)",
+  borderRadius: 8,
+  height: 24,
+  padding: "0 8px",
+  fontSize: 10.5,
+  color: "var(--cv-ink)",
+  outline: "none",
+  width: "100%",
+  fontFamily: "inherit",
+};
+
 /** Deska-style topbar. Left: machine (This Mac / cloud / phone), workspaces,
  * worktrees, tasks. Right, icon-only: mission map, search, automations,
  * notifications, tools, settings. Everything iconified with tooltips. */
@@ -81,6 +94,8 @@ export function Topbar({
   const openAgents = liveAgents.filter((a) => (a.board_id ?? "main") === activeBoard);
 
   const [menu, setMenu] = useState<"machine" | "ws" | "wt" | "tasks" | "usage" | "panels" | null>(null);
+  const [wsName, setWsName] = useState("");
+  const [wsRepo, setWsRepo] = useState("");
   const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -193,10 +208,20 @@ export function Topbar({
             <>
               <div style={sectionLabel}>Workspaces</div>
               {wsList.length === 0 &&
-                row("ws", "no workspaces", "create one from Tools → New workspace")}
+                row("ws", "no workspaces", "add one below")}
               {wsList.map((w) =>
                 row("ws", w.name, w.repo ?? "", () => useBoard.getState().requestFocus(w.id)),
               )}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "6px 4px 2px", borderTop: "1px solid var(--cv-glass-edge)" }}>
+                <input style={miniInput} placeholder="+ workspace name" value={wsName} onChange={(e) => setWsName(e.target.value)} />
+                <input style={miniInput} placeholder="repo path (~/repos/my-app)" value={wsRepo} onChange={(e) => setWsRepo(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && wsName.trim() && wsRepo.trim()) {
+                      useBoard.getState().createWorkspace(wsName.trim(), wsRepo.trim());
+                      setWsName(""); setWsRepo(""); setMenu(null);
+                    }
+                  }} />
+              </div>
             </>
           ))}
         </div>
@@ -218,8 +243,13 @@ export function Topbar({
               {Object.values(agents)
                 .filter((a) => a.worktree && a.status !== "exited")
                 .map((a) =>
-                  row("worktree", a.name, `${a.branch ?? ""} · ${a.worktree}`, undefined),
+                  row("worktree", a.name, `${a.branch ?? ""} · ${a.worktree}`, () =>
+                    useBoard.getState().requestFocus(a.id)),
                 )}
+              {row("worktree", "＋ spawn an agent", "opens the spawn chooser — pick a workspace-backed CLI", () => {
+                setMenu(null);
+                useBoard.getState().focusSpawn();
+              })}
             </>
           ))}
         </div>
@@ -245,6 +275,10 @@ export function Topbar({
                   return row("tasks", `${to?.name ?? e.to} · ${e.task.slice(0, 28)}`, "click to focus the agent", () =>
                     useBoard.getState().requestFocus(e.to));
                 })}
+              {row("tasks", "＋ new task", "opens the spawn chooser", () => {
+                setMenu(null);
+                useBoard.getState().focusSpawn();
+              })}
               {row("tasks", "Open task history", "all delegated runs", () => onNav("history"))}
             </>
           ))}
@@ -403,8 +437,8 @@ export function Topbar({
         <button
           className="glass-pill"
           style={{ ...iconBtn(false), background: "transparent", border: "none" }}
-          title="Mission Map — fit the whole board in view"
-          onClick={() => useBoard.getState().requestView()}
+          title="Mission Map — who's working, waiting and done"
+          onClick={tools.onMission}
         >
           <Icon name="map" size={15} color="var(--cv-ink-dim)" />
         </button>

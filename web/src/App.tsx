@@ -39,6 +39,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { DelegationPanel } from "./components/DelegationPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { Topbar } from "./components/Topbar";
+import { MissionStrip } from "./components/MissionStrip";
 import { ContextMenu } from "./components/ContextMenu";
 import { CardMenu } from "./components/CardMenu";
 import { isTauri } from "./daemon/tauriClient";
@@ -295,6 +296,17 @@ function Board() {
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
   const [mmSize, setMmSize] = useState({ w: 148, h: 96 });
   const [sel, setSel] = useState<Array<{ id: string; x: number; y: number; w: number; h: number }>>([]);
+  const [missionOpen, setMissionOpen] = useState(false);
+  const missionCounts = useMemo(() => {
+    const c: Record<string, number> = { working: 0, waiting: 0, blocked: 0, done: 0 };
+    for (const a of Object.values(agents)) {
+      if ((a.board_id ?? "main") !== activeBoard) continue;
+      if (attention[a.id]) c.blocked++;
+      else if (a.status === "exited") c.done++;
+      else if (a.status === "working" || a.status === "waiting" || a.status === "blocked") c[a.status]++;
+    }
+    return c;
+  }, [agents, activeBoard, attention]);
   const selRef = useRef(sel);
   selRef.current = sel;
   // Region shot: marquee-select part of the canvas → PNG of just that area.
@@ -723,9 +735,15 @@ function Board() {
               onStudio: () => useBoard.getState().studioDocNow(),
               onDraw: () => setPencil((m) => !m),
               onRegion: () => setShotMode((m) => !m),
+              onMission: () => setMissionOpen((o) => !o),
               drawOn: pencil,
               regionOn: shotMode,
             }}
+          />
+          <MissionStrip
+            counts={missionCounts}
+            open={missionOpen}
+            onToggle={() => setMissionOpen((o) => !o)}
           />
         </>
       )}
@@ -931,29 +949,6 @@ function Board() {
         <ViewportTracker />
         <AnchorCables nav={nav} />
       </ReactFlow>
-      {Object.keys(agents).length === 0 &&
-        Object.keys(shapes[activeBoard ?? "main"] ?? {}).length === 0 &&
-        Object.keys(orchestrators).length === 0 && (
-          <div
-            className="glass"
-            style={{
-              position: "absolute",
-              left: "50%",
-              top: "42%",
-              transform: "translate(-50%, -50%)",
-              padding: "18px 26px",
-              fontSize: 12.5,
-              color: "var(--cv-ink-dim)",
-              textAlign: "center",
-              lineHeight: 1.7,
-              zIndex: 5,
-              pointerEvents: "none",
-            }}
-          >
-            <div style={{ fontSize: 14, fontWeight: 650, color: "var(--cv-ink)" }}>empty board</div>
-            spawn an orchestrator or a terminal below — drag from an agent's edge handle to delegate work
-          </div>
-        )}
       {connected === false && null}
       <DigestPanel />
       <StudioPanel />

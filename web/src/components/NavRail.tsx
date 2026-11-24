@@ -329,7 +329,6 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
     ] as const : []),
     { icon: "ticket", label: "Dex Tickets", hint: "notes and tasks on the board", onClick: () => onSelect("notes"), key: "notes", fact: noteCount ? `${noteCount}` : undefined },
     { icon: "artifacts", label: "Artifacts", hint: "shots, docs and files the agents produced", onClick: () => onSelect("artifacts"), key: "artifacts", fact: artifactCount ? `${artifactCount}` : undefined },
-    { icon: "calendar", label: "Calendar", hint: "daily notes + due dates from your vault", onClick: () => onSelect("calendar"), key: "calendar" },
     { icon: "loops", label: "Loops", hint: "recurring instructions per agent", onClick: () => onSelect("loops"), key: "loops", fact: loopCount ? `${loopCount} active` : undefined },
   ];
 
@@ -548,13 +547,6 @@ export function RightRail() {
           <Icon name="zoom" size={11} />
         </button>
         <button
-          title="Gather loose windows into a group"
-          onClick={() => useBoard.getState().gatherLoose()}
-          style={tinyBtn(false)}
-        >
-          <Icon name="gather" size={11} />
-        </button>
-        <button
           title="Hide panels and menus — chrome away, canvas only"
           onClick={() => useBoard.getState().toggleChrome()}
           style={tinyBtn(false)}
@@ -665,13 +657,7 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
           >
             <Icon name="code" size={16} />
           </button>
-          <button
-            title="New orchestrator — spawn a board commander"
-            onClick={() => useBoard.getState().spawnOrchestrator()}
-            style={{ ...btn(false), borderRadius: 999 }}
-          >
-            <Icon name="orchestrator" size={16} />
-          </button>
+
         </nav>
       </div>
 
