@@ -834,6 +834,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   notify: (text) => set({ notice: text }),
   vaultList: (dir) => {
     set({ vaultDir: dir });
+    try { localStorage.setItem("cv-vault-dir", dir); } catch { /* noop */ }
     client?.vaultList(dir);
   },
   vaultRead: (path) => client?.vaultRead(get().vaultDir, path),

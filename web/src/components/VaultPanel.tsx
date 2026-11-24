@@ -440,6 +440,14 @@ export function VaultPanel() {
       return next;
     });
   };
+  // Your vault, always mounted: reopen the last vault dir automatically.
+  useEffect(() => {
+    if (vaultDir) return;
+    let saved: string | null = null;
+    try { saved = localStorage.getItem("cv-vault-dir"); } catch { saved = null; }
+    if (saved) vaultList(saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vaultDir]);
   const dragStart = (ev: React.MouseEvent) => {
     ev.preventDefault();
     const startX = ev.clientX, startW = panelW;
