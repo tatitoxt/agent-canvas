@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useBoard } from "../store/board";
+import { CliMark } from "./CliMark";
+import { cliMeta } from "../board/nodes";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--cv-glass-hi)",
@@ -124,19 +126,53 @@ export function SpawnBar() {
           ) : (
             <>
               <div style={sectionLabel}>Spawn an agent</div>
-              <select
-                style={{ ...inputStyle, cursor: "pointer" }}
-                value={choice}
-                onChange={(e) => setChoice(e.target.value)}
-                title="agent CLI"
-                autoFocus
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 4,
+                  maxHeight: 168,
+                  overflowY: "auto",
+                  paddingRight: 2,
+                }}
               >
-                {AGENT_CHOICES.map((c) => (
-                  <option key={c.cmd} value={c.cmd}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+                {AGENT_CHOICES.map((c) => {
+                  const on = choice === c.cmd;
+                  const color = c.cmd === "custom" ? "var(--cv-ink-dim)" : cliMeta(c.cmd).color;
+                  return (
+                    <button
+                      key={c.cmd}
+                      title={`${c.label}${on ? " — selected" : ""}`}
+                      onClick={() => setChoice(c.cmd)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 7,
+                        height: 26,
+                        padding: "0 8px",
+                        borderRadius: 8,
+                        border: `1px solid ${on ? "var(--cv-accent)" : "var(--cv-glass-edge)"}`,
+                        background: on ? "color-mix(in srgb, var(--cv-accent) 16%, transparent)" : "var(--cv-glass-hi)",
+                        color: on ? "var(--cv-ink)" : "var(--cv-ink-dim)",
+                        fontSize: 10.5,
+                        fontWeight: on ? 650 : 500,
+                        cursor: "pointer",
+                        textAlign: "left",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      {c.cmd === "custom" ? (
+                        <span style={{ width: 13, textAlign: "center", fontSize: 12 }}>+</span>
+                      ) : (
+                        <CliMark cli={c.cmd} color={color} size={13} />
+                      )}
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {c.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
               {choice === "custom" && (
                 <input
                   style={inputStyle}

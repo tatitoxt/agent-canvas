@@ -1,20 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBoard } from "../store/board";
+import { CliMark } from "./CliMark";
+import { cliMeta } from "../board/nodes";
 
 type Action = {
   id: string;
   group: string;
   label: string;
   hint?: string;
+  cli?: string;
   run: () => void;
 };
 
 const CLI_SPAWNS: Array<[string, string]> = [
-  ["claude", "◆ Claude Code"],
-  ["codex", "◈ Codex"],
-  ["gemini", "✦ Gemini CLI"],
-  ["aider", "▣ Aider"],
-  ["bash", "›_ Terminal"],
+  ["claude", "Claude Code"],
+  ["codex", "Codex"],
+  ["gemini", "Gemini CLI"],
+  ["aider", "Aider"],
+  ["cursor-agent", "Cursor"],
+  ["opencode", "OpenCode"],
+  ["amp", "Amp"],
+  ["droid", "Droid"],
+  ["goose", "Goose"],
+  ["kilocode", "Kilocode"],
+  ["qwen", "Qwen Code"],
+  ["hermes", "Hermes"],
+  ["kimi", "Kimi Code"],
+  ["vibe", "Mistral Vibe"],
+  ["pi", "Pi"],
+  ["antigravity", "Antigravity"],
+  ["bash", "Terminal"],
 ];
 
 /** ⌘K command launcher — every board action reachable from the keyboard. */
@@ -48,6 +63,7 @@ export function CommandPalette({
         id: `spawn-${cmd}`,
         group: "spawn",
         label: `spawn agent — ${label}`,
+        cli: cmd,
         run: () => s.spawn(`agent-${Date.now() % 1000}`, cmd),
       });
     }
@@ -223,10 +239,14 @@ export function CommandPalette({
                 fontFamily: "inherit",
               }}
             >
-              <span>
-                <span style={{ color: "var(--cv-ink-faint)", fontSize: 10, textTransform: "uppercase", letterSpacing: 0.6, marginRight: 8 }}>
+              <span style={{ display: "flex", alignItems: "center" }}>
+                <span style={{ color: "var(--cv-ink-faint)", fontSize: 10, textTransform: "uppercase", letterSpacing: 0.6, marginRight: 8, width: 46, flex: "none" }}>
                   {a.group}
                 </span>
+                {a.cli && (
+                  <CliMark cli={a.cli} color={cliMeta(a.cli).color} size={14} />
+                )}
+                {a.cli && <span style={{ width: 6 }} />}
                 {a.label}
               </span>
               {a.hint && <span style={{ fontSize: 10.5, color: "var(--cv-ink-faint)" }}>{a.hint}</span>}

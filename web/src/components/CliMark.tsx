@@ -20,9 +20,30 @@ const REAL_PATHS: Record<string, string[]> = {
 
 import hermesSvgUrl from "../assets/hermes.svg";
 
+/** Raster/vector brand marks fetched from the vendors themselves
+ * (GitHub org avatars, official favicons) — files in web/public/logos/. */
+const LOGO_FILES: Record<string, string> = {
+  aider: "/logos/aider.png",
+  kilocode: "/logos/kilocode.png",
+  droid: "/logos/droid.png",
+  goose: "/logos/goose.jpg",
+  antigravity: "/logos/antigravity.svg",
+  vibe: "/logos/mistral.png",
+};
+
 export function CliMark({ cli, color, size = 12 }: { cli: string; color: string; size?: number }) {
   const s = { width: size, height: size, flex: "none" as const, display: "inline-block" };
   const key = cli.toLowerCase();
+  const file = LOGO_FILES[key];
+  if (file) {
+    return (
+      <img
+        src={file}
+        alt={cli}
+        style={{ ...s, objectFit: "contain", borderRadius: size > 14 ? 4 : 2 }}
+      />
+    );
+  }
   // Official Hermes Agent mark (Nous Research "nous-girl" art, brand kit
   // SVG — too detailed to inline). Used as a mask so it picks up the
   // CLI's brand color like every other mark.
