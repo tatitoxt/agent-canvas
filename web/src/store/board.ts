@@ -563,6 +563,19 @@ export const useBoard = create<BoardState>((set, get) => ({
               boards: { ...get().boards, [msg.board_id]: msg.name },
             });
             break;
+          case "node_renamed": {
+            const a = get().agents[msg.node_id];
+            const w = get().workspaces[msg.node_id];
+            if (a) {
+              set({ agents: { ...get().agents, [msg.node_id]: { ...a, name: msg.name } } });
+            } else if (w) {
+              set({ workspaces: { ...get().workspaces, [msg.node_id]: { ...w, name: msg.name } } });
+            }
+            break;
+          }
+          case "board_renamed":
+            set({ boards: { ...get().boards, [msg.board_id]: msg.name } });
+            break;
           case "board_moved": {
             const a = get().agents[msg.node_id];
             const w = get().workspaces[msg.node_id];
