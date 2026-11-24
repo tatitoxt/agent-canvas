@@ -183,6 +183,39 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
   embedAssetFetch?: (path: string) => void;
 }) {
   const lines = text.split("\n");
+  // Heading folding (Obsidian): chevron on each heading collapses the body
+  // until the next same-or-higher-level heading.
+  const [folded, setFolded] = useState<Set<number>>(() => new Set());
+  const { hidden } = useMemo(() => {
+    const heads: [number, number][] = [];
+    let code = false;
+    lines.forEach((l, i) => {
+      if (/^\s*```/.test(l)) { code = !code; return; }
+      if (code) return;
+      const m = l.match(/^(#{1,6})\s/);
+      if (m) heads.push([i, m[1].length]);
+    });
+    const folds = new Map<number, number>();
+    heads.forEach(([i, lvl], j) => {
+      let end = lines.length;
+      for (let k = j + 1; k < heads.length; k++) {
+        if (heads[k][1] <= lvl) { end = heads[k][0]; break; }
+      }
+      folds.set(i, end);
+    });
+    const hidden = new Set<number>();
+    folded.forEach((f) => {
+      const end = folds.get(f) ?? lines.length;
+      for (let i = f + 1; i < end; i++) hidden.add(i);
+    });
+    return { folds, hidden };
+  }, [text, folded]);
+  const toggleFold = (i: number) =>
+    setFolded((s) => {
+      const n = new Set(s);
+      if (n.has(i)) n.delete(i); else n.add(i);
+      return n;
+    });
   // YAML frontmatter (--- ... ---): Obsidian renders it as a "Properties"
   // table at the top of the note instead of raw YAML.
   let start = 0;
@@ -229,6 +262,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
   }
   let inCode = false, codeBuf: string[] = [];
   for (let i = start; i < lines.length; i++) {
+    if (hidden.has(i)) continue;
     const l = lines[i];
     if (/^\s*```/.test(l)) {
       if (inCode) {
@@ -260,8 +294,16 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
     const h = l.match(/^(#{1,6})\s+(.*)/);
     if (h) {
       const size = [19, 16, 14, 12.5, 11.5, 11][h[1].length - 1];
+      const isFolded = folded.has(i);
       els.push(
         <div key={i} id={`vh-${i}`} style={{ fontSize: size, fontWeight: 700, margin: "16px 0 6px", color: "var(--cv-accent)", letterSpacing: 0.2 }}>
+          <span
+            onClick={() => toggleFold(i)}
+            title={isFolded ? "unfold" : "fold"}
+            style={{ cursor: "pointer", marginRight: 6, fontSize: "0.75em", opacity: isFolded ? 0.9 : 0.35, userSelect: "none" }}
+          >
+            {isFolded ? "\u25B8" : "\u25BE"}
+          </span>
           {mdInline(h[2], onLink, onTag)}
         </div>,
       );
