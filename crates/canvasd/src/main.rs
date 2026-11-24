@@ -231,10 +231,12 @@ async fn ws_handler(
     Query(q): Query<WsQuery>,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
-    if q.token != state.token {
+    if !token_eq(&q.token, &state.token) {
         return (StatusCode::UNAUTHORIZED, "invalid session token").into_response();
     }
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+    ws.max_message_size(8 * 1024 * 1024)
+        .max_frame_size(2 * 1024 * 1024)
+        .on_upgrade(move |socket| handle_socket(socket, state))
 }
 
 async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
@@ -804,6 +806,11 @@ fn handle_client_msg(
                         {
                             continue;
                         }
+                        // Never follow symlinks — a vault must not escape
+                        // itself through a linked dir.
+                        if e.file_type().map(|t| t.is_symlink()).unwrap_or(true) {
+                            continue;
+                        }
                         if p.is_dir() && stack.len() + entries.len() < 5000 {
                             stack.push(p);
                         } else if name.ends_with(".md") {
@@ -1121,13 +1128,21 @@ async fn auth_middleware(
     let ok = headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
-        .map(|v| v == format!("Bearer {}", state.token))
+        .map(|v| token_eq(&v, &format!("Bearer {}", state.token)))
         .unwrap_or(false);
     if ok {
         next.run(req).await
     } else {
         (StatusCode::UNAUTHORIZED, "invalid session token").into_response()
     }
+}
+
+/// Constant-time token compare — avoids early-exit leaks on the auth path.
+fn token_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 fn generate_token() -> String {

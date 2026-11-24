@@ -346,6 +346,9 @@ fn vault_list(app: AppHandle, dir: String) -> Result<(), String> {
                 {
                     continue;
                 }
+                if e.file_type().map(|t| t.is_symlink()).unwrap_or(true) {
+                    continue;
+                }
                 if p.is_dir() && stack.len() + entries.len() < 5000 {
                     stack.push(p);
                 } else if name.ends_with(".md") {
