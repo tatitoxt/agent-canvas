@@ -960,6 +960,7 @@ function Board() {
           y={menu.y}
           nodeId={menu.id}
           isAgent={!!agents[menu.id]}
+          multi={sel.map((s) => s.id).filter((id) => !!agents[id])}
           onOpenTerminal={() => {
             const a = agents[menu.id];
             if (a) openTerm({ id: a.id, name: a.name });
@@ -967,6 +968,7 @@ function Board() {
           onClose={() => setMenu(null)}
         />
       )}
+
       {edgeDetail && liveEdges[edgeDetail] && (
         <DelegationPanel
           edgeId={edgeDetail}

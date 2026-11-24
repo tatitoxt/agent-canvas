@@ -10,6 +10,7 @@ export function ContextMenu({
   y,
   nodeId,
   isAgent,
+  multi = [],
   onOpenTerminal,
   onClose,
 }: {
@@ -17,6 +18,9 @@ export function ContextMenu({
   y: number;
   nodeId: string;
   isAgent: boolean;
+  /** Selected agent ids — when the right-clicked card is part of a
+   * multi-select, board moves apply to the whole selection. */
+  multi?: string[];
   onOpenTerminal: () => void;
   onClose: () => void;
 }) {
@@ -156,9 +160,13 @@ export function ContextMenu({
                   ...item,
                   color: id === current ? "var(--cv-accent)" : "var(--cv-ink)",
                 }}
-                onClick={() => { moveToBoard(nodeId, id); onClose(); }}
+                onClick={() => {
+                  const targets = multi.includes(nodeId) ? multi : [nodeId];
+                  for (const t of targets) moveToBoard(t, id);
+                  onClose();
+                }}
               >
-                {id === current ? "✓ " : ""}{name}
+                {id === current ? "✓ " : ""}{name}{multi.includes(nodeId) && multi.length > 1 ? ` (${multi.length})` : ""}
               </button>
             ))}
           </div>
