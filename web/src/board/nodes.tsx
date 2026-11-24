@@ -547,22 +547,41 @@ export function OrchestratorNode({
         >
           orchestrator
         </div>
-        <button
-          className="nodrag"
-          onClick={() => setWiring(wiring ? null : orchId)}
-          title="Pick agent consoles on the canvas to wire them here"
-          style={{
-            background: wiring ? "rgba(201,162,107,0.16)" : "none",
-            border: "1px solid var(--cv-accent-dim)",
-            borderRadius: 11,
-            color: wiring ? "var(--cv-accent)" : "var(--cv-ink-dim)",
-            fontSize: 10,
-            padding: "2px 9px",
-            cursor: "pointer",
-          }}
-        >
-          {wiring ? "done" : "⚡ connect"}
-        </button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button
+            className="nodrag"
+            onClick={() => useBoard.getState().setSpawnOpen(true)}
+            title="Spawn — pick a CLI agent to run on the canvas"
+            style={{
+              background: "var(--cv-accent)",
+              border: "none",
+              borderRadius: 11,
+              color: "#14110d",
+              fontSize: 11,
+              fontWeight: 700,
+              padding: "2px 9px",
+              cursor: "pointer",
+            }}
+          >
+            + spawn
+          </button>
+          <button
+            className="nodrag"
+            onClick={() => setWiring(wiring ? null : orchId)}
+            title="Pick agent consoles on the canvas to wire them here"
+            style={{
+              background: wiring ? "rgba(201,162,107,0.16)" : "none",
+              border: "1px solid var(--cv-accent-dim)",
+              borderRadius: 11,
+              color: wiring ? "var(--cv-accent)" : "var(--cv-ink-dim)",
+              fontSize: 10,
+              padding: "2px 9px",
+              cursor: "pointer",
+            }}
+          >
+            {wiring ? "done" : "⚡ connect"}
+          </button>
+        </div>
       </div>
       <div style={{ fontSize: 16, fontWeight: 650, marginTop: 4 }}>
         {data.name}

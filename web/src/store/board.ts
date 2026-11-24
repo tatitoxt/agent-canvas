@@ -172,8 +172,10 @@ type BoardState = {
    * inline mini-terminal preview for a quieter board. */
   panelSummaries: boolean;
   togglePanelSummaries: () => void;
-  /** Bump counter that focuses the spawn bar's agent picker (New Task). */
-  spawnFocusN: number;
+  /** Whether the spawn chooser is open (summoned by the orchestrator's
+   * + or the rail's New Task — there is no permanent spawn button). */
+  spawnOpen: boolean;
+  setSpawnOpen: (v: boolean) => void;
   focusSpawn: () => void;
   /** Deska's "Gather loose windows into groups" — pulls every unwired,
    * unparented agent card into a tight grid and reframes the view. */
@@ -1006,8 +1008,9 @@ export const useBoard = create<BoardState>((set, get) => ({
   requestNav: (key) => set((s) => ({ navRequest: { key, n: (s.navRequest?.n ?? 0) + 1 } })),
   panelSummaries: true,
   togglePanelSummaries: () => set((s) => ({ panelSummaries: !s.panelSummaries })),
-  spawnFocusN: 0,
-  focusSpawn: () => set((s) => ({ spawnFocusN: s.spawnFocusN + 1 })),
+  spawnOpen: false,
+  setSpawnOpen: (v) => set({ spawnOpen: v }),
+  focusSpawn: () => set({ spawnOpen: true }),
   gatherLoose: () => {
     const { agents, edges, positions, activeBoard } = get();
     const wired = new Set(Object.values(edges).flatMap((e) => [e.from, e.to]));

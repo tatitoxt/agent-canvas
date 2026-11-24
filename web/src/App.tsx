@@ -18,7 +18,7 @@ import { MdNode } from "./components/MdNode";
 import { DelegationEdge } from "./board/edges";
 import { initialEdges, initialNodes } from "./board/mockData";
 import { DelegateDialog } from "./components/DelegateDialog";
-import { NavRail } from "./components/NavRail";
+import { NavRail, RightRail } from "./components/NavRail";
 import { Icon } from "./components/icons";
 import { SpawnBar } from "./components/SpawnBar";
 import { TerminalPanel } from "./components/TerminalPanel";
@@ -415,6 +415,10 @@ function Board() {
       {!chromeHidden && (
         <>
           <NavRail
+            active={nav}
+            onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
+          />
+          <RightRail
             active={nav}
             onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
           />

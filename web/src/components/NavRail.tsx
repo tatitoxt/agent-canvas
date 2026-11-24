@@ -14,6 +14,12 @@ const railCol: React.CSSProperties = {
   gap: 8,
 };
 
+const railColRight: React.CSSProperties = {
+  ...railCol,
+  left: undefined,
+  right: 12,
+};
+
 const bubble: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -70,6 +76,22 @@ const statusDot = (c: string): React.CSSProperties => ({
   flex: "none",
 });
 
+const badge = (bg: string): React.CSSProperties => ({
+  position: "absolute",
+  top: 0,
+  right: 0,
+  minWidth: 13,
+  height: 13,
+  borderRadius: 999,
+  background: bg,
+  color: "var(--cv-base)",
+  fontSize: 8.5,
+  fontWeight: 700,
+  display: "grid",
+  placeItems: "center",
+  padding: "0 3px",
+});
+
 const STATUS_COLOR: Record<string, string> = {
   working: "var(--cv-working)",
   waiting: "var(--cv-waiting)",
@@ -80,10 +102,9 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 /** Left rail, Deska-style — stacked separate bubbles instead of one
- * packed column: Spaces · Extras · New/Task tools · Ask Dex + Inbox ·
- * open panels · canvas controls (hide, gather, zoom). */
+ * packed column: Spaces · Extras · Ask Dex + tasks + automations ·
+ * canvas controls (hide, gather, summaries) · create (bottom). */
 export function NavRail({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
-  const connected = useBoard((s) => s.connected);
   const boards = useBoard((s) => s.boards);
   const activeBoard = useBoard((s) => s.activeBoard);
   const setActiveBoard = useBoard((s) => s.setActiveBoard);
@@ -91,17 +112,12 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
   const renameBoard = useBoard((s) => s.renameBoard);
   const deleteBoard = useBoard((s) => s.deleteBoard);
   const agents = useBoard((s) => s.agents);
-  const edges = useBoard((s) => s.edges);
-  const approvals = useBoard((s) => s.approvals);
   const summaries = useBoard((s) => s.panelSummaries);
-  const inboxCount =
-    Object.keys(approvals).length +
-    Object.values(agents).filter((a) => a.status === "waiting" || a.status === "blocked").length +
-    Object.values(edges).filter((e) => e.state === "delegated").length;
+  const connected = useBoard((s) => s.connected);
 
   const [editing, setEditing] = useState<"new" | string | null>(null);
   const [editName, setEditName] = useState("");
-  const [menu, setMenu] = useState<"extras" | "panels" | null>(null);
+  const [menu, setMenu] = useState<"extras" | null>(null);
   const railRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -117,9 +133,6 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
     Object.values(agents).filter(
       (a) => (a.board_id ?? "main") === boardId && a.status !== "exited",
     ).length;
-
-  const openAgents = Object.values(agents)
-    .filter((a) => (a.board_id ?? "main") === activeBoard && a.status !== "exited");
 
   const submitEdit = () => {
     const n = editName.trim();
@@ -181,25 +194,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
             >
               {n.slice(0, 1).toUpperCase()}
               {agentCount(id) > 0 && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    right: 0,
-                    minWidth: 13,
-                    height: 13,
-                    borderRadius: 999,
-                    background: "var(--cv-done)",
-                    color: "var(--cv-base)",
-                    fontSize: 8.5,
-                    fontWeight: 700,
-                    display: "grid",
-                    placeItems: "center",
-                    padding: "0 3px",
-                  }}
-                >
-                  {agentCount(id)}
-                </span>
+                <span style={badge("var(--cv-done)")}>{agentCount(id)}</span>
               )}
               {id !== "main" && id === activeBoard && (
                 <span
@@ -243,7 +238,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
       {/* ── Bubble 2 · Extras (integrations hub) ──────────── */}
       <nav className="glass" style={{ ...bubble, position: "relative" }}>
         <button
-          title="Extras — plug other apps into the canvas"
+          title="Extras — plug other apps into the canvas (VS Code, Obsidian, Discord)"
           onClick={() => setMenu((m) => (m === "extras" ? null : "extras"))}
           style={btn(menu === "extras")}
         >
@@ -260,7 +255,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
             ].map(([icon, label, hint]) => (
               <button
                 key={label}
-                style={{ ...menuRow, opacity: label.includes("—") ? 1 : 1 }}
+                style={menuRow}
                 title={hint}
                 onClick={() => {
                   if (label === "Obsidian vault") onSelect("vault");
@@ -280,10 +275,62 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         )}
       </nav>
 
-      {/* ── Bubble 3 · create ─────────────────────────────── */}
+      {/* ── Bubble 3 · Dex ────────────────────────────────── */}
       <nav className="glass" style={bubble}>
         <button
-          title="New task — pick a CLI and spawn (focuses the spawn button)"
+          title="Ask Dex — talk to the board commander"
+          onClick={() => onSelect("thread")}
+          style={btn(active === "thread")}
+        >
+          <Icon name="bot" color={active === "thread" ? "var(--cv-accent)" : undefined} />
+        </button>
+        <button
+          title="Tasks — delegated work in flight"
+          onClick={() => onSelect("history")}
+          style={btn(active === "history")}
+        >
+          <Icon name="tasks" />
+        </button>
+        <button
+          title="Automations — scheduled agent runs"
+          onClick={() => onSelect("automations")}
+          style={btn(active === "automations")}
+        >
+          <Icon name="automations" />
+        </button>
+      </nav>
+
+      <div style={{ flex: 1 }} />
+
+      {/* ── Bubble 4 · canvas controls ────────────────────── */}
+      <nav className="glass" style={bubble}>
+        <button
+          title="Hide panels and menus — chrome away, canvas only"
+          onClick={() => useBoard.getState().toggleChrome()}
+          style={btn(false)}
+        >
+          <Icon name="hide" />
+        </button>
+        <button
+          title="Gather loose windows into a group"
+          onClick={() => useBoard.getState().gatherLoose()}
+          style={btn(false)}
+        >
+          <Icon name="gather" />
+        </button>
+        <button
+          title="Show panel summaries — last line + mini preview per card"
+          onClick={() => useBoard.getState().togglePanelSummaries()}
+          style={btn(!summaries)}
+        >
+          <Icon name="eye" color={summaries ? "var(--cv-ink)" : "var(--cv-ink-faint)"} />
+        </button>
+      </nav>
+
+      {/* ── Bubble 5 · create (bottom of the rail, Deska) ─── */}
+      <nav className="glass" style={bubble}>
+        <button
+          title="New task — open the spawn chooser (lives on the Orchestrator)"
           onClick={() => useBoard.getState().focusSpawn()}
           style={btn(false)}
         >
@@ -310,156 +357,6 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         >
           <Icon name="code" />
         </button>
-      </nav>
-
-      {/* ── Bubble 4 · Dex + comms ────────────────────────── */}
-      <nav className="glass" style={bubble}>
-        <button
-          title="Ask Dex — talk to the board commander"
-          onClick={() => onSelect("thread")}
-          style={btn(active === "thread")}
-        >
-          <Icon name="bot" color={active === "thread" ? "var(--cv-accent)" : undefined} />
-        </button>
-        <button
-          title="Inbox — approvals, waiting agents, delegations"
-          onClick={() => onSelect("inbox")}
-          style={btn(active === "inbox")}
-        >
-          <Icon name="inbox" />
-          {inboxCount > 0 && (
-            <span
-              style={{
-                position: "absolute",
-                top: 0,
-                right: 0,
-                minWidth: 14,
-                height: 14,
-                borderRadius: 999,
-                background: "var(--cv-waiting)",
-                color: "var(--cv-base)",
-                fontSize: 9,
-                fontWeight: 700,
-                display: "grid",
-                placeItems: "center",
-                padding: "0 4px",
-              }}
-            >
-              {inboxCount}
-            </span>
-          )}
-        </button>
-        <button
-          title="Tasks — delegated work in flight"
-          onClick={() => onSelect("history")}
-          style={btn(active === "history")}
-        >
-          <Icon name="tasks" />
-        </button>
-        <button
-          title="Automations"
-          onClick={() => onSelect("automations")}
-          style={btn(active === "automations")}
-        >
-          <Icon name="automations" />
-        </button>
-      </nav>
-
-      {/* ── Bubble 5 · open panels ────────────────────────── */}
-      <nav className="glass" style={{ ...bubble, position: "relative" }}>
-        <button
-          title="Panels on the canvas — which terminals are open"
-          onClick={() => setMenu((m) => (m === "panels" ? null : "panels"))}
-          style={btn(menu === "panels")}
-        >
-          <Icon name="panels" />
-          {openAgents.length > 0 && (
-            <span
-              style={{
-                position: "absolute",
-                top: 0,
-                right: 0,
-                minWidth: 13,
-                height: 13,
-                borderRadius: 999,
-                background: "var(--cv-glass-hi)",
-                border: "1px solid var(--cv-glass-edge)",
-                color: "var(--cv-ink-dim)",
-                fontSize: 8.5,
-                fontWeight: 700,
-                display: "grid",
-                placeItems: "center",
-                padding: "0 3px",
-              }}
-            >
-              {openAgents.length}
-            </span>
-          )}
-        </button>
-        {menu === "panels" && (
-          <div className="cv-menu" style={{ position: "absolute", left: 46, top: 0, width: 216, padding: 6, zIndex: 40, maxHeight: 320, overflowY: "auto" }}>
-            <div style={sectionLabel}>Panels on the canvas</div>
-            {openAgents.length === 0 && (
-              <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
-                no open panels
-              </div>
-            )}
-            {openAgents.map((a) => (
-              <button
-                key={a.id}
-                style={menuRow}
-                title={`open ${a.name}`}
-                onClick={() => { useBoard.getState().requestTerm(a.id, a.name); setMenu(null); }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-              >
-                <span style={statusDot(STATUS_COLOR[a.status] ?? "var(--cv-idle)")} />
-                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {a.name}
-                </span>
-                <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>{a.status}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </nav>
-
-      <div style={{ flex: 1 }} />
-
-      {/* ── Bubble 6 · canvas controls ────────────────────── */}
-      <nav className="glass" style={bubble}>
-        <button
-          title="Hide panels and menus — chrome away, canvas only"
-          onClick={() => useBoard.getState().toggleChrome()}
-          style={btn(false)}
-        >
-          <Icon name="hide" />
-        </button>
-        <button
-          title="Gather loose windows into a group"
-          onClick={() => useBoard.getState().gatherLoose()}
-          style={btn(false)}
-        >
-          <Icon name="gather" />
-        </button>
-        <button
-          title="Show panel summaries — last line + mini preview per card"
-          onClick={() => useBoard.getState().togglePanelSummaries()}
-          style={btn(!summaries)}
-        >
-          <Icon name="eye" color={summaries ? "var(--cv-ink)" : "var(--cv-ink-faint)"} />
-        </button>
-      </nav>
-      <nav className="glass" style={bubble}>
-        <button title="Zoom out" onClick={() => useBoard.getState().requestZoom(-1)} style={btn(false)}>
-          <Icon name="minus" />
-        </button>
-        <button title="Zoom in" onClick={() => useBoard.getState().requestZoom(1)} style={btn(false)}>
-          <Icon name="plus" />
-        </button>
-        <button title="Zoom to fit" onClick={() => useBoard.getState().requestView()} style={btn(false)}>
-          <Icon name="zoom" />
-        </button>
         <div
           title={connected ? "daemon connected" : "daemon offline"}
           style={{
@@ -470,6 +367,179 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
             background: connected ? "var(--cv-done)" : "var(--cv-ink-faint)",
           }}
         />
+      </nav>
+    </div>
+  );
+}
+
+/** Right rail, Deska-style — comms + panels + source control + dev
+ * ticket, with the zoom controls parked at the bottom next to the
+ * minimap. Dropdowns open to the LEFT of the rail. */
+export function RightRail({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
+  const agents = useBoard((s) => s.agents);
+  const edges = useBoard((s) => s.edges);
+  const approvals = useBoard((s) => s.approvals);
+  const activeBoard = useBoard((s) => s.activeBoard);
+  const inboxCount =
+    Object.keys(approvals).length +
+    Object.values(agents).filter((a) => a.status === "waiting" || a.status === "blocked").length +
+    Object.values(edges).filter((e) => e.state === "delegated").length;
+
+  const openAgents = Object.values(agents)
+    .filter((a) => (a.board_id ?? "main") === activeBoard && a.status !== "exited");
+  const gitAgents = openAgents.filter((a) => a.worktree);
+
+  const [menu, setMenu] = useState<"panels" | "git" | null>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e: MouseEvent) => {
+      if (railRef.current && !railRef.current.contains(e.target as Node)) setMenu(null);
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [menu]);
+
+  const sideMenu = (node: React.ReactNode, width = 220) =>
+    menu ? (
+      <div
+        className="cv-menu cv-menu-scroll"
+        style={{
+          position: "absolute",
+          right: 46,
+          top: 0,
+          width,
+          padding: 6,
+          zIndex: 40,
+          maxHeight: 340,
+          overflowY: "auto",
+        }}
+      >
+        {node}
+      </div>
+    ) : null;
+
+  return (
+    <div ref={railRef} style={railColRight}>
+      {/* ── Bubble 1 · comms ──────────────────────────────── */}
+      <nav className="glass" style={bubble}>
+        <button
+          title="Inbox — approvals, waiting agents, delegations in flight"
+          onClick={() => onSelect("inbox")}
+          style={btn(active === "inbox")}
+        >
+          <Icon name="inbox" />
+          {inboxCount > 0 && <span style={badge("var(--cv-waiting)")}>{inboxCount}</span>}
+        </button>
+        <div style={{ position: "relative" }}>
+          <button
+            title="Panels on the canvas — which terminals are open"
+            onClick={() => setMenu((m) => (m === "panels" ? null : "panels"))}
+            style={btn(menu === "panels")}
+          >
+            <Icon name="panels" />
+            {openAgents.length > 0 && (
+              <span style={badge("var(--cv-glass-hi)")}>{openAgents.length}</span>
+            )}
+          </button>
+          {menu === "panels" && sideMenu(
+            <>
+              <div style={sectionLabel}>Panels on the canvas</div>
+              {openAgents.length === 0 && (
+                <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
+                  no open panels
+                </div>
+              )}
+              {openAgents.map((a) => (
+                <button
+                  key={a.id}
+                  style={menuRow}
+                  title={`open ${a.name}`}
+                  onClick={() => { useBoard.getState().requestTerm(a.id, a.name); setMenu(null); }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <span style={statusDot(STATUS_COLOR[a.status] ?? "var(--cv-idle)")} />
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {a.name}
+                  </span>
+                  <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>{a.status}</span>
+                </button>
+              ))}
+            </>,
+          )}
+        </div>
+      </nav>
+
+      {/* ── Bubble 2 · code ───────────────────────────────── */}
+      <nav className="glass" style={bubble}>
+        <div style={{ position: "relative" }}>
+          <button
+            title="Source control — worktrees, push an agent's branch"
+            onClick={() => setMenu((m) => (m === "git" ? null : "git"))}
+            style={btn(menu === "git")}
+          >
+            <Icon name="git" />
+            {gitAgents.length > 0 && (
+              <span style={badge("var(--cv-glass-hi)")}>{gitAgents.length}</span>
+            )}
+          </button>
+          {menu === "git" && sideMenu(
+            <>
+              <div style={sectionLabel}>Source control</div>
+              {gitAgents.length === 0 && (
+                <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
+                  no agents with worktrees
+                </div>
+              )}
+              {gitAgents.map((a) => (
+                <button
+                  key={a.id}
+                  style={menuRow}
+                  title={`push ${a.worktree} — the agent's branch`}
+                  onClick={() => { useBoard.getState().gitPush(a.id); setMenu(null); }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <Icon name="git" size={13} color="var(--cv-ink-dim)" />
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {a.name}
+                  </span>
+                  <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>push</span>
+                </button>
+              ))}
+            </>,
+          )}
+        </div>
+        <button
+          title="Explorer — vault files"
+          onClick={() => onSelect("vault")}
+          style={btn(active === "vault")}
+        >
+          <Icon name="explorer" />
+        </button>
+        <button
+          title="Dev ticket — notes and tasks on the board"
+          onClick={() => onSelect("notes")}
+          style={btn(active === "notes")}
+        >
+          <Icon name="ticket" />
+        </button>
+      </nav>
+
+      <div style={{ flex: 1 }} />
+
+      {/* ── Bubble 3 · zoom (bottom-right, next to minimap) ─ */}
+      <nav className="glass" style={bubble}>
+        <button title="Zoom out" onClick={() => useBoard.getState().requestZoom(-1)} style={btn(false)}>
+          <Icon name="minus" />
+        </button>
+        <button title="Zoom in" onClick={() => useBoard.getState().requestZoom(1)} style={btn(false)}>
+          <Icon name="plus" />
+        </button>
+        <button title="Zoom to fit — frame the whole board" onClick={() => useBoard.getState().requestView()} style={btn(false)}>
+          <Icon name="zoom" />
+        </button>
       </nav>
     </div>
   );

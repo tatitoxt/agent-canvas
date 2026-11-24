@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useBoard } from "../store/board";
-import { Icon } from "./icons";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--cv-glass-hi)",
@@ -56,8 +55,10 @@ export function SpawnBar() {
   const spawn = useBoard((s) => s.spawn);
   const workspaces = useBoard((s) => s.workspaces);
   const accounts = useBoard((s) => s.accounts);
-  const spawnFocusN = useBoard((s) => s.spawnFocusN);
-  const [open, setOpen] = useState(false);
+  // The chooser has no permanent button — it opens from the
+  // orchestrator's + or the rail's New Task.
+  const open = useBoard((s) => s.spawnOpen);
+  const setOpen = useBoard((s) => s.setSpawnOpen);
   const [choice, setChoice] = useState("claude");
   const [command, setCommand] = useState("");
   const [wsId, setWsId] = useState("");
@@ -66,11 +67,6 @@ export function SpawnBar() {
   const [task, setTask] = useState("");
   const acctOptions = Object.values(accounts).filter((a) => a.cli === choice);
   const wrap = useRef<HTMLDivElement>(null);
-
-  // "New task" in the rail opens the chooser.
-  useEffect(() => {
-    if (spawnFocusN > 0) setOpen(true);
-  }, [spawnFocusN]);
 
   useEffect(() => {
     if (!open) return;
@@ -223,28 +219,6 @@ export function SpawnBar() {
           )}
         </div>
       )}
-      <button
-        className="glass-pill"
-        onClick={() => setOpen((o) => !o)}
-        title={open ? "close" : "Spawn — pick an agent to run on the canvas"}
-        style={{
-          width: 40,
-          height: 40,
-          display: "grid",
-          placeItems: "center",
-          borderRadius: 999,
-          cursor: "pointer",
-          color: open ? "var(--cv-base)" : "var(--cv-accent)",
-          background: open ? "var(--cv-accent)" : undefined,
-          boxShadow: open ? "0 0 18px rgba(245,165,36,0.45)" : undefined,
-          fontSize: 20,
-          fontWeight: 600,
-          transform: open ? "rotate(45deg)" : "none",
-          transition: "transform 140ms ease, background 140ms ease",
-        }}
-      >
-        <Icon name="plus" size={18} color={open ? "#14110d" : "var(--cv-accent)"} />
-      </button>
     </div>
   );
 }
