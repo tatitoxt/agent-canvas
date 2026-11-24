@@ -1405,6 +1405,23 @@ export const useBoard = create<BoardState>((set, get) => ({
         return;
       }
       const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+      if (/^(?:summary|recap|status|digest)$/.test(text.toLowerCase())) {
+        const agents = Object.values(get().agents);
+        const lines = [
+          `## ${stamp} — board recap`,
+          ...agents.map(
+            (a) => `- ${a.name} · ${a.command ?? "?"} · ${a.status}`,
+          ),
+          ...(Object.values(get().notes ?? {}).length
+            ? ["", "### open notes", ...Object.values(get().notes ?? {}).map(
+                (n) => `- [${n.col}] ${n.text}`,
+              )]
+            : []),
+        ];
+        get().vaultAppend("canvas-dex.md", lines.join("\n"));
+        reply("recap written to Obsidian → canvas-dex.md");
+        return;
+      }
       get().vaultAppend("canvas-dex.md", `- ${stamp} — ${text}`);
       reply("logged to Obsidian → canvas-dex.md");
       return;
