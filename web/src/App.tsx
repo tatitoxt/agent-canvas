@@ -7,6 +7,7 @@ import {
   getNodesBounds,
   getViewportForBounds,
   useReactFlow,
+  useViewport,
   type FinalConnectionState,
   type Node,
   type NodeMouseHandler,
@@ -57,6 +58,15 @@ const nodeTypes = {
   md: MdNode,
 };
 const edgeTypes = { delegation: DelegationEdge };
+
+/** Keeps the zoom % readout fresh — Deska's bottom-right zoom %. */
+function ViewportTracker() {
+  const { zoom } = useViewport();
+  useEffect(() => {
+    useBoard.setState({ zoomPct: Math.round(zoom * 100) });
+  }, [zoom]);
+  return null;
+}
 
 function Board() {
   const agents = useBoard((s) => s.agents);
@@ -624,6 +634,7 @@ function Board() {
             return "#33333a";
           }}
         />
+        <ViewportTracker />
       </ReactFlow>
       {connected === false && null}
       {nav === "inbox" && (

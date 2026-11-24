@@ -308,6 +308,8 @@ type BoardState = {
   toggleChrome: () => void;
   /** Bump counter → zoom the canvas in (1) or out (-1). */
   zoomN: { dir: number; n: number };
+  /** Live canvas zoom percent (synced from the viewport) — the % readout. */
+  zoomPct: number;
   requestZoom: (dir: number) => void;
   /** Ask the board to open a terminal panel for an agent (Panels menu). */
   termRequest: { id: string; name: string; n: number } | null;
@@ -1211,6 +1213,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   chromeHidden: false,
   toggleChrome: () => set((s) => ({ chromeHidden: !s.chromeHidden })),
   zoomN: { dir: 0, n: 0 },
+  zoomPct: 100,
   requestZoom: (dir) => set((s) => ({ zoomN: { dir, n: s.zoomN.n + 1 } })),
   termRequest: null,
   requestTerm: (id, name) =>

@@ -611,6 +611,7 @@ function OrchestratorsBubble() {
  * of the minimap. */
 export function RightRail() {
   const summaries = useBoard((s) => s.panelSummaries);
+  const zoomPct = useBoard((s) => s.zoomPct);
 
   return (
     <div style={railColRight}>
@@ -625,6 +626,12 @@ export function RightRail() {
         <button title="Zoom in" onClick={() => useBoard.getState().requestZoom(1)} style={tinyBtn(false)}>
           <Icon name="plus" size={11} />
         </button>
+        <span
+          title="Zoom level"
+          style={{ fontSize: 9.5, color: "var(--cv-ink-dim)", fontWeight: 600, minWidth: 30, textAlign: "center" }}
+        >
+          {zoomPct}%
+        </span>
         <button title="Zoom to fit — frame the whole board" onClick={() => useBoard.getState().requestView()} style={tinyBtn(false)}>
           <Icon name="zoom" size={11} />
         </button>
