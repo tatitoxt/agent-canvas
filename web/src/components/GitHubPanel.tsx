@@ -53,8 +53,10 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
     setErr(null);
     // canvasd proxies api.github.com (gh CLI auth when installed) — no
     // anonymous rate limit and private repos work too. No daemon → direct.
+    const base =
+      location.port === "5174" ? "http://127.0.0.1:4242" : location.origin;
     const gh = (rest: string) =>
-      fetch(`http://127.0.0.1:4242/api/github/${rest}`, {
+      fetch(`${base}/api/github/${rest}`, {
         headers: { Authorization: `Bearer ${TOKEN}` },
       }).catch(() => fetch(`https://api.github.com/${rest}`));
     gh(`repos/${slug}/${kind === "prs" ? "pulls" : "issues"}?state=open&per_page=30`)

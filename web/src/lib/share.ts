@@ -1,6 +1,12 @@
 import { buildPdf, mdToLines } from "./pdf";
 
-const DAEMON = "http://127.0.0.1:4242";
+/** daemond REST base: same origin when canvasd serves the web build
+ * (LAN/phone), localhost daemon on the vite dev port. */
+export function daemonBase(): string {
+  return location.port === "5174" ? "http://127.0.0.1:4242" : location.origin;
+}
+
+const DAEMON = daemonBase();
 
 function toB64(bytes: Uint8Array): string {
   let s = "";

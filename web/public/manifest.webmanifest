@@ -1,0 +1,13 @@
+{
+  "name": "Agent Canvas",
+  "short_name": "Canvas",
+  "description": "Orchestrate CLI agents on a canvas",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0d0f12",
+  "theme_color": "#0d0f12",
+  "icons": [
+    { "src": "/canvas-mark-64.png", "sizes": "64x64", "type": "image/png" },
+    { "src": "/canvas-mark.png", "sizes": "1024x1024", "type": "image/png" }
+  ]
+}

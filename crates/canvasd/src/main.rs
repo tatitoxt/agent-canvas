@@ -1821,14 +1821,24 @@ async fn main() -> Result<()> {
             auth_middleware,
         ));
 
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/ws", get(ws_handler))
         .route("/share/{id}", get(share_get))
         .nest("/api", api)
         // The Vite dev origin (:5174) calls the daemon cross-origin —
         // outermost layer so CORS answers preflights before auth runs.
-        .layer(tower_http::cors::CorsLayer::permissive())
-        .with_state(state.clone());
+        .layer(tower_http::cors::CorsLayer::permissive());
+    // One binary serves UI+ws: CANVASD_WEB_DIR points at a built `web/dist`
+    // so a phone on the LAN just opens http://<host>:<port>/?token=….
+    if let Ok(dir) = std::env::var("CANVASD_WEB_DIR") {
+        let index = format!("{}/index.html", dir.trim_end_matches('/'));
+        app = app.fallback_service(
+            tower_http::services::ServeDir::new(&dir)
+                .append_index_html_on_directories(true)
+                .fallback(tower_http::services::ServeFile::new(index)),
+        );
+    }
+    let app = app.with_state(state.clone());
 
     let port: u16 = std::env::var("CANVASD_PORT")
         .ok()
