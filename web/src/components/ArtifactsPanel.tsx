@@ -4,6 +4,8 @@ import { useReactFlow } from "@xyflow/react";
 import { cleanPinSpot } from "./PinBtn";
 import { downloadPdf } from "../lib/pdf";
 import { shareArtifactPdf } from "../lib/share";
+import { buildDoc, buildAskDoc } from "../lib/boardDocs";
+import { GeneratePdfMenu } from "./VaultPanel";
 import { Icon } from "./icons";
 
 /** Each artifact kind gets its own symbol + muted color (Deska-style
@@ -40,6 +42,22 @@ export function ArtifactsPanel() {
   const [text, setText] = useState("");
   const [query, setQuery] = useState("");
   const [shared, setShared] = useState<Record<string, string>>({});
+  const [genOpen, setGenOpen] = useState(false);
+
+  // Generate-PDF lives here too (not only in the vault panel): same
+  // templates, same "ask for anything", saved straight into this list.
+  const generate = (k: "overview" | "onboarding" | "architecture") => {
+    const { title, md } = buildDoc(k);
+    downloadPdf(title, md);
+    artifactCreate("pdf", `PDF — ${title}`, undefined, md);
+    setGenOpen(false);
+  };
+  const askAnything = (q: string) => {
+    const { title, md } = buildAskDoc(q);
+    downloadPdf(title, md);
+    artifactCreate("pdf", `PDF — ${title}`, undefined, md);
+    setGenOpen(false);
+  };
 
   const list = Object.values(artifacts)
     .filter((a) => a.board_id === (activeBoard ?? "main"))
@@ -113,13 +131,28 @@ export function ArtifactsPanel() {
           <Icon name="artifacts" size={15} color="var(--cv-ink)" />
           Artifacts
         </span>
-        <button
-          className="glass-pill"
-          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-ink)" }}
-          onClick={() => setCreating((c) => !c)}
-        >
-          + new
-        </button>
+        <span style={{ display: "flex", gap: 5, position: "relative" }}>
+          <button
+            className="glass-pill"
+            style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-ink)" }}
+            title="Generate a PDF document from the board"
+            onClick={() => setGenOpen((o) => !o)}
+          >
+            ⎙ pdf
+          </button>
+          <button
+            className="glass-pill"
+            style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-ink)" }}
+            onClick={() => setCreating((c) => !c)}
+          >
+            + new
+          </button>
+          {genOpen && (
+            <div className="cv-menu" style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: 240, padding: 8, zIndex: 50 }}>
+              <GeneratePdfMenu onPick={generate} onAsk={askAnything} />
+            </div>
+          )}
+        </span>
       </div>
 
       {creating && (

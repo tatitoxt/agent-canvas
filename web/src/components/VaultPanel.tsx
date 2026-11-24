@@ -134,7 +134,7 @@ function GraphView({ text, path, entries, onOpen }: {
 
 /** "Generate PDF" menu — pick a template or ask for anything; the doc is
  * built from live board state, exported as .pdf and saved to artifacts. */
-function GeneratePdfMenu({ onPick, onAsk }: {
+export function GeneratePdfMenu({ onPick, onAsk }: {
   onPick: (kind: "overview" | "onboarding" | "architecture") => void;
   onAsk: (question: string) => void;
 }) {
