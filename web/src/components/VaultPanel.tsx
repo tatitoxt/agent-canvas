@@ -63,8 +63,15 @@ function ReadingView({ text }: { text: string }) {
   );
 }
 
-/** Graph view — the note's [[wiki links]] as clickable cards. */
-function GraphView({ text, onOpen }: { text: string; onOpen: (name: string) => void }) {
+/** Graph view — Obsidian-style: the note as center node with its
+ * [[wiki links]] as clickable satellites; dashed = unresolved. */
+function GraphView({ text, path, entries, onOpen }: {
+  text: string;
+  path: string;
+  entries: string[];
+  onOpen: (name: string) => void;
+}) {
+  const [hover, setHover] = useState<string | null>(null);
   const links = [...new Set(
     [...text.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)].map((m) => m[1].trim()),
   )];
@@ -72,24 +79,55 @@ function GraphView({ text, onOpen }: { text: string; onOpen: (name: string) => v
     [...text.matchAll(/\[([^\]]+)\]\(([^)]+\.md)\)/g)].map((m) => m[2].trim()),
   )];
   const all = [...new Set([...links, ...mdLinks])];
+  const resolve = (name: string) =>
+    entries.find((e) => e === name || e.endsWith(`/${name}.md`) || e === `${name}.md` || e.replace(/\.md$/, "") === name);
+
+  const W = 480, H = 480, cx = W / 2, cy = H / 2, R = 165;
+  const sats = all.map((name, i) => {
+    const a = (i / Math.max(1, all.length)) * Math.PI * 2 - Math.PI / 2;
+    return { name, x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R, hit: resolve(name) };
+  });
+
+  if (all.length === 0) {
+    return (
+      <div style={{ flex: 1, display: "grid", placeItems: "center", fontSize: 11, color: "var(--cv-ink-faint)" }}>
+        no links in this note — use [[note name]] to wire them
+      </div>
+    );
+  }
+  const label = (s: string, max: number) => (s.length > max ? s.slice(0, max - 1) + "…" : s);
   return (
-    <div style={{ flex: 1, overflow: "auto", padding: "12px 14px" }}>
-      {all.length === 0 && (
-        <div style={{ fontSize: 11, color: "var(--cv-ink-faint)" }}>no links in this note</div>
-      )}
-      {all.map((l) => (
-        <button
-          key={l}
-          onClick={() => onOpen(l)}
-          style={{
-            display: "block", width: "100%", textAlign: "left", marginBottom: 6,
-            padding: "8px 12px", borderRadius: 10, border: "1px solid var(--cv-glass-edge)",
-            background: "var(--cv-glass-hi)", color: "var(--cv-ink)", fontSize: 11.5, cursor: "pointer",
-          }}
-        >
-          {l}
-        </button>
-      ))}
+    <div style={{ flex: 1, overflow: "auto" }}>
+      <svg width={W} height={H} style={{ display: "block", margin: "0 auto" }}>
+        {sats.map((s) => (
+          <line
+            key={`l-${s.name}`}
+            x1={cx} y1={cy} x2={s.x} y2={s.y}
+            stroke={hover === s.name ? "var(--cv-accent)" : "var(--cv-glass-edge)"}
+            strokeWidth={hover === s.name ? 1.6 : 1}
+            strokeDasharray={s.hit ? undefined : "4 4"}
+          />
+        ))}
+        {sats.map((s) => (
+          <g key={s.name} onClick={() => onOpen(s.name)} style={{ cursor: "pointer" }}
+            onMouseEnter={() => setHover(s.name)} onMouseLeave={() => setHover(null)}>
+            <circle cx={s.x} cy={s.y} r={26}
+              fill={hover === s.name ? "var(--cv-glass-hi)" : "var(--cv-base)"}
+              stroke={hover === s.name ? "var(--cv-accent)" : "var(--cv-glass-edge)"}
+              strokeDasharray={s.hit ? undefined : "4 3"} />
+            <text x={s.x} y={s.y + 3} textAnchor="middle" fontSize={8.5} fill="var(--cv-ink)">
+              {label(s.name.replace(/\.md$/, ""), 14)}
+            </text>
+          </g>
+        ))}
+        <circle cx={cx} cy={cy} r={38} fill="var(--cv-glass-hi)" stroke="var(--cv-accent)" strokeWidth={1.4} />
+        <text x={cx} y={cy + 3} textAnchor="middle" fontSize={10} fontWeight={700} fill="var(--cv-ink)">
+          {label(path.replace(/\.md$/, "").split("/").pop() ?? path, 16)}
+        </text>
+      </svg>
+      <div style={{ padding: "4px 16px 12px", fontSize: 10, color: "var(--cv-ink-faint)" }}>
+        {all.length} link{all.length === 1 ? "" : "s"} · dashed = note doesn't exist in the vault yet
+      </div>
     </div>
   );
 }
@@ -340,6 +378,8 @@ export function VaultPanel() {
           {view === "graph" && (
             <GraphView
               text={vaultFile.text}
+              path={vaultFile.path}
+              entries={vaultEntries}
               onOpen={(name) => {
                 const hit = vaultEntries.find((e) => e === name || e.endsWith(`/${name}.md`) || e === `${name}.md` || e.replace(/\.md$/, "") === name);
                 if (hit) vaultRead(hit);
