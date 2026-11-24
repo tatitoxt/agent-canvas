@@ -51,6 +51,7 @@ export function LoopsPanel() {
   const boards = useBoard((s) => s.boards);
   const createLoop = useBoard((s) => s.createLoop);
   const deleteLoop = useBoard((s) => s.deleteLoop);
+  const runLoop = useBoard((s) => s.runLoop);
   const setLoopEnabled = useBoard((s) => s.setLoopEnabled);
 
   const [creating, setCreating] = useState(false);
@@ -241,6 +242,14 @@ export function LoopsPanel() {
                 onClick={() => setLoopEnabled(l.loop_id, !l.enabled)}
               >
                 {l.enabled ? "pause" : "resume"}
+              </button>
+              <button
+                className="glass-pill"
+                title="run it once right now"
+                style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 12px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}
+                onClick={() => runLoop(l.loop_id)}
+              >
+                run now
               </button>
               <button
                 className="glass-pill"

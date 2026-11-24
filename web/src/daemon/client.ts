@@ -338,6 +338,10 @@ export class CanvasClient {
     this.send({ cmd: "delete_loop", loop_id: loopId });
   }
 
+  runLoop(loopId: string) {
+    this.send({ cmd: "run_loop", loop_id: loopId });
+  }
+
   setLoopEnabled(loopId: string, enabled: boolean) {
     this.send({ cmd: "set_loop_enabled", loop_id: loopId, enabled });
   }

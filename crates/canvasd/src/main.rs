@@ -946,6 +946,33 @@ fn handle_client_msg(
                 }),
             }
         }
+        ClientMsg::RunLoop { loop_id } => {
+            let row = state
+                .store
+                .loops_snapshot()
+                .unwrap_or_default()
+                .into_iter()
+                .find(|r| r.0 == loop_id);
+            match row {
+                Some(row) => {
+                    fire_loop(state, &row);
+                    if let Some(l) = state
+                        .store
+                        .loops_snapshot()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .find(|r| r.0 == loop_id)
+                        .map(loop_to_snapshot)
+                    {
+                        send_control(ServerMsg::LoopSaved { l });
+                    }
+                }
+                None => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: format!("loop not found: {loop_id}"),
+                }),
+            }
+        }
         ClientMsg::DeleteLoop { loop_id } => {
             match state.store.loop_deleted(&loop_id) {
                 Ok(()) => send_control(ServerMsg::LoopDeleted { loop_id }),

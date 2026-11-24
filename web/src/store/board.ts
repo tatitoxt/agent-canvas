@@ -353,6 +353,7 @@ type BoardState = {
   }) => void;
   deleteLoop: (loopId: string) => void;
   setLoopEnabled: (loopId: string, enabled: boolean) => void;
+  runLoop: (loopId: string) => void;
   pauseAll: (boardId?: string) => void;
   resumeAll: (boardId?: string) => void;
   /** Symvibe's saveable layout presets — board id → preset name →
@@ -1015,6 +1016,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   createLoop: (l) => client?.createLoop(l),
   deleteLoop: (loopId) => client?.deleteLoop(loopId),
   setLoopEnabled: (loopId, enabled) => client?.setLoopEnabled(loopId, enabled),
+  runLoop: (loopId) => client?.runLoop(loopId),
   pauseAll: (boardId) => client?.pauseAll(boardId),
   resumeAll: (boardId) => client?.resumeAll(boardId),
 

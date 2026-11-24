@@ -772,6 +772,33 @@ fn create_loop(
 }
 
 #[tauri::command]
+fn run_loop(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    loop_id: String,
+) -> Result<(), String> {
+    let row = state
+        .store
+        .loops_snapshot()
+        .unwrap_or_default()
+        .into_iter()
+        .find(|r| r.0 == loop_id)
+        .ok_or_else(|| format!("loop not found: {loop_id}"))?;
+    fire_loop(&app, &state, &row);
+    if let Some(l) = state
+        .store
+        .loops_snapshot()
+        .unwrap_or_default()
+        .into_iter()
+        .find(|r| r.0 == loop_id)
+        .map(loop_to_snapshot)
+    {
+        emit_control(&app, &ServerMsg::LoopSaved { l });
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn delete_loop(
     app: AppHandle,
     state: State<'_, CanvasState>,
@@ -1530,6 +1557,7 @@ fn main() {
             create_automation,
             create_loop,
             delete_loop,
+            run_loop,
             set_loop_enabled,
             pause_all,
             resume_all,

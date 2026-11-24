@@ -125,6 +125,10 @@ export class TauriCanvasClient {
     void invoke("delete_loop", { loopId }).catch(console.error);
   }
 
+  runLoop(loopId: string) {
+    void invoke("run_loop", { loopId }).catch(console.error);
+  }
+
   setLoopEnabled(loopId: string, enabled: boolean) {
     void invoke("set_loop_enabled", { loopId, enabled }).catch(console.error);
   }
