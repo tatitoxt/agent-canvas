@@ -1254,6 +1254,43 @@ export const useBoard = create<BoardState>((set, get) => ({
       }
       return;
     }
+    const ck =
+      low.match(/^(?:check|peek|inspect|last(?:\s+line)?)\s+(?:on\s+|of\s+)?(.+)$/) ??
+      low.match(/^what(?:'s| is)\s+(.+?)\s+doing\s*\??$/);
+    if (ck) {
+      const q = ck[1].replace(/[?.\s]+$/, "").trim();
+      const boardAgents = Object.values(get().agents).filter(
+        (a) => (a.board_id ?? "main") === get().activeBoard,
+      );
+      const ctm = q.match(/^terminal\s+(\d+)$/);
+      const target = ctm
+        ? boardAgents[parseInt(ctm[1], 10) - 1]
+        : boardAgents.find(
+            (a) =>
+              a.name.toLowerCase().includes(q) ||
+              (a.command ?? "").toLowerCase().includes(q),
+          );
+      if (!target) {
+        reply(`no agent matches "${q}"`);
+      } else {
+        const label = ctm ? `Terminal ${ctm[1]}` : target.name;
+        const buf = get().ptyBuffers[target.id];
+        const line = buf
+          ? new TextDecoder()
+              .decode(buf)
+              .replace(ANSI_RX, "")
+              .replace(/\r/g, "\n")
+              .split("\n")
+              .map((l) => l.trim())
+              .filter(
+                (l) => l && !l.endsWith("$") && !l.endsWith("%") && !l.endsWith("#"),
+              )
+              .pop()
+          : "";
+        reply(line ? `${label}: ${line.slice(0, 160)}` : `${label}: no output yet`);
+      }
+      return;
+    }
     if (/^gather/.test(low)) {
       get().gatherLoose();
       reply("gathered the loose windows into a group");
