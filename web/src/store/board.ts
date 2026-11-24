@@ -1165,6 +1165,33 @@ export const useBoard = create<BoardState>((set, get) => ({
       );
       // Cards display "Terminal N" — N is the index in this same ordering —
       // so "@Terminal 4 …" addresses the 4th agent, not a name match.
+      // "@all / @everyone / @* <msg>" — broadcast to every live agent and
+      // collect each reply into the thread.
+      const all = rest.match(/^(?:all|everyone|\*)\s+(.*)$/is);
+      if (all) {
+        const msg = all[1].trim();
+        const live = boardAgents.filter((a) => a.status !== "exited");
+        if (!msg) reply(`@all needs a message`);
+        else if (!live.length) reply("no live agents on this board");
+        else {
+          const payload = new TextEncoder().encode(msg + "\n");
+          const snaps = new Map<string, Uint8Array | undefined>();
+          for (const a of live) {
+            snaps.set(a.id, get().ptyBuffers[a.id]);
+            get().sendInput(a.id, payload);
+          }
+          reply(`→ all ${live.length} agents: ${msg.slice(0, 60)}`);
+          live.forEach((a, i) => {
+            const name = `Terminal ${boardAgents.indexOf(a) + 1}`;
+            const before = snaps.get(a.id);
+            setTimeout(
+              () => watchReply(get, reply, a.id, name, before, msg),
+              i * 200,
+            );
+          });
+        }
+        return;
+      }
       const tm = rest.match(/^terminal\s+(\d+)\s+(.*)$/is);
       let target: (typeof boardAgents)[number] | undefined;
       let label = "";
