@@ -73,6 +73,8 @@ pub enum ClientMsg {
     /// path. Creates the file (and parent dirs) when missing; the path is
     /// constrained to the vault root and must end in .md.
     VaultAppend { dir: String, path: String, text: String },
+    /// Full-text search across the vault's markdown files.
+    VaultSearch { dir: String, query: String },
     /// Push an agent's worktree branch to origin (its committed work).
     GitPush { agent_id: String },
     /// Register an artifact (an agent's deliverable — a report, plan,
@@ -314,12 +316,25 @@ pub enum ServerMsg {
     VaultListing { dir: String, entries: Vec<String> },
     /// Vault file contents (VaultRead answer).
     VaultFile { path: String, text: String },
+    /// Vault search hits (VaultSearch answer).
+    VaultHits { dir: String, query: String, hits: Vec<VaultHit> },
     /// An artifact was removed.
     ArtifactDeleted { artifact_id: String },
     /// A loop was created.
     LoopSaved { l: SnapshotLoop },
     /// A loop was removed.
     LoopDeleted { loop_id: String },
+}
+
+/// One matching line from a vault full-text search.
+#[derive(Debug, Clone, Serialize)]
+pub struct VaultHit {
+    /// Vault-relative path.
+    pub path: String,
+    /// 1-based line number.
+    pub line: u32,
+    /// Trimmed line text (capped).
+    pub text: String,
 }
 
 /// An autopilot loop in a snapshot.

@@ -1079,6 +1079,65 @@ fn handle_client_msg(
                 }
             }
         }
+        ClientMsg::VaultSearch { dir, query } => {
+            let root = PathBuf::from(&dir);
+            let needle = query.to_lowercase();
+            let mut hits = Vec::new();
+            let mut scanned = 0usize;
+            if needle.len() >= 2 {
+                let mut stack = vec![root.clone()];
+                while let Some(d) = stack.pop() {
+                    if hits.len() >= 60 || scanned >= 500 {
+                        break;
+                    }
+                    if let Ok(rd) = std::fs::read_dir(&d) {
+                        for e in rd.flatten() {
+                            if hits.len() >= 60 {
+                                break;
+                            }
+                            let p = e.path();
+                            let name = e.file_name().to_string_lossy().to_string();
+                            if name.starts_with('.')
+                                || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build")
+                            {
+                                continue;
+                            }
+                            if e.file_type().map(|t| t.is_symlink()).unwrap_or(true) {
+                                continue;
+                            }
+                            if p.is_dir() {
+                                stack.push(p);
+                                continue;
+                            }
+                            if !name.ends_with(".md") {
+                                continue;
+                            }
+                            scanned += 1;
+                            let Ok(text) = std::fs::read_to_string(&p) else {
+                                continue;
+                            };
+                            let Ok(rel) = p.strip_prefix(&root) else {
+                                continue;
+                            };
+                            let rel = rel.to_string_lossy().to_string();
+                            for (i, line) in text.lines().enumerate() {
+                                if line.to_lowercase().contains(&needle) {
+                                    hits.push(protocol::VaultHit {
+                                        path: rel.clone(),
+                                        line: (i + 1) as u32,
+                                        text: line.trim().chars().take(160).collect(),
+                                    });
+                                    if hits.len() >= 60 {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            send_control(ServerMsg::VaultHits { dir, query, hits });
+        }
         ClientMsg::GitPush { agent_id } => {
             let wt = state
                 .store

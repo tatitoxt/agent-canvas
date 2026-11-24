@@ -379,6 +379,68 @@ fn vault_list(app: AppHandle, dir: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn vault_search(app: AppHandle, dir: String, query: String) -> Result<(), String> {
+    let root = PathBuf::from(&dir);
+    let needle = query.to_lowercase();
+    let mut hits = Vec::new();
+    let mut scanned = 0usize;
+    if needle.len() >= 2 {
+        let mut stack = vec![root.clone()];
+        while let Some(d) = stack.pop() {
+            if hits.len() >= 60 || scanned >= 500 {
+                break;
+            }
+            if let Ok(rd) = std::fs::read_dir(&d) {
+                for e in rd.flatten() {
+                    if hits.len() >= 60 {
+                        break;
+                    }
+                    let p = e.path();
+                    let name = e.file_name().to_string_lossy().to_string();
+                    if name.starts_with('.')
+                        || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build")
+                    {
+                        continue;
+                    }
+                    if e.file_type().map(|t| t.is_symlink()).unwrap_or(true) {
+                        continue;
+                    }
+                    if p.is_dir() {
+                        stack.push(p);
+                        continue;
+                    }
+                    if !name.ends_with(".md") {
+                        continue;
+                    }
+                    scanned += 1;
+                    let Ok(text) = std::fs::read_to_string(&p) else {
+                        continue;
+                    };
+                    let Ok(rel) = p.strip_prefix(&root) else {
+                        continue;
+                    };
+                    let rel = rel.to_string_lossy().to_string();
+                    for (i, line) in text.lines().enumerate() {
+                        if line.to_lowercase().contains(&needle) {
+                            hits.push(canvasd::protocol::VaultHit {
+                                path: rel.clone(),
+                                line: (i + 1) as u32,
+                                text: line.trim().chars().take(160).collect(),
+                            });
+                            if hits.len() >= 60 {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    emit_control(&app, &ServerMsg::VaultHits { dir, query, hits });
+    Ok(())
+}
+
+#[tauri::command]
 fn vault_read(app: AppHandle, dir: String, path: String) -> Result<(), String> {
     let file = PathBuf::from(&dir).join(&path);
     if path.contains("..") || !path.ends_with(".md") || !file.is_file() {
@@ -1452,6 +1514,7 @@ fn main() {
             git_push,
             studio_doc,
             vault_list,
+            vault_search,
             vault_read,
             vault_append,
             create_workspace,

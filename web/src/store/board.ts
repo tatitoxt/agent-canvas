@@ -187,6 +187,8 @@ type BoardState = {
   vaultDir: string;
   vaultEntries: string[];
   vaultFile: { path: string; text: string } | null;
+  /** Latest vault full-text search hits. */
+  vaultHits: { path: string; line: number; text: string }[];
   /** Studio dossier markdown (Studios: repo → material). */
   studioDoc: string | null;
   /** Embedded web pages on the canvas: node id -> url, per board. */
@@ -248,6 +250,7 @@ type BoardState = {
   notify: (text: string) => void;
   vaultList: (dir: string) => void;
   vaultRead: (path: string) => void;
+  vaultSearch: (query: string) => void;
   vaultAppend: (path: string, text: string) => void;
   closeVaultFile: () => void;
   webNodeAdd: (url: string) => void;
@@ -400,6 +403,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   vaultDir: "",
   vaultEntries: [],
   vaultFile: null,
+  vaultHits: [],
   studioDoc: null,
   theme: localStorage.getItem("cv-theme") ?? "obsidian",
   setTheme: (t) => {
@@ -702,6 +706,9 @@ export const useBoard = create<BoardState>((set, get) => ({
           case "vault_listing":
             set({ vaultEntries: msg.entries });
             break;
+          case "vault_hits":
+            set({ vaultHits: msg.hits });
+            break;
           case "vault_file":
             set({
               vaultFile: { path: msg.path, text: msg.text },
@@ -818,6 +825,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   },
   vaultRead: (path) => client?.vaultRead(get().vaultDir, path),
   vaultAppend: (path, text) => client?.vaultAppend(get().vaultDir, path, text),
+  vaultSearch: (query) => client?.vaultSearch(get().vaultDir, query),
   closeVaultFile: () => set({ vaultFile: null }),
   studioDocNow: () => client?.studioDoc(),
   closeStudioDoc: () => set({ studioDoc: null }),

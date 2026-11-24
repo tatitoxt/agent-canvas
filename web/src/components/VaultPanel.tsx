@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useBoard } from "../store/board";
 import { downloadPdf } from "../lib/pdf";
 import { buildDoc, buildAskDoc } from "../lib/boardDocs";
@@ -195,8 +195,19 @@ export function VaultPanel() {
   const vaultList = useBoard((s) => s.vaultList);
   const vaultRead = useBoard((s) => s.vaultRead);
   const closeVaultFile = useBoard((s) => s.closeVaultFile);
+  const vaultHits = useBoard((s) => s.vaultHits);
+  const vaultSearch = useBoard((s) => s.vaultSearch);
   const [dir, setDir] = useState(vaultDir || "/home/ubuntu/repos/agent-canvas");
   const [filter, setFilter] = useState("");
+
+  // Debounced full-text search — filename filter stays instant, content
+  // hits arrive via `vault_hits`.
+  useEffect(() => {
+    const q = filter.trim();
+    if (q.length < 2 || !vaultDir) return;
+    const t = setTimeout(() => vaultSearch(q), 250);
+    return () => clearTimeout(t);
+  }, [filter, vaultDir, vaultSearch]);
   const [view, setView] = useState<"reading" | "source" | "graph">("reading");
   const [genOpen, setGenOpen] = useState(false);
 
@@ -276,11 +287,45 @@ export function VaultPanel() {
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder={`${vaultEntries.length} notes — filter…`}
+          placeholder={`${vaultEntries.length} notes — filter or search inside…`}
           style={{ margin: "0 4px 8px", background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 12px", fontSize: 11, color: "var(--cv-ink)", outline: "none" }}
         />
       )}
       <div style={{ flex: 1, overflowY: "auto" }}>
+        {filter.trim().length >= 2 && vaultHits.length > 0 && (
+          <>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "10px 12px 4px" }}>
+              content matches
+            </div>
+            {vaultHits.map((h, i) => (
+              <button
+                key={`${h.path}:${h.line}:${i}`}
+                onClick={() => vaultRead(h.path)}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  border: "none",
+                  background: "transparent",
+                  padding: "5px 12px",
+                  cursor: "pointer",
+                  borderRadius: 8,
+                }}
+                title={`${h.path}:${h.line}`}
+              >
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--cv-accent)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {h.path}:{h.line}
+                </div>
+                <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {h.text}
+                </div>
+              </button>
+            ))}
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "10px 12px 4px" }}>
+              files
+            </div>
+          </>
+        )}
         {shown.map((e) => (
           <button
             key={e}

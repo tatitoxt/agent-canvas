@@ -74,6 +74,7 @@ export type ServerMsg =
   | { type: "studio_doc_md"; text: string }
   | { type: "vault_listing"; dir: string; entries: string[] }
   | { type: "vault_file"; path: string; text: string }
+  | { type: "vault_hits"; dir: string; query: string; hits: { path: string; line: number; text: string }[] }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
   | { type: "result"; edge_id: string; summary: string; files?: number }
   | {
@@ -205,6 +206,10 @@ export class CanvasClient {
 
   vaultAppend(dir: string, path: string, text: string) {
     this.send({ cmd: "vault_append", dir, path, text });
+  }
+
+  vaultSearch(dir: string, query: string) {
+    this.send({ cmd: "vault_search", dir, query });
   }
 
   gitPush(agentId: string) {
