@@ -281,6 +281,36 @@ fn delete_board(
 }
 
 #[tauri::command]
+fn note_upsert(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    note_id: Option<String>,
+    board_id: Option<String>,
+    col: String,
+    text: String,
+    pos: Option<i64>,
+) -> Result<(), String> {
+    let id = note_id.unwrap_or_else(|| format!("note-{}", &uuid_v4ish()[..8]));
+    let board = board_id.unwrap_or_else(|| "main".to_string());
+    let p = match pos {
+        Some(p) => p,
+        None => state.store.note_next_pos(&board, &col).map_err(|e| e.to_string())?,
+    };
+    state.store.note_upsert(&id, &board, &col, &text, p).map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::NoteUpserted {
+        note: canvasd::protocol::SnapshotNote { note_id: id, board_id: board, col, text, pos: p },
+    });
+    Ok(())
+}
+
+#[tauri::command]
+fn note_delete(app: AppHandle, state: State<'_, CanvasState>, note_id: String) -> Result<(), String> {
+    state.store.note_deleted(&note_id).map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::NoteDeleted { note_id });
+    Ok(())
+}
+
+#[tauri::command]
 fn session_digest(app: AppHandle, state: State<'_, CanvasState>) -> Result<(), String> {
     let rows = state.store.agents_snapshot().map_err(|e| e.to_string())?;
     let mut md = String::from("# Session digest\n\n");
@@ -756,6 +786,15 @@ fn snapshot(
         "delegations": delegations,
         "workspaces": workspaces,
         "layout": layout,
+        "notes": state
+            .store
+            .all_notes()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(note_id, board_id, col, text, pos)| canvasd::protocol::SnapshotNote {
+                note_id, board_id, col, text, pos,
+            })
+            .collect::<Vec<_>>(),
         "automations": state
             .store
             .automations_snapshot()
@@ -961,6 +1000,8 @@ fn main() {
             memory_read,
             memory_write,
             session_digest,
+            note_upsert,
+            note_delete,
             create_workspace,
             move_to_board,
             delegate,

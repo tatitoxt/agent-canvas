@@ -337,6 +337,19 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .into_iter()
                 .map(|(account_id, cli, label)| protocol::SnapshotAccount { account_id, cli, label })
                 .collect(),
+            notes: state
+                .store
+                .all_notes()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(note_id, board_id, col, text, pos)| protocol::SnapshotNote {
+                    note_id,
+                    board_id,
+                    col,
+                    text,
+                    pos,
+                })
+                .collect(),
             approvals: state
                 .pending_inputs
                 .lock()
@@ -742,6 +755,26 @@ fn handle_client_msg(
                     agent_id: Some(agent_id),
                     message: "no transcript for agent".into(),
                 }),
+            }
+        }
+        ClientMsg::NoteUpsert { note_id, board_id, col, text, pos } => {
+            let id = note_id.unwrap_or_else(|| format!("note-{}", uuid_like()));
+            let board = board_id.unwrap_or_else(|| "main".to_string());
+            let p = match pos {
+                Some(p) => p,
+                None => state.store.note_next_pos(&board, &col).unwrap_or(0),
+            };
+            match state.store.note_upsert(&id, &board, &col, &text, p) {
+                Ok(()) => send_control(ServerMsg::NoteUpserted {
+                    note: protocol::SnapshotNote { note_id: id, board_id: board, col, text, pos: p },
+                }),
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
+            }
+        }
+        ClientMsg::NoteDelete { note_id } => {
+            match state.store.note_deleted(&note_id) {
+                Ok(()) => send_control(ServerMsg::NoteDeleted { note_id }),
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
             }
         }
         ClientMsg::Digest => {

@@ -112,6 +112,14 @@ export class TauriCanvasClient {
     );
   }
 
+  noteUpsert(noteId: string | null, boardId: string | undefined, col: string, text: string, pos?: number) {
+    void invoke("note_upsert", { noteId, boardId, col, text, pos }).catch(console.error);
+  }
+
+  noteDelete(noteId: string) {
+    void invoke("note_delete", { noteId }).catch(console.error);
+  }
+
   digest() {
     void invoke("session_digest").catch(console.error);
   }

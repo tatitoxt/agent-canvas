@@ -25,6 +25,7 @@ import { InboxPanel } from "./components/InboxPanel";
 import { AutomationsPanel } from "./components/AutomationsPanel";
 import { AccountsPanel } from "./components/AccountsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
+import { NotesPanel } from "./components/NotesPanel";
 import { DigestPanel } from "./components/DigestPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { CommandPalette } from "./components/CommandPalette";
@@ -335,6 +336,7 @@ function Board() {
       {nav === "automations" && <AutomationsPanel />}
       {nav === "accounts" && <AccountsPanel />}
       {nav === "memory" && <MemoryPanel />}
+      {nav === "notes" && <NotesPanel />}
       <DigestPanel />
       {nav === "history" && (
         <HistoryPanel onOpenEdge={(id) => { setEdgeDetail(id); setNav("canvas"); }} />

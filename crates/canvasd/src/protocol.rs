@@ -45,6 +45,17 @@ pub enum ClientMsg {
     RenameBoard { board_id: String, name: String },
     /// Delete a board — refused while it still holds nodes.
     DeleteBoard { board_id: String },
+    /// Create or update a kanban note: no id = create (pos auto),
+    /// id = move/edit (col/text/pos replace).
+    NoteUpsert {
+        note_id: Option<String>,
+        board_id: Option<String>,
+        col: String,
+        text: String,
+        pos: Option<i64>,
+    },
+    /// Delete a kanban note.
+    NoteDelete { note_id: String },
     /// A digest of every agent: status, files touched, transcript tail.
     Digest,
     /// Read a node's memory file — "main" is the board repo's memory,
@@ -214,6 +225,8 @@ pub enum ServerMsg {
         automations: Vec<SnapshotAutomation>,
         /// Registered named accounts (id, cli, label).
         accounts: Vec<SnapshotAccount>,
+        /// Kanban notes across boards.
+        notes: Vec<SnapshotNote>,
     },
     /// A named account was registered.
     AccountCreated { account_id: String, cli: String, label: String },
@@ -223,6 +236,10 @@ pub enum ServerMsg {
     Memory { node_id: String, text: String },
     /// Session digest markdown (Digest answer).
     SessionDigest { text: String },
+    /// A kanban note was created or edited.
+    NoteUpserted { note: SnapshotNote },
+    /// A kanban note was removed.
+    NoteDeleted { note_id: String },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -238,6 +255,16 @@ pub struct SnapshotAutomation {
     pub last_run_at: Option<String>,
     pub interval_secs: Option<u64>,
     pub next_run_at: Option<String>,
+}
+
+/// A kanban card in a snapshot.
+#[derive(Debug, Clone, Serialize)]
+pub struct SnapshotNote {
+    pub note_id: String,
+    pub board_id: String,
+    pub col: String,
+    pub text: String,
+    pub pos: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]

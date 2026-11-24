@@ -167,6 +167,21 @@ impl Store {
                  PRAGMA user_version = 7;",
             )?;
         }
+        // v7 → v8: kanban notes — a card lives on a board in a column
+        // (todo/doing/done), like Symvibe's tasks panel.
+        if version < 8 {
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS notes (
+                   id TEXT PRIMARY KEY,
+                   board_id TEXT NOT NULL DEFAULT 'main',
+                   col TEXT NOT NULL DEFAULT 'todo',
+                   text TEXT NOT NULL,
+                   pos INTEGER NOT NULL DEFAULT 0,
+                   created_at TEXT DEFAULT (datetime('now'))
+                 );
+                 PRAGMA user_version = 8;",
+            )?;
+        }
         Ok(Self { conn: Mutex::new(conn) })
     }
 
@@ -395,6 +410,56 @@ impl Store {
     }
 
     /// (id, cli, label) for the snapshot replay.
+    /// (id, board_id, col, text, pos) — the kanban cards of one board.
+    pub fn notes_snapshot(&self, board_id: &str) -> Result<Vec<(String, String, String, String, i64)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare(
+            "SELECT id, board_id, col, text, pos FROM notes WHERE board_id = ?1 ORDER BY col, pos",
+        )?;
+        let rows = st
+            .query_map([board_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// All notes across boards — the full snapshot embeds them so a
+    /// board switch needs no round-trip.
+    pub fn all_notes(&self) -> Result<Vec<(String, String, String, String, i64)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare(
+            "SELECT id, board_id, col, text, pos FROM notes ORDER BY board_id, col, pos",
+        )?;
+        let rows = st
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn note_upsert(&self, id: &str, board_id: &str, col: &str, text: &str, pos: i64) -> Result<()> {
+        self.conn.lock().unwrap().execute(
+            "INSERT INTO notes (id, board_id, col, text, pos) VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(id) DO UPDATE SET board_id=excluded.board_id, col=excluded.col, text=excluded.text, pos=excluded.pos",
+            rusqlite::params![id, board_id, col, text, pos],
+        )?;
+        Ok(())
+    }
+
+    pub fn note_deleted(&self, id: &str) -> Result<()> {
+        self.conn.lock().unwrap().execute("DELETE FROM notes WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// Next position value inside a column — appended cards land last.
+    pub fn note_next_pos(&self, board_id: &str, col: &str) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let pos: i64 = conn.query_row(
+            "SELECT COALESCE(MAX(pos) + 1, 0) FROM notes WHERE board_id = ?1 AND col = ?2",
+            rusqlite::params![board_id, col],
+            |r| r.get(0),
+        )?;
+        Ok(pos)
+    }
+
     pub fn accounts_snapshot(&self) -> Result<Vec<(String, String, String)>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare("SELECT id, cli, label FROM accounts ORDER BY created_at")?;

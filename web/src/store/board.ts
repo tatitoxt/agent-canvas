@@ -60,6 +60,8 @@ type BoardState = {
   memories: Record<string, string>;
   /** Last "lose nothing" digest markdown, when requested. */
   digest: string | null;
+  /** Kanban notes by id (all boards; filtered by activeBoard in UI). */
+  notes: Record<string, { note_id: string; board_id: string; col: string; text: string; pos: number }>;
   /** Saved node positions — replayed from the daemon's layout table. */
   positions: Record<string, { x: number; y: number }>;
   /** Drop position for a delegation child, keyed by parent agent id —
@@ -99,6 +101,8 @@ type BoardState = {
   memoryWrite: (nodeId: string, text: string) => void;
   digestNow: () => void;
   closeDigest: () => void;
+  noteUpsert: (noteId: string | null, col: string, text: string, pos?: number) => void;
+  noteDelete: (noteId: string) => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
   kill: (agentId: string) => void;
@@ -152,6 +156,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   accounts: {},
   memories: {},
   digest: null,
+  notes: {},
   positions: {},
   pendingPositions: {},
   approvals: {},
@@ -358,6 +363,9 @@ export const useBoard = create<BoardState>((set, get) => ({
             const accounts = Object.fromEntries(
               (msg.accounts ?? []).map((a) => [a.account_id, a]),
             );
+            const notes = Object.fromEntries(
+              (msg.notes ?? []).map((n) => [n.note_id, n]),
+            );
             const workspaces = Object.fromEntries(
               (msg.workspaces ?? []).map((w) => [
                 w.workspace_id,
@@ -398,7 +406,18 @@ export const useBoard = create<BoardState>((set, get) => ({
               automations,
               boards: { main: "Main", ...boards },
               accounts,
+              notes,
             });
+            break;
+          }
+          case "note_upserted": {
+            set((st) => ({ notes: { ...st.notes, [msg.note.note_id]: msg.note } }));
+            break;
+          }
+          case "note_deleted": {
+            const notes = { ...get().notes };
+            delete notes[msg.note_id];
+            set({ notes });
             break;
           }
           case "session_digest":
@@ -475,6 +494,9 @@ export const useBoard = create<BoardState>((set, get) => ({
   memoryRead: (nodeId) => client?.memoryRead(nodeId),
   digestNow: () => client?.digest(),
   closeDigest: () => set({ digest: null }),
+  noteUpsert: (noteId, col, text, pos) =>
+    client?.noteUpsert(noteId, get().activeBoard ?? undefined, col, text, pos),
+  noteDelete: (noteId) => client?.noteDelete(noteId),
   memoryWrite: (nodeId, text) => {
     client?.memoryWrite(nodeId, text);
     set((st) => ({ memories: { ...st.memories, [nodeId]: text } }));
