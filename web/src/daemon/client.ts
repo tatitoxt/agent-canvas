@@ -76,6 +76,7 @@ export type ServerMsg =
   | { type: "vault_listing"; dir: string; entries: string[] }
   | { type: "vault_file"; path: string; text: string }
   | { type: "vault_hits"; dir: string; query: string; hits: { path: string; line: number; text: string }[] }
+  | { type: "vault_graph"; dir: string; nodes: string[]; edges: [string, string][] }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
   | { type: "result"; edge_id: string; summary: string; files?: number }
   | {
@@ -218,6 +219,9 @@ export class CanvasClient {
   }
   vaultRename(dir: string, path: string, newPath: string) {
     this.send({ cmd: "vault_rename", dir, path, new_path: newPath });
+  }
+  vaultGraph(dir: string) {
+    this.send({ cmd: "vault_graph", dir });
   }
 
   vaultSearch(dir: string, query: string) {

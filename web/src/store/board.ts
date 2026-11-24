@@ -256,6 +256,8 @@ type BoardState = {
   vaultWrite: (path: string, text: string) => void;
   vaultDelete: (path: string) => void;
   vaultRename: (path: string, newPath: string) => void;
+  vaultGraphReq: () => void;
+  vaultGraph: { nodes: string[]; edges: [string, string][] } | null;
   closeVaultFile: () => void;
   webNodeAdd: (url: string) => void;
   webNodeRemove: (id: string) => void;
@@ -724,6 +726,9 @@ export const useBoard = create<BoardState>((set, get) => ({
           case "vault_hits":
             set({ vaultHits: msg.hits });
             break;
+          case "vault_graph":
+            set({ vaultGraph: { nodes: msg.nodes, edges: msg.edges } });
+            break;
           case "vault_file":
             set({
               vaultFile: { path: msg.path, text: msg.text },
@@ -853,6 +858,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   vaultWrite: (path, text) => client?.vaultWrite(get().vaultDir, path, text),
   vaultDelete: (path) => client?.vaultDelete(get().vaultDir, path),
   vaultRename: (path, newPath) => client?.vaultRename(get().vaultDir, path, newPath),
+  vaultGraphReq: () => client?.vaultGraph(get().vaultDir),
+  vaultGraph: null,
   vaultSearch: (query) => client?.vaultSearch(get().vaultDir, query),
   closeVaultFile: () => set({ vaultFile: null }),
   studioDocNow: () => client?.studioDoc(),

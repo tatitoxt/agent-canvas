@@ -359,9 +359,7 @@ fn studio_doc(app: AppHandle, state: State<'_, CanvasState>, board_id: Option<St
     Ok(())
 }
 
-#[tauri::command]
-fn vault_list(app: AppHandle, dir: String) -> Result<(), String> {
-    let root = PathBuf::from(&dir);
+fn vault_list_entries(root: &PathBuf) -> Vec<String> {
     let mut entries = Vec::new();
     let mut stack = vec![root.clone()];
     while let Some(d) = stack.pop() {
@@ -380,7 +378,7 @@ fn vault_list(app: AppHandle, dir: String) -> Result<(), String> {
                 if p.is_dir() && stack.len() + entries.len() < 5000 {
                     stack.push(p);
                 } else if name.ends_with(".md") {
-                    if let Ok(rel) = p.strip_prefix(&root) {
+                    if let Ok(rel) = p.strip_prefix(root) {
                         entries.push(rel.to_string_lossy().to_string());
                     }
                 }
@@ -388,8 +386,65 @@ fn vault_list(app: AppHandle, dir: String) -> Result<(), String> {
         }
     }
     entries.sort();
+    entries
+}
+
+fn vault_links(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("[[") {
+        let inner = &rest[start + 2..];
+        let Some(end) = inner.find("]]") else { break };
+        let name = inner[..end].split('|').next().unwrap_or("").trim();
+        if !name.is_empty() { out.push(name.to_string()); }
+        rest = &inner[end + 2..];
+    }
+    let mut rest = text;
+    while let Some(pos) = rest.find("](") {
+        let inner = &rest[pos + 2..];
+        let Some(end) = inner.find(')') else { break };
+        let target = inner[..end].trim();
+        if target.ends_with(".md") { out.push(target.to_string()); }
+        rest = &inner[end..];
+    }
+    out
+}
+
+#[tauri::command]
+fn vault_list(app: AppHandle, dir: String) -> Result<(), String> {
+    let root = PathBuf::from(&dir);
+    let mut entries = vault_list_entries(&root);
     entries.truncate(2000);
     emit_control(&app, &ServerMsg::VaultListing { dir, entries });
+    Ok(())
+}
+
+#[tauri::command]
+fn vault_graph(app: AppHandle, dir: String) -> Result<(), String> {
+    let root = PathBuf::from(&dir);
+    let nodes = vault_list_entries(&root);
+    let resolve = |name: &str| -> Option<String> {
+        let n = name.trim();
+        nodes.iter().find(|e| {
+            e.as_str() == n
+                || **e == format!("{n}.md")
+                || e.ends_with(&format!("/{n}.md"))
+                || e.trim_end_matches(".md") == n
+        }).cloned()
+    };
+    let mut edges: Vec<(String, String)> = Vec::new();
+    for e in &nodes {
+        if let Ok(text) = std::fs::read_to_string(root.join(e)) {
+            for name in vault_links(&text) {
+                if let Some(t) = resolve(&name) {
+                    if t != *e { edges.push((e.clone(), t)); }
+                }
+            }
+        }
+    }
+    edges.sort();
+    edges.dedup();
+    emit_control(&app, &ServerMsg::VaultGraph { dir, nodes, edges });
     Ok(())
 }
 
@@ -1616,6 +1671,7 @@ fn main() {
             vault_write,
             vault_delete,
             vault_rename,
+            vault_graph,
             create_workspace,
             move_to_board,
             delegate,

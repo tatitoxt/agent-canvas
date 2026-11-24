@@ -83,6 +83,8 @@ pub enum ClientMsg {
     VaultDelete { dir: String, path: String },
     /// Rename/move a markdown file inside the vault (root-scoped, .md only).
     VaultRename { dir: String, path: String, new_path: String },
+    /// Build the whole-vault link graph (all notes + resolved links).
+    VaultGraph { dir: String },
     /// Full-text search across the vault's markdown files.
     VaultSearch { dir: String, query: String },
     /// Push an agent's worktree branch to origin (its committed work).
@@ -335,6 +337,9 @@ pub enum ServerMsg {
     VaultFile { path: String, text: String },
     /// Vault search hits (VaultSearch answer).
     VaultHits { dir: String, query: String, hits: Vec<VaultHit> },
+    /// Whole-vault link graph (VaultGraph answer): every note plus every
+    /// resolved [[link]] or (x.md) edge between them.
+    VaultGraph { dir: String, nodes: Vec<String>, edges: Vec<(String, String)> },
     /// An artifact was removed.
     ArtifactDeleted { artifact_id: String },
     /// A loop was created.

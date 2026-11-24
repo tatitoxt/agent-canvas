@@ -239,6 +239,29 @@ fn vault_list_entries(root: &PathBuf) -> Vec<String> {
     entries
 }
 
+/// Extract link targets from markdown text: `[[name|alias]]` → `name`,
+/// `](path.md)` → `path`. No regex dep — manual scanning.
+fn vault_links(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("[[") {
+        let inner = &rest[start + 2..];
+        let Some(end) = inner.find("]]" ) else { break };
+        let name = inner[..end].split('|').next().unwrap_or("").trim();
+        if !name.is_empty() { out.push(name.to_string()); }
+        rest = &inner[end + 2..];
+    }
+    let mut rest = text;
+    while let Some(pos) = rest.find("](") {
+        let inner = &rest[pos + 2..];
+        let Some(end) = inner.find(')') else { break };
+        let target = inner[..end].trim();
+        if target.ends_with(".md") { out.push(target.to_string()); }
+        rest = &inner[end..];
+    }
+    out
+}
+
 /// Spawn a PTY agent wired to the event bus + store. Used by both
 /// `spawn_agent` (standalone node) and `delegate` (edge-owned child).
 /// Memory file for a node: the board repo's `.canvas/memory.md`, or the
@@ -1118,6 +1141,32 @@ fn handle_client_msg(
                     Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault delete failed: {e}") }),
                 }
             }
+        }
+        ClientMsg::VaultGraph { dir } => {
+            let root = PathBuf::from(&dir);
+            let nodes = vault_list_entries(&root);
+            let resolve = |name: &str| -> Option<String> {
+                let n = name.trim();
+                nodes.iter().find(|e| {
+                    e.as_str() == n
+                        || **e == format!("{n}.md")
+                        || e.ends_with(&format!("/{n}.md"))
+                        || e.trim_end_matches(".md") == n
+                }).cloned()
+            };
+            let mut edges: Vec<(String, String)> = Vec::new();
+            for e in &nodes {
+                if let Ok(text) = std::fs::read_to_string(root.join(e)) {
+                    for name in vault_links(&text) {
+                        if let Some(t) = resolve(&name) {
+                            if t != *e { edges.push((e.clone(), t)); }
+                        }
+                    }
+                }
+            }
+            edges.sort();
+            edges.dedup();
+            send_control(ServerMsg::VaultGraph { dir, nodes, edges });
         }
         ClientMsg::VaultRename { dir, path, new_path } => {
             let root = PathBuf::from(&dir);

@@ -244,6 +244,70 @@ function GraphView({ text, path, entries, onOpen }: {
   );
 }
 
+/** Whole-vault graph — every note as a dot on a ring (grouped by folder),
+ * every resolved [[link]] as a faint edge. Hover a node to light its
+ * edges; click to open it. The open note glows amber. */
+function GlobalGraph({ nodes, edges, current, onOpen }: {
+  nodes: string[];
+  edges: [string, string][];
+  current: string;
+  onOpen: (path: string) => void;
+}) {
+  const [hover, setHover] = useState<string | null>(null);
+  const W = 640, H = 560, cx = W / 2, cy = H / 2;
+  const R = Math.min(240, Math.max(120, nodes.length * 16));
+  const pos = new Map<string, { x: number; y: number }>();
+  nodes.forEach((n, i) => {
+    const a = (i / Math.max(1, nodes.length)) * Math.PI * 2 - Math.PI / 2;
+    const wobble = ((i * 29) % 13) - 6;
+    pos.set(n, { x: cx + Math.cos(a) * (R + wobble * 3), y: cy + Math.sin(a) * (R + wobble * 3) });
+  });
+  const neighbors = hover ? new Set(edges.filter(([a, b]) => a === hover || b === hover).flat()) : null;
+  const label = (s: string) => {
+    const base = s.replace(/\.md$/, "").split("/").pop() ?? s;
+    return base.length > 18 ? base.slice(0, 17) + "…" : base;
+  };
+  if (nodes.length === 0) {
+    return <div style={{ flex: 1, display: "grid", placeItems: "center", fontSize: 11, color: "var(--cv-ink-faint)" }}>no notes in vault</div>;
+  }
+  return (
+    <div style={{ flex: 1, overflow: "auto", position: "relative", background: "radial-gradient(ellipse at center, rgba(255,255,255,0.02), transparent 65%)" }}>
+      <svg width={W} height={H} style={{ display: "block", margin: "0 auto" }}>
+        {edges.map(([a, b], i) => {
+          const pa = pos.get(a), pb = pos.get(b);
+          if (!pa || !pb) return null;
+          const hot = hover != null && (a === hover || b === hover);
+          return <line key={i} x1={pa.x} y1={pa.y} x2={pb.x} y2={pb.y}
+            stroke={hot ? "var(--cv-accent)" : "rgba(140,130,110,0.22)"} strokeWidth={hot ? 1.3 : 0.7} />;
+        })}
+        {nodes.map((n) => {
+          const p = pos.get(n)!;
+          const isCur = n === current;
+          const dim = neighbors != null && n !== hover && !neighbors.has(n);
+          return (
+            <g key={n} onClick={() => onOpen(n)} style={{ cursor: "pointer" }}
+              onMouseEnter={() => setHover(n)} onMouseLeave={() => setHover(null)}>
+              <circle cx={p.x} cy={p.y} r={isCur ? 8 : hover === n ? 6 : 4.5}
+                fill={isCur ? "var(--cv-accent)" : hover === n ? "var(--cv-accent)" : "#7f9e78"}
+                opacity={dim ? 0.3 : 1} />
+              {isCur && <circle cx={p.x} cy={p.y} r={13} fill="none" stroke="var(--cv-accent)" strokeOpacity={0.35} />}
+              <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize={isCur ? 10.5 : 9}
+                fontWeight={isCur ? 700 : 400}
+                fill={isCur || hover === n ? "var(--cv-accent)" : "var(--cv-ink-dim)"}
+                opacity={dim ? 0.25 : 1}>
+                {label(n)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div style={{ position: "absolute", bottom: 8, left: 14, fontSize: 9.5, color: "var(--cv-ink-faint)" }}>
+        {nodes.length} notes · {edges.length} links
+      </div>
+    </div>
+  );
+}
+
 /** "Generate PDF" menu — pick a template or ask for anything; the doc is
  * built from live board state, exported as .pdf and saved to artifacts. */
 export function GeneratePdfMenu({ onPick, onAsk }: {
@@ -479,6 +543,8 @@ export function VaultPanel() {
   const vaultWrite = useBoard((s) => s.vaultWrite);
   const vaultDelete = useBoard((s) => s.vaultDelete);
   const vaultRename = useBoard((s) => s.vaultRename);
+  const vaultGraph = useBoard((s) => s.vaultGraph);
+  const vaultGraphReq = useBoard((s) => s.vaultGraphReq);
   const notify = useBoard((s) => s.notify);
   const [dir, setDir] = useState(vaultDir || "/home/ubuntu/repos/agent-canvas");
   const [filter, setFilter] = useState("");
@@ -537,6 +603,7 @@ export function VaultPanel() {
   const [armedDel, setArmedDel] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [renName, setRenName] = useState("");
+  const [graphScope, setGraphScope] = useState<"local" | "vault">("local");
 
   const openDaily = () => {
     if (!vaultDir) { notify("open a vault first"); return; }
@@ -863,18 +930,45 @@ export function VaultPanel() {
             <button style={tabBtn(view === "reading")} onClick={() => setView("reading")}>Reading</button>
             <button style={tabBtn(view === "source")} onClick={() => setView("source")}>Source</button>
             <button style={tabBtn(view === "graph")} onClick={() => setView("graph")}>Graph</button>
+            {view === "graph" && (
+              <>
+                <span style={{ width: 1, background: "var(--cv-glass-edge)", margin: "2px 2px" }} />
+                <button style={tabBtn(graphScope === "local")} onClick={() => setGraphScope("local")}>note</button>
+                <button
+                  style={tabBtn(graphScope === "vault")}
+                  title="whole-vault graph — every note and every [[link]] between them"
+                  onClick={() => { setGraphScope("vault"); vaultGraphReq(); }}
+                >
+                  vault
+                </button>
+              </>
+            )}
           </div>
           {view === "reading" && <ReadingView text={vaultFile.text} onLink={openByName} />}
           {view === "source" && (
             <SourceEditor path={vaultFile.path} text={vaultFile.text} />
           )}
-          {view === "graph" && (
+          {view === "graph" && graphScope === "local" && (
             <GraphView
               text={vaultFile.text}
               path={vaultFile.path}
               entries={vaultEntries}
               onOpen={openByName}
             />
+          )}
+          {view === "graph" && graphScope === "vault" && (
+            vaultGraph ? (
+              <GlobalGraph
+                nodes={vaultGraph.nodes}
+                edges={vaultGraph.edges}
+                current={vaultFile.path}
+                onOpen={vaultRead}
+              />
+            ) : (
+              <div style={{ flex: 1, display: "grid", placeItems: "center", fontSize: 11, color: "var(--cv-ink-faint)" }}>
+                building graph…
+              </div>
+            )
           )}
           <div style={{
             marginTop: 8, paddingTop: 6, borderTop: "1px solid var(--cv-glass-edge)",
