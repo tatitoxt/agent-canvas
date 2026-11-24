@@ -244,8 +244,19 @@ export function Topbar({
             </>
           ))}
         </div>
+        <div
+          title={connected ? "daemon connected — canvasd is running" : "daemon offline — start canvasd"}
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: 999,
+            background: connected ? "var(--cv-done)" : "var(--cv-ink-faint)",
+            margin: "0 5px",
+            flexShrink: 0,
+          }}
+        />
         {!connected && (
-          <span style={{ fontSize: 10.5, color: "var(--cv-blocked)", padding: "0 6px" }}>
+          <span style={{ fontSize: 10.5, color: "var(--cv-blocked)", paddingRight: 6 }}>
             offline
           </span>
         )}

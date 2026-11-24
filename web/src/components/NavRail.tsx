@@ -17,7 +17,7 @@ const railCol: React.CSSProperties = {
 const railColRight: React.CSSProperties = {
   ...railCol,
   left: undefined,
-  right: 2,
+  right: 0,
 };
 
 const bubble: React.CSSProperties = {
@@ -292,7 +292,6 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
   const repoUrl = useBoard((s) => s.repoUrl);
   const agents = useBoard((s) => s.agents);
   const activeBoard = useBoard((s) => s.activeBoard);
-  const connected = useBoard((s) => s.connected);
   const openAgents = Object.values(agents)
     .filter((a) => (a.board_id ?? "main") === activeBoard && a.status !== "exited");
   const gitAgents = openAgents.filter((a) => a.worktree);
@@ -394,17 +393,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
           </>
         )}
         {/* github.com refuses iframes, so PRs/issues open as live panels,
-            not web nodes */}
-        <div
-          title={connected ? "daemon connected" : "daemon offline"}
-          style={{
-            marginTop: 2,
-            width: 7,
-            height: 7,
-            borderRadius: 999,
-            background: connected ? "var(--cv-done)" : "var(--cv-ink-faint)",
-          }}
-        />
+            not web nodes; the daemon dot lives in the topbar */}
       </nav>
 
       <div style={{ flex: 1 }} />
@@ -494,41 +483,41 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
     >
       {/* ── left of Dex · create ──────────────────────────── */}
       <div style={{ justifySelf: "end", display: "flex", alignItems: "flex-end", gap: 8, marginRight: 16, pointerEvents: "auto" }}>
-        <nav className="glass" style={bubbleRow}>
+        <nav className="glass" style={{ ...bubbleRow, padding: 4, gap: 2 }}>
           <button
             title="New task — open the spawn chooser (lives on the Orchestrator)"
             onClick={() => useBoard.getState().focusSpawn()}
-            style={btn(false)}
+            style={miniBtn(false)}
           >
-            <Icon name="newtask" />
+            <Icon name="newtask" size={13} />
           </button>
           <button
             title="File Explorer — vault files"
             onClick={() => onSelect("vault")}
-            style={btn(active === "vault")}
+            style={miniBtn(active === "vault")}
           >
-            <Icon name="explorer" />
+            <Icon name="explorer" size={13} />
           </button>
           <button
             title="Terminal — spawn a plain shell"
             onClick={() => useBoard.getState().spawn("Terminal", "bash")}
-            style={btn(false)}
+            style={miniBtn(false)}
           >
-            <Icon name="terminal" />
+            <Icon name="terminal" size={13} />
           </button>
           <button
             title="Code Editor — notes"
             onClick={() => onSelect("notes")}
-            style={btn(active === "notes")}
+            style={miniBtn(active === "notes")}
           >
-            <Icon name="code" />
+            <Icon name="code" size={13} />
           </button>
           <button
             title="New orchestrator — spawn a board commander"
             onClick={() => useBoard.getState().spawnOrchestrator()}
-            style={btn(false)}
+            style={miniBtn(false)}
           >
-            <Icon name="orchestrator" />
+            <Icon name="orchestrator" size={13} />
           </button>
         </nav>
       </div>

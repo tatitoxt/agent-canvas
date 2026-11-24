@@ -1,6 +1,7 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { useMemo, useState } from "react";
 import { CliMark } from "../components/CliMark";
+import { Icon } from "../components/icons";
 import { useBoard } from "../store/board";
 import { screenLines } from "./ptyScreen";
 import type {
@@ -522,141 +523,198 @@ export function OrchestratorNode({
     setCmd("");
   };
 
+  const actBtn: React.CSSProperties = {
+    width: 28,
+    height: 28,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 8,
+    cursor: "pointer",
+    flexShrink: 0,
+  };
+
   return (
     <div
       className="glass"
       style={{
-        width: 268,
-        padding: "14px 16px",
+        width: 292,
+        padding: 0,
+        overflow: "hidden",
         borderColor: wiring ? "var(--cv-accent)" : "var(--cv-accent-dim)",
         boxShadow: wiring
           ? "0 0 0 1px var(--cv-accent), 0 0 18px rgba(201,162,107,0.18)"
-          : undefined,
+          : "0 14px 36px rgba(0,0,0,0.34)",
       }}
     >
       <Handle type="target" position={Position.Left} />
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      {/* command-deck header: accent tile + name + spawn/connect */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 9,
+          padding: "10px 12px",
+          borderBottom: "1px solid var(--cv-glass-edge)",
+          background:
+            "linear-gradient(180deg, rgba(201,162,107,0.13), rgba(201,162,107,0.02))",
+        }}
+      >
         <div
           style={{
-            fontSize: 9.5,
-            letterSpacing: 1.6,
-            textTransform: "uppercase",
-            color: "var(--cv-accent)",
-            fontWeight: 600,
+            width: 30,
+            height: 30,
+            borderRadius: 9,
+            background: "var(--cv-accent)",
+            display: "grid",
+            placeItems: "center",
+            color: "#14110d",
+            flexShrink: 0,
           }}
         >
-          orchestrator
+          <Icon name="orchestrator" size={16} />
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 13.5,
+              fontWeight: 700,
+              color: "var(--cv-ink)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {data.name}
+          </div>
+          <div
+            style={{
+              fontSize: 8,
+              letterSpacing: 1.4,
+              textTransform: "uppercase",
+              color: "var(--cv-accent)",
+              fontWeight: 700,
+            }}
+          >
+            orchestrator · {roster.length} wired
+          </div>
+        </div>
+        <button
+          className="nodrag"
+          onClick={() => useBoard.getState().setSpawnOpen(true)}
+          title="Spawn — pick a CLI agent to run on the canvas"
+          style={{ ...actBtn, background: "var(--cv-accent)", border: "none", color: "#14110d" }}
+        >
+          <Icon name="plus" size={14} />
+        </button>
+        <button
+          className="nodrag"
+          onClick={() => setWiring(wiring ? null : orchId)}
+          title={wiring ? "Done wiring" : "Pick agent consoles on the canvas to wire them here"}
+          style={{
+            ...actBtn,
+            background: wiring ? "rgba(201,162,107,0.16)" : "none",
+            border: "1px solid var(--cv-accent-dim)",
+            color: wiring ? "var(--cv-accent)" : "var(--cv-ink-dim)",
+            fontSize: 10,
+            fontWeight: 700,
+            width: wiring ? 46 : 28,
+          }}
+        >
+          {wiring ? "done" : "⚡"}
+        </button>
+      </div>
+
+      <div style={{ padding: "9px 12px 12px" }}>
+        {wiring ? (
+          <div style={{ fontSize: 10.5, color: "var(--cv-accent)", marginBottom: 8 }}>
+            click agent cards to wire them — done when finished
+          </div>
+        ) : roster.length === 0 ? (
+          <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", marginBottom: 8 }}>
+            No agents wired — ⚡ connect to pick consoles
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 9 }}>
+            {roster.map((aid) => {
+              const a = agents[aid];
+              if (!a) return null;
+              const cli = (a.command ?? "bash").split(/\s+/)[0].toLowerCase();
+              const meta = CLI_META[cli];
+              return (
+                <button
+                  key={aid}
+                  className="nodrag"
+                  title={`${a.name} · ${meta?.label ?? cli} · ${a.status} — click to focus`}
+                  onClick={() => useBoard.getState().requestFocus(aid)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                    background: "var(--cv-glass-hi)",
+                    border: "1px solid var(--cv-glass-edge)",
+                    borderRadius: 999,
+                    padding: "2.5px 8px 2.5px 5px",
+                    fontSize: 9.5,
+                    color: "var(--cv-ink)",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <CliMark cli={cli} color={meta?.color ?? "#9a968e"} size={10} />
+                  {a.name}
+                  <span
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: 999,
+                      background: a.status === "exited" ? "var(--cv-idle)" : "var(--cv-working)",
+                    }}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="nodrag" style={{ display: "flex", gap: 6 }}>
+          <input
+            value={cmd}
+            onChange={(e) => setCmd(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && send()}
+            placeholder={
+              roster.length
+                ? `Command ${roster.length} agent${roster.length === 1 ? "" : "s"} · @ to direct…`
+                : "Try 'spawn two reviewers'…"
+            }
+            style={{
+              flex: 1,
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 8,
+              color: "var(--cv-ink)",
+              fontSize: 11,
+              padding: "6px 9px",
+              outline: "none",
+            }}
+          />
           <button
-            className="nodrag"
-            onClick={() => useBoard.getState().setSpawnOpen(true)}
-            title="Spawn — pick a CLI agent to run on the canvas"
+            onClick={send}
+            disabled={!cmd.trim()}
+            title="Send the command to every wired console — 'spawn two codex' also works"
             style={{
               background: "var(--cv-accent)",
               border: "none",
-              borderRadius: 11,
+              borderRadius: 8,
               color: "#14110d",
               fontSize: 11,
               fontWeight: 700,
-              padding: "2px 9px",
+              padding: "6px 12px",
               cursor: "pointer",
+              opacity: cmd.trim() ? 1 : 0.45,
             }}
           >
-            + spawn
-          </button>
-          <button
-            className="nodrag"
-            onClick={() => setWiring(wiring ? null : orchId)}
-            title="Pick agent consoles on the canvas to wire them here"
-            style={{
-              background: wiring ? "rgba(201,162,107,0.16)" : "none",
-              border: "1px solid var(--cv-accent-dim)",
-              borderRadius: 11,
-              color: wiring ? "var(--cv-accent)" : "var(--cv-ink-dim)",
-              fontSize: 10,
-              padding: "2px 9px",
-              cursor: "pointer",
-            }}
-          >
-            {wiring ? "done" : "⚡ connect"}
+            ▸
           </button>
         </div>
-      </div>
-      <div style={{ fontSize: 16, fontWeight: 650, marginTop: 4 }}>
-        {data.name}
-      </div>
-      <div style={{ fontSize: 11, color: "var(--cv-ink-dim)", marginTop: 5 }}>
-        {wiring
-          ? "click agent cards to wire them — click Connect when done"
-          : roster.length
-            ? `${roster.length} agents · General`
-            : "No agents wired — Connect and pick consoles"}
-      </div>
-      {roster.length > 0 && (
-        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-          {roster.map((aid) => {
-            const a = agents[aid];
-            if (!a) return null;
-            const cli = (a.command ?? "bash").split(/\s+/)[0].toLowerCase();
-            const meta = CLI_META[cli];
-            return (
-              <div key={aid} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 10.5 }}>
-                <CliMark cli={cli} color={meta?.color ?? "#9a968e"} size={11} />
-                <span style={{ color: "var(--cv-ink)", fontWeight: 600 }}>{a.name}</span>
-                <span style={{ color: "var(--cv-ink-dim)" }}>· {meta?.label ?? cli}</span>
-                <span
-                  style={{
-                    marginLeft: "auto",
-                    fontSize: 9.5,
-                    color: a.status === "exited" ? "var(--cv-idle)" : "var(--cv-working)",
-                  }}
-                >
-                  {a.status === "exited" ? "done" : "running"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      <div className="nodrag" style={{ display: "flex", gap: 6, marginTop: 10 }}>
-        <input
-          value={cmd}
-          onChange={(e) => setCmd(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder={
-            roster.length
-              ? `Command ${roster.length} agent${roster.length === 1 ? "" : "s"} · @ to direct…`
-              : "Try 'spawn two reviewers'…"
-          }
-          style={{
-            flex: 1,
-            background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 7,
-            color: "var(--cv-ink)",
-            fontSize: 11,
-            padding: "5px 8px",
-            outline: "none",
-          }}
-        />
-        <button
-          onClick={send}
-          disabled={!cmd.trim()}
-          title="Send the command to every wired console — 'spawn two codex' also works"
-          style={{
-            background: "rgba(201,162,107,0.14)",
-            border: "1px solid var(--cv-accent-dim)",
-            borderRadius: 7,
-            color: "var(--cv-accent)",
-            fontSize: 11,
-            padding: "5px 10px",
-            cursor: "pointer",
-            opacity: cmd.trim() ? 1 : 0.45,
-          }}
-        >
-          ▸
-        </button>
       </div>
       <Handle type="source" position={Position.Right} />
     </div>
