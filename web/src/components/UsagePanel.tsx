@@ -1,5 +1,5 @@
 import { useBoard } from "../store/board";
-import { PinBtn } from "./PinBtn";
+import { panelRoot } from "./panelChrome";
 
 const fmtBytes = (n: number) =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : n >= 1_000 ? `${(n / 1_000).toFixed(1)} KB` : `${n} B`;
@@ -27,29 +27,10 @@ export function UsagePanel() {
 
   return (
     <div
-      className="glass"
-      style={{
-        position: "absolute",
-        right: 76,
-        top: 64,
-        width: 300,
-        maxHeight: "72vh",
-        zIndex: 19,
-        padding: "12px 10px",
-        display: "flex",
-        flexDirection: "column",
-      }}
+      style={{ ...panelRoot, padding: "12px 10px" }}
     >
       <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 8px", color: "var(--cv-ink)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         Juice
-        <PinBtn
-          anchor="usage"
-          title="Juice — agent usage"
-          body={[
-            `${boardAgents.length} agents · ${live} live · ${fmtBytes(totalBytes)} output · ${totalFiles} files`,
-            ...list.map((a) => `${a.name}: ${fmtBytes(a.output_bytes ?? 0)} · ${a.files ?? 0} files · ${a.status}`),
-          ].join("\n")}
-        />
       </div>
       <div style={{ fontSize: 10, color: "var(--cv-ink-dim)", padding: "0 12px 10px" }}>
         {boardAgents.length} agent{boardAgents.length === 1 ? "" : "s"} · {live} live ·{" "}

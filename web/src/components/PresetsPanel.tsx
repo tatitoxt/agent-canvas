@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 
 const inputStyle: React.CSSProperties = {
@@ -38,17 +39,7 @@ export function PresetsPanel() {
 
   return (
     <div
-      className="glass-panel"
-      style={{
-        position: "absolute",
-        left: 64,
-        top: 64,
-        bottom: 64,
-        width: 330,
-        zIndex: 19,
-        padding: "16px 16px",
-        overflowY: "auto",
-      }}
+      style={{ ...panelRoot, padding: "16px 16px" }}
     >
       <div style={{ fontSize: 12, fontWeight: 700, color: "var(--cv-ink)", marginBottom: 4 }}>
         ◫ Layout presets

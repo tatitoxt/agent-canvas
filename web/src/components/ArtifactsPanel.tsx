@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 import { useReactFlow } from "@xyflow/react";
 import { cleanPinSpot } from "./PinBtn";
@@ -74,19 +75,8 @@ export function ArtifactsPanel() {
 
   return (
     <div
-      className="glass"
       data-panel="artifacts"
-      style={{
-        position: "absolute",
-        left: 64,
-        top: 64,
-        bottom: 64,
-        width: 340,
-        zIndex: 19,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
+      style={{ ...panelRoot, padding: "12px 10px" }}
     >
       {/* search */}
       <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid var(--cv-glass-edge)" }}>

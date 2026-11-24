@@ -1,6 +1,6 @@
 import { useState } from "react";
+import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
-import { PinBtn } from "./PinBtn";
 
 const input: React.CSSProperties = {
   width: "100%",
@@ -91,20 +91,8 @@ export function LoopsPanel() {
 
   return (
     <div
-      className="glass"
       data-panel="loops"
-      style={{
-        position: "absolute",
-        left: 64,
-        top: 64,
-        bottom: 64,
-        width: 330,
-        zIndex: 19,
-        display: "flex",
-        flexDirection: "column",
-        padding: "12px 10px",
-        overflow: "hidden",
-      }}
+      style={{ ...panelRoot, padding: "12px 10px" }}
     >
       <div
         style={{
@@ -119,7 +107,6 @@ export function LoopsPanel() {
       >
         Loops
         <span style={{ flex: 1 }} />
-        <PinBtn anchor="loops" title="Loops" body={list.map((l) => `${l.enabled ? "on" : "off"} · ${l.instruction}`).join("\n")} />
         <button
           className="glass-pill"
           style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}

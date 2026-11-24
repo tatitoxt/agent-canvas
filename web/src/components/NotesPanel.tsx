@@ -1,6 +1,6 @@
 import { useState } from "react";
+import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
-import { PinBtn } from "./PinBtn";
 
 const COLS = [
   { key: "todo", label: "todo" },
@@ -38,24 +38,11 @@ export function NotesPanel() {
 
   return (
     <div
-      className="glass"
       data-panel="notes"
-      style={{
-        position: "absolute",
-        left: 64,
-        top: 64,
-        bottom: 64,
-        width: 400,
-        zIndex: 19,
-        display: "flex",
-        flexDirection: "column",
-        padding: "12px 10px",
-        overflow: "hidden",
-      }}
+      style={{ ...panelRoot, padding: "12px 10px" }}
     >
       <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 8px", color: "var(--cv-ink)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         Notes
-        <PinBtn anchor="notes" title="Dex Tickets" body={Object.values(notes).map((n) => `[${n.col}] ${n.text}`).join("\n")} />
       </div>
       <form
         style={{ display: "flex", gap: 6, margin: "0 4px 10px" }}

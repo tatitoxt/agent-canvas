@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
+import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
-import { PinBtn } from "./PinBtn";
 
 const WD = ["m", "t", "w", "t", "f", "s", "s"];
 
@@ -53,20 +53,8 @@ export function CalendarPanel() {
 
   return (
     <div
-      className="glass"
       data-panel="calendar"
-      style={{
-        position: "absolute",
-        left: 64,
-        top: 64,
-        bottom: 64,
-        width: 340,
-        zIndex: 19,
-        display: "flex",
-        flexDirection: "column",
-        padding: "12px 10px",
-        overflow: "hidden",
-      }}
+      style={{ ...panelRoot, padding: "12px 10px" }}
     >
       <div
         style={{
@@ -84,7 +72,6 @@ export function CalendarPanel() {
           {monthName} {y}
           <button style={navBtn} onClick={() => setYm(shift(ym, 1))}>›</button>
         </span>
-        <PinBtn anchor="calendar" title="Calendar" body={`daily notes: ${[...daily].sort().join(", ")}`} />
       </div>
       <div
         style={{

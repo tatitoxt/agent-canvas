@@ -1,5 +1,5 @@
 import { useBoard } from "../store/board";
-import { PinBtn } from "./PinBtn";
+import { panelRoot } from "./panelChrome";
 
 const rowStyle: React.CSSProperties = {
   display: "flex",
@@ -53,20 +53,8 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
 
   return (
     <div
-      className="glass"
       data-panel="inbox"
-      style={{
-        position: "absolute",
-        left: 64,
-        top: 64,
-        bottom: 64,
-        width: 300,
-        zIndex: 19,
-        display: "flex",
-        flexDirection: "column",
-        padding: "12px 8px",
-        overflow: "hidden",
-      }}
+      style={{ ...panelRoot, padding: "12px 8px" }}
     >
       <div
         style={{
@@ -80,7 +68,6 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
       >
         Inbox
         <span style={{ flex: 1 }} />
-        <PinBtn anchor="inbox" title="Inbox" body={needsYou.map((a) => `${a.name} — ${a.lastLine ?? a.status}`).join("\n")} />
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
         {empty && (

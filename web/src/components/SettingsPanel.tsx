@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 
 const THEMES = [
@@ -15,15 +16,7 @@ export function SettingsPanel() {
   const [perm, setPerm] = useState<NotificationPermission>(supported ? Notification.permission : "denied");
   return (
     <div
-      className="glass"
-      style={{
-        position: "absolute",
-        left: 64,
-        top: 64,
-        width: 300,
-        zIndex: 19,
-        padding: "12px 10px",
-      }}
+      style={{ ...panelRoot, padding: "12px 10px" }}
     >
       <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 10px", color: "var(--cv-ink)" }}>
         Settings

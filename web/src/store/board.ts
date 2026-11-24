@@ -292,6 +292,14 @@ type BoardState = {
   vaultAssets: Record<string, string>;
   mdNodeAdd: (path: string, anchor?: string) => void;
   mdNodeRemove: (id: string) => void;
+  /** Tool panels living ON the canvas as nodes (Deska "Add to board") —
+   * each renders the live panel UI inside a card: movable, resizable,
+   * closable. Keyed per board; node id is `panel-<key>`. */
+  panelNodes: Record<string, Record<string, { panel: string; x: number; y: number; w: number; h: number }>>;
+  openPanelNode: (panel: string, pos?: { x: number; y: number }, size?: { w: number; h: number }) => void;
+  closePanelNode: (id: string) => void;
+  movePanelNode: (id: string, x: number, y: number) => void;
+  resizePanelNode: (id: string, w: number, h: number) => void;
   studioDocNow: () => void;
   closeStudioDoc: () => void;
   artifactDelete: (artifactId: string) => void;
@@ -945,6 +953,44 @@ export const useBoard = create<BoardState>((set, get) => ({
   mdNodes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-mdnodes") ?? "{}"); } catch { return {}; }
   })(),
+  panelNodes: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}"); } catch { return {}; }
+  })(),
+  openPanelNode: (panel, pos, size) => {
+    const board = get().activeBoard;
+    const id = `panel-${panel}`;
+    const existing = get().panelNodes[board]?.[id];
+    if (existing) { get().requestFocus(id); return; }
+    const def = size ?? { w: 320, h: 420 };
+    const m = { ...(get().panelNodes[board] ?? {}), [id]: { panel, x: pos?.x ?? 380 + Math.random() * 120, y: pos?.y ?? 140 + Math.random() * 80, ...def } };
+    const next = { ...get().panelNodes, [board]: m };
+    localStorage.setItem("cv-panelnodes", JSON.stringify(next));
+    set({ panelNodes: next });
+  },
+  closePanelNode: (id) => {
+    const board = get().activeBoard;
+    const m = { ...(get().panelNodes[board] ?? {}) };
+    delete m[id];
+    const next = { ...get().panelNodes, [board]: m };
+    localStorage.setItem("cv-panelnodes", JSON.stringify(next));
+    set({ panelNodes: next });
+  },
+  movePanelNode: (id, x, y) => {
+    const board = get().activeBoard;
+    const n = get().panelNodes[board]?.[id];
+    if (!n) return;
+    const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: { ...n, x, y } } };
+    localStorage.setItem("cv-panelnodes", JSON.stringify(next));
+    set({ panelNodes: next });
+  },
+  resizePanelNode: (id, w, h) => {
+    const board = get().activeBoard;
+    const n = get().panelNodes[board]?.[id];
+    if (!n) return;
+    const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: { ...n, w, h } } };
+    localStorage.setItem("cv-panelnodes", JSON.stringify(next));
+    set({ panelNodes: next });
+  },
   mdContents: {},
   vaultAssets: {},
   anchors: (() => {

@@ -24,25 +24,13 @@ import { NavRail, RightRail, BottomDock } from "./components/NavRail";
 import { Icon } from "./components/icons";
 import { SpawnBar } from "./components/SpawnBar";
 import { TerminalPanel } from "./components/TerminalPanel";
-import { InboxPanel } from "./components/InboxPanel";
-import { AutomationsPanel } from "./components/AutomationsPanel";
-import { LoopsPanel } from "./components/LoopsPanel";
-import { PresetsPanel } from "./components/PresetsPanel";
-import { ThreadPanel } from "./components/ThreadPanel";
-import { AccountsPanel } from "./components/AccountsPanel";
-import { UsagePanel } from "./components/UsagePanel";
-import { MemoryPanel } from "./components/MemoryPanel";
-import { GitHubPanel } from "./components/GitHubPanel";
-import { NotesPanel } from "./components/NotesPanel";
-import { ArtifactsPanel } from "./components/ArtifactsPanel";
-import { VaultPanel } from "./components/VaultPanel";
-import { CalendarPanel } from "./components/CalendarPanel";
-import { SettingsPanel } from "./components/SettingsPanel";
-import { SkillsPanel } from "./components/SkillsPanel";
+import { PanelNode } from "./board/PanelNode";
+import { PANEL_DEFS } from "./components/panelRegistry";
+import { PanelActionsCtx } from "./components/panelCtx";
 import { StudioPanel } from "./components/StudioPanel";
 import { DigestPanel } from "./components/DigestPanel";
 import { NoticePill } from "./components/NoticePill";
-import { HistoryPanel } from "./components/HistoryPanel";
+
 import { CommandPalette } from "./components/CommandPalette";
 
 import { DelegationPanel } from "./components/DelegationPanel";
@@ -59,6 +47,7 @@ const nodeTypes = {
   web: WebNode,
   shape: ShapeNode,
   md: MdNode,
+  panel: PanelNode,
 };
 const edgeTypes = { delegation: DelegationEdge };
 
@@ -151,6 +140,7 @@ function Board() {
   const shapes = useBoard((s) => s.shapes);
   const moveShape = useBoard((s) => s.moveShape);
   const mdNodes = useBoard((s) => s.mdNodes);
+  const panelNodes = useBoard((s) => s.panelNodes);
   const wiringFrom = useBoard((s) => s.wiringFrom);
   const toggleWire = useBoard((s) => s.toggleWire);
   const setWiring = useBoard((s) => s.setWiring);
@@ -244,11 +234,45 @@ function Board() {
   }, [termRequest]);
   const focusNode = useBoard((s) => s.focusNode);
   useEffect(() => {
-    if (focusNode) fitView({ nodes: [{ id: focusNode.id }], padding: 0.25, maxZoom: 1.2, duration: 300 });
+    if (focusNode) {
+      // Retry a few frames: a just-created panel node may take a tick to
+      // register, and fitView on a missing node falls back to fitting all.
+      let tries = 8;
+      const attempt = () => {
+        const n = getNodes().find((x) => x.id === focusNode.id);
+        if (n) fitView({ nodes: [n], padding: 0.25, maxZoom: 1.2, duration: 300 });
+        else if (--tries > 0) setTimeout(attempt, 40);
+      };
+      const t = setTimeout(attempt, 40);
+      return () => clearTimeout(t);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusNode]);
   const [delegateFrom, setDelegateFrom] = useState<{ from: string; at: { x: number; y: number } } | null>(null);
   const [nav, setNav] = useState("canvas");
+  // Tool panels live on the canvas as nodes (Deska "Add to board"):
+  // clicking a rail/topbar icon opens or focuses its card; re-clicking
+  // closes it. Non-panel keys (canvas) behave as before.
+  const navToggle = (k: string) => {
+    setNav((n) => {
+      if (n === k) {
+        useBoard.getState().closePanelNode(`panel-${k}`);
+        return "canvas";
+      }
+      if (PANEL_DEFS[k]) {
+        const b = useBoard.getState();
+        if (!b.panelNodes[b.activeBoard]?.[`panel-${k}`]) {
+          const def = PANEL_DEFS[k];
+          // Inbox docks to the right edge (Deska); other panels land center-right.
+          const sx = k === "inbox" ? window.innerWidth - def.w - 24 : window.innerWidth * 0.42;
+          const p = screenToFlowPosition({ x: sx, y: window.innerHeight * 0.1 });
+          b.openPanelNode(k, p, { w: def.w, h: def.h });
+        }
+        b.requestFocus(`panel-${k}`);
+      }
+      return k;
+    });
+  };
   const [palette, setPalette] = useState(false);
   const edgeDetail = useBoard((s) => s.edgeDetail);
   const setEdgeDetail = useBoard((s) => s.setEdgeDetail);
@@ -430,13 +454,22 @@ function Board() {
         data: { kind: "md" as const, id, path },
       }),
     );
+    const panelNs: Node<BoardNodeData>[] = Object.entries(panelNodes[activeBoard] ?? {}).map(
+      ([id, n]) => ({
+        id,
+        type: "panel" as const,
+        position: { x: n.x, y: n.y },
+        style: { width: n.w, height: n.h },
+        data: { kind: "panel" as const, id },
+      }),
+    );
     // Demo mock only when the daemon was never connected AND there's no
     // persisted state — a transient disconnect keeps the real board.
     const useMock = !connected && Object.keys(agents).length === 0;
     return useMock
-      ? [...initialNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs]
-      : [...wsNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs];
-  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges, shapes, mdNodes]);
+      ? [...initialNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs]
+      : [...wsNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs];
+  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges, shapes, mdNodes, panelNodes]);
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     // In Connect mode a click on an agent card wires/unwires it to the
@@ -468,6 +501,8 @@ function Board() {
   const onNodeDragStop: OnNodeDrag = (_, node) => {
     if (node.id.startsWith("shape-")) {
       moveShape(node.id, node.position.x, node.position.y);
+    } else if (node.id.startsWith("panel-")) {
+      useBoard.getState().movePanelNode(node.id, node.position.x, node.position.y);
     } else if (agents[node.id] || workspaces[node.id] || node.id.startsWith("web-") || node.id.startsWith("orch-") || node.id.startsWith("md-")) {
       moveNode(node.id, node.position.x, node.position.y);
     }
@@ -520,21 +555,22 @@ function Board() {
   }, [connected, liveEdges, agents, activeBoard, orchestrators]);
 
   return (
+    <PanelActionsCtx.Provider value={{ openTerm, openEdgeDetail: setEdgeDetail }}>
     <div className="relative h-full w-full">
       {!chromeHidden && (
         <>
           <NavRail
             active={nav}
-            onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
+            onSelect={navToggle}
           />
           <RightRail />
           <BottomDock
             active={nav}
-            onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
+            onSelect={navToggle}
           />
           <Topbar
             nav={nav}
-            onNav={(k) => setNav((n) => (n === k ? "canvas" : k))}
+            onNav={navToggle}
             tools={{
               onDigest: () => useBoard.getState().digestNow(),
               onShot: () => void shotCanvas(),
@@ -651,12 +687,13 @@ function Board() {
           setEdgeDetail(null);
           setWiring(null);
         }}
-        fitView
-        fitViewOptions={{ padding: 0.18, maxZoom: 1.1 }}
+        onInit={(rf) => rf.fitView({ padding: 0.18, maxZoom: 1.1 })}
         minZoom={0.15}
         maxZoom={2}
         selectionOnDrag
         panOnDrag={[1, 2]}
+        panOnScroll
+        zoomOnScroll={false}
         onSelectionChange={({ nodes }) =>
           setSel(
             nodes.map((n) => ({
@@ -754,35 +791,9 @@ function Board() {
           </div>
         )}
       {connected === false && null}
-      {nav === "inbox" && (
-        <InboxPanel
-          onOpenAgent={(id) => {
-            const a = agents[id];
-            if (a) { useBoard.getState().requestFocus(id); openTerm({ id: a.id, name: a.name }); }
-          }}
-        />
-      )}
-      {nav === "automations" && <AutomationsPanel />}
-      {nav === "loops" && <LoopsPanel />}
-      {nav === "presets" && <PresetsPanel />}
-      {nav === "thread" && <ThreadPanel />}
-      {nav === "accounts" && <AccountsPanel />}
-      {nav === "usage" && <UsagePanel />}
-      {nav === "memory" && <MemoryPanel />}
-      {nav === "notes" && <NotesPanel />}
-      {nav === "prs" && <GitHubPanel kind="prs" />}
-      {nav === "issues" && <GitHubPanel kind="issues" />}
-      {nav === "artifacts" && <ArtifactsPanel />}
-      {nav === "vault" && <VaultPanel />}
-      {nav === "calendar" && <CalendarPanel />}
-      {nav === "settings" && <SettingsPanel />}
-      {nav === "skills" && <SkillsPanel />}
       <DigestPanel />
       <StudioPanel />
       <NoticePill />
-      {nav === "history" && (
-        <HistoryPanel onOpenEdge={(id) => { setEdgeDetail(id); setNav("canvas"); }} />
-      )}
       {sel.length >= 2 && !chromeHidden && (
         <button
           className="glass"
@@ -871,6 +882,7 @@ function Board() {
         <DelegateDialog from={delegateFrom.from} at={delegateFrom.at} onClose={() => setDelegateFrom(null)} />
       )}
     </div>
+    </PanelActionsCtx.Provider>
   );
 }
 

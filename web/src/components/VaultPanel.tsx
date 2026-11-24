@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 import { downloadPdf } from "../lib/pdf";
 import { buildDoc, buildAskDoc } from "../lib/boardDocs";
@@ -1015,7 +1016,7 @@ export function VaultPanel() {
   const notify = useBoard((s) => s.notify);
   const [dir, setDir] = useState(vaultDir || "/home/ubuntu/repos/agent-canvas");
   const [filter, setFilter] = useState("");
-  const [panelW, setPanelW] = useState(320);
+
   const [bookmarks, setBookmarks] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem(BOOKMARKS_KEY) ?? "[]")); } catch { return new Set(); }
   });
@@ -1059,14 +1060,6 @@ export function VaultPanel() {
     if (saved) vaultList(saved);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vaultDir]);
-  const dragStart = (ev: React.MouseEvent) => {
-    ev.preventDefault();
-    const startX = ev.clientX, startW = panelW;
-    const move = (e: MouseEvent) => setPanelW(Math.min(560, Math.max(230, startW + e.clientX - startX)));
-    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
-  };
 
   // Debounced full-text search — filename filter stays instant, content
   // hits arrive via `vault_hits`.
@@ -1225,27 +1218,21 @@ export function VaultPanel() {
   };
 
   return (
-    <>
+    <div style={{ ...panelRoot, flexDirection: "row" }}>
       <div
-        className="glass"
+        data-panel="vault-explorer"
         style={{
-          position: "absolute",
-          left: 64,
-          top: 64,
-          bottom: 64,
-          width: panelW,
-          zIndex: 19,
+          width: "36%",
+          minWidth: 170,
+          flexShrink: 0,
+          height: "100%",
           display: "flex",
           flexDirection: "column",
           padding: "12px 10px 8px",
           overflow: "hidden",
+          borderRight: "1px solid var(--cv-glass-edge)",
         }}
       >
-      <div
-        onMouseDown={dragStart}
-        title="drag to resize"
-        style={{ position: "absolute", right: -3, top: 0, bottom: 0, width: 6, cursor: "col-resize", zIndex: 5 }}
-      />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px 8px" }}>
         <span style={{ fontSize: 12.5, fontWeight: 650, color: "var(--cv-ink)", display: "flex", alignItems: "center", gap: 6 }}>
           <img src="/obsidian.svg" alt="" width={13} height={13} /> Vault
@@ -1465,21 +1452,18 @@ export function VaultPanel() {
         {vaultName}
       </div>
       </div>
-      {vaultFile && (
+      {vaultFile ? (
         <div
-          className="glass"
           data-panel="vault"
           style={{
-            position: "absolute",
-            left: 64 + panelW + 12,
-            top: 64,
-            bottom: 64,
-            right: 24,
-            maxWidth: 720,
-            zIndex: 20,
+            position: "relative",
+            flex: 1,
+            minWidth: 0,
+            height: "100%",
             display: "flex",
             flexDirection: "column",
             padding: "14px 16px 10px",
+            overflow: "hidden",
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
@@ -1691,6 +1675,10 @@ export function VaultPanel() {
             <span>{vaultFile.text.length.toLocaleString()} characters</span>
           </div>
         </div>
+      ) : (
+        <div style={{ flex: 1, display: "grid", placeItems: "center", color: "var(--cv-ink-faint)", fontSize: 11.5 }}>
+          pick a note — or today for your daily
+        </div>
       )}
       {ctxMenu && (
         <>
@@ -1771,6 +1759,6 @@ export function VaultPanel() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

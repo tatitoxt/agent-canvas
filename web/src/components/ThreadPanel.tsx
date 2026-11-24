@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 
 /** The Dex conversation — log only. Input lives in the Dex pill at
@@ -13,18 +14,7 @@ export function ThreadPanel() {
 
   return (
     <div
-      className="glass-panel"
-      style={{
-        position: "absolute",
-        left: 64,
-        top: 64,
-        bottom: 64,
-        width: 330,
-        zIndex: 19,
-        padding: "16px 16px",
-        display: "flex",
-        flexDirection: "column",
-      }}
+      style={{ ...panelRoot, padding: "16px 16px" }}
     >
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
         {log.length === 0 && (

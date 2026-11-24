@@ -77,13 +77,19 @@ export type MdNodeData = {
   path: string;
 };
 
+export type PanelNodeData = {
+  kind: "panel";
+  id: string;
+};
+
 export type BoardNodeData =
   | AgentNodeData
   | OrchestratorNodeData
   | WorkspaceNodeData
   | WebNodeData
   | ShapeNodeData
-  | MdNodeData;
+  | MdNodeData
+  | PanelNodeData;
 
 export type DelegationEdgeData = {
   task?: string;

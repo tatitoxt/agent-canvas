@@ -310,9 +310,6 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
 
   const [menu, setMenu] = useState<"git" | null>(null);
   const [expanded, setExpanded] = useState(false);
-  // Picking a panel collapses the Library so it doesn't cover the panel's
-  // left column.
-  const pick = (k: string) => { setExpanded(false); onSelect(k); };
   const railRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -323,203 +320,114 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
     return () => window.removeEventListener("mousedown", onDown);
   }, [menu]);
 
-  const toolRow = (icon: string, label: string, hint: string, onClick: () => void, activeKey?: string, iconColor?: string, fact?: string) => (
-    <button
-      key={label}
+  const tools: { icon?: string; img?: string; label: string; hint: string; onClick: () => void; key?: string; color?: string; fact?: string; badgeN?: number }[] = [
+    { icon: "git", label: "Source Control", hint: `worktrees, push an agent's branch${gitAgents.length ? ` — ${gitAgents.length} live` : ""}`, onClick: () => setMenu((m) => (m === "git" ? null : "git")), badgeN: gitAgents.length },
+    { img: "/obsidian.svg", label: "Obsidian", hint: "your real vault — 'obsidian <note>' in Dex writes to it", onClick: () => onSelect("vault"), key: "vault", color: "#8B5CF6" },
+    ...(repoUrl ? [
+      { icon: "github", label: "Pull requests", hint: "live list from the repo's GitHub", onClick: () => onSelect("prs"), key: "prs", fact: ghCounts.prs != null ? `${ghCounts.prs} open` : undefined },
+      { icon: "issue", label: "Issues", hint: "live list from the repo's GitHub", onClick: () => onSelect("issues"), key: "issues", fact: ghCounts.issues != null ? `${ghCounts.issues} open` : undefined },
+    ] as const : []),
+    { icon: "ticket", label: "Dex Tickets", hint: "notes and tasks on the board", onClick: () => onSelect("notes"), key: "notes", fact: noteCount ? `${noteCount}` : undefined },
+    { icon: "artifacts", label: "Artifacts", hint: "shots, docs and files the agents produced", onClick: () => onSelect("artifacts"), key: "artifacts", fact: artifactCount ? `${artifactCount}` : undefined },
+    { icon: "calendar", label: "Calendar", hint: "daily notes + due dates from your vault", onClick: () => onSelect("calendar"), key: "calendar" },
+    { icon: "loops", label: "Loops", hint: "recurring instructions per agent", onClick: () => onSelect("loops"), key: "loops", fact: loopCount ? `${loopCount} active` : undefined },
+  ];
+
+  const renderTool = (t: (typeof tools)[number]) =>
+    expanded ? (
+      <button
+        key={t.label}
+        title={t.hint}
+        onClick={t.onClick}
+        style={menuRow}
+        onMouseEnter={(e) => hoverRow(e, true)}
+        onMouseLeave={(e) => hoverRow(e, false)}
+      >
+        {t.img ? (
+          <img src={t.img} alt="" width={14} height={14} />
+        ) : (
+          <Icon name={t.icon!} size={14} color={t.color ?? (t.key && active === t.key ? "var(--cv-accent)" : "var(--cv-ink-dim)")} />
+        )}
+        <span style={{ flex: 1 }}>{t.label}</span>
+        {t.fact && <span style={{ fontSize: 9, color: "var(--cv-ink-dim)", fontWeight: 600 }}>{t.fact}</span>}
+      </button>
+    ) : (
+      <button key={t.label} title={t.hint} onClick={t.onClick} style={btn(!!t.key && active === t.key)}>
+        {t.img ? (
+          <img src={t.img} alt="" width={15} height={15} />
+        ) : (
+          <Icon name={t.icon!} color={t.color} />
+        )}
+        {!!t.badgeN && <span style={badge("var(--cv-waiting)")}>{t.badgeN}</span>}
+      </button>
+    );
+
+  const gitMenuEl = menu === "git" && (
+    <div
+      className="cv-menu cv-menu-scroll"
       style={{
-        ...menuRow,
-        color: activeKey && active === activeKey ? "var(--cv-accent)" : "var(--cv-ink)",
-        background: activeKey && active === activeKey ? "var(--cv-glass-hi)" : "transparent",
+        position: "absolute",
+        left: expanded ? 180 : 46,
+        top: expanded ? 64 : 36,
+        width: 220,
+        padding: 6,
+        zIndex: 40,
+        maxHeight: 340,
+        overflowY: "auto",
       }}
-      title={hint}
-      onClick={() => { onClick(); }}
-      onMouseEnter={(e) => hoverRow(e, true)}
-      onMouseLeave={(e) => hoverRow(e, activeKey === active)}
     >
-      {icon === "obsidian-real" ? (
-        <img src="/obsidian.svg" alt="" width={14} height={14} />
-      ) : (
-        <Icon name={icon} size={14} color={iconColor ?? (activeKey && active === activeKey ? "var(--cv-accent)" : "var(--cv-ink-dim)")} />
+      <div style={sectionLabel}>Source control</div>
+      {gitAgents.length === 0 && (
+        <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
+          no agents with worktrees
+        </div>
       )}
-      <span style={{ flex: 1 }}>{label}</span>
-      {fact && <span style={{ fontSize: 9, color: "var(--cv-ink-dim)", fontWeight: 600 }}>{fact}</span>}
-    </button>
+      {gitAgents.map((a) => (
+        <button
+          key={a.id}
+          style={menuRow}
+          title={`push ${a.worktree} — the agent's branch`}
+          onClick={() => { useBoard.getState().gitPush(a.id); setMenu(null); }}
+          onMouseEnter={(e) => hoverRow(e, true)}
+          onMouseLeave={(e) => hoverRow(e, false)}
+        >
+          <Icon name="git" size={13} color="var(--cv-ink-dim)" />
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {a.name}
+          </span>
+          <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>push</span>
+        </button>
+      ))}
+    </div>
   );
 
-  if (expanded) {
-    return (
-      <div ref={railRef} style={{ ...railCol, width: 172, alignItems: "stretch" }}>
-        <nav className="glass cv-menu-scroll" style={{ ...bubble, alignItems: "stretch", padding: "6px 4px", gap: 1, maxHeight: "70vh", overflowY: "auto" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px 6px" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--cv-ink)" }}>Library</span>
-            <button
-              title="Collapse tools — icons only"
-              onClick={() => setExpanded(false)}
-              style={{ ...tinyBtn(false), borderRadius: 999 }}
-            >
-              <Icon name="expand" size={12} />
-            </button>
-          </div>
-          {toolRow("git", "Source Control", `worktrees, push an agent's branch${gitAgents.length ? ` — ${gitAgents.length} live` : ""}`, () => setMenu((m) => (m === "git" ? null : "git")))}
-          {toolRow("obsidian-real", "Obsidian", "your real vault — browse markdown; 'obsidian <note>' in Dex writes to it", () => pick("vault"), "vault", "#8B5CF6")}
-          {toolRow("github", "Pull requests", "live list from the repo's GitHub", () => pick("prs"), "prs", undefined, ghCounts.prs != null ? `${ghCounts.prs} open` : undefined)}
-          {toolRow("issue", "Issues", "live list from the repo's GitHub", () => pick("issues"), "issues", undefined, ghCounts.issues != null ? `${ghCounts.issues} open` : undefined)}
-          {toolRow("ticket", "Dex Tickets", "notes and tasks on the board", () => pick("notes"), "notes", undefined, noteCount ? `${noteCount}` : undefined)}
-          {toolRow("artifacts", "Artifacts", "shots, docs and files the agents produced", () => pick("artifacts"), "artifacts", undefined, artifactCount ? `${artifactCount}` : undefined)}
-          {toolRow("calendar", "Calendar", "daily notes + due dates from your vault", () => pick("calendar"), "calendar")}
-          {toolRow("loops", "Loops", "recurring instructions per agent", () => pick("loops"), "loops", undefined, loopCount ? `${loopCount} active` : undefined)}
-        </nav>
-        {menu === "git" && (
-          <div
-            className="cv-menu cv-menu-scroll"
-            style={{
-              position: "absolute",
-              left: 180,
-              top: 226,
-              width: 220,
-              padding: 6,
-              zIndex: 40,
-              maxHeight: 340,
-              overflowY: "auto",
-            }}
-          >
-            <div style={sectionLabel}>Source control</div>
-            {gitAgents.length === 0 && (
-              <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
-                no agents with worktrees
-              </div>
-            )}
-            {gitAgents.map((a) => (
-              <button
-                key={a.id}
-                style={menuRow}
-                title={`push ${a.worktree} — the agent's branch`}
-                onClick={() => { useBoard.getState().gitPush(a.id); setMenu(null); }}
-                onMouseEnter={(e) => hoverRow(e, true)}
-                onMouseLeave={(e) => hoverRow(e, false)}
-              >
-                <Icon name="git" size={13} color="var(--cv-ink-dim)" />
-                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {a.name}
-                </span>
-                <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>push</span>
-              </button>
-            ))}
-          </div>
-        )}
-        <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 8 }}>
-          <ExtrasBubble side="left" onSelect={onSelect} />
-          <OrchestratorsBubble />
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div ref={railRef} style={railCol}>
-      <button
-        className="glass"
-        title="Library — expand for panel names"
-        onClick={() => setExpanded(true)}
-        style={{ ...btn(false), borderRadius: 999, width: 30, height: 30 }}
+    <div ref={railRef} style={{ ...railCol, alignItems: expanded ? "stretch" : "center", width: expanded ? 174 : undefined }}>
+      <nav
+        className={expanded ? "glass cv-menu-scroll" : "glass"}
+        style={{
+          ...bubble,
+          alignItems: expanded ? "stretch" : "center",
+          padding: expanded ? "6px 4px" : bubble.padding,
+          gap: expanded ? 1 : bubble.gap,
+          maxHeight: expanded ? "70vh" : undefined,
+          overflowY: expanded ? "auto" : undefined,
+        }}
       >
-        <Icon name="collapse" size={13} />
-      </button>
-      <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 0.4, color: "var(--cv-ink-dim)", textTransform: "uppercase" }}>Library</span>
-      <nav className="glass" style={bubble}>
-        <div style={{ position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: expanded ? "space-between" : "center", padding: expanded ? "2px 6px 6px" : "2px 0", width: expanded ? "100%" : undefined }}>
+          {expanded && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--cv-ink)" }}>Library</span>}
           <button
-            title="Source control — worktrees, push an agent's branch"
-            onClick={() => setMenu((m) => (m === "git" ? null : "git"))}
-            style={btn(menu === "git")}
+            title={expanded ? "Collapse tools — icons only" : "Library — expand for panel names"}
+            onClick={() => setExpanded((e) => !e)}
+            style={{ ...tinyBtn(false), borderRadius: 999 }}
           >
-            <Icon name="git" />
-            {gitAgents.length > 0 && (
-              <span style={badge("var(--cv-waiting)")}>{gitAgents.length}</span>
-            )}
+            <Icon name={expanded ? "expand" : "collapse"} size={12} />
           </button>
-          {menu === "git" && (
-            <div
-              className="cv-menu cv-menu-scroll"
-              style={{
-                position: "absolute",
-                left: 46,
-                top: 0,
-                width: 220,
-                padding: 6,
-                zIndex: 40,
-                maxHeight: 340,
-                overflowY: "auto",
-              }}
-            >
-              <div style={sectionLabel}>Source control</div>
-              {gitAgents.length === 0 && (
-                <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
-                  no agents with worktrees
-                </div>
-              )}
-              {gitAgents.map((a) => (
-                <button
-                  key={a.id}
-                  style={menuRow}
-                  title={`push ${a.worktree} — the agent's branch`}
-                  onClick={() => { useBoard.getState().gitPush(a.id); setMenu(null); }}
-                  onMouseEnter={(e) => hoverRow(e, true)}
-                  onMouseLeave={(e) => hoverRow(e, false)}
-                >
-                  <Icon name="git" size={13} color="var(--cv-ink-dim)" />
-                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {a.name}
-                  </span>
-                  <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>push</span>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
-        <button
-          title="Explorer — vault files"
-          onClick={() => onSelect("vault")}
-          style={btn(active === "vault")}
-        >
-          <Icon name="explorer" />
-        </button>
-        <button
-          title="Dev ticket — notes and tasks on the board"
-          onClick={() => onSelect("notes")}
-          style={btn(active === "notes")}
-        >
-          <Icon name="ticket" />
-        </button>
-        <button
-          title="Obsidian — your real vault, live markdown; tell Dex 'obsidian <note>' to write there"
-          onClick={() => onSelect("vault")}
-          style={btn(active === "vault")}
-        >
-          <img src="/obsidian.svg" alt="" width={15} height={15} />
-        </button>
-        {repoUrl && (
-          <>
-            <button
-              title="Pull requests — live list; the panel has an Open on github.com button"
-              onClick={() => onSelect("prs")}
-              style={btn(active === "prs")}
-            >
-              <Icon name="github" />
-            </button>
-            <button
-              title="Issues — live list from the repo's GitHub"
-              onClick={() => onSelect("issues")}
-              style={btn(active === "issues")}
-            >
-              <Icon name="issue" />
-            </button>
-          </>
-        )}
-        {/* github.com refuses iframes, so PRs/issues open as live panels,
-            not web nodes; the daemon dot lives in the topbar */}
+        {!expanded && <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 0.4, color: "var(--cv-ink-dim)", textTransform: "uppercase" }}>Library</span>}
+        {tools.map(renderTool)}
       </nav>
+      {gitMenuEl}
 
       <div style={{ flex: 1 }} />
 
@@ -531,8 +439,6 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
   );
 }
 
-/** Orchestrators on this board — own bubble next to Extras; the list
- * focuses a commander, the last row spawns a new one. */
 function OrchestratorsBubble() {
   const orchestrators = useBoard((s) => s.orchestrators);
   const activeBoard = useBoard((s) => s.activeBoard);
@@ -614,6 +520,7 @@ function OrchestratorsBubble() {
 /** Right rail — Spaces up top; the mini controls bubble (zoom,
  * gather, hide, summaries) parked at the bottom-right edge, right
  * of the minimap. */
+
 export function RightRail() {
   const summaries = useBoard((s) => s.panelSummaries);
   const zoomPct = useBoard((s) => s.zoomPct);

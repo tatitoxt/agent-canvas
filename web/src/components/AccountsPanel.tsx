@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 
 const CLIS = [
@@ -68,19 +69,7 @@ export function AccountsPanel() {
 
   return (
     <div
-      className="glass"
-      style={{
-        position: "absolute",
-        left: 64,
-        top: 64,
-        bottom: 64,
-        width: 320,
-        zIndex: 19,
-        display: "flex",
-        flexDirection: "column",
-        padding: "12px 10px",
-        overflow: "hidden",
-      }}
+      style={{ ...panelRoot, padding: "12px 10px" }}
     >
       <div
         style={{

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 
 /** One-click skills — a small community-style catalog. Installing appends
@@ -71,19 +72,7 @@ export function SkillsPanel() {
 
   return (
     <div
-      className="glass"
-      style={{
-        position: "absolute",
-        left: 64,
-        top: 64,
-        bottom: 64,
-        width: 300,
-        zIndex: 19,
-        display: "flex",
-        flexDirection: "column",
-        padding: "12px 10px",
-        overflow: "hidden",
-      }}
+      style={{ ...panelRoot, padding: "12px 10px" }}
     >
       <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 8px", color: "var(--cv-ink)" }}>
         Skills
