@@ -159,7 +159,9 @@ export class CanvasClient {
 
   constructor(token: string, handlers: Handlers) {
     this.handlers = handlers;
-    this.ws = new WebSocket(`ws://127.0.0.1:4242/ws?token=${token}`);
+    const daemon =
+      new URLSearchParams(location.search).get("daemon") ?? "127.0.0.1:4242";
+    this.ws = new WebSocket(`ws://${daemon}/ws?token=${token}`);
     this.ws.binaryType = "arraybuffer";
     this.ws.onmessage = (ev) => {
       if (typeof ev.data === "string") {

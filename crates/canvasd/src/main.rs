@@ -2044,9 +2044,13 @@ async fn main() -> Result<()> {
         });
     }
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let host: std::net::IpAddr = std::env::var("CANVASD_HOST")
+        .ok()
+        .and_then(|h| h.parse().ok())
+        .unwrap_or(std::net::IpAddr::from([127, 0, 0, 1]));
+    let addr = SocketAddr::from((host, port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    info!(%addr, "canvasd listening (localhost only)");
+    info!(%addr, "canvasd listening");
     println!("CANVASD_TOKEN={token}");
 
     axum::serve(listener, app).await?;
