@@ -37,6 +37,8 @@ import { DelegationPanel } from "./components/DelegationPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { Topbar } from "./components/Topbar";
 import { ContextMenu } from "./components/ContextMenu";
+import { CardMenu } from "./components/CardMenu";
+import { isTauri } from "./daemon/tauriClient";
 import { PaneMenu } from "./components/PaneMenu";
 import { TermNode } from "./board/TermNode";
 import { useBoard } from "./store/board";
@@ -145,6 +147,7 @@ function Board() {
   const mdNodes = useBoard((s) => s.mdNodes);
   const panelNodes = useBoard((s) => s.panelNodes);
   const termNodes = useBoard((s) => s.termNodes);
+  const cardZ = useBoard((s) => s.cardZ);
   const wiringFrom = useBoard((s) => s.wiringFrom);
   const toggleWire = useBoard((s) => s.toggleWire);
   const setWiring = useBoard((s) => s.setWiring);
@@ -213,35 +216,7 @@ function Board() {
   useEffect(() => {
     if (viewCmdN > 0) fitView({ padding: 0.18, maxZoom: 1.1, duration: 250 });
   }, [viewCmdN, fitView]);
-  const tidyCmdN = useBoard((s) => s.tidyCmdN);
-  useEffect(() => {
-    if (tidyCmdN === 0) return;
-    const b = useBoard.getState();
-    // Stack every open card (tool panels + popped-out terminals) in a
-    // column docked to the right edge; wraps to more columns when full.
-    const panels = Object.entries(b.panelNodes[b.activeBoard] ?? {});
-    const terms = Object.entries(b.termNodes[b.activeBoard] ?? {});
-    const cards = [
-      ...panels.map(([id, n]) => ({ id, w: n.w ?? 320, h: n.h ?? 420, move: b.movePanelNode })),
-      ...terms.map(([id, n]) => ({ id, w: n.w ?? 560, h: n.h ?? 320, move: b.moveTermNode })),
-    ];
-    if (!cards.length) return;
-    const top = window.innerHeight * 0.08;
-    const bottom = window.innerHeight - 40;
-    const gap = 16;
-    const widest = Math.max(...cards.map((c) => c.w));
-    let x = window.innerWidth - 24;
-    let y = top;
-    for (const c of cards) {
-      if (y > top && y + c.h > bottom) {
-        x -= widest + gap;
-        y = top;
-      }
-      const p = screenToFlowPosition({ x: x - c.w, y });
-      c.move(c.id, p.x, p.y);
-      y += c.h + gap;
-    }
-  }, [tidyCmdN, screenToFlowPosition]);
+
   const zoomN = useBoard((s) => s.zoomN);
   useEffect(() => {
     if (zoomN.n > 0) zoomTo(getZoom() * (zoomN.dir > 0 ? 1.3 : 0.77), { duration: 160 });
@@ -313,6 +288,7 @@ function Board() {
   const setEdgeDetail = useBoard((s) => s.setEdgeDetail);
   const [search, setSearch] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [cardMenu, setCardMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
   const [mmSize, setMmSize] = useState({ w: 148, h: 96 });
   const [sel, setSel] = useState<Array<{ id: string; x: number; y: number; w: number; h: number }>>([]);
@@ -427,7 +403,7 @@ function Board() {
           zoomTo(1, { duration: 300 });
         } else if (e.key === "t") {
           e.preventDefault();
-          useBoard.getState().requestTidy();
+          useBoard.getState().gatherLoose();
         } else if (e.key === "Backspace" || e.key === "Delete") {
           // Close selected tool/terminal cards. Agents are excluded — they
           // need the explicit kill confirm, never a bare Delete.
@@ -545,6 +521,8 @@ function Board() {
         type: "panel" as const,
         position: { x: n.x, y: n.y },
         style: { width: n.w, height: n.h },
+        draggable: !n.locked,
+        zIndex: cardZ[id] ?? 0,
         data: { kind: "panel" as const, id },
       }),
     );
@@ -554,6 +532,8 @@ function Board() {
         type: "term" as const,
         position: { x: n.x, y: n.y },
         style: { width: n.w, height: n.h },
+        draggable: !n.locked,
+        zIndex: cardZ[id] ?? 0,
         data: { kind: "term" as const, id },
       }),
     );
@@ -563,7 +543,7 @@ function Board() {
     return useMock
       ? [...initialNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs]
       : [...wsNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs];
-  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges, shapes, mdNodes, panelNodes, termNodes]);
+  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges, shapes, mdNodes, panelNodes, termNodes, cardZ]);
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     // In Connect mode a click on an agent card wires/unwires it to the
@@ -588,8 +568,12 @@ function Board() {
 
   const onNodeContextMenu: NodeMouseHandler = (ev, node) => {
     ev.preventDefault();
-    // A popped-out terminal card exposes its owner's menu.
-    const id = node.id.startsWith("term-") ? node.id.slice(5) : node.id;
+    // Deska-style window menu on canvas cards (panels + popped-out terms).
+    if (/^(panel|term)-/.test(node.id)) {
+      setCardMenu({ x: ev.clientX, y: ev.clientY, id: node.id });
+      return;
+    }
+    const id = node.id;
     if (!agents[id] && !workspaces[id]) return;
     setMenu({ x: ev.clientX, y: ev.clientY, id });
   };
@@ -723,7 +707,8 @@ function Board() {
           style={{
             position: "absolute",
             left: 14,
-            top: 14,
+            // Clear the overlay-titlebar traffic lights on macOS/Tauri.
+            top: isTauri() ? 52 : 14,
             zIndex: 20,
             width: 36,
             height: 36,
@@ -890,7 +875,11 @@ function Board() {
           zoomable
           style={{ width: mmSize.w, height: mmSize.h, marginRight: 184 }}
           className="!bg-[var(--cv-base)]"
-          maskColor="rgba(14,14,16,0.7)"
+          maskColor="rgba(14,14,16,0.55)"
+          maskStrokeColor="var(--cv-accent)"
+          maskStrokeWidth={1.5}
+          nodeStrokeColor="rgba(255,255,255,0.25)"
+          nodeStrokeWidth={1}
           nodeColor={(n) => {
             const data = n.data as Partial<BoardNodeData>;
             if (data.kind === "orchestrator") return "#c9a26b";
@@ -973,6 +962,19 @@ function Board() {
       )}
       {paneMenu && (
         <PaneMenu x={paneMenu.x} y={paneMenu.y} onClose={() => setPaneMenu(null)} />
+      )}
+      {cardMenu && (
+        <CardMenu
+          x={cardMenu.x}
+          y={cardMenu.y}
+          nodeId={cardMenu.id}
+          onAgentMenu={
+            cardMenu.id.startsWith("term-")
+              ? () => setMenu({ x: cardMenu.x, y: cardMenu.y, id: cardMenu.id.slice(5) })
+              : undefined
+          }
+          onClose={() => setCardMenu(null)}
+        />
       )}
       {menu && (
         <ContextMenu

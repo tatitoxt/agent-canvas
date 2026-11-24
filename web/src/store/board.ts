@@ -232,8 +232,6 @@ type BoardState = {
   moveHistory: Array<{ id: string; prev?: { x: number; y: number } }>;
   /** Bump counter telling the canvas to run fitView (local "fit" request). */
   viewCmdN: number;
-  /** Bump counter telling the canvas to tidy open panel cards into a column. */
-  tidyCmdN: number;
   /** Saved automations (Deska-style guardrailed task runs). */
   automations: Record<string, AutomationDef>;
   /** Autopilot loops — an instruction re-sent to consoles on a trigger. */
@@ -300,7 +298,7 @@ type BoardState = {
   /** Tool panels living ON the canvas as nodes (Deska "Add to board") —
    * each renders the live panel UI inside a card: movable, resizable,
    * closable. Keyed per board; node id is `panel-<key>`. */
-  panelNodes: Record<string, Record<string, { panel: string; x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number }>>;
+  panelNodes: Record<string, Record<string, { panel: string; x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number; locked?: boolean }>>;
   openPanelNode: (panel: string, pos?: { x: number; y: number }, size?: { w: number; h: number }) => void;
   closePanelNode: (id: string) => void;
   movePanelNode: (id: string, x: number, y: number) => void;
@@ -308,7 +306,14 @@ type BoardState = {
   collapsePanelNode: (id: string) => void;
   /** Live terminals living ON the canvas as cards — `term-<agentId>` per
    * board. Popped out of the bottom drawer; movable/resizable/closable. */
-  termNodes: Record<string, Record<string, { x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number }>>;
+  termNodes: Record<string, Record<string, { x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number; locked?: boolean }>>;
+  /** Deska card ops: z-order and position lock for canvas cards. */
+  cardZ: Record<string, number>;
+  toggleCardLock: (id: string) => void;
+  bringCardToFront: (id: string) => void;
+  sendCardToBack: (id: string) => void;
+  /** Close every panel + term card on the active board. */
+  closeAllCards: () => void;
   /** Set before spawning when the new agent should pop out as a term card
    * at this flow position (right-click "New terminal"). Consumed once. */
   pendingTermPos: { x: number; y: number } | null;
@@ -354,7 +359,6 @@ type BoardState = {
   bumpFont: (delta: number) => void;
   undoMove: () => boolean;
   requestView: () => void;
-  requestTidy: () => void;
   clearDone: () => number;
   /** Local short-request router (Deska-style): runs instant commands
    * client-side — no agent spawn, no token spend. Returns feedback text. */
@@ -490,7 +494,6 @@ export const useBoard = create<BoardState>((set, get) => ({
   termFont: 13,
   moveHistory: [],
   viewCmdN: 0,
-  tidyCmdN: 0,
   automations: {},
   loops: {},
   attention: {},
@@ -1216,6 +1219,41 @@ export const useBoard = create<BoardState>((set, get) => ({
     localStorage.setItem("cv-termnodes", JSON.stringify(next));
     set({ termNodes: next });
   },
+  cardZ: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-cardz") ?? "{}"); } catch { return {}; }
+  })(),
+  toggleCardLock: (id) => {
+    const board = get().activeBoard;
+    const map = id.startsWith("panel-") ? "panelNodes" : id.startsWith("term-") ? "termNodes" : null;
+    if (!map) return;
+    const n = (get() as never as Record<string, Record<string, Record<string, { locked?: boolean }>>>)[map][board]?.[id];
+    if (!n) return;
+    const next = { ...(get() as never as Record<string, Record<string, Record<string, { locked?: boolean }>>>)[map],
+      [board]: { ...(get() as never as Record<string, Record<string, Record<string, { locked?: boolean }>>>)[map][board], [id]: { ...n, locked: !n.locked } } };
+    localStorage.setItem(`cv-${map === "panelNodes" ? "panelnodes" : "termnodes"}`, JSON.stringify(next));
+    set({ [map]: next } as Partial<BoardState>);
+    get().notify(n.locked ? "card unlocked" : "card locked in place");
+  },
+  bringCardToFront: (id) => {
+    const z = Math.max(0, ...Object.values(get().cardZ)) + 1;
+    const next = { ...get().cardZ, [id]: z };
+    localStorage.setItem("cv-cardz", JSON.stringify(next));
+    set({ cardZ: next });
+  },
+  sendCardToBack: (id) => {
+    const z = Math.min(0, ...Object.values(get().cardZ)) - 1;
+    const next = { ...get().cardZ, [id]: z };
+    localStorage.setItem("cv-cardz", JSON.stringify(next));
+    set({ cardZ: next });
+  },
+  closeAllCards: () => {
+    const board = get().activeBoard;
+    const m = { ...get().panelNodes, [board]: {} };
+    const tm = { ...get().termNodes, [board]: {} };
+    localStorage.setItem("cv-panelnodes", JSON.stringify(m));
+    localStorage.setItem("cv-termnodes", JSON.stringify(tm));
+    set({ panelNodes: m, termNodes: tm });
+  },
   /** Move a client-side card (term- / panel- / shape- / md- / web- / orch-)
    * to another board: relocate its entry in the per-board map and switch
    * to that board so the drop is visible. */
@@ -1396,7 +1434,6 @@ export const useBoard = create<BoardState>((set, get) => ({
   },
 
   requestView: () => set((s) => ({ viewCmdN: s.viewCmdN + 1 })),
-  requestTidy: () => set((s) => ({ tidyCmdN: s.tidyCmdN + 1 })),
 
   clearDone: () => {
     const { agents } = get();
@@ -1700,9 +1737,9 @@ export const useBoard = create<BoardState>((set, get) => ({
       set({ panelNodes: m, termNodes: tm });
       return "closed all panels";
     }
-    if (/tidy/.test(t)) {
-      get().requestTidy();
-      return "tidied panels";
+    if (/tidy|gather/.test(t)) {
+      get().gatherLoose();
+      return "gathered loose windows";
     }
     if (/clear|clean/.test(t)) {
       const n = clearDone();
@@ -1741,7 +1778,7 @@ export const useBoard = create<BoardState>((set, get) => ({
       get().openPanelNode(panelAlias[pm[1]]);
       return `opened ${pm[1]}`;
     }
-    return "try: open <panel> · new agent · new terminal · bigger text · smaller text · undo · fit · tidy · close panels · clear done";
+    return "try: open <panel> · new agent · new terminal · bigger text · smaller text · undo · fit · gather · close panels · clear done";
   },
 
   threadLog: loadThreadLog(),
@@ -1756,28 +1793,52 @@ export const useBoard = create<BoardState>((set, get) => ({
   setSpawnOpen: (v) => set({ spawnOpen: v }),
   focusSpawn: () => set({ spawnOpen: true }),
   gatherLoose: () => {
-    const { agents, edges, positions, activeBoard } = get();
+    const { agents, edges, positions, activeBoard, shapes, panelNodes, termNodes } = get();
     const wired = new Set(Object.values(edges).flatMap((e) => [e.from, e.to]));
-    const loose = Object.values(agents).filter(
-      (a) =>
+    // A card is "loose" when its center isn't already inside a group frame.
+    const rects = Object.values(shapes[activeBoard] ?? {}).filter(
+      (s) => s.kind === "rect" && s.w != null && s.h != null,
+    );
+    const inside = (x: number, y: number) =>
+      rects.some((r) => x >= r.x && x <= r.x + r.w! && y >= r.y && y <= r.y + r.h!);
+    const loose: Array<{ id: string; x: number; y: number; w: number; h: number; move: (id: string, x: number, y: number) => void }> = [];
+    for (const a of Object.values(agents)) {
+      const p = positions[a.id];
+      if (
         (a.board_id ?? "main") === activeBoard &&
         a.status !== "exited" &&
         !a.workspace_id &&
-        !wired.has(a.id),
-    );
+        !wired.has(a.id) &&
+        !(p && inside(p.x + 180, p.y + 110))
+      ) {
+        loose.push({ id: a.id, x: p?.x ?? 0, y: p?.y ?? 0, w: 360, h: 220, move: (id, x, y) => get().moveNode(id, x, y) });
+      }
+    }
+    for (const [id, n] of Object.entries(panelNodes[activeBoard] ?? {})) {
+      if (!inside(n.x + (n.w ?? 320) / 2, n.y + (n.h ?? 420) / 2))
+        loose.push({ id, x: n.x, y: n.y, w: n.w ?? 320, h: n.h ?? 420, move: (i, x, y) => get().movePanelNode(i, x, y) });
+    }
+    for (const [id, n] of Object.entries(termNodes[activeBoard] ?? {})) {
+      if (!inside(n.x + (n.w ?? 560) / 2, n.y + (n.h ?? 320) / 2))
+        loose.push({ id, x: n.x, y: n.y, w: n.w ?? 560, h: n.h ?? 320, move: (i, x, y) => get().moveTermNode(i, x, y) });
+    }
     if (!loose.length) {
       get().notify("gather — no loose windows");
       return;
     }
-    const x0 = Math.min(...loose.map((a) => positions[a.id]?.x ?? 0));
-    const y0 = Math.min(...loose.map((a) => positions[a.id]?.y ?? 0));
+    // Anchor the grid at the loosest cluster's top-left, cells sized to the
+    // biggest card so nothing overlaps.
+    const x0 = Math.min(...loose.map((l) => l.x));
+    const y0 = Math.min(...loose.map((l) => l.y));
     const cols = Math.ceil(Math.sqrt(loose.length));
-    loose.forEach((a, i) =>
-      get().moveNode(a.id, x0 + (i % cols) * 500, y0 + Math.floor(i / cols) * 250),
+    const cw = Math.max(...loose.map((l) => l.w)) + 32;
+    const ch = Math.max(...loose.map((l) => l.h)) + 32;
+    loose.forEach((l, i) =>
+      l.move(l.id, x0 + (i % cols) * cw, y0 + Math.floor(i / cols) * ch),
     );
     const rows = Math.ceil(loose.length / cols);
     const n = get().frameNodes(
-      x0 - 26, y0 - 46, cols * 500 + 12, rows * 250 + 56,
+      x0 - 26, y0 - 46, cols * cw + 12, rows * ch + 56,
     );
     get().notify(`gathered ${loose.length} loose window${loose.length === 1 ? "" : "s"} into ${n}`);
     get().requestView();

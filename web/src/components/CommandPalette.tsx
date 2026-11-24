@@ -84,7 +84,7 @@ export function CommandPalette({
     list.push(
       { id: "view-fit", group: "view", label: "fit view", run: () => s.requestView() },
       { id: "view-clear", group: "view", label: "clear done agents", hint: "removes exited nodes", run: () => s.clearDone() },
-      { id: "view-tidy", group: "view", label: "tidy cards", hint: "stack open panels + terminals", run: () => s.requestTidy() },
+      { id: "view-gather", group: "view", label: "gather loose windows", hint: "group stray cards + agents into a frame", run: () => s.gatherLoose() },
       {
         id: "view-close-cards",
         group: "view",

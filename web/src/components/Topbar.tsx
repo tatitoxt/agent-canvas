@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useBoard } from "../store/board";
+import { isTauri } from "../daemon/tauriClient";
 import { Icon } from "./icons";
 import { ToolsMenu, type ToolsMenuActions } from "./ToolsRail";
 
@@ -133,7 +134,9 @@ export function Topbar({
       style={{
         position: "absolute",
         top: 12,
-        left: 58,
+        // Tauri's overlay titlebar paints the macOS traffic lights over the
+        // webview — push the bar right so they never sit on the buttons.
+        left: isTauri() ? 96 : 58,
         right: 12,
         zIndex: 15,
         display: "flex",
@@ -408,10 +411,10 @@ export function Topbar({
         <button
           className="glass-pill"
           style={{ ...iconBtn(false), background: "transparent", border: "none" }}
-          title="Tidy — stack open panels in a column"
-          onClick={() => useBoard.getState().requestTidy()}
+          title="Gather — group loose windows into a frame"
+          onClick={() => useBoard.getState().gatherLoose()}
         >
-          <Icon name="panels" size={15} color="var(--cv-ink-dim)" />
+          <Icon name="gather" size={15} color="var(--cv-ink-dim)" />
         </button>
         <ToolsMenu active={nav} onSelect={onNav} actions={tools} />
         <button
