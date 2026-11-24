@@ -163,6 +163,7 @@ function Board() {
   const [edgeDetail, setEdgeDetail] = useState<string | null>(null);
   const [search, setSearch] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [mmSize, setMmSize] = useState({ w: 148, h: 96 });
   // Region shot: marquee-select part of the canvas → PNG of just that area.
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [shotMode, setShotMode] = useState(false);
@@ -534,11 +535,44 @@ function Board() {
         panOnDrag={[1, 2]}
         proOptions={{ hideAttribution: true }}
       >
+        {/* resize grip at the minimap's top-left corner — drag to resize */}
+        <div
+          title="Resize minimap"
+          style={{
+            position: "absolute",
+            right: 10 + 84 + mmSize.w - 5,
+            bottom: 10 + mmSize.h - 5,
+            width: 10,
+            height: 10,
+            cursor: "nwse-resize",
+            zIndex: 10,
+            borderRadius: 2,
+          }}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            const sx = e.clientX;
+            const sy = e.clientY;
+            const sw = mmSize.w;
+            const sh = mmSize.h;
+            const move = (ev: PointerEvent) => {
+              setMmSize({
+                w: Math.min(320, Math.max(96, sw + (sx - ev.clientX))),
+                h: Math.min(220, Math.max(64, sh + (sy - ev.clientY))),
+              });
+            };
+            const up = () => {
+              window.removeEventListener("pointermove", move);
+              window.removeEventListener("pointerup", up);
+            };
+            window.addEventListener("pointermove", move);
+            window.addEventListener("pointerup", up);
+          }}
+        />
         <MiniMap
           position="bottom-right"
           pannable
           zoomable
-          style={{ width: 148, height: 96, marginRight: 84 }}
+          style={{ width: mmSize.w, height: mmSize.h, marginRight: 84 }}
           className="!bg-[var(--cv-base)]"
           maskColor="rgba(14,14,16,0.7)"
           nodeColor={(n) => {
