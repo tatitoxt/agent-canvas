@@ -1440,10 +1440,15 @@ export const useBoard = create<BoardState>((set, get) => ({
     if (/^(?:help|commands|what can you do)\s*\??$/.test(low)) {
       reply(
         "I speak: @Terminal N <msg> · @all <msg> · check Terminal N · " +
-          "spawn <cli> · kill Terminal N · kill all · pause/resume · " +
-          "apply/save preset <n> · open <panel> · focus <name> · " +
-          "gather · hide chrome · status · summary",
+          "approve/deny Terminal N · spawn <cli> · kill Terminal N · kill all · " +
+          "pause/resume · apply/save preset <n> · open <panel> · focus <name> · " +
+          "gather · hide chrome · clear thread · status · summary",
       );
+      return;
+    }
+    if (/^(?:clear|wipe) thread$/.test(low)) {
+      localStorage.removeItem(THREAD_KEY);
+      set({ threadLog: [{ role: "thread", text: "thread cleared" }] });
       return;
     }
     if (/^gather/.test(low)) {
