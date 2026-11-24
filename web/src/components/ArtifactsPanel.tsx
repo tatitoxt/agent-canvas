@@ -35,6 +35,9 @@ export function ArtifactsPanel() {
   const threadSend = useBoard((s) => s.threadSend);
   const requestNav = useBoard((s) => s.requestNav);
   const pinCard = useBoard((s) => s.pinCard);
+  const vaultDir = useBoard((s) => s.vaultDir);
+  const vaultAppend = useBoard((s) => s.vaultAppend);
+  const notify = useBoard((s) => s.notify);
   const { screenToFlowPosition } = useReactFlow();
   const [creating, setCreating] = useState(false);
   const [kind, setKind] = useState("note");
@@ -350,6 +353,18 @@ export function ArtifactsPanel() {
               >
                 <Icon name="pin" size={11} />
                 board
+              </button>
+              <button
+                title={vaultDir ? "save to your Obsidian vault (Canvas/Artifacts/<title>.md)" : "open a vault first — Library → Obsidian"}
+                style={{ border: "none", background: "none", cursor: "pointer", display: "grid", placeItems: "center", padding: 0, opacity: vaultDir ? 1 : 0.45 }}
+                onClick={() => {
+                  if (!vaultDir) { notify("open a vault first — Library → Obsidian"); return; }
+                  const safe = a.title.replace(/[\\/:*?"<>|]/g, "-").slice(0, 60) || "artifact";
+                  vaultAppend(`Canvas/Artifacts/${safe}.md`, `## ${a.title}\n\n${a.text ?? a.path ?? ""}\n`);
+                  notify(`saved to vault → Canvas/Artifacts/${safe}.md`);
+                }}
+              >
+                <img src="/obsidian.svg" alt="" width={12} height={12} />
               </button>
               {a.text && (
                 <button
