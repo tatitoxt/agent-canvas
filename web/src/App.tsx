@@ -28,6 +28,7 @@ import { MemoryPanel } from "./components/MemoryPanel";
 import { NotesPanel } from "./components/NotesPanel";
 import { ArtifactsPanel } from "./components/ArtifactsPanel";
 import { DigestPanel } from "./components/DigestPanel";
+import { NoticePill } from "./components/NoticePill";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { CommandPalette } from "./components/CommandPalette";
 import { DelegationPanel } from "./components/DelegationPanel";
@@ -348,6 +349,7 @@ function Board() {
       {nav === "notes" && <NotesPanel />}
       {nav === "artifacts" && <ArtifactsPanel />}
       <DigestPanel />
+      <NoticePill />
       {nav === "history" && (
         <HistoryPanel onOpenEdge={(id) => { setEdgeDetail(id); setNav("canvas"); }} />
       )}

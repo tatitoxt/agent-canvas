@@ -60,6 +60,8 @@ type BoardState = {
   memories: Record<string, string>;
   /** Last "lose nothing" digest markdown, when requested. */
   digest: string | null;
+  /** Transient toast — latest info/error line shown bottom-right. */
+  notice: string | null;
   /** Artifacts by id — deliverables agents produced. */
   artifacts: Record<string, import("../daemon/client").SnapshotArtifact>;
   /** Kanban notes by id (all boards; filtered by activeBoard in UI). */
@@ -106,6 +108,8 @@ type BoardState = {
   noteUpsert: (noteId: string | null, col: string, text: string, pos?: number) => void;
   noteDelete: (noteId: string) => void;
   artifactCreate: (kind: string, title: string, path?: string, text?: string) => void;
+  gitPush: (agentId: string) => void;
+  notify: (text: string) => void;
   artifactDelete: (artifactId: string) => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
@@ -160,6 +164,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   accounts: {},
   memories: {},
   digest: null,
+  notice: null,
   notes: {},
   artifacts: {},
   positions: {},
@@ -419,6 +424,10 @@ export const useBoard = create<BoardState>((set, get) => ({
             });
             break;
           }
+          case "git_pushed": {
+            set({ notice: `pushed — ${msg.output || "done"}` });
+            break;
+          }
           case "artifact_created": {
             set((st) => ({ artifacts: { ...st.artifacts, [msg.artifact.artifact_id]: msg.artifact } }));
             break;
@@ -461,6 +470,7 @@ export const useBoard = create<BoardState>((set, get) => ({
             break;
           }
           case "error":
+            set({ notice: `error — ${msg.message}` });
             console.error("[canvasd]", msg.message);
             break;
           default:
@@ -516,6 +526,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   noteUpsert: (noteId, col, text, pos) =>
     client?.noteUpsert(noteId, get().activeBoard ?? undefined, col, text, pos),
   noteDelete: (noteId) => client?.noteDelete(noteId),
+  gitPush: (agentId) => client?.gitPush(agentId),
+  notify: (text) => set({ notice: text }),
   artifactCreate: (kind, title, path, text) =>
     client?.artifactCreate(get().activeBoard ?? undefined, kind, title, path, text),
   artifactDelete: (artifactId) => client?.artifactDelete(artifactId),

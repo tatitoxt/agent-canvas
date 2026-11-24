@@ -56,6 +56,8 @@ pub enum ClientMsg {
     },
     /// Delete a kanban note.
     NoteDelete { note_id: String },
+    /// Push an agent's worktree branch to origin (its committed work).
+    GitPush { agent_id: String },
     /// Register an artifact (an agent's deliverable — a report, plan,
     /// exported file). Agents emit these via canvasctl.
     ArtifactCreate {
@@ -256,6 +258,8 @@ pub enum ServerMsg {
     NoteDeleted { note_id: String },
     /// An artifact was registered.
     ArtifactCreated { artifact: SnapshotArtifact },
+    /// git push finished for an agent's worktree.
+    GitPushed { agent_id: String, output: String },
     /// An artifact was removed.
     ArtifactDeleted { artifact_id: String },
 }

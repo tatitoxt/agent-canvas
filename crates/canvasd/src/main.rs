@@ -789,6 +789,39 @@ fn handle_client_msg(
                 Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
             }
         }
+        ClientMsg::GitPush { agent_id } => {
+            let wt = state
+                .store
+                .agent_worktree(&agent_id)
+                .ok()
+                .flatten()
+                .map(|w| state.repo_root.join(&w))
+                .filter(|p| p.is_dir());
+            match wt {
+                Some(dir) => {
+                    let out = std::process::Command::new("git")
+                        .args(["-C"])
+                        .arg(&dir)
+                        .args(["push", "-u", "origin", "HEAD"])
+                        .output();
+                    match out {
+                        Ok(o) if o.status.success() => send_control(ServerMsg::GitPushed {
+                            agent_id,
+                            output: String::from_utf8_lossy(&o.stderr).trim().to_string(),
+                        }),
+                        Ok(o) => send_control(ServerMsg::Error {
+                            agent_id: Some(agent_id),
+                            message: format!("git push: {}", String::from_utf8_lossy(&o.stderr).trim()),
+                        }),
+                        Err(e) => send_control(ServerMsg::Error { agent_id: Some(agent_id), message: e.to_string() }),
+                    }
+                }
+                None => send_control(ServerMsg::Error {
+                    agent_id: Some(agent_id),
+                    message: "no worktree for agent".into(),
+                }),
+            }
+        }
         ClientMsg::ArtifactCreate { board_id, agent_id, kind, title, path, text } => {
             let id = format!("art-{}", uuid_like());
             let board = board_id

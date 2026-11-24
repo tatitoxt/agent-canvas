@@ -112,6 +112,10 @@ export class TauriCanvasClient {
     );
   }
 
+  gitPush(agentId: string) {
+    void invoke("git_push", { agentId }).catch(console.error);
+  }
+
   artifactCreate(boardId: string | undefined, kind: string, title: string, path?: string, text?: string) {
     void invoke("artifact_create", { boardId, kind, title, path, text }).catch(console.error);
   }

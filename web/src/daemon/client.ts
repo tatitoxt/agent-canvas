@@ -67,6 +67,7 @@ export type ServerMsg =
   | { type: "note_deleted"; note_id: string }
   | { type: "artifact_created"; artifact: SnapshotArtifact }
   | { type: "artifact_deleted"; artifact_id: string }
+  | { type: "git_pushed"; agent_id: string; output: string }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
   | { type: "result"; edge_id: string; summary: string; files?: number }
   | {
@@ -164,6 +165,10 @@ export class CanvasClient {
 
   spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string, accountId?: string) {
     this.send({ cmd: "spawn_agent", name, command, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null, board_id: boardId ?? null, account_id: accountId ?? null });
+  }
+
+  gitPush(agentId: string) {
+    this.send({ cmd: "git_push", agent_id: agentId });
   }
 
   artifactCreate(boardId: string | undefined, kind: string, title: string, path?: string, text?: string) {

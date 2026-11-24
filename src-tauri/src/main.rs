@@ -281,6 +281,32 @@ fn delete_board(
 }
 
 #[tauri::command]
+fn git_push(app: AppHandle, state: State<'_, CanvasState>, agent_id: String) -> Result<(), String> {
+    let wt = state
+        .store
+        .agent_worktree(&agent_id)
+        .map_err(|e| e.to_string())?
+        .map(|w| state.repo_root.join(&w))
+        .filter(|p| p.is_dir())
+        .ok_or("no worktree for agent")?;
+    let out = std::process::Command::new("git")
+        .args(["-C"])
+        .arg(&wt)
+        .args(["push", "-u", "origin", "HEAD"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        emit_control(&app, &ServerMsg::GitPushed {
+            agent_id,
+            output: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        });
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
+#[tauri::command]
 fn artifact_create(
     app: AppHandle,
     state: State<'_, CanvasState>,
@@ -1063,6 +1089,7 @@ fn main() {
             note_delete,
             artifact_create,
             artifact_delete,
+            git_push,
             create_workspace,
             move_to_board,
             delegate,

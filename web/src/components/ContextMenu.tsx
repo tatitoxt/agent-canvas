@@ -25,6 +25,7 @@ export function ContextMenu({
     (s) => s.agents[nodeId]?.name ?? s.workspaces[nodeId]?.name ?? "",
   );
   const kill = useBoard((s) => s.kill);
+  const gitPush = useBoard((s) => s.gitPush);
   const current = useBoard(
     (s) => s.agents[nodeId]?.board_id ?? s.workspaces[nodeId]?.board_id ?? "main",
   );
@@ -148,6 +149,14 @@ export function ContextMenu({
           </div>
         )}
       </div>
+      {isAgent && (
+        <button
+          style={{ ...item, color: "var(--cv-ink-dim)" }}
+          onClick={() => { gitPush(nodeId); onClose(); }}
+        >
+          git push ▸
+        </button>
+      )}
       {isAgent ? (
         <button
           style={{
