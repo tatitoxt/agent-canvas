@@ -1368,10 +1368,11 @@ export const useBoard = create<BoardState>((set, get) => ({
       reply(`saved preset "${sp[1].trim()}"`);
       return;
     }
-    const PANELS = ["inbox", "automations", "loops", "presets", "history", "accounts", "memory", "notes", "artifacts", "vault", "skills", "settings", "canvas"];
+    const PANELS = ["inbox", "automations", "loops", "presets", "history", "accounts", "memory", "notes", "artifacts", "vault", "skills", "settings", "canvas", "usage"];
     const om = low.match(/^(?:open|show|go to)\s+([\w\s]+?)$/);
     if (om) {
-      const hit = PANELS.find((p) => om[1].trim().startsWith(p));
+      const hit = PANELS.find((p) => om[1].trim().startsWith(p)) ??
+        (om[1].trim().startsWith("juice") ? "usage" : undefined);
       if (hit) {
         get().requestNav(hit);
         reply(`opened ${hit}`);
