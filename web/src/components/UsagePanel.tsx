@@ -29,7 +29,7 @@ export function UsagePanel() {
       className="glass"
       style={{
         position: "absolute",
-        right: 16,
+        right: 76,
         top: 64,
         width: 300,
         maxHeight: "72vh",
