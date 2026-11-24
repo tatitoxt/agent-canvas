@@ -317,7 +317,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       {!collapsed && (
       <div style={{ padding: "9px 12px 10px" }}>
       {/* Meta row — files / account / permission. */}
-      {(data.files || data.accountLabel || (data.permission && data.permission !== "supervised")) && (
+      {(data.files || data.accountLabel || data.permission) && (
         <div
           style={{
             display: "flex",
@@ -338,14 +338,30 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
               @{data.accountLabel}
             </span>
           )}
-          {data.permission && data.permission !== "supervised" && (
-            <span
-              className="glass-pill"
-              style={{ fontSize: 9, padding: "1px 6px", color: "var(--cv-accent)", marginLeft: "auto" }}
-              title="permission level"
+          {data.permission && (
+            <button
+              className="glass-pill nodrag"
+              style={{
+                fontSize: 9,
+                padding: "1px 6px",
+                color: data.permission === "supervised" ? "var(--cv-ink-faint)" : "var(--cv-accent)",
+                cursor: "pointer",
+                border: "none",
+                marginLeft: "auto",
+              }}
+              title="Permission level — click to cycle: supervised → auto-accept → auto → full access"
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!data.id) return;
+                const order = ["supervised", "auto_accept", "auto", "full"];
+                const next = order[(order.indexOf(data.permission ?? "supervised") + 1) % order.length];
+                useBoard.getState().setPermission(data.id, next);
+              }}
             >
               {PERMISSION_LABEL[data.permission] ?? data.permission}
-            </span>
+            </button>
           )}
         </div>
       )}

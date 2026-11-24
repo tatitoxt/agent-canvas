@@ -1558,6 +1558,29 @@ export const useBoard = create<BoardState>((set, get) => ({
       }
       return;
     }
+    const pm2 = low.match(/^(?:permission|perm)\s+(.+?)\s+(supervised|auto[-_ ]?accept|auto|full)$/);
+    if (pm2) {
+      const q = pm2[1].replace(/[?.\s]+$/, "").trim();
+      const lvl = pm2[2].replace(/[- ]/g, "_");
+      const boardAgents = Object.values(get().agents).filter(
+        (a) => (a.board_id ?? "main") === get().activeBoard,
+      );
+      const tm = q.match(/^terminal\s+(\d+)$/);
+      const hit = tm
+        ? boardAgents[parseInt(tm[1], 10) - 1]
+        : boardAgents.find(
+            (a) =>
+              a.name.toLowerCase().includes(q) ||
+              (a.command ?? "").toLowerCase() === q,
+          );
+      if (!hit) {
+        reply(`no agent matches "${q}"`);
+      } else {
+        get().setPermission(hit.id, lvl);
+        reply(`${hit.name} → ${lvl}`);
+      }
+      return;
+    }
     const shm = low.match(/^(?:share|publish)\s+(.+)$/);
     if (shm) {
       const q = shm[1].replace(/[?.\s]+$/, "").trim();
@@ -1727,7 +1750,7 @@ export const useBoard = create<BoardState>((set, get) => ({
           "approve/deny Terminal N · spawn <cli> · kill Terminal N · kill all · " +
           "pause/resume · board/new board <name> · apply/save preset <n> · " +
           "open <panel> · focus <name> · gather · hide chrome · " +
-          "obsidian <note> · pdf <topic> · share <artifact> · handoff <agent> · parallel N <cli> <task> · status · summary",
+          "obsidian <note> · pdf <topic> · share <artifact> · handoff <agent> · parallel N <cli> <task> · permission <agent> <level> · status · summary",
       );
       return;
     }
