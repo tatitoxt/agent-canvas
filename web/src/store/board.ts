@@ -310,6 +310,10 @@ type BoardState = {
    * at this flow position (right-click "New terminal"). Consumed once. */
   pendingTermPos: { x: number; y: number } | null;
   setPendingTermPos: (p: { x: number; y: number } | null) => void;
+  /** Same trick for the spawn chooser: right-click "New agent…" plants the
+   * spawned card where the click landed. Consumed once. */
+  pendingSpawnPos: { x: number; y: number } | null;
+  setPendingSpawnPos: (p: { x: number; y: number } | null) => void;
   openTermNode: (agentId: string, pos?: { x: number; y: number }) => void;
   closeTermNode: (id: string) => void;
   moveTermNode: (id: string, x: number, y: number) => void;
@@ -521,6 +525,11 @@ export const useBoard = create<BoardState>((set, get) => ({
             if (pend) {
               set({ pendingTermPos: null });
               get().openTermNode(msg.agent_id, pend);
+            }
+            const pSpawn = get().pendingSpawnPos;
+            if (pSpawn) {
+              set({ pendingSpawnPos: null });
+              get().moveNode(msg.agent_id, pSpawn.x, pSpawn.y);
             }
             break;
           }
@@ -1049,6 +1058,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   })(),
   pendingTermPos: null,
   setPendingTermPos: (p) => set({ pendingTermPos: p }),
+  pendingSpawnPos: null,
+  setPendingSpawnPos: (p) => set({ pendingSpawnPos: p }),
   openTermNode: (agentId, pos) => {
     const board = get().activeBoard;
     const id = `term-${agentId}`;
