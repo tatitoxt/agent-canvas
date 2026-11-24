@@ -96,7 +96,7 @@ function newOutput(
  * `← name: …` once output shows up (plus one settle pass for streaming). */
 function watchReply(
   get: () => BoardState,
-  post: (text: string) => void,
+  post: (text: string, agentId: string) => void,
   agentId: string,
   name: string,
   before: Uint8Array | undefined,
@@ -109,7 +109,7 @@ function watchReply(
   const poll = (tries: number) => {
     const out = collect();
     if (out) {
-      setTimeout(() => post(`← ${name}: ${collect() || out}`), 1500);
+      setTimeout(() => post(`← ${name}: ${collect() || out}`, agentId), 1500);
       return;
     }
     if (tries > 0) setTimeout(() => poll(tries - 1), 1500);
@@ -136,7 +136,7 @@ function resolveAgent(
   return a ? { agent: a, label: a.name } : undefined;
 }
 
-type ThreadLine = { role: "you" | "thread"; text: string };
+type ThreadLine = { role: "you" | "thread"; text: string; agentId?: string };
 const THREAD_KEY = "cv-thread-log";
 
 function loadThreadLog(): ThreadLine[] {
@@ -148,8 +148,13 @@ function loadThreadLog(): ThreadLine[] {
   }
 }
 
-function logLine(log: ThreadLine[], role: ThreadLine["role"], text: string): ThreadLine[] {
-  const next = [...log.slice(-60), { role, text }];
+function logLine(
+  log: ThreadLine[],
+  role: ThreadLine["role"],
+  text: string,
+  agentId?: string,
+): ThreadLine[] {
+  const next = [...log.slice(-60), { role, text, agentId }];
   try {
     localStorage.setItem(THREAD_KEY, JSON.stringify(next));
   } catch {
@@ -1099,8 +1104,8 @@ export const useBoard = create<BoardState>((set, get) => ({
       get().sendInput(aid, payload);
     }
     // Replies land in the Dex thread — the orchestrator has no log of its own.
-    const post = (r: string) =>
-      set((s) => ({ threadLog: logLine(s.threadLog, "thread", r) }));
+    const post = (r: string, aid?: string) =>
+      set((s) => ({ threadLog: logLine(s.threadLog, "thread", r, aid) }));
     for (const [aid, before] of snaps) {
       const agent = get().agents[aid];
       if (agent) watchReply(get, post, aid, agent.name, before, text.trim());
@@ -1195,8 +1200,8 @@ export const useBoard = create<BoardState>((set, get) => ({
     const t = text.trim();
     if (!t) return;
     set((s) => ({ threadLog: logLine(s.threadLog, "you", t) }));
-    const reply = (r: string) =>
-      set((s) => ({ threadLog: logLine(s.threadLog, "thread", r) }));
+    const reply = (r: string, aid?: string) =>
+      set((s) => ({ threadLog: logLine(s.threadLog, "thread", r, aid) }));
     const low = t.toLowerCase();
     // "@<agent name> <message>" — type the message straight into that
     // agent's PTY (command the board without touching terminals). Names

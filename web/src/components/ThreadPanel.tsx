@@ -35,6 +35,8 @@ export function ThreadPanel() {
         {log.map((m, i) => (
           <div
             key={i}
+            title={m.agentId ? "focus this agent" : undefined}
+            onClick={m.agentId ? () => useBoard.getState().requestFocus(m.agentId!) : undefined}
             style={{
               alignSelf: m.role === "you" ? "flex-end" : "flex-start",
               maxWidth: "88%",
@@ -43,6 +45,10 @@ export function ThreadPanel() {
               borderRadius: 10,
               padding: "5px 10px",
               fontSize: 11.5,
+              cursor: m.agentId ? "pointer" : "default",
+              textDecoration: m.agentId ? "underline" : "none",
+              textDecorationStyle: "dotted",
+              textUnderlineOffset: 3,
               color: m.role === "you" ? "var(--cv-ink)" : "var(--cv-accent)",
             }}
           >
