@@ -1156,7 +1156,13 @@ fn handle_client_msg(
                         .agent_worktree(&agent_id)
                         .ok()
                         .flatten()
-                        .map(std::path::PathBuf::from)
+                        .map(|p| {
+                            // Rows persist the worktree relative to the
+                            // repo; resolve it there, not against the
+                            // daemon's own cwd.
+                            let p = std::path::PathBuf::from(p);
+                            if p.is_absolute() { p } else { state.repo_root.join(p) }
+                        })
                 });
             match wt {
                 Some(wt) => send_control(ServerMsg::DiffDetail {
