@@ -51,6 +51,70 @@ type DaemonTransport = CanvasClient | TauriCanvasClient;
 const ANSI_RX =
   /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[()][0-9A-B]|\x1b[=>N_O]/g;
 
+/** Read an agent's PTY ring for output appended after `before` was taken.
+ * bash does not echo pasted input, so we cannot find "our text" — instead
+ * byte-diff the ring against the pre-send snapshot and read from the first
+ * differing byte. A tail signature fails here: the shell prompt repeats,
+ * so any fixed signature also matches the NEW buffer's tail. */
+function newOutput(
+  buf: Uint8Array,
+  before: Uint8Array | undefined,
+  sent: string,
+): string {
+  let start = -1;
+  if (before) {
+    const n = Math.min(before.length, buf.length);
+    let d = 0;
+    while (d < n && buf[d] === before[d]) d++;
+    if (d < n || buf.length > before.length) start = d;
+  } else if (buf.length > 0) {
+    start = 0;
+  }
+  if (start < 0 || buf.length <= start) return "";
+  return new TextDecoder()
+    .decode(buf.subarray(start))
+    .replace(ANSI_RX, "")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(
+      (l) =>
+        l &&
+        !l.endsWith("$") &&
+        !l.endsWith("%") &&
+        !l.endsWith("#") &&
+        !l.includes(sent),
+    )
+    .slice(0, 3)
+    .join(" · ")
+    .slice(0, 160);
+}
+
+/** Poll an agent's ring for a reply after writing `sent` to it; post
+ * `← name: …` once output shows up (plus one settle pass for streaming). */
+function watchReply(
+  get: () => BoardState,
+  post: (text: string) => void,
+  agentId: string,
+  name: string,
+  before: Uint8Array | undefined,
+  sent: string,
+) {
+  const collect = () => {
+    const buf = get().ptyBuffers[agentId];
+    return buf ? newOutput(buf, before, sent) : "";
+  };
+  const poll = (tries: number) => {
+    const out = collect();
+    if (out) {
+      setTimeout(() => post(`← ${name}: ${collect() || out}`), 1500);
+      return;
+    }
+    if (tries > 0) setTimeout(() => poll(tries - 1), 1500);
+  };
+  setTimeout(() => poll(4), 1500);
+}
+
 type BoardState = {
   connected: boolean;
   agents: Record<string, LiveAgent>;
@@ -986,7 +1050,18 @@ export const useBoard = create<BoardState>((set, get) => ({
     const targets = new Set(cur.wired);
     for (const e of Object.values(get().edges))
       if (e.from === orchId) targets.add(e.to);
-    for (const aid of targets) get().sendInput(aid, payload);
+    const snaps = new Map<string, Uint8Array | undefined>();
+    for (const aid of targets) {
+      snaps.set(aid, get().ptyBuffers[aid]);
+      get().sendInput(aid, payload);
+    }
+    // Replies land in the Dex thread — the orchestrator has no log of its own.
+    const post = (r: string) =>
+      set((s) => ({ threadLog: [...s.threadLog.slice(-60), { role: "thread", text: r }] }));
+    for (const [aid, before] of snaps) {
+      const agent = get().agents[aid];
+      if (agent) watchReply(get, post, aid, agent.name, before, text.trim());
+    }
   },
 
   quickRequest: (text) => {
@@ -1118,55 +1193,10 @@ export const useBoard = create<BoardState>((set, get) => ({
         else {
           const id = target.id;
           const name = label || target.name;
-          // Keep the ring snapshot NOW — bash does not echo pasted input,
-          // so we cannot find "our text"; instead find where the buffer
-          // first differs from this snapshot and read everything after.
-          // A byte-diff beats a tail signature: the shell prompt repeats,
-          // so any fixed signature also matches the NEW buffer's tail.
           const before = get().ptyBuffers[id];
           get().sendInput(id, new TextEncoder().encode(msg + "\n"));
           reply(`→ ${name}: ${msg.slice(0, 60)}`);
-          const collect = () => {
-            const buf = get().ptyBuffers[id];
-            if (!buf) return "";
-            let start = -1;
-            if (before) {
-              const n = Math.min(before.length, buf.length);
-              let d = 0;
-              while (d < n && buf[d] === before[d]) d++;
-              if (d < n || buf.length > before.length) start = d;
-            } else if (buf.length > 0) {
-              start = 0;
-            }
-            if (start < 0 || buf.length <= start) return "";
-            return new TextDecoder()
-              .decode(buf.subarray(start))
-              .replace(ANSI_RX, "")
-              .replace(/\r/g, "\n")
-              .split("\n")
-              .map((l) => l.trim())
-              .filter(
-                (l) =>
-                  l &&
-                  !l.endsWith("$") &&
-                  !l.endsWith("%") &&
-                  !l.endsWith("#") &&
-                  !l.includes(msg),
-              )
-              .slice(0, 3)
-              .join(" · ")
-              .slice(0, 160);
-          };
-          const poll = (tries: number) => {
-            const out = collect();
-            if (out) {
-              // One settle pass — the reply may still be streaming in.
-              setTimeout(() => reply(`← ${name}: ${collect() || out}`), 1500);
-              return;
-            }
-            if (tries > 0) setTimeout(() => poll(tries - 1), 1500);
-          };
-          setTimeout(() => poll(4), 1500);
+          watchReply(get, reply, id, name, before, msg);
         }
       }
       return;
