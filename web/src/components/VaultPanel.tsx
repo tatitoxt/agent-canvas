@@ -93,8 +93,13 @@ function GraphView({ text, onOpen }: { text: string; onOpen: (name: string) => v
   );
 }
 
-/** "Generate PDF" menu — Deska-style: pick a template, export + save to artifacts. */
-function GeneratePdfMenu({ onPick }: { onPick: (kind: "overview" | "onboarding" | "architecture") => void }) {
+/** "Generate PDF" menu — pick a template or ask for anything; the doc is
+ * built from live board state, exported as .pdf and saved to artifacts. */
+function GeneratePdfMenu({ onPick, onAsk }: {
+  onPick: (kind: "overview" | "onboarding" | "architecture") => void;
+  onAsk: (question: string) => void;
+}) {
+  const [q, setQ] = useState("");
   const rows: { k: "overview" | "onboarding" | "architecture"; icon: string; label: string; hint: string }[] = [
     { k: "overview", icon: "notes", label: "Project overview", hint: "agents, boards, notes — what the board is doing" },
     { k: "onboarding", icon: "play", label: "Onboarding guide", hint: "how to drive this board" },
@@ -125,6 +130,18 @@ function GeneratePdfMenu({ onPick }: { onPick: (kind: "overview" | "onboarding" 
           </div>
         </button>
       ))}
+      <form
+        style={{ display: "flex", gap: 5, padding: "8px 6px 2px", borderTop: "1px solid var(--cv-glass-edge)", marginTop: 4 }}
+        onSubmit={(e) => { e.preventDefault(); if (q.trim()) onAsk(q.trim()); }}
+      >
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Ask for anything…"
+          style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 10px", fontSize: 10.5, color: "var(--cv-ink)", outline: "none" }}
+        />
+        <button type="submit" style={{ ...actionBtn, color: "var(--cv-accent)" }} title="Write a PDF about this from the board's state">→</button>
+      </form>
     </div>
   );
 }
@@ -234,6 +251,29 @@ export function VaultPanel() {
     setGenOpen(false);
   };
 
+  const askAnything = (q: string) => {
+    const s = useBoard.getState();
+    const agents = Object.values(s.agents);
+    const md = [
+      `# ${q}`,
+      "",
+      "## Board right now",
+      `Agents: ${agents.length} (${agents.filter((a) => a.status !== "exited").length} live)`,
+      ...agents.map((a) => `- ${a.name} · ${a.command ?? "?"} · ${a.status}`),
+      "",
+      "## Boards",
+      ...Object.entries(s.boards).map(([, n]) => `- ${n}`),
+      "",
+      "## Notes",
+      ...(Object.values(s.notes ?? {}).length
+        ? Object.values(s.notes ?? {}).map((n) => `- ${(n as { text?: string }).text ?? ""}`)
+        : ["- none"]),
+    ].join("\n");
+    downloadPdf(q.slice(0, 40), md);
+    useBoard.getState().artifactCreate("pdf", `PDF — ${q.slice(0, 40)}`, undefined, md.slice(0, 800));
+    setGenOpen(false);
+  };
+
   return (
     <>
       <div
@@ -259,7 +299,7 @@ export function VaultPanel() {
           </button>
           {genOpen && (
             <div className="cv-menu" style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: 240, padding: 8, zIndex: 50 }}>
-              <GeneratePdfMenu onPick={generate} />
+              <GeneratePdfMenu onPick={generate} onAsk={askAnything} />
             </div>
           )}
         </div>

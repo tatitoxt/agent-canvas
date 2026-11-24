@@ -36,6 +36,7 @@ const TEMPLATES: {
   { name: "Build rescue", trigger: "match", pattern: "FAILED", instruction: "Stop what you're doing and fix the failure that just printed." },
   { name: "Test watchdog", trigger: "interval", interval: 30, instruction: "Run the test suite. If anything fails, fix it before continuing." },
   { name: "Commit checkpoint", trigger: "interval", interval: 20, instruction: "Commit your work-in-progress with a clear message." },
+  { name: "Review sweep", trigger: "interval", interval: 45, instruction: "Re-read the files you changed this session and flag anything unfinished or broken." },
   { name: "Hourly standup", trigger: "interval", interval: 60, instruction: "Write a two-line standup: done / doing / blocked." },
 ];
 
