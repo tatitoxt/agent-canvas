@@ -6,7 +6,6 @@ const railCol: React.CSSProperties = {
   position: "absolute",
   left: 12,
   top: 58,
-  bottom: 12,
   zIndex: 20,
   display: "flex",
   flexDirection: "column",
@@ -18,6 +17,18 @@ const railColRight: React.CSSProperties = {
   ...railCol,
   left: undefined,
   right: 12,
+  top: 58,
+  bottom: 12,
+};
+
+const bottomRowLeft: React.CSSProperties = {
+  position: "absolute",
+  left: 12,
+  bottom: 12,
+  zIndex: 20,
+  display: "flex",
+  alignItems: "flex-end",
+  gap: 8,
 };
 
 const bubble: React.CSSProperties = {
@@ -27,6 +38,12 @@ const bubble: React.CSSProperties = {
   gap: 3,
   padding: "6px 5px",
   borderRadius: 14,
+};
+
+const bubbleRow: React.CSSProperties = {
+  ...bubble,
+  flexDirection: "row",
+  padding: "5px 6px",
 };
 
 const btn = (active: boolean): React.CSSProperties => ({
@@ -101,10 +118,9 @@ const STATUS_COLOR: Record<string, string> = {
   exited: "var(--cv-idle)",
 };
 
-/** Left rail, Deska-style — stacked separate bubbles instead of one
- * packed column: Spaces · Extras · Ask Dex + tasks + automations ·
- * canvas controls (hide, gather, summaries) · create (bottom). */
-export function NavRail({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
+/** Left rail — Spaces + Extras only (Deska's left column is just for
+ * boards; everything else lives on the bottom strip or the right rail). */
+export function NavRail({ onSelect }: { onSelect: (key: string) => void }) {
   const boards = useBoard((s) => s.boards);
   const activeBoard = useBoard((s) => s.activeBoard);
   const setActiveBoard = useBoard((s) => s.setActiveBoard);
@@ -112,8 +128,6 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
   const renameBoard = useBoard((s) => s.renameBoard);
   const deleteBoard = useBoard((s) => s.deleteBoard);
   const agents = useBoard((s) => s.agents);
-  const summaries = useBoard((s) => s.panelSummaries);
-  const connected = useBoard((s) => s.connected);
 
   const [editing, setEditing] = useState<"new" | string | null>(null);
   const [editName, setEditName] = useState("");
@@ -274,61 +288,144 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
           </div>
         )}
       </nav>
+    </div>
+  );
+}
 
-      {/* ── Bubble 3 · Dex ────────────────────────────────── */}
+/** Right rail — code group + zoom parked at the bottom next to the
+ * minimap. Dropdowns open to the LEFT of the rail. */
+export function RightRail({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
+  const agents = useBoard((s) => s.agents);
+  const activeBoard = useBoard((s) => s.activeBoard);
+  const connected = useBoard((s) => s.connected);
+  const openAgents = Object.values(agents)
+    .filter((a) => (a.board_id ?? "main") === activeBoard && a.status !== "exited");
+  const gitAgents = openAgents.filter((a) => a.worktree);
+
+  const [menu, setMenu] = useState<"git" | null>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e: MouseEvent) => {
+      if (railRef.current && !railRef.current.contains(e.target as Node)) setMenu(null);
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [menu]);
+
+  return (
+    <div ref={railRef} style={railColRight}>
+      {/* ── Bubble 1 · code ───────────────────────────────── */}
       <nav className="glass" style={bubble}>
+        <div style={{ position: "relative" }}>
+          <button
+            title="Source control — worktrees, push an agent's branch"
+            onClick={() => setMenu((m) => (m === "git" ? null : "git"))}
+            style={btn(menu === "git")}
+          >
+            <Icon name="git" />
+            {gitAgents.length > 0 && (
+              <span style={badge("var(--cv-glass-hi)")}>{gitAgents.length}</span>
+            )}
+          </button>
+          {menu === "git" && (
+            <div
+              className="cv-menu cv-menu-scroll"
+              style={{
+                position: "absolute",
+                right: 46,
+                top: 0,
+                width: 220,
+                padding: 6,
+                zIndex: 40,
+                maxHeight: 340,
+                overflowY: "auto",
+              }}
+            >
+              <div style={sectionLabel}>Source control</div>
+              {gitAgents.length === 0 && (
+                <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
+                  no agents with worktrees
+                </div>
+              )}
+              {gitAgents.map((a) => (
+                <button
+                  key={a.id}
+                  style={menuRow}
+                  title={`push ${a.worktree} — the agent's branch`}
+                  onClick={() => { useBoard.getState().gitPush(a.id); setMenu(null); }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <Icon name="git" size={13} color="var(--cv-ink-dim)" />
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {a.name}
+                  </span>
+                  <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>push</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button
-          title="Ask Dex — talk to the board commander"
-          onClick={() => onSelect("thread")}
-          style={btn(active === "thread")}
+          title="Explorer — vault files"
+          onClick={() => onSelect("vault")}
+          style={btn(active === "vault")}
         >
-          <Icon name="bot" color={active === "thread" ? "var(--cv-accent)" : undefined} />
+          <Icon name="explorer" />
         </button>
         <button
-          title="Tasks — delegated work in flight"
-          onClick={() => onSelect("history")}
-          style={btn(active === "history")}
+          title="Dev ticket — notes and tasks on the board"
+          onClick={() => onSelect("notes")}
+          style={btn(active === "notes")}
         >
-          <Icon name="tasks" />
-        </button>
-        <button
-          title="Automations — scheduled agent runs"
-          onClick={() => onSelect("automations")}
-          style={btn(active === "automations")}
-        >
-          <Icon name="automations" />
+          <Icon name="ticket" />
         </button>
       </nav>
 
       <div style={{ flex: 1 }} />
 
-      {/* ── Bubble 4 · canvas controls ────────────────────── */}
+      {/* ── Bubble 2 · zoom (far-right, beside the minimap) ─ */}
       <nav className="glass" style={bubble}>
-        <button
-          title="Hide panels and menus — chrome away, canvas only"
-          onClick={() => useBoard.getState().toggleChrome()}
-          style={btn(false)}
-        >
-          <Icon name="hide" />
+        <button title="Zoom out" onClick={() => useBoard.getState().requestZoom(-1)} style={btn(false)}>
+          <Icon name="minus" />
         </button>
-        <button
-          title="Gather loose windows into a group"
-          onClick={() => useBoard.getState().gatherLoose()}
-          style={btn(false)}
-        >
-          <Icon name="gather" />
+        <button title="Zoom in" onClick={() => useBoard.getState().requestZoom(1)} style={btn(false)}>
+          <Icon name="plus" />
         </button>
-        <button
-          title="Show panel summaries — last line + mini preview per card"
-          onClick={() => useBoard.getState().togglePanelSummaries()}
-          style={btn(!summaries)}
-        >
-          <Icon name="eye" color={summaries ? "var(--cv-ink)" : "var(--cv-ink-faint)"} />
+        <button title="Zoom to fit — frame the whole board" onClick={() => useBoard.getState().requestView()} style={btn(false)}>
+          <Icon name="zoom" />
         </button>
+        <div
+          title={connected ? "daemon connected" : "daemon offline"}
+          style={{
+            marginTop: 2,
+            width: 7,
+            height: 7,
+            borderRadius: 999,
+            background: connected ? "var(--cv-done)" : "var(--cv-ink-faint)",
+          }}
+        />
       </nav>
+    </div>
+  );
+}
 
-      {/* ── Bubble 5 · create (bottom of the rail, Deska) ─── */}
-      <nav className="glass" style={bubble}>
+/** Bottom-left strip — the create row, then Dex alone, then the
+ * inbox alone: three separate bubbles, left to right. */
+export function BottomBar({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
+  const agents = useBoard((s) => s.agents);
+  const edges = useBoard((s) => s.edges);
+  const approvals = useBoard((s) => s.approvals);
+  const inboxCount =
+    Object.keys(approvals).length +
+    Object.values(agents).filter((a) => a.status === "waiting" || a.status === "blocked").length +
+    Object.values(edges).filter((e) => e.state === "delegated").length;
+
+  return (
+    <div style={bottomRowLeft}>
+      {/* ── Bubble 1 · create ─────────────────────────────── */}
+      <nav className="glass" style={bubbleRow}>
         <button
           title="New task — open the spawn chooser (lives on the Orchestrator)"
           onClick={() => useBoard.getState().focusSpawn()}
@@ -357,72 +454,21 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         >
           <Icon name="code" />
         </button>
-        <div
-          title={connected ? "daemon connected" : "daemon offline"}
-          style={{
-            marginTop: 2,
-            width: 7,
-            height: 7,
-            borderRadius: 999,
-            background: connected ? "var(--cv-done)" : "var(--cv-ink-faint)",
-          }}
-        />
       </nav>
-    </div>
-  );
-}
 
-/** Right rail, Deska-style — comms + panels + source control + dev
- * ticket, with the zoom controls parked at the bottom next to the
- * minimap. Dropdowns open to the LEFT of the rail. */
-export function RightRail({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
-  const agents = useBoard((s) => s.agents);
-  const edges = useBoard((s) => s.edges);
-  const approvals = useBoard((s) => s.approvals);
-  const activeBoard = useBoard((s) => s.activeBoard);
-  const inboxCount =
-    Object.keys(approvals).length +
-    Object.values(agents).filter((a) => a.status === "waiting" || a.status === "blocked").length +
-    Object.values(edges).filter((e) => e.state === "delegated").length;
+      {/* ── Bubble 2 · Dex, alone ─────────────────────────── */}
+      <nav className="glass" style={bubbleRow}>
+        <button
+          title="Ask Dex — talk to the board commander"
+          onClick={() => onSelect("thread")}
+          style={btn(active === "thread")}
+        >
+          <Icon name="bot" color={active === "thread" ? "var(--cv-accent)" : undefined} />
+        </button>
+      </nav>
 
-  const openAgents = Object.values(agents)
-    .filter((a) => (a.board_id ?? "main") === activeBoard && a.status !== "exited");
-  const gitAgents = openAgents.filter((a) => a.worktree);
-
-  const [menu, setMenu] = useState<"panels" | "git" | null>(null);
-  const railRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!menu) return;
-    const onDown = (e: MouseEvent) => {
-      if (railRef.current && !railRef.current.contains(e.target as Node)) setMenu(null);
-    };
-    window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
-  }, [menu]);
-
-  const sideMenu = (node: React.ReactNode, width = 220) =>
-    menu ? (
-      <div
-        className="cv-menu cv-menu-scroll"
-        style={{
-          position: "absolute",
-          right: 46,
-          top: 0,
-          width,
-          padding: 6,
-          zIndex: 40,
-          maxHeight: 340,
-          overflowY: "auto",
-        }}
-      >
-        {node}
-      </div>
-    ) : null;
-
-  return (
-    <div ref={railRef} style={railColRight}>
-      {/* ── Bubble 1 · comms ──────────────────────────────── */}
-      <nav className="glass" style={bubble}>
+      {/* ── Bubble 3 · inbox, alone ───────────────────────── */}
+      <nav className="glass" style={bubbleRow}>
         <button
           title="Inbox — approvals, waiting agents, delegations in flight"
           onClick={() => onSelect("inbox")}
@@ -431,114 +477,119 @@ export function RightRail({ active, onSelect }: { active: string; onSelect: (key
           <Icon name="inbox" />
           {inboxCount > 0 && <span style={badge("var(--cv-waiting)")}>{inboxCount}</span>}
         </button>
-        <div style={{ position: "relative" }}>
-          <button
-            title="Panels on the canvas — which terminals are open"
-            onClick={() => setMenu((m) => (m === "panels" ? null : "panels"))}
-            style={btn(menu === "panels")}
-          >
-            <Icon name="panels" />
-            {openAgents.length > 0 && (
-              <span style={badge("var(--cv-glass-hi)")}>{openAgents.length}</span>
-            )}
-          </button>
-          {menu === "panels" && sideMenu(
-            <>
-              <div style={sectionLabel}>Panels on the canvas</div>
-              {openAgents.length === 0 && (
-                <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
-                  no open panels
-                </div>
-              )}
-              {openAgents.map((a) => (
-                <button
-                  key={a.id}
-                  style={menuRow}
-                  title={`open ${a.name}`}
-                  onClick={() => { useBoard.getState().requestTerm(a.id, a.name); setMenu(null); }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                >
-                  <span style={statusDot(STATUS_COLOR[a.status] ?? "var(--cv-idle)")} />
-                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {a.name}
-                  </span>
-                  <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>{a.status}</span>
-                </button>
-              ))}
-            </>,
+      </nav>
+    </div>
+  );
+}
+
+/** Bottom-right strip — sits LEFT of the minimap: the panels bubble
+ * alone, then hide/gather/summaries. `right` is the minimap's width
+ * plus its margin so this cluster hugs the minimap's left edge. */
+export function BottomControls({ right }: { right: number }) {
+  const agents = useBoard((s) => s.agents);
+  const activeBoard = useBoard((s) => s.activeBoard);
+  const summaries = useBoard((s) => s.panelSummaries);
+  const openAgents = Object.values(agents)
+    .filter((a) => (a.board_id ?? "main") === activeBoard && a.status !== "exited");
+
+  const [menu, setMenu] = useState<"panels" | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setMenu(null);
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [menu]);
+
+  return (
+    <div
+      ref={wrapRef}
+      style={{
+        position: "absolute",
+        right,
+        bottom: 12,
+        zIndex: 20,
+        display: "flex",
+        alignItems: "flex-end",
+        gap: 8,
+      }}
+    >
+      {/* ── panels, alone ─────────────────────────────────── */}
+      <nav className="glass" style={{ ...bubbleRow, position: "relative" }}>
+        <button
+          title="Panels on the canvas — which terminals are open"
+          onClick={() => setMenu((m) => (m === "panels" ? null : "panels"))}
+          style={btn(menu === "panels")}
+        >
+          <Icon name="panels" />
+          {openAgents.length > 0 && (
+            <span style={badge("var(--cv-glass-hi)")}>{openAgents.length}</span>
           )}
-        </div>
+        </button>
+        {menu === "panels" && (
+          <div
+            className="cv-menu cv-menu-scroll"
+            style={{
+              position: "absolute",
+              bottom: 42,
+              right: 0,
+              width: 220,
+              padding: 6,
+              zIndex: 40,
+              maxHeight: 340,
+              overflowY: "auto",
+            }}
+          >
+            <div style={sectionLabel}>Panels on the canvas</div>
+            {openAgents.length === 0 && (
+              <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
+                no open panels
+              </div>
+            )}
+            {openAgents.map((a) => (
+              <button
+                key={a.id}
+                style={menuRow}
+                title={`open ${a.name}`}
+                onClick={() => { useBoard.getState().requestTerm(a.id, a.name); setMenu(null); }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                <span style={statusDot(STATUS_COLOR[a.status] ?? "var(--cv-idle)")} />
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {a.name}
+                </span>
+                <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>{a.status}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </nav>
 
-      {/* ── Bubble 2 · code ───────────────────────────────── */}
-      <nav className="glass" style={bubble}>
-        <div style={{ position: "relative" }}>
-          <button
-            title="Source control — worktrees, push an agent's branch"
-            onClick={() => setMenu((m) => (m === "git" ? null : "git"))}
-            style={btn(menu === "git")}
-          >
-            <Icon name="git" />
-            {gitAgents.length > 0 && (
-              <span style={badge("var(--cv-glass-hi)")}>{gitAgents.length}</span>
-            )}
-          </button>
-          {menu === "git" && sideMenu(
-            <>
-              <div style={sectionLabel}>Source control</div>
-              {gitAgents.length === 0 && (
-                <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
-                  no agents with worktrees
-                </div>
-              )}
-              {gitAgents.map((a) => (
-                <button
-                  key={a.id}
-                  style={menuRow}
-                  title={`push ${a.worktree} — the agent's branch`}
-                  onClick={() => { useBoard.getState().gitPush(a.id); setMenu(null); }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                >
-                  <Icon name="git" size={13} color="var(--cv-ink-dim)" />
-                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {a.name}
-                  </span>
-                  <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>push</span>
-                </button>
-              ))}
-            </>,
-          )}
-        </div>
+      {/* ── canvas controls ───────────────────────────────── */}
+      <nav className="glass" style={bubbleRow}>
         <button
-          title="Explorer — vault files"
-          onClick={() => onSelect("vault")}
-          style={btn(active === "vault")}
+          title="Hide panels and menus — chrome away, canvas only"
+          onClick={() => useBoard.getState().toggleChrome()}
+          style={btn(false)}
         >
-          <Icon name="explorer" />
+          <Icon name="hide" />
         </button>
         <button
-          title="Dev ticket — notes and tasks on the board"
-          onClick={() => onSelect("notes")}
-          style={btn(active === "notes")}
+          title="Gather loose windows into a group"
+          onClick={() => useBoard.getState().gatherLoose()}
+          style={btn(false)}
         >
-          <Icon name="ticket" />
+          <Icon name="gather" />
         </button>
-      </nav>
-
-      <div style={{ flex: 1 }} />
-
-      {/* ── Bubble 3 · zoom (bottom-right, next to minimap) ─ */}
-      <nav className="glass" style={bubble}>
-        <button title="Zoom out" onClick={() => useBoard.getState().requestZoom(-1)} style={btn(false)}>
-          <Icon name="minus" />
-        </button>
-        <button title="Zoom in" onClick={() => useBoard.getState().requestZoom(1)} style={btn(false)}>
-          <Icon name="plus" />
-        </button>
-        <button title="Zoom to fit — frame the whole board" onClick={() => useBoard.getState().requestView()} style={btn(false)}>
-          <Icon name="zoom" />
+        <button
+          title="Show panel summaries — last line + mini preview per card"
+          onClick={() => useBoard.getState().togglePanelSummaries()}
+          style={btn(!summaries)}
+        >
+          <Icon name="eye" color={summaries ? "var(--cv-ink)" : "var(--cv-ink-faint)"} />
         </button>
       </nav>
     </div>
