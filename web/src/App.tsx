@@ -101,6 +101,40 @@ function Board() {
   const [edgeDetail, setEdgeDetail] = useState<string | null>(null);
   const [search, setSearch] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  // Region shot: marquee-select part of the canvas → PNG of just that area.
+  const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [shotMode, setShotMode] = useState(false);
+  const shotRegion = useCallback(async (r: { x1: number; y1: number; x2: number; y2: number }) => {
+    const ns = getNodes();
+    const vp = document.querySelector<HTMLElement>(".react-flow__viewport");
+    if (!vp) return;
+    // Intersect each node's rendered box with the marquee to capture it.
+    const picked = ns.filter((n) => {
+      const el = document.querySelector(`[data-id="${n.id}"]`);
+      if (!el) return false;
+      const b = el.getBoundingClientRect();
+      return b.left < r.x2 && b.right > r.x1 && b.top < r.y2 && b.bottom > r.y1;
+    });
+    if (picked.length === 0) {
+      useBoard.getState().notify("region shot — no nodes in the selected area");
+      return;
+    }
+    const bounds = getNodesBounds(picked);
+    const w = Math.min(2400, Math.max(400, Math.ceil(bounds.width) + 160));
+    const h = Math.min(2400, Math.max(300, Math.ceil(bounds.height) + 160));
+    const v = getViewportForBounds(bounds, w, h, 0.2, 2, 0.12);
+    const dataUrl = await toPng(vp, {
+      backgroundColor: "#0e0e10",
+      width: w,
+      height: h,
+      style: { width: `${w}px`, height: `${h}px`, transform: `translate(${v.x}px, ${v.y}px) scale(${v.zoom})` },
+    });
+    const a = document.createElement("a");
+    a.download = `canvas-region-${Date.now()}.png`;
+    a.href = dataUrl;
+    a.click();
+    useBoard.getState().notify(`region shot — ${picked.length} node(s)`);
+  }, [getNodes]);
   // Connect on load when a token is present — no manual "connect" click.
   useEffect(() => {
     useBoard.getState().connect("");
@@ -302,6 +336,64 @@ function Board() {
       >
         ▣ shot
       </button>
+      <button
+        className="glass-pill"
+        title="drag a region → PNG of just that part"
+        onClick={() => setShotMode((m) => !m)}
+        style={{
+          position: "absolute",
+          right: 16,
+          bottom: 36,
+          zIndex: 20,
+          fontSize: 11,
+          fontWeight: 600,
+          padding: "6px 14px",
+          cursor: "pointer",
+          border: "none",
+          color: shotMode ? "var(--cv-accent)" : "var(--cv-ink)",
+        }}
+      >
+        ◳ region
+      </button>
+      {shotMode && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 30,
+            cursor: "crosshair",
+            background: "rgba(14,14,16,0.15)",
+          }}
+          onMouseDown={(e) => setMarquee({ x1: e.clientX, y1: e.clientY, x2: e.clientX, y2: e.clientY })}
+          onMouseMove={(e) => { if (marquee) setMarquee({ ...marquee, x2: e.clientX, y2: e.clientY }); }}
+          onMouseUp={(e) => {
+            if (marquee) {
+              const r = {
+                x1: Math.min(marquee.x1, e.clientX), x2: Math.max(marquee.x1, e.clientX),
+                y1: Math.min(marquee.y1, e.clientY), y2: Math.max(marquee.y1, e.clientY),
+              };
+              setMarquee(null);
+              setShotMode(false);
+              if (r.x2 - r.x1 > 20 && r.y2 - r.y1 > 20) void shotRegion(r);
+            } else setShotMode(false);
+          }}
+        >
+          {marquee && (
+            <div
+              style={{
+                position: "absolute",
+                left: Math.min(marquee.x1, marquee.x2),
+                top: Math.min(marquee.y1, marquee.y2),
+                width: Math.abs(marquee.x2 - marquee.x1),
+                height: Math.abs(marquee.y2 - marquee.y1),
+                border: "1.5px solid var(--cv-accent)",
+                background: "rgba(201,162,107,0.08)",
+                borderRadius: 8,
+              }}
+            />
+          )}
+        </div>
+      )}
       <SpawnBar />
       <ReactFlow
         nodes={nodes}
