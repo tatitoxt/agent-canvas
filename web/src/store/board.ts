@@ -1369,6 +1369,15 @@ export const useBoard = create<BoardState>((set, get) => ({
       }
       return;
     }
+    if (/^(?:help|commands|what can you do)\s*\??$/.test(low)) {
+      reply(
+        "I speak: @Terminal N <msg> · @all <msg> · check Terminal N · " +
+          "spawn <cli> · kill Terminal N · kill all · pause/resume · " +
+          "apply/save preset <n> · open <panel> · focus <name> · " +
+          "gather · hide chrome · status · summary",
+      );
+      return;
+    }
     if (/^gather/.test(low)) {
       get().gatherLoose();
       reply("gathered the loose windows into a group");
