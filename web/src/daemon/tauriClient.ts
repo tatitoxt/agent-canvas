@@ -17,8 +17,10 @@ const b64decode = (s: string) =>
 
 export class TauriCanvasClient {
   private unlistens: UnlistenFn[] = [];
+  private handlers: Handlers;
 
   constructor(handlers: Handlers) {
+    this.handlers = handlers;
     void listen<{ agent_id: string; data: string }>("canvas://pty", (ev) => {
       handlers.onPty(ev.payload.agent_id, b64decode(ev.payload.data));
     }).then((u) => this.unlistens.push(u));
@@ -108,6 +110,18 @@ export class TauriCanvasClient {
     void invoke("delegate", { from, name, command, task, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null, accountId: accountId ?? null }).catch(
       console.error,
     );
+  }
+
+  memoryRead(nodeId: string) {
+    void invoke("memory_read", { nodeId })
+      .then((text) =>
+        this.handlers.onControl({ type: "memory", node_id: nodeId, text: text as string } as Parameters<Handlers["onControl"]>[0]),
+      )
+      .catch(console.error);
+  }
+
+  memoryWrite(nodeId: string, text: string) {
+    void invoke("memory_write", { nodeId, text }).catch(console.error);
   }
 
   createAccount(cli: string, label: string) {

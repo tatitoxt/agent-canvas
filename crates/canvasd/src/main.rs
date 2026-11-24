@@ -103,6 +103,24 @@ async fn health() -> Json<Health> {
 
 /// Spawn a PTY agent wired to the event bus + store. Used by both
 /// `spawn_agent` (standalone node) and `delegate` (edge-owned child).
+/// Memory file for a node: the board repo's `.canvas/memory.md`, or the
+/// workspace's repo memory when node_id is a workspace. Every agent
+/// spawned in that scope gets CANVAS_MEMORY pointing at it.
+fn memory_path(state: &Arc<AppState>, node_id: &str) -> PathBuf {
+    let repo = if node_id == "main" {
+        state.repo_root.clone()
+    } else {
+        state
+            .store
+            .workspace_repo(node_id)
+            .ok()
+            .flatten()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| state.repo_root.clone())
+    };
+    repo.join(".canvas").join("memory.md")
+}
+
 /// A workspace-scoped agent runs inside that workspace's repo, not the
 /// daemon's default board repo.
 fn spawn_agent(
@@ -175,6 +193,15 @@ fn spawn_agent(
                 .map(|k| vec![(k.to_string(), abs.to_string_lossy().to_string())])
         })
         .unwrap_or_default();
+    // Workspace (or board) memory — the agent reads/appends shared notes.
+    let mem_scope = workspace_id.unwrap_or("main");
+    let mem_path = memory_path(state, mem_scope);
+    let _ = std::fs::create_dir_all(mem_path.parent().unwrap());
+    if !mem_path.exists() {
+        let _ = std::fs::write(&mem_path, "");
+    }
+    let mut pty_env = pty_env;
+    pty_env.push(("CANVAS_MEMORY".to_string(), mem_path.to_string_lossy().to_string()));
     let id = state
         .agents
         .spawn(name, command, cwd, &repo_root, permission, out_tx, exit_tx, &pty_env)?;
@@ -706,6 +733,21 @@ fn handle_client_msg(
                     agent_id: Some(agent_id),
                     message: "no transcript for agent".into(),
                 }),
+            }
+        }
+        ClientMsg::MemoryRead { node_id } => {
+            let path = memory_path(state, &node_id);
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            send_control(ServerMsg::Memory { node_id, text });
+        }
+        ClientMsg::MemoryWrite { node_id, text } => {
+            let path = memory_path(state, &node_id);
+            if let Some(p) = path.parent() {
+                let _ = std::fs::create_dir_all(p);
+            }
+            match std::fs::write(&path, &text) {
+                Ok(()) => send_control(ServerMsg::Memory { node_id, text }),
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
             }
         }
         ClientMsg::DeleteWorkspace { workspace_id } => {

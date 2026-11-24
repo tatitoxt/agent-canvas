@@ -55,6 +55,8 @@ type BoardState = {
   workspaces: Record<string, LiveWorkspace>;
   /** Registered named CLI accounts (id → account). */
   accounts: Record<string, { account_id: string; cli: string; label: string }>;
+  /** node_id ("main" or a workspace id) → memory.md text. */
+  memories: Record<string, string>;
   /** Saved node positions — replayed from the daemon's layout table. */
   positions: Record<string, { x: number; y: number }>;
   /** Drop position for a delegation child, keyed by parent agent id —
@@ -90,6 +92,8 @@ type BoardState = {
   spawn: (name: string, command: string, workspaceId?: string, permission?: string, accountId?: string) => void;
   createAccount: (cli: string, label: string) => void;
   deleteAccount: (accountId: string) => void;
+  memoryRead: (nodeId: string) => void;
+  memoryWrite: (nodeId: string, text: string) => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
   kill: (agentId: string) => void;
@@ -141,6 +145,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   edges: {},
   workspaces: {},
   accounts: {},
+  memories: {},
   positions: {},
   pendingPositions: {},
   approvals: {},
@@ -389,6 +394,10 @@ export const useBoard = create<BoardState>((set, get) => ({
             });
             break;
           }
+          case "memory": {
+            set((st) => ({ memories: { ...st.memories, [msg.node_id]: msg.text } }));
+            break;
+          }
           case "account_created": {
             set((s) => ({
               accounts: { ...s.accounts, [msg.account_id]: { account_id: msg.account_id, cli: msg.cli, label: msg.label } },
@@ -453,6 +462,11 @@ export const useBoard = create<BoardState>((set, get) => ({
 
   createAccount: (cli, label) => client?.createAccount(cli, label),
   deleteAccount: (accountId) => client?.deleteAccount(accountId),
+  memoryRead: (nodeId) => client?.memoryRead(nodeId),
+  memoryWrite: (nodeId, text) => {
+    client?.memoryWrite(nodeId, text);
+    set((st) => ({ memories: { ...st.memories, [nodeId]: text } }));
+  },
 
   createWorkspace: (name, repo) => client?.createWorkspace(name, repo, get().activeBoard),
 

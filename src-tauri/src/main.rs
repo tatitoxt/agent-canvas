@@ -42,6 +42,23 @@ fn emit_pty(app: &AppHandle, agent_id: &str, bytes: &[u8]) {
     }
 }
 
+/// Memory file for a node: the board repo's `.canvas/memory.md`, or the
+/// workspace's repo memory when node_id is a workspace.
+fn memory_path(state: &State<'_, CanvasState>, node_id: &str) -> PathBuf {
+    let repo = if node_id == "main" {
+        state.repo_root.clone()
+    } else {
+        state
+            .store
+            .workspace_repo(node_id)
+            .ok()
+            .flatten()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| state.repo_root.clone())
+    };
+    repo.join(".canvas").join("memory.md")
+}
+
 /// Spawn a PTY agent wired to emit events + persist. Shared by spawn_agent
 /// and delegate.
 #[allow(clippy::too_many_arguments)]
@@ -98,6 +115,17 @@ fn spawn_wired(
                 .map(|k| vec![(k.to_string(), abs.to_string_lossy().to_string())])
         })
         .unwrap_or_default();
+    // Workspace (or board) memory — injected as CANVAS_MEMORY.
+    let mem_scope = workspace_id.unwrap_or("main");
+    let mem_path = memory_path(state, mem_scope);
+    if let Some(p) = mem_path.parent() {
+        let _ = std::fs::create_dir_all(p);
+    }
+    if !mem_path.exists() {
+        let _ = std::fs::write(&mem_path, "");
+    }
+    let mut pty_env = pty_env;
+    pty_env.push(("CANVAS_MEMORY".to_string(), mem_path.to_string_lossy().to_string()));
     let id = state
         .agents
         .spawn(name, command, cwd, &repo_root, permission, out_tx, exit_tx, &pty_env)
@@ -250,6 +278,22 @@ fn delete_board(
         }
         _ => Err("board not empty or is main".to_string()),
     }
+}
+
+#[tauri::command]
+fn memory_read(state: State<'_, CanvasState>, node_id: String) -> Result<String, String> {
+    Ok(std::fs::read_to_string(memory_path(&state, &node_id)).unwrap_or_default())
+}
+
+#[tauri::command]
+fn memory_write(app: AppHandle, state: State<'_, CanvasState>, node_id: String, text: String) -> Result<(), String> {
+    let path = memory_path(&state, &node_id);
+    if let Some(p) = path.parent() {
+        let _ = std::fs::create_dir_all(p);
+    }
+    std::fs::write(&path, &text).map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::Memory { node_id, text });
+    Ok(())
 }
 
 #[tauri::command]
@@ -874,6 +918,8 @@ fn main() {
             rename_board,
             delete_board,
             delete_workspace,
+            memory_read,
+            memory_write,
             create_workspace,
             move_to_board,
             delegate,

@@ -45,6 +45,11 @@ pub enum ClientMsg {
     RenameBoard { board_id: String, name: String },
     /// Delete a board — refused while it still holds nodes.
     DeleteBoard { board_id: String },
+    /// Read a node's memory file — "main" is the board repo's memory,
+    /// a workspace id reads that workspace's repo memory.
+    MemoryRead { node_id: String },
+    /// Overwrite a node's memory file.
+    MemoryWrite { node_id: String, text: String },
     /// Delete a workspace — refused while it holds live agents; dead
     /// agents are detached and stay on the canvas.
     DeleteWorkspace { workspace_id: String },
@@ -212,6 +217,8 @@ pub enum ServerMsg {
     AccountCreated { account_id: String, cli: String, label: String },
     /// A named account was removed.
     AccountDeleted { account_id: String },
+    /// Memory file contents (MemoryRead answer).
+    Memory { node_id: String, text: String },
 }
 
 #[derive(Debug, Clone, Serialize)]
