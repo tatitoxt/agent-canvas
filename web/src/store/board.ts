@@ -1468,8 +1468,9 @@ export const useBoard = create<BoardState>((set, get) => ({
       reply(
         "I speak: @Terminal N <msg> · @all <msg> · check Terminal N · " +
           "approve/deny Terminal N · spawn <cli> · kill Terminal N · kill all · " +
-          "pause/resume · apply/save preset <n> · open <panel> · focus <name> · " +
-          "gather · hide chrome · clear thread · status · summary",
+          "pause/resume · board/new board <name> · apply/save preset <n> · " +
+          "open <panel> · focus <name> · gather · hide chrome · " +
+          "clear thread · status · summary",
       );
       return;
     }
