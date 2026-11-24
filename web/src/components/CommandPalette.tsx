@@ -84,6 +84,32 @@ export function CommandPalette({
     list.push(
       { id: "view-fit", group: "view", label: "fit view", run: () => s.requestView() },
       { id: "view-clear", group: "view", label: "clear done agents", hint: "removes exited nodes", run: () => s.clearDone() },
+      { id: "view-tidy", group: "view", label: "tidy cards", hint: "stack open panels + terminals", run: () => s.requestTidy() },
+      {
+        id: "view-close-cards",
+        group: "view",
+        label: "close all cards",
+        hint: "panels + canvas terminals",
+        run: () => {
+          const board = s.activeBoard;
+          const m = { ...s.panelNodes, [board]: {} };
+          const tm = { ...s.termNodes, [board]: {} };
+          localStorage.setItem("cv-panelnodes", JSON.stringify(m));
+          localStorage.setItem("cv-termnodes", JSON.stringify(tm));
+          useBoard.setState({ panelNodes: m, termNodes: tm });
+        },
+      },
+      {
+        id: "spawn-term",
+        group: "spawn",
+        label: "new terminal card",
+        cli: "bash",
+        hint: "bash on the canvas",
+        run: () => {
+          s.setPendingTermPos({ x: 240 + Math.random() * 560, y: 120 + Math.random() * 240 });
+          s.spawn("terminal", "bash");
+        },
+      },
       { id: "font-up", group: "view", label: "bigger terminal text", run: () => s.bumpFont(1) },
       { id: "font-down", group: "view", label: "smaller terminal text", run: () => s.bumpFont(-1) },
     );
@@ -136,6 +162,24 @@ export function CommandPalette({
           label: `open terminal — ${a.name}`,
           hint: a.status,
           run: () => onOpenAgent(a.id, a.name),
+        });
+        list.push({
+          id: `termcard-${a.id}`,
+          group: "agents",
+          label: `terminal on canvas — ${a.name}`,
+          hint: "pop out",
+          run: () => s.openTermNode(a.id),
+        });
+        list.push({
+          id: `dup-${a.id}`,
+          group: "agents",
+          label: `duplicate — ${a.name}`,
+          hint: "same CLI",
+          run: () => {
+            const p = s.positions[a.id];
+            if (p) s.setPendingSpawnPos({ x: p.x + 60, y: p.y + 60 });
+            s.spawn(a.name, a.command ?? "bash", a.workspace_id ?? undefined, a.permission);
+          },
         });
       }
       list.push({
