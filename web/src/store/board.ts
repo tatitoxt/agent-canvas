@@ -128,6 +128,12 @@ type BoardState = {
   closeVaultFile: () => void;
   webNodeAdd: (url: string) => void;
   webNodeRemove: (id: string) => void;
+  /** Live markdown nodes — vault files pinned on the board, re-polled
+   * so an agent editing the file shows up live on the card. */
+  mdNodes: Record<string, Record<string, string>>;
+  mdContents: Record<string, string>;
+  mdNodeAdd: (path: string) => void;
+  mdNodeRemove: (id: string) => void;
   studioDocNow: () => void;
   closeStudioDoc: () => void;
   artifactDelete: (artifactId: string) => void;
@@ -513,7 +519,10 @@ export const useBoard = create<BoardState>((set, get) => ({
             set({ vaultEntries: msg.entries });
             break;
           case "vault_file":
-            set({ vaultFile: { path: msg.path, text: msg.text } });
+            set({
+              vaultFile: { path: msg.path, text: msg.text },
+              mdContents: { ...get().mdContents, [msg.path]: msg.text },
+            });
             break;
           case "git_pushed": {
             set({ notice: `pushed — ${msg.output || "done"}` });
@@ -645,6 +654,28 @@ export const useBoard = create<BoardState>((set, get) => ({
       return { webNodes: { ...st.webNodes, [board]: m } };
     });
     localStorage.setItem("cv-webnodes", JSON.stringify(get().webNodes));
+  },
+
+  mdNodes: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-mdnodes") ?? "{}"); } catch { return {}; }
+  })(),
+  mdContents: {},
+  mdNodeAdd: (path) => {
+    const board = get().activeBoard;
+    const id = `md-${Math.random().toString(16).slice(2, 10)}`;
+    const next = { ...get().mdNodes, [board]: { ...(get().mdNodes[board] ?? {}), [id]: path } };
+    localStorage.setItem("cv-mdnodes", JSON.stringify(next));
+    set({ mdNodes: next });
+    client?.moveNode(id, 300 + Math.random() * 200, 140 + Math.random() * 160);
+    client?.vaultRead(get().vaultDir, path);
+  },
+  mdNodeRemove: (id) => {
+    const board = get().activeBoard;
+    const m = { ...(get().mdNodes[board] ?? {}) };
+    delete m[id];
+    const next = { ...get().mdNodes, [board]: m };
+    localStorage.setItem("cv-mdnodes", JSON.stringify(next));
+    set({ mdNodes: next });
   },
   artifactCreate: (kind, title, path, text) =>
     client?.artifactCreate(get().activeBoard ?? undefined, kind, title, path, text),

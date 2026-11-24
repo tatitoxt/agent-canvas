@@ -1,0 +1,76 @@
+import { useEffect } from "react";
+import type { NodeProps, Node } from "@xyflow/react";
+import type { MdNodeData } from "../board/types";
+import { useBoard } from "../store/board";
+
+/** Symvibe's live markdown card — a vault file pinned on the board,
+ * re-polled so an agent editing the file shows up live. */
+const POLL_MS = 4000;
+
+export function MdNode({ id, data }: NodeProps<Node<MdNodeData>>) {
+  const text = useBoard((s) => s.mdContents[data.path]);
+  const mdNodeRemove = useBoard((s) => s.mdNodeRemove);
+  const basename = data.path.split("/").pop() ?? data.path;
+
+  useEffect(() => {
+    const tick = () => useBoard.getState().vaultRead(data.path);
+    tick();
+    const t = setInterval(tick, POLL_MS);
+    return () => clearInterval(t);
+  }, [data.path]);
+
+  return (
+    <div
+      className="glass-panel"
+      style={{
+        width: 340,
+        height: 260,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        borderRadius: 12,
+        border: "1px solid var(--cv-glass-edge)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "7px 10px",
+          borderBottom: "1px solid var(--cv-glass-edge)",
+          fontSize: 11,
+          color: "var(--cv-ink-dim)",
+        }}
+      >
+        <span style={{ color: "var(--cv-accent)" }}>▤</span>
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {basename}
+        </span>
+        <span style={{ fontSize: 9, color: "var(--cv-waiting)" }}>live</span>
+        <button
+          className="nodrag"
+          onClick={() => mdNodeRemove(id)}
+          style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 13 }}
+        >
+          ×
+        </button>
+      </div>
+      <div
+        className="nodrag"
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "8px 12px",
+          fontSize: 11.5,
+          lineHeight: 1.5,
+          color: "var(--cv-ink)",
+          whiteSpace: "pre-wrap",
+          fontFamily: "inherit",
+        }}
+      >
+        {text ?? "…"}
+      </div>
+    </div>
+  );
+}

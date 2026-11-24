@@ -84,6 +84,17 @@ export function VaultPanel() {
           >
             <span style={{ color: "var(--cv-ink-dim)" }}>✎ </span>
             {e}
+            <span
+              role="button"
+              title="pin as live card on the board"
+              onClick={(ev) => {
+                ev.stopPropagation();
+                useBoard.getState().mdNodeAdd(e);
+              }}
+              style={{ float: "right", color: "var(--cv-ink-dim)", cursor: "pointer", padding: "0 4px" }}
+            >
+              ⌖
+            </span>
           </button>
         ))}
       </div>

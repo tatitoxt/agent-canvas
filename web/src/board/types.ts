@@ -62,12 +62,19 @@ export type ShapeNodeData = {
   shape: ShapeDef;
 };
 
+export type MdNodeData = {
+  kind: "md";
+  id: string;
+  path: string;
+};
+
 export type BoardNodeData =
   | AgentNodeData
   | OrchestratorNodeData
   | WorkspaceNodeData
   | WebNodeData
-  | ShapeNodeData;
+  | ShapeNodeData
+  | MdNodeData;
 
 export type DelegationEdgeData = {
   task?: string;
