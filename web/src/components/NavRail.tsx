@@ -378,21 +378,23 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         {repoUrl && (
           <>
             <button
-              title="Pull requests — pins the repo's PR list on the canvas"
-              onClick={() => useBoard.getState().webNodeAdd(`${repoUrl}/pulls`)}
-              style={btn(false)}
+              title="Pull requests — live list from the repo's GitHub"
+              onClick={() => onSelect("prs")}
+              style={btn(active === "prs")}
             >
               <Icon name="pr" />
             </button>
             <button
-              title="Issues — pins the repo's issue list on the canvas"
-              onClick={() => useBoard.getState().webNodeAdd(`${repoUrl}/issues`)}
-              style={btn(false)}
+              title="Issues — live list from the repo's GitHub"
+              onClick={() => onSelect("issues")}
+              style={btn(active === "issues")}
             >
               <Icon name="issue" />
             </button>
           </>
         )}
+        {/* github.com refuses iframes, so PRs/issues open as live panels,
+            not web nodes */}
         <div
           title={connected ? "daemon connected" : "daemon offline"}
           style={{

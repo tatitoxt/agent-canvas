@@ -29,6 +29,7 @@ import { PresetsPanel } from "./components/PresetsPanel";
 import { ThreadPanel } from "./components/ThreadPanel";
 import { AccountsPanel } from "./components/AccountsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
+import { GitHubPanel } from "./components/GitHubPanel";
 import { NotesPanel } from "./components/NotesPanel";
 import { ArtifactsPanel } from "./components/ArtifactsPanel";
 import { VaultPanel } from "./components/VaultPanel";
@@ -636,6 +637,8 @@ function Board() {
       {nav === "accounts" && <AccountsPanel />}
       {nav === "memory" && <MemoryPanel />}
       {nav === "notes" && <NotesPanel />}
+      {nav === "prs" && <GitHubPanel kind="prs" />}
+      {nav === "issues" && <GitHubPanel kind="issues" />}
       {nav === "artifacts" && <ArtifactsPanel />}
       {nav === "vault" && <VaultPanel />}
       {nav === "settings" && <SettingsPanel />}
