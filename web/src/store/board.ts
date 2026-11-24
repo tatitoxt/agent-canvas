@@ -757,6 +757,21 @@ export const useBoard = create<BoardState>((set, get) => ({
             const boards = Object.fromEntries(
               (msg.boards ?? []).map((b) => [b.board_id, b.name]),
             );
+            // Drop canvas terminal cards whose agent no longer exists
+            // (killed server-side) — a card would show a dead shell.
+            const termNodes = { ...get().termNodes };
+            let tnTouched = false;
+            for (const [boardId, m] of Object.entries(termNodes)) {
+              for (const id of Object.keys(m)) {
+                if (id.startsWith("term-") && !agents[id.slice(5)]) {
+                  const c = { ...m };
+                  delete c[id];
+                  termNodes[boardId] = c;
+                  tnTouched = true;
+                }
+              }
+            }
+            if (tnTouched) localStorage.setItem("cv-termnodes", JSON.stringify(termNodes));
             set({
               agents,
               positions,
@@ -770,6 +785,7 @@ export const useBoard = create<BoardState>((set, get) => ({
               accounts,
               notes,
               artifacts,
+              ...(tnTouched ? { termNodes } : {}),
             });
             break;
           }
@@ -1226,7 +1242,25 @@ export const useBoard = create<BoardState>((set, get) => ({
         delete next[id];
         n++;
       }
-    if (n) set({ agents: next });
+    if (n) {
+      // Their canvas terminal cards go too — the PTY is gone.
+      const board = get().activeBoard;
+      const tn = { ...(get().termNodes[board] ?? {}) };
+      let touched = false;
+      for (const id of Object.keys(tn)) {
+        if (id.startsWith("term-") && !next[id.slice(5)]) {
+          delete tn[id];
+          touched = true;
+        }
+      }
+      if (touched) {
+        const tAll = { ...get().termNodes, [board]: tn };
+        localStorage.setItem("cv-termnodes", JSON.stringify(tAll));
+        set({ agents: next, termNodes: tAll });
+      } else {
+        set({ agents: next });
+      }
+    }
     return n;
   },
 
