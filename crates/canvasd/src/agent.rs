@@ -255,7 +255,16 @@ impl AgentManager {
         // Allowlisted env: the PTY does not inherit arbitrary session env.
         let mut cmd = CommandBuilder::new("/bin/bash");
         cmd.arg("-lc");
-        cmd.arg(command);
+        // The slave spawns with ECHO+ICANON until the child CLI configures
+        // its own termios — and bash -lc never does. Query replies sent in
+        // that window (cursor reports, OSC answers) get echoed back into
+        // the scrollback as `^[[1;1R` garbage AND line-buffered (the CLI
+        // never receives them until a newline). Disable both up front;
+        // interactive children (bash itself, TUIs) set their own modes.
+        cmd.arg(format!(
+            "stty -echo -icanon 2>/dev/null; exec {}",
+            command
+        ));
         cmd.cwd(&spawn_dir);
         cmd.env("TERM", "xterm-256color");
         cmd.env("CANVAS_AGENT_ID", &id);
