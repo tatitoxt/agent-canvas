@@ -1,7 +1,7 @@
 import { Icon } from "./icons";
 import { useBoard } from "../store/board";
 import { useReactFlow } from "@xyflow/react";
-import { edgePoint, obstacleRects, segmentHitsRect, type Pt, type Rect } from "./anchorGeom";
+import { edgePoint, obstacleRects, rectsOverlap, segmentHitsRect, type Pt, type Rect } from "./anchorGeom";
 
 const CARD_W = 250;
 const CARD_H = 150;
@@ -23,20 +23,30 @@ export function cleanPinSpot(anchor: string | undefined): Pt {
     );
   }
   cands.push(
+    { x: iw * 0.8, y: ih * 0.3 },
+    { x: iw * 0.8, y: ih * 0.62 },
     { x: iw * 0.62, y: ih * 0.35 },
-    { x: iw * 0.62, y: ih * 0.6 },
-    { x: iw * 0.45, y: ih * 0.62 },
+    { x: iw * 0.62, y: ih * 0.68 },
+    { x: iw * 0.45, y: ih * 0.7 },
+    { x: iw * 0.62, y: ih * 0.8 },
   );
   if (!panel) return cands[4];
   const pr = panel.getBoundingClientRect();
   const panelRect: Rect = { x: pr.left, y: pr.top, w: pr.width, h: pr.height };
   const panelC = { x: panelRect.x + panelRect.w / 2, y: panelRect.y + panelRect.h / 2 };
+  const obstacles = obstacleRects([`[data-panel="${anchor}"]`]);
   for (const c of cands) {
     const card: Rect = { x: c.x, y: c.y, w: CARD_W, h: CARD_H };
+    // card itself must sit on free canvas — never under/ontop another node
+    if (obstacles.some((o) => rectsOverlap(card, o, 6))) continue;
     const a = edgePoint(card, panelC);
     const b = edgePoint(panelRect, { x: card.x + card.w / 2, y: card.y + card.h / 2 });
-    const obstacles = obstacleRects([`[data-panel="${anchor}"]`]);
     if (!obstacles.some((o) => segmentHitsRect(a, b, o))) return c;
+  }
+  // nothing fully clean: take the first spot where at least the CARD is free
+  for (const c of cands) {
+    const card: Rect = { x: c.x, y: c.y, w: CARD_W, h: CARD_H };
+    if (!obstacles.some((o) => rectsOverlap(card, o, 6))) return c;
   }
   return cands[0];
 }

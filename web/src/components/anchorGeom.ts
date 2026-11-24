@@ -44,6 +44,10 @@ export function segmentHitsRect(a: Pt, b: Pt, r: Rect): boolean {
   return false;
 }
 
+export function rectsOverlap(a: Rect, b: Rect, pad = 0): boolean {
+  return a.x < b.x + b.w + pad && a.x + a.w + pad > b.x && a.y < b.y + b.h + pad && a.y + a.h + pad > b.y;
+}
+
 /** Rects of every rendered node + open panel, minus `excludeSel` matches. */
 export function obstacleRects(excludeSel: string[]): Rect[] {
   const rects: Rect[] = [];
