@@ -310,6 +310,9 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
 
   const [menu, setMenu] = useState<"git" | null>(null);
   const [expanded, setExpanded] = useState(false);
+  // Picking a panel collapses the Library so it doesn't cover the panel's
+  // left column.
+  const pick = (k: string) => { setExpanded(false); onSelect(k); };
   const railRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -358,13 +361,13 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
             </button>
           </div>
           {toolRow("git", "Source Control", `worktrees, push an agent's branch${gitAgents.length ? ` — ${gitAgents.length} live` : ""}`, () => setMenu((m) => (m === "git" ? null : "git")))}
-          {toolRow("obsidian-real", "Obsidian", "your real vault — browse markdown; 'obsidian <note>' in Dex writes to it", () => onSelect("vault"), "vault", "#8B5CF6")}
-          {toolRow("github", "Pull requests", "live list from the repo's GitHub", () => onSelect("prs"), "prs", undefined, ghCounts.prs != null ? `${ghCounts.prs} open` : undefined)}
-          {toolRow("issue", "Issues", "live list from the repo's GitHub", () => onSelect("issues"), "issues", undefined, ghCounts.issues != null ? `${ghCounts.issues} open` : undefined)}
-          {toolRow("ticket", "Dex Tickets", "notes and tasks on the board", () => onSelect("notes"), "notes", undefined, noteCount ? `${noteCount}` : undefined)}
-          {toolRow("artifacts", "Artifacts", "shots, docs and files the agents produced", () => onSelect("artifacts"), "artifacts", undefined, artifactCount ? `${artifactCount}` : undefined)}
-          {toolRow("calendar", "Calendar", "daily notes + due dates from your vault", () => onSelect("calendar"), "calendar")}
-          {toolRow("loops", "Loops", "recurring instructions per agent", () => onSelect("loops"), "loops", undefined, loopCount ? `${loopCount} active` : undefined)}
+          {toolRow("obsidian-real", "Obsidian", "your real vault — browse markdown; 'obsidian <note>' in Dex writes to it", () => pick("vault"), "vault", "#8B5CF6")}
+          {toolRow("github", "Pull requests", "live list from the repo's GitHub", () => pick("prs"), "prs", undefined, ghCounts.prs != null ? `${ghCounts.prs} open` : undefined)}
+          {toolRow("issue", "Issues", "live list from the repo's GitHub", () => pick("issues"), "issues", undefined, ghCounts.issues != null ? `${ghCounts.issues} open` : undefined)}
+          {toolRow("ticket", "Dex Tickets", "notes and tasks on the board", () => pick("notes"), "notes", undefined, noteCount ? `${noteCount}` : undefined)}
+          {toolRow("artifacts", "Artifacts", "shots, docs and files the agents produced", () => pick("artifacts"), "artifacts", undefined, artifactCount ? `${artifactCount}` : undefined)}
+          {toolRow("calendar", "Calendar", "daily notes + due dates from your vault", () => pick("calendar"), "calendar")}
+          {toolRow("loops", "Loops", "recurring instructions per agent", () => pick("loops"), "loops", undefined, loopCount ? `${loopCount} active` : undefined)}
         </nav>
         {menu === "git" && (
           <div
