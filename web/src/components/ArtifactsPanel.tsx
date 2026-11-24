@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useBoard } from "../store/board";
+import { downloadPdf } from "../lib/pdf";
 
 /** Each artifact kind gets its own symbol + muted color (Deska-style
  * deliverable templates). */
@@ -10,6 +11,7 @@ const KINDS: Record<string, { mark: string; color: string }> = {
   log: { mark: "▦", color: "#86817a" },
   image: { mark: "▩", color: "#7ba389" },
   note: { mark: "✎", color: "#c9a26b" },
+  pdf: { mark: "⎙", color: "#c96b6b" },
 };
 const kindMeta = (k: string) => KINDS[k] ?? KINDS.note;
 
@@ -144,6 +146,15 @@ export function ArtifactsPanel() {
                   {a.created_at && ` · ${a.created_at.slice(5, 16)}`}
                 </div>
               </div>
+              {a.kind === "pdf" && a.text && (
+                <button
+                  title="download PDF again"
+                  style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-accent)", fontSize: 13 }}
+                  onClick={() => downloadPdf(a.title.replace(/^PDF — /, ""), a.text ?? "")}
+                >
+                  ⭳
+                </button>
+              )}
               <button
                 title="delete artifact"
                 style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: 13 }}

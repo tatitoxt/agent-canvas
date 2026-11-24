@@ -241,13 +241,13 @@ export function VaultPanel() {
     if (!vaultFile) return;
     const title = vaultFile.path.replace(/\.md$/, "").split("/").pop() ?? "note";
     downloadPdf(title, vaultFile.text);
-    useBoard.getState().artifactCreate("pdf", `PDF — ${title}`, vaultFile.path, vaultFile.text.slice(0, 800));
+    useBoard.getState().artifactCreate("pdf", `PDF — ${title}`, vaultFile.path, vaultFile.text);
   };
 
   const generate = (kind: "overview" | "onboarding" | "architecture") => {
     const { title, md } = buildDoc(kind);
     downloadPdf(title, md);
-    useBoard.getState().artifactCreate("pdf", `PDF — ${title}`, undefined, md.slice(0, 800));
+    useBoard.getState().artifactCreate("pdf", `PDF — ${title}`, undefined, md);
     setGenOpen(false);
   };
 
@@ -270,7 +270,7 @@ export function VaultPanel() {
         : ["- none"]),
     ].join("\n");
     downloadPdf(q.slice(0, 40), md);
-    useBoard.getState().artifactCreate("pdf", `PDF — ${q.slice(0, 40)}`, undefined, md.slice(0, 800));
+    useBoard.getState().artifactCreate("pdf", `PDF — ${q.slice(0, 40)}`, undefined, md);
     setGenOpen(false);
   };
 
