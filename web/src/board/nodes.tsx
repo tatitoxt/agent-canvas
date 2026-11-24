@@ -135,8 +135,8 @@ const MODEL_RE =
 
 function MiniTerm({ agentId }: { agentId: string }) {
   const buf = useBoard((s) => s.ptyBuffers[agentId]);
-  const { lines, model } = useMemo(() => {
-    if (!buf || buf.length === 0) return { lines: [] as { spans: AnsiSpan[]; text: string }[], model: undefined as string | undefined };
+  const lines = useMemo(() => {
+    if (!buf || buf.length === 0) return [] as { spans: AnsiSpan[]; text: string }[];
     const tail = buf.slice(Math.max(0, buf.length - 4000));
     const text = decoder.decode(tail).replace(/\r/g, "");
     const parsed = text
@@ -145,13 +145,7 @@ function MiniTerm({ agentId }: { agentId: string }) {
       .map((spans) => ({ spans, text: spans.map((p) => p.text).join("") }))
       .filter((l) => l.text.trim().length > 0)
       .slice(-5);
-    // Last model mention in the tail — the real model the CLI announced.
-    let model: string | undefined;
-    for (let i = parsed.length - 1; i >= 0; i--) {
-      const m = parsed[i].text.match(MODEL_RE);
-      if (m) { model = m[0]; break; }
-    }
-    return { lines: parsed, model };
+    return parsed;
   }, [buf]);
   if (lines.length === 0) return null;
   return (
@@ -161,7 +155,7 @@ function MiniTerm({ agentId }: { agentId: string }) {
         marginTop: 10,
         padding: "7px 9px",
         borderRadius: 8,
-        background: "rgba(0,0,0,0.35)",
+        background: "rgba(0,0,0,0.22)",
         border: "1px solid var(--cv-glass-edge)",
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
         fontSize: 9,
@@ -190,32 +184,34 @@ function MiniTerm({ agentId }: { agentId: string }) {
           ))}
         </div>
       ))}
-      {model && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            marginTop: 3,
-            fontSize: 8.5,
-            color: "var(--cv-ink-faint)",
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-          }}
-        >
-          {model}
-        </div>
-      )}
     </div>
+  );
+}
+
+/** Deska's signal bars — three rising bars in the status color, shown in
+ * front of "Cursor running". A real glyph, not a colored square. */
+function StatusBars({ color }: { color: string }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "flex-end", gap: 2, height: 10 }}>
+      {[4, 7, 10].map((h) => (
+        <span key={h} style={{ width: 2.5, height: h, borderRadius: 1, background: color }} />
+      ))}
+    </span>
   );
 }
 
 export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const meta = cliMeta(data.cli);
+  const [collapsed, setCollapsed] = useState(false);
+  const statusColor = STATUS_COLOR[data.status];
   return (
     <div
       className={`glass ${data.status === "waiting" ? "node-waiting" : ""}`}
       style={{
-        width: 264,
-        padding: "13px 15px 12px",
+        width: 336,
+        padding: "10px 13px 10px",
+        // Deska's card is real glass — the dot canvas bleeds through.
+        background: "color-mix(in srgb, var(--cv-base) 58%, transparent)",
         outline: selected
           ? "1px solid var(--cv-glass-shine)"
           : data.delegating
@@ -223,77 +219,103 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             : "none",
         boxShadow: data.delegating
           ? "0 0 18px color-mix(in srgb, var(--cv-waiting) 24%, transparent)"
-          : "none",
+          : undefined,
         cursor: "pointer",
       }}
     >
       <Handle type="target" position={Position.Left} />
-      {/* Deska-style header: [tile] name · <cli> <status> · [logo] <cli> */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div
+      {/* Deska header: [>_ icon] Name  ▮▮▮ <Cli> running   [mark] <Cli>  — ⤢ × */}
+      <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+        <span
+          title={meta.label}
           style={{
-            width: 20,
-            height: 20,
+            width: 18,
+            height: 18,
             flex: "none",
             display: "grid",
             placeItems: "center",
             borderRadius: 5,
-            fontSize: 10.5,
-            color: meta.color,
-            background: `color-mix(in srgb, ${meta.color} 14%, var(--cv-glass-hi))`,
-            border: `1px solid color-mix(in srgb, ${meta.color} 30%, var(--cv-glass-edge))`,
+            fontSize: 9.5,
+            fontFamily: "ui-monospace, SFMono-Regular, monospace",
+            color: "#5b7fa6",
+            background: "transparent",
+            border: "1px solid var(--cv-glass-shine)",
+            paddingBottom: 1,
           }}
-          title={meta.label}
         >
-          {meta.mark}
-        </div>
+          ›_
+        </span>
         <div
           style={{
-            fontSize: 13.5,
+            fontSize: 13,
             fontWeight: 600,
             letterSpacing: -0.1,
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
             minWidth: 0,
-            flex: "1 1 auto",
           }}
         >
           {data.name}
         </div>
         <span
           style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
             fontSize: 11,
-            color: STATUS_COLOR[data.status],
-            fontWeight: 500,
+            fontWeight: 600,
+            color: statusColor,
             flex: "none",
             whiteSpace: "nowrap",
           }}
         >
-          ≋ {meta.label} {STATUS_LABEL[data.status]}
+          <StatusBars color={statusColor} />
+          {meta.label} {STATUS_LABEL[data.status]}
         </span>
         <span
           style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            marginLeft: "auto",
             fontSize: 11,
-            color: meta.color,
-            fontWeight: 600,
             flex: "none",
             whiteSpace: "nowrap",
-            marginLeft: "auto",
           }}
         >
-          {meta.mark} {meta.label}
+          <span style={{ color: meta.color, fontSize: 10.5 }}>{meta.mark}</span>
+          <span style={{ color: "var(--cv-ink-dim)" }}>{meta.label}</span>
+        </span>
+        <span className="nodrag" style={{ display: "inline-flex", alignItems: "center", gap: 7, flex: "none", color: "var(--cv-ink-faint)", fontSize: 12 }}>
+          <span
+            role="button"
+            title="collapse"
+            style={{ cursor: "pointer", lineHeight: 1 }}
+            onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }}
+          >
+            —
+          </span>
+          <span
+            role="button"
+            title="kill"
+            style={{ cursor: "pointer", lineHeight: 1, fontSize: 13 }}
+            onClick={(e) => { e.stopPropagation(); if (data.id) useBoard.getState().kill(data.id); }}
+          >
+            ×
+          </span>
         </span>
       </div>
-      {/* Meta row — files / branch / account / permission (Deska keeps the
-          header clean and pushes these under it). */}
-      {(data.files || data.branch || data.accountLabel || (data.permission && data.permission !== "supervised")) && (
+      {!collapsed && (
+      <>
+      {/* Meta row — files / account / permission. */}
+      {(data.files || data.accountLabel || (data.permission && data.permission !== "supervised")) && (
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: 8,
-            marginTop: 7,
+            marginTop: 6,
             fontSize: 9.5,
             color: "var(--cv-ink-faint)",
           }}
@@ -301,11 +323,6 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           {data.files != null && data.files > 0 && (
             <span title={data.paths?.length ? data.paths.join("\n") : "uncommitted changes in worktree"}>
               {data.files} file{data.files === 1 ? "" : "s"}
-            </span>
-          )}
-          {data.branch && (
-            <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace" }} title="worktree branch">
-              ⎇ {data.branch}
             </span>
           )}
           {data.accountLabel && (
@@ -407,9 +424,58 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           </div>
         </div>
       )}
+      {/* Deska footer: branch + accept-edits on the left, model on the right. */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          marginTop: 9,
+          paddingTop: 8,
+          borderTop: "1px solid rgba(255,255,255,0.06)",
+          fontSize: 9.5,
+          color: "var(--cv-ink-faint)",
+        }}
+      >
+        {data.permission === "auto_accept" && (
+          <span style={{ color: "#9a7fd4", fontWeight: 600 }}>▸ accept edits on</span>
+        )}
+        {data.branch && (
+          <span
+            style={{
+              fontFamily: "ui-monospace, SFMono-Regular, monospace",
+              marginLeft: data.permission === "auto_accept" ? 8 : 0,
+            }}
+            title="worktree branch"
+          >
+            {data.branch.replace(/^canvas\//, "")}
+          </span>
+        )}
+        <span style={{ marginLeft: "auto", fontFamily: "ui-monospace, SFMono-Regular, monospace" }}>
+          <FooterModel agentId={data.id} />
+        </span>
+      </div>
+      </>
+      )}
       <Handle type="source" position={Position.Right} />
     </div>
   );
+}
+
+/** Reads the same pty buffer as MiniTerm and reports the model the CLI
+ * announced, for the Deska-style footer (bottom-right). */
+function FooterModel({ agentId }: { agentId?: string }) {
+  const buf = useBoard((s) => (agentId ? s.ptyBuffers[agentId] : undefined));
+  const model = useMemo(() => {
+    if (!buf || buf.length === 0) return undefined as string | undefined;
+    const tail = decoder.decode(buf.slice(Math.max(0, buf.length - 4000)));
+    const parsed = tail.replace(/\r/g, "").split("\n").map((l) => l.replace(ANSI_RE, ""));
+    for (let i = parsed.length - 1; i >= 0; i--) {
+      const m = parsed[i].match(MODEL_RE);
+      if (m) return m[0];
+    }
+    return undefined;
+  }, [buf, agentId]);
+  return <>{model}</>;
 }
 
 /**
