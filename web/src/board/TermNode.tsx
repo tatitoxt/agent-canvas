@@ -1,5 +1,5 @@
 import { memo, useContext } from "react";
-import { NodeResizer, type NodeProps } from "@xyflow/react";
+import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
 import { useBoard } from "../store/board";
 import { TermHost } from "../components/TermHost";
 import { PanelActionsCtx } from "../components/panelCtx";
@@ -34,6 +34,7 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
           : "var(--cv-shadow)",
       }}
     >
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
       <NodeResizer
         isVisible={selected}
         minWidth={320}

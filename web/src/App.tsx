@@ -611,8 +611,21 @@ function Board() {
             data: { state: "delegated" as const },
           })),
       );
-    return [...delegEdges, ...wireEdges];
-  }, [connected, liveEdges, agents, activeBoard, orchestrators]);
+    // A thin dashed thread from each agent card to its popped-out
+    // terminal card — shows ownership at a glance.
+    const termOwnEdges = Object.keys(termNodes[activeBoard] ?? {})
+      .filter((id) => agents[id.slice(5)])
+      .map((id) => ({
+        id: `own-${id}`,
+        source: id.slice(5),
+        target: id,
+        type: "default" as const,
+        style: { stroke: "var(--cv-ink-faint)", strokeDasharray: "4 6", strokeWidth: 1, opacity: 0.5 },
+        animated: false,
+        selectable: false,
+      }));
+    return [...delegEdges, ...wireEdges, ...termOwnEdges];
+  }, [connected, liveEdges, agents, activeBoard, orchestrators, termNodes]);
 
   return (
     <PanelActionsCtx.Provider value={{ openTerm, openEdgeDetail: setEdgeDetail }}>
