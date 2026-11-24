@@ -289,6 +289,7 @@ function ExtrasBubble({ side, onSelect }: { side: "left" | "right"; onSelect: (k
 /** Left rail — the code bubble up top (source control, explorer,
  * dev ticket, daemon status), Extras parked at the bottom. */
 export function NavRail({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
+  const repoUrl = useBoard((s) => s.repoUrl);
   const agents = useBoard((s) => s.agents);
   const activeBoard = useBoard((s) => s.activeBoard);
   const connected = useBoard((s) => s.connected);
@@ -374,6 +375,24 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         >
           <Icon name="ticket" />
         </button>
+        {repoUrl && (
+          <>
+            <button
+              title="Pull requests — pins the repo's PR list on the canvas"
+              onClick={() => useBoard.getState().webNodeAdd(`${repoUrl}/pulls`)}
+              style={btn(false)}
+            >
+              <Icon name="pr" />
+            </button>
+            <button
+              title="Issues — pins the repo's issue list on the canvas"
+              onClick={() => useBoard.getState().webNodeAdd(`${repoUrl}/issues`)}
+              style={btn(false)}
+            >
+              <Icon name="issue" />
+            </button>
+          </>
+        )}
         <div
           title={connected ? "daemon connected" : "daemon offline"}
           style={{
@@ -405,7 +424,7 @@ export function RightRail() {
 
       <div style={{ flex: 1 }} />
 
-      <nav className="glass" style={bubble}>
+      <nav className="glass" style={bubbleRow}>
         <button title="Zoom out" onClick={() => useBoard.getState().requestZoom(-1)} style={btn(false)}>
           <Icon name="minus" />
         </button>
@@ -499,6 +518,13 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
             style={btn(active === "notes")}
           >
             <Icon name="code" />
+          </button>
+          <button
+            title="New orchestrator — spawn a board commander"
+            onClick={() => useBoard.getState().spawnOrchestrator()}
+            style={btn(false)}
+          >
+            <Icon name="orchestrator" />
           </button>
         </nav>
       </div>

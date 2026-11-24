@@ -271,7 +271,7 @@ export function Topbar({
             title="Panels on the canvas — which terminals are open"
             onClick={() => setMenu((m) => (m === "panels" ? null : "panels"))}
           >
-            <Icon name="panels" size={15} color={menu === "panels" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+            <Icon name="windows" size={15} color={menu === "panels" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
             {openAgents.length > 0 && (
               <span
                 style={{

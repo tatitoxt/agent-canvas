@@ -280,6 +280,9 @@ pub enum ServerMsg {
         artifacts: Vec<SnapshotArtifact>,
         /// Autopilot loops across boards.
         loops: Vec<SnapshotLoop>,
+        /// The board repo's git remote (https-normalized) — powers the
+        /// GitHub shortcuts in the web UI; None when there is no origin.
+        repo_url: Option<String>,
     },
     /// A named account was registered.
     AccountCreated { account_id: String, cli: String, label: String },

@@ -33,6 +33,9 @@ struct AppState {
     agents: Arc<AgentManager>,
     store: Arc<store::Store>,
     repo_root: PathBuf,
+    /// origin remote normalized to an https URL (None when the board
+    /// repo has no remote — e.g. a scratch dir).
+    repo_url: Option<String>,
     /// agent_id → delegation edge_id: which child still owes a CANVAS_RESULT.
     pending_results: Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
     /// agent_id → held PTY input bytes a supervised agent needs approval for.
@@ -357,6 +360,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .map(loop_to_snapshot)
                 .collect(),
             layout: state.store.layout_map().unwrap_or_default(),
+            repo_url: state.repo_url.clone(),
             accounts: state
                 .store
                 .accounts_snapshot()
@@ -1349,6 +1353,26 @@ async fn main() -> Result<()> {
             }
         }
     }
+    // The repo's origin remote as an https URL — git@/ssh/… normalized,
+    // trailing ".git" stripped. One shot at startup; remotes rarely move.
+    let repo_url = std::process::Command::new("git")
+        .args(["-C", &repo_root.to_string_lossy(), "remote", "get-url", "origin"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|u| !u.is_empty())
+        .map(|u| {
+            // Remotes may be proxies embedding the real host in the path
+            // (e.g. git-manager.devin.ai/proxy/github.com/o/r) — prefer the
+            // innermost github.com/… segment when one is present.
+            let inner = u.rfind("github.com/").map(|i| format!("https://{}", &u[i..]));
+            let u = inner.unwrap_or_else(|| {
+                u.replace("git@github.com:", "https://github.com/")
+                    .replace("ssh://git@", "https://")
+            });
+            u.strip_suffix(".git").unwrap_or(&u).to_string()
+        });
     let agents = Arc::new(AgentManager::new());
     agents.set_transcript_dir(repo_root.join(".canvas").join("transcripts"));
     let state = Arc::new(AppState {
@@ -1357,6 +1381,7 @@ async fn main() -> Result<()> {
         agents,
         store,
         repo_root,
+        repo_url,
         pending_results: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         pending_inputs: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
     });

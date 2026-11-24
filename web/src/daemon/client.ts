@@ -88,6 +88,7 @@ export type ServerMsg =
       accounts?: SnapshotAccount[];
     notes?: SnapshotNote[];
     artifacts?: SnapshotArtifact[];
+      repo_url?: string | null;
     };
 
 export type SnapshotWorkspace = {

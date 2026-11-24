@@ -1091,6 +1091,22 @@ fn snapshot(
         .map(|(account_id, cli, label)| canvasd::protocol::SnapshotAccount { account_id, cli, label })
         .collect();
     let layout = state.store.layout_map().unwrap_or_default();
+    // Same remote normalization as canvasd's Snapshot::repo_url.
+    let repo_url = std::process::Command::new("git")
+        .args(["-C", &state.repo_root.to_string_lossy(), "remote", "get-url", "origin"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|u| !u.is_empty())
+        .map(|u| {
+            let inner = u.rfind("github.com/").map(|i| format!("https://{}", &u[i..]));
+            let u = inner.unwrap_or_else(|| {
+                u.replace("git@github.com:", "https://github.com/")
+                    .replace("ssh://git@", "https://")
+            });
+            u.strip_suffix(".git").unwrap_or(&u).to_string()
+        });
     let agent_names: std::collections::HashMap<String, String> = state
         .store
         .agents_snapshot()
@@ -1118,6 +1134,7 @@ fn snapshot(
         "delegations": delegations,
         "workspaces": workspaces,
         "layout": layout,
+        "repo_url": repo_url,
         "artifacts": artifacts,
         "notes": state
             .store

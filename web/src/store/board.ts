@@ -56,6 +56,8 @@ type BoardState = {
   activeBoard: string;
   edges: Record<string, LiveEdge>;
   workspaces: Record<string, LiveWorkspace>;
+  /** The board repo's origin (https) — powers the GitHub shortcuts. */
+  repoUrl: string | null;
   /** Registered named CLI accounts (id → account). */
   accounts: Record<string, { account_id: string; cli: string; label: string }>;
   /** node_id ("main" or a workspace id) → memory.md text. */
@@ -253,6 +255,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   activeBoard: "main",
   edges: {},
   workspaces: {},
+  repoUrl: null,
   accounts: {},
   memories: {},
   digest: null,
@@ -537,6 +540,7 @@ export const useBoard = create<BoardState>((set, get) => ({
               edges,
               workspaces,
               approvals: msg.approvals ?? {},
+              repoUrl: msg.repo_url ?? null,
               automations,
               loops,
               boards: { main: "Main", ...boards },
