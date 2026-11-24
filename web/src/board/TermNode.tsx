@@ -71,9 +71,23 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
         >
           ›_
         </span>
-        <span style={{ fontSize: 11, fontWeight: 650, color: "var(--cv-ink)", whiteSpace: "nowrap" }}>
+        <button
+          className="nodrag"
+          title="Locate the agent card"
+          onClick={() => useBoard.getState().requestFocus(agentId)}
+          style={{
+            fontSize: 11,
+            fontWeight: 650,
+            color: "var(--cv-ink)",
+            whiteSpace: "nowrap",
+            border: "none",
+            background: "transparent",
+            padding: 0,
+            cursor: "pointer",
+          }}
+        >
           {agent?.name ?? "terminal"}
-        </span>
+        </button>
         <span
           style={{
             display: "inline-flex",
