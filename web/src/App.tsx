@@ -331,9 +331,12 @@ function Board() {
         data: { kind: "md" as const, id, path },
       }),
     );
-    return connected
-      ? [...wsNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs]
-      : [...initialNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs];
+    // Demo mock only when the daemon was never connected AND there's no
+    // persisted state — a transient disconnect keeps the real board.
+    const useMock = !connected && Object.keys(agents).length === 0;
+    return useMock
+      ? [...initialNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs]
+      : [...wsNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs];
   }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges, shapes, mdNodes]);
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
@@ -377,7 +380,7 @@ function Board() {
   };
 
   const edges = useMemo(() => {
-    if (!connected) return initialEdges;
+    if (!connected && Object.keys(agents).length === 0) return initialEdges;
     // An edge is visible when its delegating node is on this board.
     const delegEdges = Object.values(liveEdges)
       .filter(
