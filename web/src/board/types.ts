@@ -20,6 +20,8 @@ export type AgentNodeData = {
   accountLabel?: string;
   /** Worktree branch — shown as a muted mono badge. */
   branch?: string;
+  /** Part of an in-flight delegation — orange outline (talking to orchestrator). */
+  delegating?: boolean;
 };
 
 export type OrchestratorNodeData = {

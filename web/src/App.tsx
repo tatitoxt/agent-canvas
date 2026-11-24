@@ -150,6 +150,13 @@ function Board() {
       style: { width: 900, height: 540 },
       data: { kind: "workspace" as const, name: w.name, repo: w.repo },
     }));
+    // Nodes taking part in an in-flight delegation glow orange — the
+    // "talking to the orchestrator" cue.
+    const inFlight = new Set(
+      Object.values(liveEdges)
+        .filter((e) => e.state === "delegated")
+        .flatMap((e) => [e.from, e.to]),
+    );
     let i = 0;
     const live = Object.values(agents)
       .filter((a) => (a.board_id ?? "main") === activeBoard)
@@ -170,6 +177,7 @@ function Board() {
           cli: (a.command ?? "bash").split(/\s+/)[0].toLowerCase(),
           permission: a.permission,
           accountLabel: a.account_label ?? undefined,
+          delegating: inFlight.has(a.id),
           files: a.files,
           paths: a.paths,
           status: a.status === "exited"

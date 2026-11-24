@@ -37,6 +37,12 @@ const CLI_META: Record<string, { mark: string; label: string; color: string }> =
   cursor: { mark: "◐", label: "Cursor", color: "#8f7fd4" },
   "cursor-agent": { mark: "◐", label: "Cursor", color: "#8f7fd4" },
   opencode: { mark: "❖", label: "OpenCode", color: "#9a7fd4" },
+  amp: { mark: "▲", label: "Amp", color: "#cf7d5a" },
+  droid: { mark: "⬡", label: "Droid", color: "#7d9a6b" },
+  goose: { mark: "◈", label: "Goose", color: "#6b93cf" },
+  kilocode: { mark: "◈", label: "Kilocode", color: "#5b8dd6" },
+  qwen: { mark: "✧", label: "Qwen Code", color: "#8f7fd4" },
+  hermes: { mark: "◧", label: "Hermes", color: "#8a94a6" },
   bash: { mark: "›_", label: "Terminal", color: "#86817a" },
   live: { mark: "›_", label: "Terminal", color: "#86817a" },
 };
@@ -109,7 +115,14 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       style={{
         width: 264,
         padding: "13px 15px 12px",
-        outline: selected ? "1px solid var(--cv-glass-shine)" : "none",
+        outline: selected
+          ? "1px solid var(--cv-glass-shine)"
+          : data.delegating
+            ? "1.5px solid var(--cv-waiting)"
+            : "none",
+        boxShadow: data.delegating
+          ? "0 0 18px color-mix(in srgb, var(--cv-waiting) 24%, transparent)"
+          : "none",
         cursor: "pointer",
       }}
     >

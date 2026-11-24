@@ -5,8 +5,18 @@ const CLIS = [
   { cmd: "claude", label: "◆ Claude Code" },
   { cmd: "codex", label: "◈ Codex" },
   { cmd: "gemini", label: "✦ Gemini CLI" },
+  { cmd: "claude", label: "◆ Claude Code" },
+  { cmd: "codex", label: "◈ Codex" },
+  { cmd: "gemini", label: "✦ Gemini CLI" },
   { cmd: "aider", label: "▣ Aider" },
   { cmd: "cursor-agent", label: "◐ Cursor" },
+  { cmd: "opencode", label: "❖ OpenCode" },
+  { cmd: "amp", label: "▲ Amp" },
+  { cmd: "droid", label: "⬡ Droid" },
+  { cmd: "goose", label: "◈ Goose" },
+  { cmd: "kilocode", label: "◈ Kilocode" },
+  { cmd: "qwen", label: "✧ Qwen Code" },
+  { cmd: "hermes", label: "◧ Hermes" },
 ];
 
 const inputStyle: React.CSSProperties = {
