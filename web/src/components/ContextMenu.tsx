@@ -103,6 +103,7 @@ export function ContextMenu({
         <input
           autoFocus
           value={name}
+          onFocus={(e) => e.currentTarget.select()}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && name.trim()) {
