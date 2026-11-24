@@ -1515,6 +1515,18 @@ export function VaultPanel() {
               <button style={actionBtn} title="Pin this note as a live card on the board" onClick={() => useBoard.getState().mdNodeAdd(vaultFile.path, "vault")}>
                 Add to Board
               </button>
+              <button
+                style={actionBtn}
+                title="Spawn a Claude agent whose first instruction is this note"
+                onClick={() => {
+                  const title = vaultFile.path.replace(/\.md$/, "").split("/").pop() ?? "note";
+                  const brief = `Work from this vault note (${vaultFile.path}):\n\n${vaultFile.text}`;
+                  useBoard.getState().spawn(`task-${title.toLowerCase().replace(/[^\w-]+/g, "-").slice(0, 24)}`, "claude", undefined, undefined, undefined, brief);
+                  useBoard.getState().notify(`spawned agent from "${title}"`);
+                }}
+              >
+                ▶ task
+              </button>
               <button style={actionBtn} title="Export as PDF (saved to artifacts)" onClick={exportFile}>
                 <Icon name="shot" size={11} /> Export PDF
               </button>
