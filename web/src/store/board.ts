@@ -117,6 +117,25 @@ function watchReply(
   setTimeout(() => poll(4), 1500);
 }
 
+/** Resolve "terminal N" (card index) or a name/command substring to an
+ * agent on a given board. Returns the agent plus its display label. */
+function resolveAgent(
+  agents: LiveAgent[],
+  q: string,
+): { agent: LiveAgent; label: string } | undefined {
+  const m = q.match(/^terminal\s+(\d+)$/);
+  if (m) {
+    const a = agents[parseInt(m[1], 10) - 1];
+    return a ? { agent: a, label: `Terminal ${m[1]}` } : undefined;
+  }
+  const a = agents.find(
+    (x) =>
+      x.name.toLowerCase().includes(q) ||
+      (x.command ?? "").toLowerCase().includes(q),
+  );
+  return a ? { agent: a, label: a.name } : undefined;
+}
+
 type ThreadLine = { role: "you" | "thread"; text: string };
 const THREAD_KEY = "cv-thread-log";
 
@@ -1269,19 +1288,44 @@ export const useBoard = create<BoardState>((set, get) => ({
       const boardAgents = Object.values(get().agents).filter(
         (a) => (a.board_id ?? "main") === get().activeBoard,
       );
-      const ktm = q.match(/^terminal\s+(\d+)$/);
-      const target = ktm
-        ? boardAgents[parseInt(ktm[1], 10) - 1]
-        : boardAgents.find(
-            (a) =>
-              a.name.toLowerCase().includes(q) ||
-              (a.command ?? "").toLowerCase().includes(q),
-          );
-      if (!target) reply(`no agent matches "${q}"`);
+      const hit = resolveAgent(boardAgents, q);
+      if (!hit) reply(`no agent matches "${q}"`);
       else {
-        get().kill(target.id);
-        reply(`killed ${ktm ? `Terminal ${ktm[1]}` : target.name}`);
+        get().kill(hit.agent.id);
+        reply(`killed ${hit.label}`);
       }
+      return;
+    }
+    const am = low.match(/^(approve|allow|deny|reject)\s*(.*)$/);
+    if (am) {
+      const deny = am[1] === "deny" || am[1] === "reject";
+      const q = am[2].trim();
+      const pending = Object.keys(get().approvals);
+      if (!pending.length) {
+        reply("nothing waiting for approval");
+        return;
+      }
+      const boardAgents = Object.values(get().agents).filter(
+        (a) => (a.board_id ?? "main") === get().activeBoard,
+      );
+      // No arg → the single pending approval (error if ambiguous).
+      const hit = q
+        ? resolveAgent(boardAgents, q)
+        : pending.length === 1
+          ? { agent: get().agents[pending[0]], label: get().agents[pending[0]]?.name ?? "?" }
+          : undefined;
+      if (!hit?.agent) {
+        reply(q ? `no agent matches "${q}"` : `${pending.length} approvals pending — name one`);
+        return;
+      }
+      if (!get().approvals[hit.agent.id]) {
+        reply(`${hit.label} has nothing pending`);
+        return;
+      }
+      const line = get().approvals[hit.agent.id];
+      if (deny) get().denyInput(hit.agent.id);
+      else get().approveInput(hit.agent.id);
+      reply(`${deny ? "denied" : "approved"} ${hit.label}: ${line}`);
       return;
     }
     if (/^kill all/.test(low)) {
