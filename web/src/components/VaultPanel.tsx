@@ -100,7 +100,7 @@ function mdInline(text: string, onLink?: (name: string) => void): React.ReactNod
 
 /** Reading view styled on real Obsidian: amber headings, amber link underlines,
  * bullet/numbered lists, tasks, blockquotes, fenced code. */
-function ReadingView({ text, onLink }: { text: string; onLink?: (name: string) => void }) {
+function ReadingView({ text, onLink, onToggleTask }: { text: string; onLink?: (name: string) => void; onToggleTask?: (line: number, done: boolean) => void }) {
   const lines = text.split("\n");
   // Obsidian hides YAML frontmatter (--- ... ---) at the top of the note.
   let start = 0;
@@ -139,7 +139,13 @@ function ReadingView({ text, onLink }: { text: string; onLink?: (name: string) =
     if (task) {
       els.push(
         <div key={i} style={{ paddingLeft: 14 + task[1].length * 6, margin: "3px 0", display: "flex", gap: 7, alignItems: "baseline" }}>
-          <span style={{ color: "var(--cv-accent)", fontSize: 11 }}>{task[2] === " " ? "☐" : "☑"}</span>
+          <span
+            onClick={onToggleTask ? () => onToggleTask(i, task[2] === " ") : undefined}
+            title={onToggleTask ? "Toggle task — writes the change to the vault file" : undefined}
+            style={{ color: "var(--cv-accent)", fontSize: 11, cursor: onToggleTask ? "pointer" : "default" }}
+          >
+            {task[2] === " " ? "☐" : "☑"}
+          </span>
           <span style={{ opacity: task[2] === " " ? 1 : 0.55, textDecoration: task[2] === " " ? "none" : "line-through" }}>{mdInline(task[3], onLink)}</span>
         </div>,
       );
@@ -1157,7 +1163,17 @@ export function VaultPanel() {
               </>
             )}
           </div>
-          {view === "reading" && <ReadingView text={vaultFile.text} onLink={openByName} />}
+          {view === "reading" && (
+            <ReadingView
+              text={vaultFile.text}
+              onLink={openByName}
+              onToggleTask={(ln, done) => {
+                const ls = vaultFile.text.split("\n");
+                ls[ln] = ls[ln].replace(/- \[[ xX]\]/, done ? "- [x]" : "- [ ]");
+                vaultWrite(vaultFile.path, ls.join("\n"));
+              }}
+            />
+          )}
           {view === "source" && (
             <SourceEditor path={vaultFile.path} text={vaultFile.text} />
           )}
