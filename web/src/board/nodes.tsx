@@ -24,17 +24,21 @@ const STATUS_LABEL: Record<AgentStatus, string> = {
   idle: "idle",
 };
 
-/** Official CLI identities — muted monochrome marks, real names. */
-const CLI_META: Record<string, { mark: string; label: string }> = {
-  "claude-code": { mark: "◆", label: "Claude Code" },
-  claude: { mark: "◆", label: "Claude Code" },
-  codex: { mark: "◈", label: "Codex" },
-  "gemini-cli": { mark: "✦", label: "Gemini CLI" },
-  gemini: { mark: "✦", label: "Gemini CLI" },
-  aider: { mark: "▣", label: "Aider" },
-  cursor: { mark: "◐", label: "Cursor" },
-  bash: { mark: "›_", label: "Terminal" },
-  live: { mark: "›_", label: "Terminal" },
+/** Official CLI identities — each keeps its brand accent (muted, never
+ * neon) the way Deska colors a terminal's title and logo: Claude's clay,
+ * OpenAI's green, Google's blue, Cursor's violet. */
+const CLI_META: Record<string, { mark: string; label: string; color: string }> = {
+  "claude-code": { mark: "◆", label: "Claude Code", color: "#cf7f5a" },
+  claude: { mark: "◆", label: "Claude Code", color: "#cf7f5a" },
+  codex: { mark: "◈", label: "Codex", color: "#5da381" },
+  "gemini-cli": { mark: "✦", label: "Gemini CLI", color: "#6b93cf" },
+  gemini: { mark: "✦", label: "Gemini CLI", color: "#6b93cf" },
+  aider: { mark: "▣", label: "Aider", color: "#b08d68" },
+  cursor: { mark: "◐", label: "Cursor", color: "#8f7fd4" },
+  "cursor-agent": { mark: "◐", label: "Cursor", color: "#8f7fd4" },
+  opencode: { mark: "❖", label: "OpenCode", color: "#9a7fd4" },
+  bash: { mark: "›_", label: "Terminal", color: "#86817a" },
+  live: { mark: "›_", label: "Terminal", color: "#86817a" },
 };
 
 const PERMISSION_LABEL: Record<string, string> = {
@@ -45,7 +49,7 @@ const PERMISSION_LABEL: Record<string, string> = {
 };
 
 function cliMeta(cli: string) {
-  return CLI_META[cli.toLowerCase()] ?? { mark: "▢", label: cli };
+  return CLI_META[cli.toLowerCase()] ?? { mark: "▢", label: cli, color: "#9a968e" };
 }
 
 const ANSI_RE = /\u001b\[[0-9;?><=!$]*[a-zA-Z@]|\u001b\][^\u0007]*(?:\u0007|\u001b\\)|\u001b[()][0-9A-B]|\u001b[=>#]?[0-9]*.?/g;
@@ -120,9 +124,9 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             placeItems: "center",
             borderRadius: 9,
             fontSize: 13,
-            color: "var(--cv-ink)",
-            background: "var(--cv-glass-hi)",
-            border: "1px solid var(--cv-glass-edge)",
+            color: meta.color,
+            background: `color-mix(in srgb, ${meta.color} 12%, var(--cv-glass-hi))`,
+            border: `1px solid color-mix(in srgb, ${meta.color} 30%, var(--cv-glass-edge))`,
             boxShadow: "inset 0 1px 0 var(--cv-glass-shine)",
           }}
         >
@@ -141,7 +145,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           >
             {data.name}
           </div>
-          <div style={{ fontSize: 11, color: "var(--cv-ink-dim)", marginTop: 1 }}>
+          <div style={{ fontSize: 11, color: meta.color, marginTop: 1, opacity: 0.9 }}>
             {meta.label}
             {data.accountLabel && (
               <span style={{ color: "var(--cv-accent)" }}> · @{data.accountLabel}</span>
