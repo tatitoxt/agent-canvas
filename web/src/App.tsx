@@ -392,6 +392,17 @@ function Board() {
             st.openTermNode(agentId);
           }
         }
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
+        // Duplicate the selected agent — same CLI, offset +60/+60.
+        e.preventDefault();
+        const st = useBoard.getState();
+        const agentId = selRef.current.map((s) => s.id).find((id) => st.agents[id]);
+        if (agentId) {
+          const a = st.agents[agentId];
+          const p = st.positions[agentId];
+          if (p) st.setPendingSpawnPos({ x: p.x + 60, y: p.y + 60 });
+          st.spawn(a.name, a.command ?? "bash", a.workspace_id ?? undefined, a.permission);
+        }
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         const t = e.target as HTMLElement;
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
