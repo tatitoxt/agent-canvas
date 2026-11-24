@@ -300,9 +300,13 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
           <span
             onClick={() => toggleFold(i)}
             title={isFolded ? "unfold" : "fold"}
-            style={{ cursor: "pointer", marginRight: 6, fontSize: "0.75em", opacity: isFolded ? 0.9 : 0.35, userSelect: "none" }}
+            style={{
+              cursor: "pointer", marginRight: 4, marginLeft: -4, padding: "2px 6px",
+              display: "inline-block", minWidth: 14, textAlign: "center",
+              fontSize: "0.75em", opacity: isFolded ? 0.9 : 0.35, userSelect: "none",
+            }}
           >
-            {isFolded ? "\u25B8" : "\u25BE"}
+            {isFolded ? "▸" : "▾"}
           </span>
           {mdInline(h[2], onLink, onTag)}
         </div>,
