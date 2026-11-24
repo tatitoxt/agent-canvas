@@ -802,7 +802,15 @@ export const useBoard = create<BoardState>((set, get) => ({
     };
     // Inside Tauri there is no socket and no token — the app itself is the peer.
     client = isTauri() ? new TauriCanvasClient(handlers) : new CanvasClient(t, handlers);
-    void client.whenOpen().then(() => set({ connected: true }));
+    void client.whenOpen().then(() => {
+      set({ connected: true });
+      // Re-mount the saved vault after (re)connect — a vaultList() sent
+      // before the socket opens would be silently dropped.
+      const dir = get().vaultDir || (() => {
+        try { return localStorage.getItem("cv-vault-dir") ?? ""; } catch { return ""; }
+      })();
+      if (dir) get().vaultList(dir);
+    });
   },
 
   setActiveBoard: (boardId) => set({ activeBoard: boardId }),
