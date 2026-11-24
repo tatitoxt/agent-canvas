@@ -47,6 +47,7 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
           flexShrink: 0,
           cursor: "grab",
         }}
+        onDoubleClick={() => useBoard.getState().collapsePanelNode(id)}
       >
         {def.img ? (
           <img src={def.img} alt="" width={14} height={14} style={{ display: "block" }} />

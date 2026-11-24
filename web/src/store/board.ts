@@ -1420,11 +1420,22 @@ export const useBoard = create<BoardState>((set, get) => ({
       requestView();
       return "fitted view";
     }
-    if (/clear|clean|tidy/.test(t)) {
+    if (/close panels|close cards|cerrar/.test(t)) {
+      const board = get().activeBoard;
+      const m = { ...get().panelNodes, [board]: {} };
+      localStorage.setItem("cv-panelnodes", JSON.stringify(m));
+      set({ panelNodes: m });
+      return "closed all panels";
+    }
+    if (/tidy/.test(t)) {
+      get().requestTidy();
+      return "tidied panels";
+    }
+    if (/clear|clean/.test(t)) {
       const n = clearDone();
       return n ? `cleared ${n} finished agent${n === 1 ? "" : "s"}` : "nothing to clear";
     }
-    return "try: bigger text · smaller text · undo · fit · clear done";
+    return "try: bigger text · smaller text · undo · fit · tidy · close panels · clear done";
   },
 
   threadLog: loadThreadLog(),
