@@ -58,6 +58,11 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
 
     const ro = new ResizeObserver(() => {
       fit.fit();
+      // The PTY follows the panel's real size — a maximized terminal gives
+      // the CLI the full viewport, not the 80×24 it spawned with.
+      if (term.cols && term.rows) {
+        useBoard.getState().resizePty(agentId, term.cols, term.rows);
+      }
     });
     ro.observe(hostRef.current!);
     termRef.current = term;
