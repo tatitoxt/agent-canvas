@@ -260,15 +260,17 @@ function Board() {
         return "canvas";
       }
       if (PANEL_DEFS[k]) {
+        // openPanelNode focuses the card only when it already exists — a new
+        // card keeps the placement we give it (inbox docks right, Deska-style).
         const b = useBoard.getState();
         if (!b.panelNodes[b.activeBoard]?.[`panel-${k}`]) {
           const def = PANEL_DEFS[k];
-          // Inbox docks to the right edge (Deska); other panels land center-right.
           const sx = k === "inbox" ? window.innerWidth - def.w - 24 : window.innerWidth * 0.42;
           const p = screenToFlowPosition({ x: sx, y: window.innerHeight * 0.1 });
           b.openPanelNode(k, p, { w: def.w, h: def.h });
+        } else {
+          b.requestFocus(`panel-${k}`);
         }
-        b.requestFocus(`panel-${k}`);
       }
       return k;
     });
