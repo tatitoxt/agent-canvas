@@ -1098,6 +1098,18 @@ export function VaultPanel() {
     return vaultGraph.edges.filter(([, t]) => t === vaultFile.path).map(([s]) => s);
   }, [vaultFile, vaultGraph]);
 
+  // Unlinked mentions — Obsidian's second half of the backlinks panel:
+  // notes that contain this note's title as plain text (no [[link]]).
+  const noteTitle = vaultFile?.path.replace(/\.md$/, "").split("/").pop();
+  useEffect(() => {
+    if (backlinksOpen && noteTitle) vaultSearch(noteTitle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backlinksOpen, vaultFile?.path]);
+  const unlinked = useMemo(() => {
+    if (!backlinksOpen || !noteTitle) return [] as typeof vaultHits;
+    return vaultHits.filter((h) => h.text.includes(noteTitle) && !h.text.includes(`[[${noteTitle}`));
+  }, [vaultHits, noteTitle, backlinksOpen]);
+
   /** Headings of the open note for the Outline dropdown (Obsidian's Outline
    * panel): skips frontmatter and fenced code, keeps the line index used by
    * the `vh-<line>` ids ReadingView renders. */
@@ -1598,6 +1610,21 @@ export function VaultPanel() {
                   style={{ display: "block", background: "none", border: "none", cursor: "pointer", padding: "2px 0", fontSize: 11, color: "var(--cv-accent)", textDecoration: "underline", textDecorationColor: "color-mix(in srgb, var(--cv-accent) 55%, transparent)", textUnderlineOffset: 2 }}
                 >
                   {b.replace(/\.md$/, "")}
+                </button>
+              ))}
+              <div style={{ fontSize: 9.5, color: "var(--cv-ink-faint)", margin: "8px 0 3px" }}>Unlinked mentions</div>
+              {unlinked.length === 0 && <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", fontStyle: "italic" }}>none</div>}
+              {unlinked.map((h, i) => (
+                <button
+                  key={`${h.path}:${h.line}:${i}`}
+                  onClick={() => vaultRead(h.path)}
+                  title={`${h.path}:${h.line}`}
+                  style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "3px 0" }}
+                >
+                  <div style={{ fontSize: 11, color: "var(--cv-accent)", textDecoration: "underline", textDecorationColor: "color-mix(in srgb, var(--cv-accent) 55%, transparent)", textUnderlineOffset: 2 }}>
+                    {h.path.replace(/\.md$/, "")}:{h.line}
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.text}</div>
                 </button>
               ))}
             </div>
