@@ -681,6 +681,37 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
   const [dexHist, setDexHist] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(-1);
   const dexInputRef = useRef<HTMLInputElement>(null);
+  // Voice dictation — Web Speech API where it exists (Chrome/Edge; hidden
+  // on WKWebView/Firefox). Interim results stream into the input.
+  type Recog = {
+    continuous: boolean; interimResults: boolean;
+    onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+    onend: (() => void) | null; onerror: (() => void) | null;
+    start: () => void; stop: () => void;
+  };
+  const SR: (new () => Recog) | undefined =
+    (window as unknown as { SpeechRecognition?: new () => Recog; webkitSpeechRecognition?: new () => Recog }).SpeechRecognition
+    ?? (window as unknown as { webkitSpeechRecognition?: new () => Recog }).webkitSpeechRecognition;
+  const recog = useRef<Recog | null>(null);
+  const [listening, setListening] = useState(false);
+  const toggleListen = () => {
+    if (!SR) return;
+    if (listening) { recog.current?.stop(); return; }
+    const r = new SR();
+    recog.current = r;
+    r.continuous = false;
+    r.interimResults = true;
+    r.onresult = (e) => {
+      let t = "";
+      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+      setDexText(t);
+    };
+    r.onend = () => setListening(false);
+    r.onerror = () => setListening(false);
+    r.start();
+    setListening(true);
+    dexInputRef.current?.focus();
+  };
 
   return (
     <div
@@ -791,6 +822,15 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
               fontWeight: 550,
             }}
           />
+          {SR && (
+            <button
+              title={listening ? "Stop dictation" : "Dictate — speak a command"}
+              onClick={(e) => { e.stopPropagation(); toggleListen(); }}
+              style={{ ...miniBtn(listening), borderRadius: 999, color: listening ? "var(--cv-danger, #e06c75)" : undefined }}
+            >
+              <Icon name="mic" size={13} />
+            </button>
+          )}
           <button
             title="Open the Dex thread"
             onClick={(e) => { e.stopPropagation(); onSelect("thread"); }}
