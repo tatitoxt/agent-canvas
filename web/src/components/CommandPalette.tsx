@@ -29,6 +29,10 @@ export function CommandPalette({
 }) {
   const agents = useBoard((s) => s.agents);
   const automations = useBoard((s) => s.automations);
+  const notes = useBoard((s) => s.notes);
+  const vaultEntries = useBoard((s) => s.vaultEntries);
+  const mdNodes = useBoard((s) => s.mdNodes);
+  const activeBoard = useBoard((s) => s.activeBoard);
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,10 +51,21 @@ export function CommandPalette({
         run: () => s.spawn(`agent-${Date.now() % 1000}`, cmd),
       });
     }
+    for (const [key, label] of [
+      ["inbox", "open inbox"],
+      ["prs", "open pull requests"],
+      ["issues", "open issues"],
+      ["notes", "open dex tickets"],
+      ["artifacts", "open artifacts"],
+      ["loops", "open loops"],
+      ["automations", "open automations"],
+      ["vault", "open obsidian vault"],
+      ["history", "open history"],
+      ["canvas", "back to canvas"],
+    ] as const) {
+      list.push({ id: `nav-${key}`, group: "panels", label, run: () => onNav(key) });
+    }
     list.push(
-      { id: "nav-inbox", group: "navigate", label: "open inbox", run: () => onNav("inbox") },
-      { id: "nav-automations", group: "navigate", label: "open automations", run: () => onNav("automations") },
-      { id: "nav-canvas", group: "navigate", label: "back to canvas", run: () => onNav("canvas") },
       { id: "view-fit", group: "view", label: "fit view", run: () => s.requestView() },
       { id: "view-clear", group: "view", label: "clear done agents", hint: "removes exited nodes", run: () => s.clearDone() },
       { id: "font-up", group: "view", label: "bigger terminal text", run: () => s.bumpFont(1) },
@@ -64,6 +79,37 @@ export function CommandPalette({
         label: `run automation — ${a.name}`,
         hint: `${a.command} · ${a.permission}`,
         run: () => s.runAutomation(a.id),
+      });
+    }
+    for (const n of Object.values(notes)) {
+      list.push({
+        id: `task-${n.note_id}`,
+        group: "tasks",
+        label: `task — ${n.text.slice(0, 48)}`,
+        hint: n.col,
+        run: () => onNav("notes"),
+      });
+    }
+    for (const entry of vaultEntries) {
+      const path = `${s.vaultDir ? `${s.vaultDir}/` : ""}${entry}`;
+      list.push({
+        id: `file-${entry}`,
+        group: "files",
+        label: `file — ${entry}`,
+        hint: "vault",
+        run: () => {
+          s.vaultRead(path);
+          onNav("vault");
+        },
+      });
+    }
+    for (const path of Object.values(mdNodes[activeBoard] ?? {})) {
+      list.push({
+        id: `md-${path}`,
+        group: "files",
+        label: `pinned note — ${path.split("/").pop()}`,
+        hint: "on board",
+        run: () => s.requestView(),
       });
     }
     for (const a of Object.values(agents)) {
@@ -85,7 +131,7 @@ export function CommandPalette({
       });
     }
     return list;
-  }, [agents, automations, onNav, onOpenAgent]);
+  }, [agents, automations, notes, vaultEntries, mdNodes, activeBoard, onNav, onOpenAgent]);
 
   const q = query.trim().toLowerCase();
   const filtered = q

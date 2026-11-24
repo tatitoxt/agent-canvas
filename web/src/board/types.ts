@@ -50,7 +50,7 @@ export type WebNodeData = {
   url: string;
 };
 
-export type ShapeKind = "rect" | "ellipse" | "diamond" | "sticky";
+export type ShapeKind = "rect" | "ellipse" | "diamond" | "sticky" | "pin";
 
 export type ShapeDef = {
   id: string;
@@ -61,6 +61,8 @@ export type ShapeDef = {
   h: number;
   color: string;
   text: string;
+  /** Card title (pinned panels) — body lives in `text`. */
+  title?: string;
   anchor?: string;
 };
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useBoard } from "../store/board";
 import { useReactFlow } from "@xyflow/react";
+import { cleanPinSpot } from "./PinBtn";
 import { downloadPdf } from "../lib/pdf";
 import { Icon } from "./icons";
 
@@ -281,7 +282,7 @@ export function ArtifactsPanel() {
                       .slice(0, 260),
                     undefined,
                     "artifacts",
-                    screenToFlowPosition({ x: window.innerWidth * 0.6, y: window.innerHeight * 0.55 }),
+                    screenToFlowPosition(cleanPinSpot("artifacts")),
                   )
                 }
               >

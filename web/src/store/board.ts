@@ -1031,13 +1031,14 @@ export const useBoard = create<BoardState>((set, get) => ({
     const id = `card-${Math.random().toString(36).slice(2, 10)}`;
     const def = {
       id,
-      kind: "sticky" as const,
+      kind: "pin" as const,
       x: pos?.x ?? 320 + Math.random() * 240,
       y: pos?.y ?? 220 + Math.random() * 160,
-      w: 240,
-      h: 160,
-      color: color ?? "#e8e6e3",
-      text: body ? `${title}\n\n${body}` : title,
+      w: 250,
+      h: 150,
+      color: color ?? "#f5a524",
+      title,
+      text: body ?? "",
       anchor,
     };
     const next = { ...shapes, [activeBoard]: { ...(shapes[activeBoard] ?? {}), [id]: def } };

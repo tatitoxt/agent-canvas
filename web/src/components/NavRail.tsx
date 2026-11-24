@@ -304,6 +304,12 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
   const noteCount = useBoard((s) => Object.keys(s.notes).length);
   const artifactCount = useBoard((s) => Object.keys(s.artifacts).length);
   const loopCount = useBoard((s) => Object.values(s.loops).filter((l) => l.enabled).length);
+  const approvals = useBoard((s) => s.approvals);
+  const edges = useBoard((s) => s.edges);
+  const inboxCount =
+    Object.keys(approvals).length +
+    Object.values(agents).filter((a) => a.status === "waiting" || a.status === "blocked").length +
+    Object.values(edges).filter((e) => e.state === "delegated").length;
   const openAgents = Object.values(agents)
     .filter((a) => (a.board_id ?? "main") === activeBoard && a.status !== "exited");
   const gitAgents = openAgents.filter((a) => a.worktree);
@@ -358,12 +364,15 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
             </button>
           </div>
           {toolRow("git", "Source Control", `worktrees, push an agent's branch${gitAgents.length ? ` — ${gitAgents.length} live` : ""}`, () => setMenu((m) => (m === "git" ? null : "git")))}
+          {toolRow("inbox", "Inbox", "approvals, waiting agents, delegations in flight", () => onSelect("inbox"), "inbox", undefined, inboxCount ? `${inboxCount}` : undefined)}
           {toolRow("obsidian-real", "Obsidian", "your real vault — browse markdown; 'obsidian <note>' in Dex writes to it", () => onSelect("vault"), "vault", "#8B5CF6")}
           {toolRow("github", "Pull requests", "live list from the repo's GitHub", () => onSelect("prs"), "prs", undefined, ghCounts.prs != null ? `${ghCounts.prs} open` : undefined)}
           {toolRow("issue", "Issues", "live list from the repo's GitHub", () => onSelect("issues"), "issues", undefined, ghCounts.issues != null ? `${ghCounts.issues} open` : undefined)}
           {toolRow("ticket", "Dex Tickets", "notes and tasks on the board", () => onSelect("notes"), "notes", undefined, noteCount ? `${noteCount}` : undefined)}
           {toolRow("artifacts", "Artifacts", "shots, docs and files the agents produced", () => onSelect("artifacts"), "artifacts", undefined, artifactCount ? `${artifactCount}` : undefined)}
           {toolRow("loops", "Loops", "recurring instructions per agent", () => onSelect("loops"), "loops", undefined, loopCount ? `${loopCount} active` : undefined)}
+          {toolRow("automations", "Automations", "scheduled and event-driven runs", () => onSelect("automations"), "automations")}
+          {toolRow("history", "History", "what happened on this board", () => onSelect("history"), "history")}
         </nav>
         {menu === "git" && (
           <div

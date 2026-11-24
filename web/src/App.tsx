@@ -15,6 +15,7 @@ import {
 } from "@xyflow/react";
 import { AgentNode, OrchestratorNode, WebNode, WorkspaceNode } from "./board/nodes";
 import { ShapeNode } from "./components/ShapeNode";
+import { edgePoint, obstacleRects, segmentHitsRect, type Rect } from "./components/anchorGeom";
 import { MdNode } from "./components/MdNode";
 import { DelegationEdge } from "./board/edges";
 import { initialEdges, initialNodes } from "./board/mockData";
@@ -62,10 +63,11 @@ const edgeTypes = { delegation: DelegationEdge };
 /** Keeps the zoom % readout fresh — Deska's bottom-right zoom %. */
 
 /** Dashed cables tying pinned cards / obsidian notes to the panel they
- * were pinned from — border to border, hidden when the panel closes. */
+ * were pinned from — border to border, only drawn when the straight line
+ * crosses no other node or panel (Deska anchor notes, collision-aware). */
 function AnchorCables({ nav }: { nav: string }) {
   const { flowToScreenPosition } = useReactFlow();
-  const { zoom } = useViewport();
+  useViewport();
   const anchors = useBoard((s) => s.anchors);
   const shapes = useBoard((s) => s.shapes);
   const positions = useBoard((s) => s.positions);
@@ -76,20 +78,26 @@ function AnchorCables({ nav }: { nav: string }) {
     const el = document.querySelector(`[data-panel="${key}"]`);
     if (!el) continue;
     const r = el.getBoundingClientRect();
+    const panel: Rect = { x: r.left, y: r.top, w: r.width, h: r.height };
     const sh = (shapes[activeBoard] ?? {})[id];
-    const flow = sh ? { x: sh.x + sh.w / 2, y: sh.y + sh.h / 2 } : positions[id] ? { x: positions[id].x + 170, y: positions[id].y + 130 } : null;
-    if (!flow) continue;
-    const hw = (sh ? sh.w : 340) / 2 * zoom;
-    const hh = (sh ? sh.h : 260) / 2 * zoom;
-    const c = flowToScreenPosition(flow);
-    const pc = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-    // card edge point, along the direction to the panel center
-    const dx = pc.x - c.x, dy = pc.y - c.y;
-    const t1 = Math.min(dx !== 0 ? hw / Math.abs(dx) : Infinity, dy !== 0 ? hh / Math.abs(dy) : Infinity);
-    const a = { x: c.x + dx * t1, y: c.y + dy * t1 };
-    // panel edge point, along the direction to the card center
-    const t2 = Math.min(dx !== 0 ? (r.width / 2) / Math.abs(dx) : Infinity, dy !== 0 ? (r.height / 2) / Math.abs(dy) : Infinity);
-    const b = { x: pc.x - dx * t2, y: pc.y - dy * t2 };
+    let card: Rect | null = null;
+    if (sh) {
+      const tl = flowToScreenPosition({ x: sh.x, y: sh.y });
+      const br = flowToScreenPosition({ x: sh.x + sh.w, y: sh.y + sh.h });
+      card = { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
+    } else if (positions[id]) {
+      const tl = flowToScreenPosition({ x: positions[id].x, y: positions[id].y });
+      const br = flowToScreenPosition({ x: positions[id].x + 340, y: positions[id].y + 260 });
+      card = { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
+    }
+    if (!card) continue;
+    const panelC = { x: panel.x + panel.w / 2, y: panel.y + panel.h / 2 };
+    const cardC = { x: card.x + card.w / 2, y: card.y + card.h / 2 };
+    const a = edgePoint(card, panelC);
+    const b = edgePoint(panel, cardC);
+    // Draw only through free space — never across another node or panel.
+    const obstacles = obstacleRects([`[data-id="${id}"]`, `[data-panel="${key}"]`]);
+    if (obstacles.some((o) => segmentHitsRect(a, b, o))) continue;
     lines.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
   }
   if (!lines.length) return null;

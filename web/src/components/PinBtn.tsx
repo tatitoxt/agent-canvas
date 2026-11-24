@@ -1,6 +1,45 @@
 import { Icon } from "./icons";
 import { useBoard } from "../store/board";
 import { useReactFlow } from "@xyflow/react";
+import { edgePoint, obstacleRects, segmentHitsRect, type Pt, type Rect } from "./anchorGeom";
+
+const CARD_W = 250;
+const CARD_H = 150;
+
+/** Pick a drop spot (screen px) whose anchor cable crosses nothing. */
+export function cleanPinSpot(anchor: string | undefined): Pt {
+  const iw = window.innerWidth;
+  const ih = window.innerHeight;
+  const panel = anchor ? document.querySelector(`[data-panel="${anchor}"]`) : null;
+  const cands: Pt[] = [];
+  if (panel) {
+    const pr = panel.getBoundingClientRect();
+    // prefer just right of the panel, at three heights; then free canvas
+    cands.push(
+      { x: pr.right + 48, y: pr.top + 12 },
+      { x: pr.right + 48, y: pr.top + pr.height / 2 },
+      { x: pr.right + 48, y: pr.bottom - CARD_H - 12 },
+      { x: pr.left + pr.width / 2, y: pr.bottom + 40 },
+    );
+  }
+  cands.push(
+    { x: iw * 0.62, y: ih * 0.35 },
+    { x: iw * 0.62, y: ih * 0.6 },
+    { x: iw * 0.45, y: ih * 0.62 },
+  );
+  if (!panel) return cands[4];
+  const pr = panel.getBoundingClientRect();
+  const panelRect: Rect = { x: pr.left, y: pr.top, w: pr.width, h: pr.height };
+  const panelC = { x: panelRect.x + panelRect.w / 2, y: panelRect.y + panelRect.h / 2 };
+  for (const c of cands) {
+    const card: Rect = { x: c.x, y: c.y, w: CARD_W, h: CARD_H };
+    const a = edgePoint(card, panelC);
+    const b = edgePoint(panelRect, { x: card.x + card.w / 2, y: card.y + card.h / 2 });
+    const obstacles = obstacleRects([`[data-panel="${anchor}"]`]);
+    if (!obstacles.some((o) => segmentHitsRect(a, b, o))) return c;
+  }
+  return cands[0];
+}
 
 /** Deska's "Open in canvas" — pins this panel's content as a card on the board. */
 export function PinBtn({ title, body, anchor }: { title: string; body: string; anchor?: string }) {
@@ -9,7 +48,7 @@ export function PinBtn({ title, body, anchor }: { title: string; body: string; a
   return (
     <button
       title="Add to Board — pin this panel as a card on the canvas"
-      onClick={() => pinCard(title, body, undefined, anchor, screenToFlowPosition({ x: window.innerWidth * 0.6, y: window.innerHeight * 0.55 }))}
+      onClick={() => pinCard(title, body, undefined, anchor, screenToFlowPosition(cleanPinSpot(anchor)))}
       style={{
         border: "1px solid color-mix(in srgb, var(--cv-accent) 45%, transparent)",
         borderRadius: 999,

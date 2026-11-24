@@ -45,6 +45,83 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
   const deleteShape = useBoard((st) => st.deleteShape);
   const isSticky = s.kind === "sticky";
 
+  if (s.kind === "pin") {
+    return (
+      <div
+        style={{
+          position: "relative",
+          width: s.w,
+          height: s.h,
+          borderRadius: 12,
+          background: "color-mix(in srgb, var(--cv-bg, #101014) 72%, transparent)",
+          backdropFilter: "blur(18px) saturate(1.2)",
+          border: `1.5px solid ${s.anchor ? `${s.color}55` : "var(--cv-glass-edge)"}`,
+          boxShadow: "0 8px 28px rgba(0,0,0,0.4)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            padding: "8px 12px 6px",
+            borderBottom: "1px solid rgba(255,255,255,0.07)",
+            fontSize: 11,
+            fontWeight: 700,
+            color: "var(--cv-ink)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span style={{ width: 6, height: 6, borderRadius: 2, background: s.color, flexShrink: 0 }} />
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title ?? "pinned"}</span>
+        </div>
+        <textarea
+          className="nodrag"
+          value={s.text}
+          onChange={(e) => updateShape(id, { text: e.target.value })}
+          placeholder="…"
+          style={{
+            flex: 1,
+            padding: "8px 12px",
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            resize: "none",
+            fontSize: 11.5,
+            lineHeight: 1.5,
+            fontFamily: "inherit",
+            color: "var(--cv-ink-dim)",
+          }}
+        />
+        {selected && (
+          <button
+            className="nodrag"
+            onClick={() => deleteShape(id)}
+            title="remove card"
+            style={{
+              position: "absolute",
+              top: 6,
+              right: 6,
+              background: "var(--cv-glass)",
+              border: "1px solid var(--cv-glass-edge)",
+              borderRadius: 999,
+              color: "var(--cv-ink-dim)",
+              cursor: "pointer",
+              fontSize: 11,
+              width: 18,
+              height: 18,
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={{ position: "relative", width: s.w, height: s.h }}>
       <ShapeSvg s={s} />
