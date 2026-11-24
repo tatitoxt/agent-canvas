@@ -305,7 +305,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
   const gitAgents = openAgents.filter((a) => a.worktree);
 
   const [menu, setMenu] = useState<"git" | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const railRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -316,17 +316,92 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
     return () => window.removeEventListener("mousedown", onDown);
   }, [menu]);
 
-  if (collapsed) {
+  const toolRow = (icon: string, label: string, hint: string, onClick: () => void, activeKey?: string) => (
+    <button
+      key={label}
+      style={{
+        ...menuRow,
+        color: activeKey && active === activeKey ? "var(--cv-accent)" : "var(--cv-ink)",
+        background: activeKey && active === activeKey ? "var(--cv-glass-hi)" : "transparent",
+      }}
+      title={hint}
+      onClick={() => { onClick(); }}
+      onMouseEnter={(e) => hoverRow(e, true)}
+      onMouseLeave={(e) => hoverRow(e, activeKey === active)}
+    >
+      <Icon name={icon} size={14} color={activeKey && active === activeKey ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+      <span style={{ flex: 1 }}>{label}</span>
+    </button>
+  );
+
+  if (expanded) {
     return (
-      <div ref={railRef} style={railCol}>
-        <button
-          className="glass"
-          title="Expand tools"
-          onClick={() => setCollapsed(false)}
-          style={{ ...btn(false), borderRadius: 999, width: 30, height: 30 }}
-        >
-          <Icon name="expand" size={13} />
-        </button>
+      <div ref={railRef} style={{ ...railCol, width: 172, alignItems: "stretch" }}>
+        <nav className="glass cv-menu-scroll" style={{ ...bubble, alignItems: "stretch", padding: "6px 4px", gap: 1, maxHeight: "70vh", overflowY: "auto" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px 6px" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--cv-ink)" }}>Tools</span>
+            <button
+              title="Collapse tools — icons only"
+              onClick={() => setExpanded(false)}
+              style={{ ...tinyBtn(false), borderRadius: 999 }}
+            >
+              <Icon name="expand" size={12} />
+            </button>
+          </div>
+          {toolRow("git", "Source Control", `worktrees, push an agent's branch${gitAgents.length ? ` — ${gitAgents.length} live` : ""}`, () => setMenu((m) => (m === "git" ? null : "git")))}
+          {toolRow("inbox", "Inbox", "approvals, waiting agents, delegations", () => onSelect("inbox"), "inbox")}
+          {toolRow("pr", "Pull requests", "live list from the repo's GitHub", () => onSelect("prs"), "prs")}
+          {toolRow("issue", "Issues", "live list from the repo's GitHub", () => onSelect("issues"), "issues")}
+          {toolRow("explorer", "Explorer", "vault files", () => onSelect("vault"), "vault")}
+          {toolRow("ticket", "Dex Tickets", "notes and tasks on the board", () => onSelect("notes"), "notes")}
+          {toolRow("artifacts", "Artifacts", "shots, docs and files the agents produced", () => onSelect("artifacts"), "artifacts")}
+          {toolRow("automations", "Automations", "saved guardrailed runs", () => onSelect("automations"), "automations")}
+          {toolRow("loops", "Loops", "recurring instructions per agent", () => onSelect("loops"), "loops")}
+          {toolRow("history", "History", "delegation and task history", () => onSelect("history"), "history")}
+        </nav>
+        {menu === "git" && (
+          <div
+            className="cv-menu cv-menu-scroll"
+            style={{
+              position: "absolute",
+              left: 180,
+              top: 226,
+              width: 220,
+              padding: 6,
+              zIndex: 40,
+              maxHeight: 340,
+              overflowY: "auto",
+            }}
+          >
+            <div style={sectionLabel}>Source control</div>
+            {gitAgents.length === 0 && (
+              <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
+                no agents with worktrees
+              </div>
+            )}
+            {gitAgents.map((a) => (
+              <button
+                key={a.id}
+                style={menuRow}
+                title={`push ${a.worktree} — the agent's branch`}
+                onClick={() => { useBoard.getState().gitPush(a.id); setMenu(null); }}
+                onMouseEnter={(e) => hoverRow(e, true)}
+                onMouseLeave={(e) => hoverRow(e, false)}
+              >
+                <Icon name="git" size={13} color="var(--cv-ink-dim)" />
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {a.name}
+                </span>
+                <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>push</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div style={{ flex: 1 }} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <ExtrasBubble side="left" onSelect={onSelect} />
+          <OrchestratorsBubble />
+        </div>
       </div>
     );
   }
@@ -335,8 +410,8 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
     <div ref={railRef} style={railCol}>
       <button
         className="glass"
-        title="Collapse tools"
-        onClick={() => setCollapsed(true)}
+        title="Expand tools — icon names"
+        onClick={() => setExpanded(true)}
         style={{ ...btn(false), borderRadius: 999, width: 30, height: 30 }}
       >
         <Icon name="collapse" size={13} />
