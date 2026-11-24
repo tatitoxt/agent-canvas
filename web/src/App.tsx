@@ -19,7 +19,6 @@ import { MdNode } from "./components/MdNode";
 import { DelegationEdge } from "./board/edges";
 import { initialEdges, initialNodes } from "./board/mockData";
 import { DelegateDialog } from "./components/DelegateDialog";
-import { MissionStrip } from "./components/MissionStrip";
 import { NavRail } from "./components/NavRail";
 import { SpawnBar } from "./components/SpawnBar";
 import { TerminalPanel } from "./components/TerminalPanel";
@@ -43,7 +42,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { DelegationPanel } from "./components/DelegationPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { Topbar } from "./components/Topbar";
-import { BoardTabs } from "./components/BoardTabs";
+import { ToolsRail } from "./components/ToolsRail";
 import { ContextMenu } from "./components/ContextMenu";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
@@ -205,31 +204,6 @@ function Board() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-
-  const counts = useMemo(() => {
-    const c: Record<AgentStatus, number> = {
-      working: 0,
-      waiting: 0,
-      blocked: 0,
-      done: 0,
-      idle: 0,
-    };
-    if (!connected) {
-      for (const n of initialNodes) {
-        if (n.data.kind === "agent") c[n.data.status] += 1;
-      }
-    }
-    for (const a of Object.values(agents)) {
-      if ((a.board_id ?? "main") !== activeBoard) continue;
-      const k = a.status === "exited"
-        ? "done"
-        : attention[a.id]
-          ? "blocked"
-          : a.status;
-      if (k in c) c[k as AgentStatus] += 1;
-    }
-    return c;
-  }, [agents, connected, attention, activeBoard]);
 
   const nodes = useMemo<Node<BoardNodeData>[]>(() => {
     const wsNodes: Node<BoardNodeData>[] = Object.values(workspaces)
@@ -413,104 +387,21 @@ function Board() {
         active={nav}
         onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
       />
+      <ToolsRail
+        active={nav}
+        onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
+        drawOn={pencil}
+        regionOn={shotMode}
+        actions={{
+          onDigest: () => useBoard.getState().digestNow(),
+          onShot: () => void shotCanvas(),
+          onStudio: () => useBoard.getState().studioDocNow(),
+          onDraw: () => setPencil((m) => !m),
+          onRegion: () => setShotMode((m) => !m),
+          onSettings: () => setNav((n) => (n === "settings" ? "canvas" : "settings")),
+        }}
+      />
       <Topbar />
-      <BoardTabs />
-      <MissionStrip counts={counts} />
-      <button
-        className="glass-pill"
-        title="digest of every session (lose nothing)"
-        onClick={() => useBoard.getState().digestNow()}
-        style={{
-          position: "absolute",
-          right: 16,
-          bottom: 116,
-          zIndex: 20,
-          fontSize: 11,
-          fontWeight: 600,
-          padding: "6px 14px",
-          cursor: "pointer",
-          border: "none",
-          color: "var(--cv-ink)",
-        }}
-      >
-        ≡ digest
-      </button>
-      <button
-        className="glass-pill"
-        title="export the canvas as PNG"
-        onClick={() => void shotCanvas()}
-        style={{
-          position: "absolute",
-          right: 16,
-          bottom: 76,
-          zIndex: 20,
-          fontSize: 11,
-          fontWeight: 600,
-          padding: "6px 14px",
-          cursor: "pointer",
-          border: "none",
-          color: "var(--cv-ink)",
-        }}
-      >
-        ▣ shot
-      </button>
-      <button
-        className="glass-pill"
-        title="studio — repo → markdown dossier"
-        onClick={() => useBoard.getState().studioDocNow()}
-        style={{
-          position: "absolute",
-          right: 196,
-          bottom: 36,
-          zIndex: 20,
-          fontSize: 11,
-          fontWeight: 600,
-          padding: "6px 14px",
-          cursor: "pointer",
-          border: "none",
-          color: "var(--cv-ink)",
-        }}
-      >
-        ▤ studio
-      </button>
-      <button
-        className="glass-pill"
-        title="pencil — draw markups on the canvas (baked into shots)"
-        onClick={() => setPencil((m) => !m)}
-        style={{
-          position: "absolute",
-          right: 116,
-          bottom: 36,
-          zIndex: 20,
-          fontSize: 11,
-          fontWeight: 600,
-          padding: "6px 14px",
-          cursor: "pointer",
-          border: "none",
-          color: pencil ? "var(--cv-accent)" : "var(--cv-ink)",
-        }}
-      >
-        ✎ draw
-      </button>
-      <button
-        className="glass-pill"
-        title="drag a region → PNG of just that part"
-        onClick={() => setShotMode((m) => !m)}
-        style={{
-          position: "absolute",
-          right: 16,
-          bottom: 36,
-          zIndex: 20,
-          fontSize: 11,
-          fontWeight: 600,
-          padding: "6px 14px",
-          cursor: "pointer",
-          border: "none",
-          color: shotMode ? "var(--cv-accent)" : "var(--cv-ink)",
-        }}
-      >
-        ◳ region
-      </button>
       {pencil && (
         <div
           style={{ position: "absolute", inset: 0, zIndex: 29, cursor: "crosshair" }}
