@@ -1653,9 +1653,11 @@ export const useBoard = create<BoardState>((set, get) => ({
     if (/^close (?:all )?(?:panels|cards|tools)/.test(low)) {
       const board = get().activeBoard;
       const m = { ...get().panelNodes, [board]: {} };
+      const tm = { ...get().termNodes, [board]: {} };
       localStorage.setItem("cv-panelnodes", JSON.stringify(m));
-      set({ panelNodes: m });
-      reply("closed all panels");
+      localStorage.setItem("cv-termnodes", JSON.stringify(tm));
+      set({ panelNodes: m, termNodes: tm });
+      reply("closed all cards");
       return;
     }
     const km = low.match(/^(?:kill|stop|close)\s+(.+)$/);

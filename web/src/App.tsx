@@ -217,27 +217,29 @@ function Board() {
   useEffect(() => {
     if (tidyCmdN === 0) return;
     const b = useBoard.getState();
-    const nodes = b.panelNodes[b.activeBoard] ?? {};
-    const ids = Object.keys(nodes);
-    if (!ids.length) return;
-    // Stack every open panel card in a column docked to the right edge of
-    // the current viewport; wraps to a second column when it overflows.
+    // Stack every open card (tool panels + popped-out terminals) in a
+    // column docked to the right edge; wraps to more columns when full.
+    const panels = Object.entries(b.panelNodes[b.activeBoard] ?? {});
+    const terms = Object.entries(b.termNodes[b.activeBoard] ?? {});
+    const cards = [
+      ...panels.map(([id, n]) => ({ id, w: n.w ?? 320, h: n.h ?? 420, move: b.movePanelNode })),
+      ...terms.map(([id, n]) => ({ id, w: n.w ?? 560, h: n.h ?? 320, move: b.moveTermNode })),
+    ];
+    if (!cards.length) return;
     const top = window.innerHeight * 0.08;
     const bottom = window.innerHeight - 40;
     const gap = 16;
+    const widest = Math.max(...cards.map((c) => c.w));
     let x = window.innerWidth - 24;
     let y = top;
-    for (const id of ids) {
-      const n = nodes[id];
-      const w = n.w ?? 320;
-      const h = n.h ?? 420;
-      if (y > top && y + h > bottom) {
-        x -= Math.max(...ids.map((i) => nodes[i].w ?? 320)) + gap;
+    for (const c of cards) {
+      if (y > top && y + c.h > bottom) {
+        x -= widest + gap;
         y = top;
       }
-      const p = screenToFlowPosition({ x: x - w, y });
-      b.movePanelNode(id, p.x, p.y);
-      y += h + gap;
+      const p = screenToFlowPosition({ x: x - c.w, y });
+      c.move(c.id, p.x, p.y);
+      y += c.h + gap;
     }
   }, [tidyCmdN, screenToFlowPosition]);
   const zoomN = useBoard((s) => s.zoomN);
