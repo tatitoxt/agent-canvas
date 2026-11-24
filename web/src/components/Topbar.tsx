@@ -187,7 +187,7 @@ export function Topbar({
               {wsList.length === 0 &&
                 row("ws", "no workspaces", "create one from Tools → New workspace")}
               {wsList.map((w) =>
-                row("ws", w.name, w.repo ?? "", () => {}),
+                row("ws", w.name, w.repo ?? "", () => useBoard.getState().requestFocus(w.id)),
               )}
             </>
           ))}

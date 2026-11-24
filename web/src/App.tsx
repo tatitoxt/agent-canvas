@@ -157,6 +157,11 @@ function Board() {
     if (termRequest) openTerm({ id: termRequest.id, name: termRequest.name });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [termRequest]);
+  const focusNode = useBoard((s) => s.focusNode);
+  useEffect(() => {
+    if (focusNode) fitView({ nodes: [{ id: focusNode.id }], padding: 0.25, maxZoom: 1.2, duration: 300 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusNode]);
   const [delegateFrom, setDelegateFrom] = useState<{ from: string; at: { x: number; y: number } } | null>(null);
   const [nav, setNav] = useState("canvas");
   const [palette, setPalette] = useState(false);

@@ -188,6 +188,9 @@ type BoardState = {
   /** Ask the board to open a terminal panel for an agent (Panels menu). */
   termRequest: { id: string; name: string; n: number } | null;
   requestTerm: (id: string, name: string) => void;
+  /** Ask the canvas to frame one node (workspace tile, agent card). */
+  focusNode: { id: string; n: number } | null;
+  requestFocus: (id: string) => void;
   createAutomation: (a: {
     name: string;
     prompt: string;
@@ -1035,6 +1038,9 @@ export const useBoard = create<BoardState>((set, get) => ({
   termRequest: null,
   requestTerm: (id, name) =>
     set((s) => ({ termRequest: { id, name, n: (s.termRequest?.n ?? 0) + 1 } })),
+  focusNode: null,
+  requestFocus: (id) =>
+    set((s) => ({ focusNode: { id, n: (s.focusNode?.n ?? 0) + 1 } })),
 
   /** Symvibe's THREAD — the built-in board commander. Deterministic
    * intent parsing; falls back to quickRequest for local commands. */
