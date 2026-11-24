@@ -20,6 +20,10 @@ export function NotesPanel() {
   const cards = Object.values(notes).filter(
     (n) => n.board_id === (activeBoard ?? "main"),
   );
+  // Deska "From earlier tasks" — cards parked on other boards.
+  const earlier = Object.values(notes).filter(
+    (n) => n.board_id !== (activeBoard ?? "main"),
+  );
   const byCol = (col: string) => cards.filter((n) => n.col === col).sort((a, b) => a.pos - b.pos);
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = cards.filter((n) => n.due).sort((a, b) => (a.due ?? "").localeCompare(b.due ?? ""));
@@ -141,6 +145,19 @@ export function NotesPanel() {
           </div>
         ))}
       </div>
+      {earlier.length > 0 && (
+        <div style={{ margin: "8px 4px 0", borderTop: "1px solid var(--cv-glass-edge)", paddingTop: 8, maxHeight: 110, overflowY: "auto" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--cv-ink-dim)", textTransform: "uppercase", letterSpacing: 0.6, padding: "0 6px 6px" }}>
+            from earlier tasks
+          </div>
+          {earlier.map((n) => (
+            <div key={n.note_id} style={{ display: "flex", gap: 6, fontSize: 11, color: "var(--cv-ink-dim)", padding: "2px 6px", alignItems: "baseline" }}>
+              <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 9.5, flexShrink: 0 }}>[{n.col}]</span>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--cv-ink)" }}>{n.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
