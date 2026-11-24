@@ -317,6 +317,9 @@ body,
 .vault-file:focus-visible .vault-file-actions {
   display: flex;
 }
+.vault-ctx-item:hover {
+  background: var(--cv-glass-hi) !important;
+}
 .cv-menu-scroll::-webkit-scrollbar-track {
   background: transparent;
 }

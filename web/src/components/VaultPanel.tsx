@@ -781,7 +781,7 @@ const BOOKMARKS_KEY = "cv-vault-bookmarks";
 const RECENT_KEY = "cv-vault-recent";
 const COLLAPSED_KEY = "cv-vault-collapsed";
 
-function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBookmark, onDelete, armedDel, bookmarks, depth = 0 }: {
+function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBookmark, onDelete, onContext, armedDel, bookmarks, depth = 0 }: {
   entries: TreeDir;
   collapsed: Set<string>;
   toggle: (p: string) => void;
@@ -792,6 +792,7 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
   onDelete: (p: string) => void;
   armedDel: string | null;
   bookmarks: Set<string>;
+  onContext: (path: string, x: number, y: number) => void;
   depth?: number;
 }) {
   const pad = 8 + depth * 12;
@@ -817,7 +818,7 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
               <FileTree
                 entries={d} collapsed={collapsed} toggle={toggle}
                 vaultFile={vaultFile} onOpen={onOpen} onPin={onPin}
-                onBookmark={onBookmark} onDelete={onDelete} armedDel={armedDel} bookmarks={bookmarks} depth={depth + 1}
+                onBookmark={onBookmark} onDelete={onDelete} onContext={onContext} armedDel={armedDel} bookmarks={bookmarks} depth={depth + 1}
               />
             )}
           </div>
@@ -827,6 +828,7 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
         <button
           key={e}
           onClick={() => onOpen(e)}
+          onContextMenu={(ev) => { ev.preventDefault(); ev.stopPropagation(); onContext(e, ev.clientX, ev.clientY); }}
           className="vault-file"
           style={{
             display: "flex", alignItems: "center", width: "100%",
@@ -1076,6 +1078,7 @@ export function VaultPanel() {
   const [newNote, setNewNote] = useState(false);
   const [newName, setNewName] = useState("");
   const [armedDel, setArmedDel] = useState<string | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ path: string; x: number; y: number } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [renName, setRenName] = useState("");
   const [graphScope, setGraphScope] = useState<"local" | "vault">("local");
@@ -1412,6 +1415,7 @@ export function VaultPanel() {
           onPin={(e) => useBoard.getState().mdNodeAdd(e)}
           onBookmark={toggleBookmark}
           onDelete={onDeleteFile}
+          onContext={(p, x, y) => { setCtxMenu({ path: p, x, y }); setArmedDel(null); }}
           armedDel={armedDel}
           bookmarks={bookmarks}
         />
@@ -1645,6 +1649,48 @@ export function VaultPanel() {
             <span>{vaultFile.text.length.toLocaleString()} characters</span>
           </div>
         </div>
+      )}
+      {ctxMenu && (
+        <>
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 90 }}
+            onClick={() => { setCtxMenu(null); setArmedDel(null); }}
+            onContextMenu={(ev) => ev.preventDefault()}
+          />
+          <div style={{
+            position: "fixed", left: Math.min(ctxMenu.x, window.innerWidth - 190), top: Math.min(ctxMenu.y, window.innerHeight - 200),
+            zIndex: 95, minWidth: 160, padding: 4, borderRadius: 10,
+            background: "var(--cv-glass-bg, rgba(24,24,30,0.92))", border: "1px solid var(--cv-glass-edge)",
+            backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+            boxShadow: "0 8px 28px rgba(0,0,0,0.45)", fontSize: 11.5,
+          }}>
+            <div style={{ padding: "4px 10px 6px", fontSize: 9.5, color: "var(--cv-ink-faint)", borderBottom: "1px solid var(--cv-glass-edge)", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {ctxMenu.path}
+            </div>
+            {[
+              { label: IMAGE_RE.test(ctxMenu.path) ? "Open image" : "Open note", fn: () => openEntry(ctxMenu.path) },
+              { label: "Pin to board", fn: () => useBoard.getState().mdNodeAdd(ctxMenu.path) },
+              { label: bookmarks.has(ctxMenu.path) ? "Remove bookmark" : "Bookmark", fn: () => toggleBookmark(ctxMenu.path) },
+              { label: "Copy wikilink", fn: () => { const n = ctxMenu.path.replace(/\.md$/, "").split("/").pop()!; void navigator.clipboard?.writeText(`[[${n}]]`).catch(() => {}); notify(`[[${n}]] copied`); } },
+            ].map((it) => (
+              <button
+                key={it.label}
+                onClick={() => { it.fn(); setCtxMenu(null); }}
+                className="vault-ctx-item"
+                style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", color: "var(--cv-ink)", fontSize: 11.5, padding: "5px 10px", borderRadius: 6, cursor: "pointer" }}
+              >
+                {it.label}
+              </button>
+            ))}
+            <button
+              onClick={() => { onDeleteFile(ctxMenu.path); if (armedDel === ctxMenu.path) { setCtxMenu(null); setArmedDel(null); } }}
+              className="vault-ctx-item"
+              style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", color: armedDel === ctxMenu.path ? "#e07070" : "var(--cv-ink-dim)", fontSize: 11.5, padding: "5px 10px", borderRadius: 6, cursor: "pointer" }}
+            >
+              {armedDel === ctxMenu.path ? "Confirm delete → .trash" : "Move to .trash"}
+            </button>
+          </div>
+        </>
       )}
       {imgView && (
         <div
