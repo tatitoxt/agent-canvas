@@ -363,6 +363,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
           {toolRow("issue", "Issues", "live list from the repo's GitHub", () => onSelect("issues"), "issues", undefined, ghCounts.issues != null ? `${ghCounts.issues} open` : undefined)}
           {toolRow("ticket", "Dex Tickets", "notes and tasks on the board", () => onSelect("notes"), "notes", undefined, noteCount ? `${noteCount}` : undefined)}
           {toolRow("artifacts", "Artifacts", "shots, docs and files the agents produced", () => onSelect("artifacts"), "artifacts", undefined, artifactCount ? `${artifactCount}` : undefined)}
+          {toolRow("calendar", "Calendar", "daily notes + due dates from your vault", () => onSelect("calendar"), "calendar")}
           {toolRow("loops", "Loops", "recurring instructions per agent", () => onSelect("loops"), "loops", undefined, loopCount ? `${loopCount} active` : undefined)}
         </nav>
         {menu === "git" && (

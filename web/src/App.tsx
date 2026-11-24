@@ -36,6 +36,7 @@ import { GitHubPanel } from "./components/GitHubPanel";
 import { NotesPanel } from "./components/NotesPanel";
 import { ArtifactsPanel } from "./components/ArtifactsPanel";
 import { VaultPanel } from "./components/VaultPanel";
+import { CalendarPanel } from "./components/CalendarPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { SkillsPanel } from "./components/SkillsPanel";
 import { StudioPanel } from "./components/StudioPanel";
@@ -755,6 +756,7 @@ function Board() {
       {nav === "issues" && <GitHubPanel kind="issues" />}
       {nav === "artifacts" && <ArtifactsPanel />}
       {nav === "vault" && <VaultPanel />}
+      {nav === "calendar" && <CalendarPanel />}
       {nav === "settings" && <SettingsPanel />}
       {nav === "skills" && <SkillsPanel />}
       <DigestPanel />
