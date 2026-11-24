@@ -8,12 +8,50 @@ const THEMES = [
   { key: "paper", label: "Paper", sw: "#ece8e1" },
 ] as const;
 
-/** App settings — theme picker + OS notifications for agent events. */
+const SHORTCUTS: [string, string][] = [
+  ["f", "fit the board to view"],
+  ["1", "zoom to 100%"],
+  ["t", "gather loose windows into a group"],
+  ["Ctrl+Z", "undo the last card move"],
+  ["Ctrl+`", "pop terminal out / put back"],
+  ["?", "command palette"],
+  ["Del", "close the selected cards"],
+  ["right-click", "context menu — spawn, add panels"],
+];
+
+const label: React.CSSProperties = {
+  fontSize: 10.5,
+  fontWeight: 600,
+  color: "var(--cv-ink-dim)",
+  padding: "8px 12px 6px",
+  textTransform: "uppercase",
+  letterSpacing: 0.6,
+};
+
+const rowBtn: React.CSSProperties = {
+  flex: 1,
+  padding: "7px 6px",
+  border: "none",
+  cursor: "pointer",
+  fontSize: 10.5,
+  color: "var(--cv-ink)",
+};
+
+/** App settings — theme, terminal font, OS notifications, canvas
+ * housekeeping, daemon link and a keyboard cheat-sheet. */
 export function SettingsPanel() {
   const theme = useBoard((s) => s.theme);
   const setTheme = useBoard((s) => s.setTheme);
+  const termFont = useBoard((s) => s.termFont);
+  const bumpFont = useBoard((s) => s.bumpFont);
+  const connected = useBoard((s) => s.connected);
+  const connect = useBoard((s) => s.connect);
+  const clearDone = useBoard((s) => s.clearDone);
+  const undoMove = useBoard((s) => s.undoMove);
+  const moveHistory = useBoard((s) => s.moveHistory);
   const supported = typeof Notification !== "undefined";
   const [perm, setPerm] = useState<NotificationPermission>(supported ? Notification.permission : "denied");
+  const [cleared, setCleared] = useState<number | null>(null);
   return (
     <div
       style={{ ...panelRoot, padding: "12px 10px" }}
@@ -47,8 +85,75 @@ export function SettingsPanel() {
           </button>
         ))}
       </div>
-      <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--cv-ink-dim)", padding: "8px 12px 6px", textTransform: "uppercase", letterSpacing: 0.6 }}>
-        Notifications
+      <div style={label}>Terminal font</div>
+      <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>
+        <button className="glass" style={{ ...rowBtn, flex: 0, padding: "7px 14px" }} onClick={() => bumpFont(-1)}>−</button>
+        <span style={{ flex: 1, textAlign: "center", fontSize: 11, color: "var(--cv-ink)" }}>{termFont}px</span>
+        <button className="glass" style={{ ...rowBtn, flex: 0, padding: "7px 14px" }} onClick={() => bumpFont(1)}>+</button>
+      </div>
+      <div style={label}>Daemon</div>
+      <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: 99,
+            background: connected ? "var(--cv-working)" : "var(--cv-blocked)",
+            flexShrink: 0,
+          }}
+        />
+        <span style={{ flex: 1, fontSize: 10.5, color: "var(--cv-ink-dim)" }}>
+          {connected ? "connected — canvasd is driving agents" : "offline — agents can't spawn"}
+        </span>
+        {!connected && (
+          <button className="glass" style={{ ...rowBtn, flex: 0, padding: "7px 12px" }} onClick={() => connect("")}>
+            retry
+          </button>
+        )}
+      </div>
+      <div style={label}>Canvas</div>
+      <div style={{ padding: "0 12px 8px", display: "flex", gap: 8 }}>
+        <button
+          className="glass"
+          style={rowBtn}
+          onClick={() => setCleared(clearDone())}
+        >
+          {cleared == null ? "clear done agents" : cleared > 0 ? `cleared ${cleared}` : "nothing to clear"}
+        </button>
+        <button
+          className="glass"
+          style={{ ...rowBtn, opacity: moveHistory.length ? 1 : 0.45 }}
+          disabled={!moveHistory.length}
+          onClick={() => undoMove()}
+        >
+          undo move{moveHistory.length ? ` (${moveHistory.length})` : ""}
+        </button>
+      </div>
+      <div style={label}>Keyboard</div>
+      <div style={{ padding: "0 12px 8px", display: "flex", flexDirection: "column", gap: 3 }}>
+        {SHORTCUTS.map(([k, what]) => (
+          <div key={k} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                minWidth: 52,
+                textAlign: "center",
+                padding: "2px 6px",
+                borderRadius: 5,
+                background: "var(--cv-glass-hi)",
+                border: "1px solid var(--cv-glass-edge)",
+                fontSize: 9.5,
+                fontWeight: 650,
+                color: "var(--cv-ink)",
+                fontFamily: "var(--cv-mono, monospace)",
+              }}
+            >
+              {k}
+            </span>
+            <span style={{ fontSize: 10, color: "var(--cv-ink-dim)" }}>{what}</span>
+          </div>
+        ))}
+      </div>
+      <div style={label}>Notifications
       </div>
       <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>
         <button
