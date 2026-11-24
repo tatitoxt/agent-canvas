@@ -130,6 +130,31 @@ export function DelegationPanel({
       {to && (edge.files ?? 0) > 0 && (
         <DiffBlock agentId={edge.to} />
       )}
+
+      {to && edge.state !== "delegated" && (
+        <button
+          onClick={() =>
+            useBoard
+              .getState()
+              .delegate(edge.from, `${to.name}-retry`, to.command ?? "bash", edge.task, to.permission)
+          }
+          title="Run this same task again — spawns a fresh child agent wired to the same delegator"
+          style={{
+            marginTop: 10,
+            width: "100%",
+            border: "1px solid var(--cv-border)",
+            borderRadius: 8,
+            background: "var(--cv-panel)",
+            color: "var(--cv-accent)",
+            fontSize: 11.5,
+            fontWeight: 600,
+            padding: "7px 0",
+            cursor: "pointer",
+          }}
+        >
+          ↺ replay this delegation
+        </button>
+      )}
     </div>
   );
 }
