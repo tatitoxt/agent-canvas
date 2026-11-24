@@ -1,4 +1,5 @@
 import { useBoard } from "../store/board";
+import { downloadPdf } from "../lib/pdf";
 
 /** "Lose nothing" — a markdown digest of every agent session: status,
  * account, and the last visible lines of each terminal. Copy it or fold
@@ -39,6 +40,17 @@ export function DigestPanel() {
           <div style={{ display: "flex", gap: 8 }}>
             <button className="glass-pill" style={{ fontSize: 10.5, padding: "4px 12px", cursor: "pointer", border: "none", color: "var(--cv-ink)" }} onClick={copy}>
               copy
+            </button>
+            <button
+              className="glass-pill"
+              style={{ fontSize: 10.5, padding: "4px 12px", cursor: "pointer", border: "none", color: "var(--cv-ink)" }}
+              title="Export this digest as PDF (saved to artifacts)"
+              onClick={() => {
+                downloadPdf("Session digest", digest);
+                useBoard.getState().artifactCreate("pdf", "PDF — Session digest", undefined, digest);
+              }}
+            >
+              → PDF
             </button>
             <button className="glass-pill" style={{ fontSize: 10.5, padding: "4px 12px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }} onClick={toMemory}>
               → board memory
