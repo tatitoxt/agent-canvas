@@ -125,25 +125,35 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
             <div style={{ ...groupLabel, color: "var(--cv-waiting)" }}>approve commands</div>
             {held.map((h) => (
               <div key={h.id} style={{ ...rowStyle, cursor: "default" }}>
-                <span style={{ fontSize: 12, fontWeight: 600 }}>
-                  {h.name}
-                  <span style={{ fontSize: 9.5, fontWeight: 500, color: "var(--cv-ink-faint)", marginLeft: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    {agents[h.id]?.permission ?? "supervised"}
-                  </span>
-                </span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: "var(--cv-ink-dim)",
-                    fontFamily: "ui-monospace, SFMono-Regular, monospace",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={h.line}
+                <button
+                  style={{ ...rowStyle, padding: 0 }}
+                  className="inbox-row"
+                  title="open the terminal"
+                  onClick={() => onOpenAgent(h.id)}
                 >
-                  {h.line}
-                </span>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>
+                    {h.name}
+                    <span style={{ fontSize: 9.5, fontWeight: 500, color: "var(--cv-ink-faint)", marginLeft: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      {agents[h.id]?.permission ?? "supervised"}
+                    </span>
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "var(--cv-ink-dim)",
+                      fontFamily: "ui-monospace, SFMono-Regular, monospace",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      maxWidth: "100%",
+                      display: "block",
+                      textAlign: "left",
+                    }}
+                    title={h.line}
+                  >
+                    {h.line}
+                  </span>
+                </button>
                 <span style={{ display: "flex", gap: 6, marginTop: 4 }}>
                   <button
                     className="glass-pill"

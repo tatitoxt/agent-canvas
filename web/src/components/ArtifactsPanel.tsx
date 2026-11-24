@@ -45,6 +45,11 @@ export function ArtifactsPanel() {
     .filter((a) => a.board_id === (activeBoard ?? "main"))
     .filter((a) => !query || a.title.toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  // Deska "From earlier tasks" — artifacts left behind on other boards.
+  const earlier = Object.values(artifacts)
+    .filter((a) => a.board_id !== (activeBoard ?? "main"))
+    .filter((a) => !query || a.title.toLowerCase().includes(query.toLowerCase()))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   return (
     <div
@@ -224,9 +229,31 @@ export function ArtifactsPanel() {
       )}
 
       <div style={{ flex: 1, overflowY: "auto", padding: "0 8px" }}>
-        {list.map((a) => {
-          const meta = kindMeta(a.kind);
-          return (
+        {list.map(renderRow)}
+        {earlier.length > 0 && (
+          <>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 0.8,
+                textTransform: "uppercase",
+                color: "var(--cv-ink-faint)",
+                padding: "12px 12px 4px",
+              }}
+            >
+              from earlier tasks
+            </div>
+            {earlier.map(renderRow)}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  function renderRow(a: (typeof list)[number]) {
+    const meta = kindMeta(a.kind);
+    return (
             <div
               key={a.artifact_id}
               style={{ margin: "0 4px 6px", padding: "9px 12px", borderRadius: 14, background: "var(--cv-glass-hi)", display: "flex", alignItems: "center", gap: 10 }}
@@ -330,9 +357,6 @@ export function ArtifactsPanel() {
                 ×
               </button>
             </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+    );
+  }
 }
