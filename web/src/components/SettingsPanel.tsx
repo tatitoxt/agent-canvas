@@ -87,6 +87,57 @@ export function SettingsPanel() {
       <div style={{ fontSize: 9.5, color: "var(--cv-ink-dim)", padding: "0 12px 6px", lineHeight: 1.4 }}>
         Pings you when an agent needs approval or a delegation returns — only while this tab is in the background.
       </div>
+      <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--cv-ink-dim)", padding: "8px 12px 6px", textTransform: "uppercase", letterSpacing: 0.6 }}>
+        Board data
+      </div>
+      <div style={{ padding: "0 12px 8px", display: "flex", gap: 8 }}>
+        <button
+          onClick={() => {
+            const data: Record<string, string> = {};
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (k?.startsWith("cv-")) data[k] = localStorage.getItem(k) ?? "";
+            }
+            const blob = new Blob([JSON.stringify({ app: "agent-canvas", v: 1, data }, null, 2)], { type: "application/json" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "canvas-export.json";
+            a.click();
+            URL.revokeObjectURL(a.href);
+          }}
+          className="glass"
+          style={{ flex: 1, padding: "7px 6px", border: "none", cursor: "pointer", fontSize: 10.5, color: "var(--cv-ink)" }}
+        >
+          export json
+        </button>
+        <label
+          className="glass"
+          style={{ flex: 1, padding: "7px 6px", fontSize: 10.5, color: "var(--cv-ink)", textAlign: "center", cursor: "pointer" }}
+        >
+          import json
+          <input
+            type="file"
+            accept="application/json"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              void f.text().then((t) => {
+                try {
+                  const j = JSON.parse(t) as { data?: Record<string, string> };
+                  for (const [k, v] of Object.entries(j.data ?? {})) {
+                    if (k.startsWith("cv-") && typeof v === "string") localStorage.setItem(k, v);
+                  }
+                  location.reload();
+                } catch { /* bad file — ignore */ }
+              });
+            }}
+          />
+        </label>
+      </div>
+      <div style={{ fontSize: 9.5, color: "var(--cv-ink-dim)", padding: "0 12px 6px", lineHeight: 1.4 }}>
+        Carries your presets, shapes, notes, thread and theme between machines — canvas layouts live in the daemon's .canvas/board.db.
+      </div>
     </div>
   );
 }
