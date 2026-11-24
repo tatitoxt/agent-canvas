@@ -53,6 +53,9 @@ export function SpawnBar() {
   const accounts = useBoard((s) => s.accounts);
   const createWorkspace = useBoard((s) => s.createWorkspace);
   const spawnOrchestrator = useBoard((s) => s.spawnOrchestrator);
+  const pauseAll = useBoard((s) => s.pauseAll);
+  const resumeAll = useBoard((s) => s.resumeAll);
+  const activeBoard = useBoard((s) => s.activeBoard);
   const [choice, setChoice] = useState("claude");
   const [command, setCommand] = useState("");
   const [name, setName] = useState("");
@@ -257,6 +260,22 @@ export function SpawnBar() {
             title="New orchestrator — wire consoles to it and command them all from its composer"
           >
             ◉ orch
+          </button>
+          <button
+            className="glass-pill"
+            style={{ ...buttonStyle, color: "var(--cv-waiting)" }}
+            onClick={() => pauseAll(activeBoard)}
+            title="Freeze every agent on this board mid-task (SIGSTOP) — resume continues mid-line"
+          >
+            ⏸ pause all
+          </button>
+          <button
+            className="glass-pill"
+            style={{ ...buttonStyle, color: "var(--cv-done)" }}
+            onClick={() => resumeAll(activeBoard)}
+            title="Resume every paused agent"
+          >
+            ▸ resume all
           </button>
         </>
       )}

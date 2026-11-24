@@ -85,6 +85,25 @@ impl Agent {
         let _ = self.child.lock().unwrap().kill();
     }
 
+    /// SIGSTOP/SIGCONT the PTY child — Symvibe's "pause all": output
+    /// queues in the kernel PTY buffer and the process resumes mid-line.
+    fn signal(&self, sig: i32) -> bool {
+        self.child
+            .lock()
+            .unwrap()
+            .process_id()
+            .map(|pid| unsafe { libc::kill(pid as i32, sig) == 0 })
+            .unwrap_or(false)
+    }
+
+    pub fn suspend(&self) -> bool {
+        self.signal(libc::SIGSTOP)
+    }
+
+    pub fn resume(&self) -> bool {
+        self.signal(libc::SIGCONT)
+    }
+
     #[allow(dead_code)]
     pub fn is_alive(&self) -> bool {
         matches!(self.child.lock().unwrap().try_wait(), Ok(None))
@@ -328,6 +347,22 @@ impl AgentManager {
         let agents = self.agents.lock().unwrap();
         let agent = agents.get(agent_id).context("no such agent")?;
         agent.resize(cols, rows)
+    }
+
+    /// Suspend/resume a set of live agents (pause-all on a board).
+    /// Returns how many were actually signalled.
+    pub fn suspend_many(&self, ids: &[String]) -> usize {
+        let agents = self.agents.lock().unwrap();
+        ids.iter()
+            .filter(|id| agents.get(*id).map(|a| a.suspend()).unwrap_or(false))
+            .count()
+    }
+
+    pub fn resume_many(&self, ids: &[String]) -> usize {
+        let agents = self.agents.lock().unwrap();
+        ids.iter()
+            .filter(|id| agents.get(*id).map(|a| a.resume()).unwrap_or(false))
+            .count()
     }
 
     /// Kill is gated: callers must have received an explicit ConfirmDestructive

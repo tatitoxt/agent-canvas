@@ -173,6 +173,10 @@ pub enum ClientMsg {
     },
     DeleteLoop { loop_id: String },
     SetLoopEnabled { loop_id: String, enabled: bool },
+    /// SIGSTOP/SIGCONT every live agent on a board — Symvibe's
+    /// "pause all": PTYs freeze mid-task, output buffers in the kernel.
+    PauseAll { board_id: Option<String> },
+    ResumeAll { board_id: Option<String> },
     /// Stream an agent's saved transcript back as PtyOutput frames — for
     /// reading dead agents' terminals after they exited or after a
     /// daemon restart.

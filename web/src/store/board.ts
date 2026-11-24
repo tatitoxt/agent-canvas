@@ -176,6 +176,8 @@ type BoardState = {
   }) => void;
   deleteLoop: (loopId: string) => void;
   setLoopEnabled: (loopId: string, enabled: boolean) => void;
+  pauseAll: (boardId?: string) => void;
+  resumeAll: (boardId?: string) => void;
   /** Symvibe-style orchestrator cards: a board node wired to consoles with
    * cables; its composer broadcasts the command to every wired PTY. */
   orchestrators: Record<string, { name: string; board: string; wired: string[] }>;
@@ -726,6 +728,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   createLoop: (l) => client?.createLoop(l),
   deleteLoop: (loopId) => client?.deleteLoop(loopId),
   setLoopEnabled: (loopId, enabled) => client?.setLoopEnabled(loopId, enabled),
+  pauseAll: (boardId) => client?.pauseAll(boardId),
+  resumeAll: (boardId) => client?.resumeAll(boardId),
 
   orchestrators: (() => {
     try {

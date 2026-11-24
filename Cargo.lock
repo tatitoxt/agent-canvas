@@ -137,6 +137,7 @@ dependencies = [
  "axum",
  "base64",
  "futures-util",
+ "libc",
  "portable-pty",
  "rand",
  "rusqlite",

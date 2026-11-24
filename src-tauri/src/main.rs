@@ -691,6 +691,26 @@ fn delete_loop(
 }
 
 #[tauri::command]
+fn pause_all(
+    state: State<'_, CanvasState>,
+    board_id: Option<String>,
+) -> Result<usize, String> {
+    let board = board_id.unwrap_or_else(|| "main".to_string());
+    let ids = loop_targets(&state, &board, "*");
+    Ok(state.agents.suspend_many(&ids))
+}
+
+#[tauri::command]
+fn resume_all(
+    state: State<'_, CanvasState>,
+    board_id: Option<String>,
+) -> Result<usize, String> {
+    let board = board_id.unwrap_or_else(|| "main".to_string());
+    let ids = loop_targets(&state, &board, "*");
+    Ok(state.agents.resume_many(&ids))
+}
+
+#[tauri::command]
 fn set_loop_enabled(
     app: AppHandle,
     state: State<'_, CanvasState>,
@@ -1377,6 +1397,8 @@ fn main() {
             create_loop,
             delete_loop,
             set_loop_enabled,
+            pause_all,
+            resume_all,
             run_automation,
             delete_automation,
             transcript,

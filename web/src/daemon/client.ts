@@ -331,6 +331,14 @@ export class CanvasClient {
     this.send({ cmd: "set_loop_enabled", loop_id: loopId, enabled });
   }
 
+  pauseAll(boardId?: string) {
+    this.send({ cmd: "pause_all", board_id: boardId ?? null });
+  }
+
+  resumeAll(boardId?: string) {
+    this.send({ cmd: "resume_all", board_id: boardId ?? null });
+  }
+
   /** Supervised-input gate: release the held payload to the PTY. */
   approveInput(agentId: string) {
     this.send({ cmd: "approve_input", agent_id: agentId });

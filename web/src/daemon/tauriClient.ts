@@ -125,6 +125,14 @@ export class TauriCanvasClient {
     void invoke("set_loop_enabled", { loopId, enabled }).catch(console.error);
   }
 
+  pauseAll(boardId?: string) {
+    void invoke("pause_all", { boardId: boardId ?? null }).catch(console.error);
+  }
+
+  resumeAll(boardId?: string) {
+    void invoke("resume_all", { boardId: boardId ?? null }).catch(console.error);
+  }
+
   runAutomation(automationId: string) {
     void invoke("run_automation", { automationId }).catch(console.error);
   }
