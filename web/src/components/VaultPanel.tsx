@@ -879,6 +879,13 @@ export function VaultPanel() {
   const [graphScope, setGraphScope] = useState<"local" | "vault">("local");
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [backlinksOpen, setBacklinksOpen] = useState(false);
+  const [imgView, setImgView] = useState<string | null>(null);
+
+  // Click in the tree: .md opens the reader, an image opens a lightbox.
+  const openEntry = (e: string) => {
+    if (IMAGE_RE.test(e)) { setImgView(e); vaultAsset(e); }
+    else vaultRead(e);
+  };
 
   // Backlinks — Obsidian's "Linked mentions": fetch the vault graph when a
   // note opens so the footer can list every note that links here.
@@ -1171,7 +1178,7 @@ export function VaultPanel() {
           collapsed={collapsed}
           toggle={toggleCollapsed}
           vaultFile={vaultFile}
-          onOpen={vaultRead}
+          onOpen={openEntry}
           onPin={(e) => useBoard.getState().mdNodeAdd(e)}
           onBookmark={toggleBookmark}
           onDelete={onDeleteFile}
@@ -1390,6 +1397,31 @@ export function VaultPanel() {
             <span>{[...vaultFile.text.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)].length} links</span>
             <span>{vaultFile.text.split(/\s+/).filter(Boolean).length} words</span>
             <span>{vaultFile.text.length.toLocaleString()} characters</span>
+          </div>
+        </div>
+      )}
+      {imgView && (
+        <div
+          onClick={() => setImgView(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 60, display: "grid", placeItems: "center",
+            background: "rgba(0,0,0,0.72)", cursor: "zoom-out",
+          }}
+        >
+          <div
+            className="glass"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "80vw", maxHeight: "80vh", padding: 14, borderRadius: 14, cursor: "default" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 11, color: "var(--cv-ink-dim)" }}>{imgView}</span>
+              <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 14 }} onClick={() => setImgView(null)}>×</button>
+            </div>
+            {vaultAssets[imgView] ? (
+              <img src={vaultAssets[imgView]} alt={imgView} style={{ maxWidth: "76vw", maxHeight: "70vh", borderRadius: 8, display: "block" }} />
+            ) : (
+              <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", fontStyle: "italic", padding: 20 }}>loading image…</div>
+            )}
           </div>
         </div>
       )}
