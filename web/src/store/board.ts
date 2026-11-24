@@ -317,6 +317,8 @@ type BoardState = {
   openTermNode: (agentId: string, pos?: { x: number; y: number }) => void;
   closeTermNode: (id: string) => void;
   moveTermNode: (id: string, x: number, y: number) => void;
+  /** Move any client-side card (term-/panel-/shape-/md-/web-/orch-) to another board. */
+  moveCardToBoard: (id: string, boardId: string) => void;
   resizeTermNode: (id: string, w: number, h: number) => void;
   collapseTermNode: (id: string) => void;
   studioDocNow: () => void;
@@ -1150,6 +1152,37 @@ export const useBoard = create<BoardState>((set, get) => ({
     const next = { ...get().termNodes, [board]: { ...get().termNodes[board], [id]: m } };
     localStorage.setItem("cv-termnodes", JSON.stringify(next));
     set({ termNodes: next });
+  },
+  /** Move a client-side card (term- / panel- / shape- / md- / web- / orch-)
+   * to another board: relocate its entry in the per-board map and switch
+   * to that board so the drop is visible. */
+  moveCardToBoard: (id, boardId) => {
+    const board = get().activeBoard;
+    const move = <T,>(all: Record<string, Record<string, T>>, key: string) => {
+      const item = all[board]?.[id];
+      if (!item) return all;
+      const src = { ...(all[board] ?? {}) };
+      delete src[id];
+      const next = { ...all, [board]: src, [boardId]: { ...(all[boardId] ?? {}), [id]: item } };
+      localStorage.setItem(key, JSON.stringify(next));
+      return next;
+    };
+    const prefix = id.slice(0, id.indexOf("-") + 1);
+    if (prefix === "term-") set({ termNodes: move(get().termNodes, "cv-termnodes") });
+    else if (prefix === "panel-") set({ panelNodes: move(get().panelNodes, "cv-panelnodes") });
+    else if (prefix === "shape-") set({ shapes: move(get().shapes, "cv-shapes") });
+    else if (prefix === "md-") set({ mdNodes: move(get().mdNodes, "cv-mdnodes") });
+    else if (prefix === "web-") set({ webNodes: move(get().webNodes, "cv-webnodes") });
+    else if (prefix === "orch-") {
+      const orch = get().orchestrators[id];
+      if (!orch) return;
+      const orchestrators = { ...get().orchestrators, [id]: { ...orch, board: boardId } };
+      localStorage.setItem("canvas:orchestrators", JSON.stringify(orchestrators));
+      set({ orchestrators });
+    }
+    else return;
+    get().setActiveBoard(boardId);
+    get().requestFocus(id);
   },
   mdContents: {},
   vaultAssets: {},

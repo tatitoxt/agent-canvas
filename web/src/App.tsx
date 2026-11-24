@@ -595,18 +595,24 @@ function Board() {
   };
 
   const onNodeDragStop: OnNodeDrag = (event, node) => {
-    // Deska-style: dropping an agent card on a board tab moves it there.
-    if (agents[node.id]) {
-      const pt =
-        "changedTouches" in event && event.changedTouches.length
-          ? event.changedTouches[0]
-          : (event as MouseEvent);
-      const el = document.elementFromPoint(pt.clientX, pt.clientY);
-      const tab = el?.closest?.("[data-board-tab]");
-      const target = tab?.getAttribute("data-board-tab");
-      if (target && target !== (agents[node.id].board_id ?? "main")) {
-        useBoard.getState().moveToBoard(node.id, target);
-        return;
+    // Deska-style: dropping a card on a board tab moves it there.
+    const pt =
+      "changedTouches" in event && event.changedTouches.length
+        ? event.changedTouches[0]
+        : (event as MouseEvent);
+    const tabEl = document.elementFromPoint(pt.clientX, pt.clientY);
+    const target = tabEl?.closest?.("[data-board-tab]")?.getAttribute("data-board-tab");
+    if (target) {
+      if (agents[node.id]) {
+        if (target !== (agents[node.id].board_id ?? "main")) {
+          useBoard.getState().moveToBoard(node.id, target);
+          return;
+        }
+      } else if (/^(term|panel|shape|md|web|orch)-/.test(node.id)) {
+        if (target !== useBoard.getState().activeBoard) {
+          useBoard.getState().moveCardToBoard(node.id, target);
+          return;
+        }
       }
     }
     if (node.id.startsWith("shape-")) {
