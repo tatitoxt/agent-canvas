@@ -1484,8 +1484,10 @@ export const useBoard = create<BoardState>((set, get) => ({
     if (/close panels|close cards|cerrar/.test(t)) {
       const board = get().activeBoard;
       const m = { ...get().panelNodes, [board]: {} };
+      const tm = { ...get().termNodes, [board]: {} };
       localStorage.setItem("cv-panelnodes", JSON.stringify(m));
-      set({ panelNodes: m });
+      localStorage.setItem("cv-termnodes", JSON.stringify(tm));
+      set({ panelNodes: m, termNodes: tm });
       return "closed all panels";
     }
     if (/tidy/.test(t)) {

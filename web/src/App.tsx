@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toPng } from "html-to-image";
 import {
   MiniMap,
@@ -316,6 +316,8 @@ function Board() {
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
   const [mmSize, setMmSize] = useState({ w: 148, h: 96 });
   const [sel, setSel] = useState<Array<{ id: string; x: number; y: number; w: number; h: number }>>([]);
+  const selRef = useRef(sel);
+  selRef.current = sel;
   // Region shot: marquee-select part of the canvas → PNG of just that area.
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [shotMode, setShotMode] = useState(false);
@@ -390,6 +392,14 @@ function Board() {
         } else if (e.key === "t") {
           e.preventDefault();
           useBoard.getState().requestTidy();
+        } else if (e.key === "Backspace" || e.key === "Delete") {
+          // Close selected tool/terminal cards. Agents are excluded — they
+          // need the explicit kill confirm, never a bare Delete.
+          const b = useBoard.getState();
+          for (const s of selRef.current) {
+            if (s.id.startsWith("panel-")) b.closePanelNode(s.id);
+            else if (s.id.startsWith("term-")) b.closeTermNode(s.id);
+          }
         }
       }
     };
