@@ -223,6 +223,9 @@ export class CanvasClient {
   vaultGraph(dir: string) {
     this.send({ cmd: "vault_graph", dir });
   }
+  defaultVaultDir(): Promise<string | null> {
+    return Promise.resolve(null);
+  }
 
   vaultSearch(dir: string, query: string) {
     this.send({ cmd: "vault_search", dir, query });

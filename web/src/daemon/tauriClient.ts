@@ -184,6 +184,13 @@ export class TauriCanvasClient {
   vaultGraph(dir: string) {
     void invoke("vault_graph", { dir }).catch(console.error);
   }
+  async defaultVaultDir(): Promise<string | null> {
+    try {
+      return await invoke<string | null>("default_vault_dir");
+    } catch {
+      return null;
+    }
+  }
 
   vaultSearch(dir: string, query: string) {
     void invoke("vault_search", { dir, query }).catch(console.error);

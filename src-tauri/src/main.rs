@@ -410,6 +410,19 @@ fn vault_links(text: &str) -> Vec<String> {
     out
 }
 
+/// Default vault to auto-mount on first run: ~/Documents/Orkelya-Memory
+/// when it exists, else ~/Documents, else the home dir.
+#[tauri::command]
+fn default_vault_dir() -> Option<String> {
+    let home = std::env::var("HOME").ok()?;
+    for cand in [format!("{home}/Documents/Orkelya-Memory"), format!("{home}/Documents"), home] {
+        if PathBuf::from(&cand).is_dir() {
+            return Some(cand);
+        }
+    }
+    None
+}
+
 #[tauri::command]
 fn vault_list(app: AppHandle, dir: String) -> Result<(), String> {
     let root = PathBuf::from(&dir);
@@ -1672,6 +1685,7 @@ fn main() {
             vault_delete,
             vault_rename,
             vault_graph,
+            default_vault_dir,
             create_workspace,
             move_to_board,
             delegate,

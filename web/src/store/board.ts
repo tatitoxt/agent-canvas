@@ -817,7 +817,15 @@ export const useBoard = create<BoardState>((set, get) => ({
       const dir = get().vaultDir || (() => {
         try { return localStorage.getItem("cv-vault-dir") ?? ""; } catch { return ""; }
       })();
-      if (dir) get().vaultList(dir);
+      if (dir) {
+        get().vaultList(dir);
+      } else {
+        // First run on Tauri: auto-mount the user's real vault
+        // (~/Documents/Orkelya-Memory when it exists).
+        void client?.defaultVaultDir?.().then((d) => {
+          if (d && !get().vaultDir) get().vaultList(d);
+        });
+      }
     });
   },
 
