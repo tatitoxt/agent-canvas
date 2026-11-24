@@ -385,6 +385,7 @@ function sortDir(d: TreeDir): TreeDir[] {
 }
 
 const BOOKMARKS_KEY = "cv-vault-bookmarks";
+const RECENT_KEY = "cv-vault-recent";
 const COLLAPSED_KEY = "cv-vault-collapsed";
 
 function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBookmark, onDelete, armedDel, bookmarks, depth = 0 }: {
@@ -571,6 +572,19 @@ export function VaultPanel() {
       return next;
     });
   };
+  // Recent files — Obsidian tracks what you opened; we keep the last 8.
+  const [recent, setRecent] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]"); } catch { return []; }
+  });
+  useEffect(() => {
+    const p = vaultFile?.path;
+    if (!p) return;
+    setRecent((prev) => {
+      const next = [p, ...prev.filter((r) => r !== p)].slice(0, 8);
+      try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)); } catch { /* noop */ }
+      return next;
+    });
+  }, [vaultFile?.path]);
   // Your vault, always mounted: reopen the last vault dir automatically.
   useEffect(() => {
     if (vaultDir) return;
@@ -790,10 +804,37 @@ export function VaultPanel() {
                 </span>
               </button>
             ))}
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "8px 10px 4px" }}>
-              Files
-            </div>
           </>
+        )}
+        {recent.length > 0 && !filter && (
+          <>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "2px 10px 4px" }}>
+              Recent
+            </div>
+            {recent.filter((r) => vaultEntries.includes(r) && !bookmarks.has(r)).slice(0, 5).map((e) => (
+              <button
+                key={`rc-${e}`}
+                onClick={() => vaultRead(e)}
+                style={{
+                  display: "flex", alignItems: "center", width: "100%",
+                  textAlign: "left", border: "none",
+                  background: vaultFile?.path === e ? "var(--cv-glass-hi)" : "transparent",
+                  color: vaultFile?.path === e ? "var(--cv-ink)" : "var(--cv-ink-dim)",
+                  fontSize: 11.5, padding: "4px 8px", borderRadius: 6, cursor: "pointer",
+                }}
+              >
+                <span style={{ color: "var(--cv-ink-faint)", marginRight: 6, fontSize: 10 }}>◷</span>
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {e.split("/").pop()!.replace(/\.md$/, "")}
+                </span>
+              </button>
+            ))}
+          </>
+        )}
+        {(bookmarks.size > 0 || recent.length > 0) && !filter && (
+          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "8px 10px 4px" }}>
+            Files
+          </div>
         )}
         {filter.trim().length >= 2 && vaultHits.length > 0 && (
           <>
