@@ -294,6 +294,21 @@ fn delete_board(
 }
 
 #[tauri::command]
+fn delete_delegation(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    edge_id: String,
+) -> Result<(), String> {
+    match state.store.delegation_delete(&edge_id) {
+        Ok(true) => {
+            emit_control(&app, &ServerMsg::DelegationRemoved { edge_id });
+            Ok(())
+        }
+        _ => Err("no such delegation".to_string()),
+    }
+}
+
+#[tauri::command]
 fn studio_doc(app: AppHandle, state: State<'_, CanvasState>, board_id: Option<String>) -> Result<(), String> {
     let board = board_id.unwrap_or_else(|| "main".to_string());
     let mut md = String::from("# Studio — repo dossier

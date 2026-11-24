@@ -29,6 +29,7 @@ export function DelegationPanel({
 }) {
   const edge = useBoard((s) => s.edges[edgeId]);
   const agents = useBoard((s) => s.agents);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   if (!edge) return null;
 
   const from = agents[edge.from];
@@ -155,6 +156,32 @@ export function DelegationPanel({
           ↺ replay this delegation
         </button>
       )}
+      <button
+        onClick={() => {
+          if (confirmDelete) {
+            useBoard.getState().deleteEdge(edge.id);
+            onClose();
+          } else {
+            setConfirmDelete(true);
+            setTimeout(() => setConfirmDelete(false), 2500);
+          }
+        }}
+        title="Remove this delegation record and its edge from the board"
+        style={{
+          marginTop: 6,
+          width: "100%",
+          border: `1px solid ${confirmDelete ? "#e5484d" : "var(--cv-border)"}`,
+          borderRadius: 8,
+          background: "transparent",
+          color: confirmDelete ? "#e5484d" : "var(--cv-ink-dim)",
+          fontSize: 10.5,
+          fontWeight: 600,
+          padding: "5px 0",
+          cursor: "pointer",
+        }}
+      >
+        {confirmDelete ? "remove this record? click again" : "✕ remove record"}
+      </button>
     </div>
   );
 }

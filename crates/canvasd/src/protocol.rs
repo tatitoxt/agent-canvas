@@ -52,6 +52,8 @@ pub enum ClientMsg {
     RenameBoard { board_id: String, name: String },
     /// Delete a board — refused while it still holds nodes.
     DeleteBoard { board_id: String },
+    /// Remove a delegation record (and its edge) from the board.
+    DeleteDelegation { edge_id: String },
     /// Create or update a kanban note: no id = create (pos auto),
     /// id = move/edit (col/text/pos replace).
     NoteUpsert {
@@ -271,6 +273,8 @@ pub enum ServerMsg {
     BoardRenamed { board_id: String, name: String },
     /// A board was deleted (only emitted for empty boards).
     BoardDeleted { board_id: String },
+    /// A delegation record was removed; clients drop the edge.
+    DelegationRemoved { edge_id: String },
     /// A workspace was deleted; agents keep existing detached from it.
     WorkspaceDeleted { workspace_id: String },
     /// Unified diff text for one agent's worktree (DiffDetail answer).

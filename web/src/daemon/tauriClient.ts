@@ -243,6 +243,10 @@ export class TauriCanvasClient {
     invoke("delete_board", { boardId }).catch(console.error);
   }
 
+  deleteDelegation(edgeId: string) {
+    invoke("delete_delegation", { edgeId }).catch(console.error);
+  }
+
   diffDetail(agentId: string) {
     invoke("diff_detail", { agentId }).catch(console.error);
   }

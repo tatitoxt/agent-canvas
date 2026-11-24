@@ -653,6 +653,15 @@ fn handle_client_msg(
                 }),
             }
         }
+        ClientMsg::DeleteDelegation { edge_id } => {
+            match state.store.delegation_delete(&edge_id) {
+                Ok(true) => send_control(ServerMsg::DelegationRemoved { edge_id }),
+                _ => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: "no such delegation".to_string(),
+                }),
+            }
+        }
         ClientMsg::CreateWorkspace { name, repo, board_id } => {
             // Path validated on spawn side; a workspace is just a named
             // container + its repo.

@@ -488,6 +488,15 @@ impl Store {
         Ok(())
     }
 
+    pub fn delegation_delete(&self, id: &str) -> Result<bool> {
+        let n = self
+            .conn
+            .lock()
+            .unwrap()
+            .execute("DELETE FROM delegations WHERE id = ?1", (id,))?;
+        Ok(n > 0)
+    }
+
     pub fn account_created(&self, id: &str, cli: &str, label: &str, config_dir: &str) -> Result<()> {
         self.conn.lock().unwrap().execute(
             "INSERT INTO accounts (id, cli, label, config_dir) VALUES (?1, ?2, ?3, ?4)",

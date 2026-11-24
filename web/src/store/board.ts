@@ -232,6 +232,7 @@ type BoardState = {
   renameNode: (nodeId: string, name: string) => void;
   renameBoard: (boardId: string, name: string) => void;
   deleteBoard: (boardId: string) => void;
+  deleteEdge: (edgeId: string) => void;
   deleteWorkspace: (workspaceId: string) => void;
   /** agent_id → latest fetched unified diff text. */
   diffTexts: Record<string, string>;
@@ -586,6 +587,14 @@ export const useBoard = create<BoardState>((set, get) => ({
             }
             break;
           }
+          case "delegation_removed": {
+            set((st) => {
+              const edges = { ...st.edges };
+              delete edges[msg.edge_id];
+              return { edges, edgeDetail: st.edgeDetail === msg.edge_id ? null : st.edgeDetail };
+            });
+            break;
+          }
           case "delegation": {
             const pending = get().pendingPositions[msg.from];
             if (pending) {
@@ -805,6 +814,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   renameNode: (nodeId, name) => client?.renameNode(nodeId, name),
   renameBoard: (boardId, name) => client?.renameBoard(boardId, name),
   deleteBoard: (boardId) => client?.deleteBoard(boardId),
+  deleteEdge: (edgeId) => client?.deleteDelegation(edgeId),
   deleteWorkspace: (workspaceId) => client?.deleteWorkspace(workspaceId),
   diffTexts: {},
   requestDiff: (agentId) => client?.diffDetail(agentId),

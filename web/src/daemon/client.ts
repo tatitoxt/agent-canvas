@@ -50,6 +50,7 @@ export type ServerMsg =
   | { type: "permission_changed"; agent_id: string; permission: string }
   | { type: "board_renamed"; board_id: string; name: string }
   | { type: "board_deleted"; board_id: string }
+  | { type: "delegation_removed"; edge_id: string }
   | { type: "workspace_deleted"; workspace_id: string }
   | { type: "diff_detail"; agent_id: string; diff: string }
   | { type: "status"; agent_id: string; status: string }
@@ -278,6 +279,10 @@ export class CanvasClient {
 
   deleteBoard(boardId: string) {
     this.send({ cmd: "delete_board", board_id: boardId });
+  }
+
+  deleteDelegation(edgeId: string) {
+    this.send({ cmd: "delete_delegation", edge_id: edgeId });
   }
 
   diffDetail(agentId: string) {
