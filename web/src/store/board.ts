@@ -264,6 +264,9 @@ type BoardState = {
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }, boardId?: string) => void;
   kill: (agentId: string) => void;
+  /** Hand off a finished agent's work: spawn a same-CLI successor whose first
+   * input is a brief (who it replaces, branch/files it left, tail of output). */
+  handoff: (agentId: string, cli?: string) => void;
   approveInput: (agentId: string) => void;
   denyInput: (agentId: string) => void;
   /** Dismiss one automation alert row (or every alert with id "*"). */
@@ -875,6 +878,37 @@ export const useBoard = create<BoardState>((set, get) => ({
 
   kill: (agentId) => client?.confirmDestructive(agentId, "kill"),
 
+  handoff: (agentId, cli) => {
+    const a = get().agents[agentId];
+    if (!a) return;
+    const buf = get().ptyBuffers[agentId];
+    const tail = buf
+      ? new TextDecoder()
+          .decode(buf)
+          .replace(ANSI_RX, "")
+          .replace(/\r/g, "\n")
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .slice(-25)
+          .join("\n")
+          .slice(-2800)
+      : "";
+    const cmd = (cli ?? a.command ?? "codex").toLowerCase();
+    const name = `${a.name.replace(/-next(-\d+)?$/, "")}-next`;
+    const brief = [
+      `HANDOFF — you are continuing the work of ${a.name} (${a.command ?? "?"}, ended ${a.status}).`,
+      a.branch ? `It left a worktree on branch ${a.branch}.` : "",
+      a.paths?.length ? `Files it touched: ${a.paths.slice(0, 8).join(", ")}.` : "",
+      tail ? `Its last output:\n${tail}` : "",
+      "Pick up where it stopped — check the worktree state first, then continue.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    get().spawn(name, cmd, a.workspace_id ?? undefined, a.permission, undefined, brief);
+    get().notify(`handoff: ${a.name} → ${name}`);
+  },
+
   approveInput: (agentId) => {
     client?.approveInput(agentId);
     const next = { ...get().approvals };
@@ -1461,6 +1495,28 @@ export const useBoard = create<BoardState>((set, get) => ({
       );
       return;
     }
+    const hoff = low.match(/^handoff\s+(.+?)(?:\s+to\s+(\w+))?\s*$/);
+    if (hoff) {
+      const q = hoff[1].replace(/[?.\s]+$/, "").trim();
+      const boardAgents = Object.values(get().agents).filter(
+        (a) => (a.board_id ?? "main") === get().activeBoard,
+      );
+      const tm = q.match(/^terminal\s+(\d+)$/);
+      const hit = tm
+        ? boardAgents[parseInt(tm[1], 10) - 1]
+        : boardAgents.find(
+            (a) =>
+              a.name.toLowerCase().includes(q) ||
+              (a.command ?? "").toLowerCase() === q,
+          );
+      if (!hit) {
+        reply(`no agent matches "${q}"`);
+      } else {
+        get().handoff(hit.id, hoff[2]);
+        reply(`handed off ${hit.name} → ${hit.name.replace(/-next(-\d+)?$/, "")}-next (${hoff[2] ?? hit.command ?? "same cli"})`);
+      }
+      return;
+    }
     const shm = low.match(/^(?:share|publish)\s+(.+)$/);
     if (shm) {
       const q = shm[1].replace(/[?.\s]+$/, "").trim();
@@ -1630,7 +1686,7 @@ export const useBoard = create<BoardState>((set, get) => ({
           "approve/deny Terminal N · spawn <cli> · kill Terminal N · kill all · " +
           "pause/resume · board/new board <name> · apply/save preset <n> · " +
           "open <panel> · focus <name> · gather · hide chrome · " +
-          "obsidian <note> · pdf <topic> · share <artifact> · clear thread · status · summary",
+          "obsidian <note> · pdf <topic> · share <artifact> · handoff <agent> · status · summary",
       );
       return;
     }

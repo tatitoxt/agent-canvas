@@ -463,6 +463,28 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             {data.branch.replace(/^canvas\//, "")}
           </span>
         )}
+        {data.status === "done" && data.id && (
+          <button
+            title="Handoff — spawn a successor briefed with this session's tail + files"
+            onClick={(e) => {
+              e.stopPropagation();
+              useBoard.getState().handoff(data.id!);
+            }}
+            style={{
+              marginLeft: 8,
+              border: "1px solid color-mix(in srgb, var(--cv-accent) 40%, transparent)",
+              borderRadius: 999,
+              background: "color-mix(in srgb, var(--cv-accent) 8%, transparent)",
+              color: "var(--cv-accent)",
+              fontSize: 9,
+              fontWeight: 650,
+              padding: "1px 8px",
+              cursor: "pointer",
+            }}
+          >
+            ⇄ handoff
+          </button>
+        )}
         <span style={{ marginLeft: "auto", fontFamily: "ui-monospace, SFMono-Regular, monospace" }}>
           <FooterSize agentId={data.id} />
           <FooterModel agentId={data.id} />
