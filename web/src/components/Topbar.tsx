@@ -153,7 +153,8 @@ export function Topbar({
           pointerEvents: "auto",
         }}
       >
-        <span style={{ ...pill, color: "var(--cv-accent)", fontWeight: 700, cursor: "default" }}>
+        <span style={{ ...pill, color: "var(--cv-accent)", fontWeight: 700, cursor: "default", display: "flex", alignItems: "center", gap: 5 }}>
+          <img src="/canvas-mark.png" alt="" width={15} height={15} style={{ display: "block" }} />
           Canvas
         </span>
         <div style={{ position: "relative" }}>

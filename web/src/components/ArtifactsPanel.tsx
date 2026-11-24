@@ -128,7 +128,7 @@ export function ArtifactsPanel() {
         }}
       >
         <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <Icon name="artifacts" size={15} color="var(--cv-ink)" />
+          <img src="/canvas-mark.png" alt="" width={15} height={15} style={{ display: "block" }} />
           Artifacts
         </span>
         <span style={{ display: "flex", gap: 5, position: "relative" }}>
