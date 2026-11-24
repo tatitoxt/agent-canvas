@@ -205,7 +205,13 @@ export function Topbar({
           {drop("wt", (
             <>
               <div style={sectionLabel}>Worktrees</div>
-              {row("worktree", "no worktrees", "spawn agents in a workspace to see their trees")}
+              {Object.values(agents).filter((a) => a.worktree && a.status !== "exited").length === 0 &&
+                row("worktree", "no worktrees", "spawn agents in a workspace to see their trees")}
+              {Object.values(agents)
+                .filter((a) => a.worktree && a.status !== "exited")
+                .map((a) =>
+                  row("worktree", a.name, `${a.branch ?? ""} · ${a.worktree}`, undefined),
+                )}
             </>
           ))}
         </div>

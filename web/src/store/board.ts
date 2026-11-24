@@ -14,6 +14,8 @@ export type LiveAgent = {
   paths?: string[];
   /** Worktree branch (`canvas/<name>-<id>`) — the node's branch badge. */
   branch?: string;
+  /** Path of the agent's git worktree on disk (`.canvas-worktrees/<id>`). */
+  worktree?: string;
   status: AgentStatus | "exited";
   workspace_id?: string | null;
   /** Canvas board this agent lives on (Deska "Spaces"). */
@@ -476,7 +478,8 @@ export const useBoard = create<BoardState>((set, get) => ({
                   workspace_id: a.workspace_id ?? null,
                   board_id: a.board_id ?? "main",
                   account_label: a.account_label ?? null,
-              output_bytes: a.output_bytes,
+                  worktree: a.worktree || undefined,
+                  output_bytes: a.output_bytes,
                 },
               ]),
             );
