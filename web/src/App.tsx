@@ -604,7 +604,7 @@ function Board() {
           position="bottom-right"
           pannable
           zoomable
-          style={{ width: mmSize.w, height: mmSize.h, marginRight: 84 }}
+          style={{ width: mmSize.w, height: mmSize.h, marginRight: 184 }}
           className="!bg-[var(--cv-base)]"
           maskColor="rgba(14,14,16,0.7)"
           nodeColor={(n) => {
