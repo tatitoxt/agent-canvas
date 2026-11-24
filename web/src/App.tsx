@@ -696,6 +696,29 @@ function Board() {
         <ViewportTracker />
         <AnchorCables nav={nav} />
       </ReactFlow>
+      {Object.keys(agents).length === 0 &&
+        Object.keys(shapes[activeBoard ?? "main"] ?? {}).length === 0 &&
+        Object.keys(orchestrators).length === 0 && (
+          <div
+            className="glass"
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "42%",
+              transform: "translate(-50%, -50%)",
+              padding: "18px 26px",
+              fontSize: 12.5,
+              color: "var(--cv-ink-dim)",
+              textAlign: "center",
+              lineHeight: 1.7,
+              zIndex: 5,
+              pointerEvents: "none",
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 650, color: "var(--cv-ink)" }}>empty board</div>
+            spawn an orchestrator or a terminal below — drag from an agent's edge handle to delegate work
+          </div>
+        )}
       {connected === false && null}
       {nav === "inbox" && (
         <InboxPanel
