@@ -114,6 +114,15 @@ export function CommandPalette({
       { id: "font-down", group: "view", label: "smaller terminal text", run: () => s.bumpFont(-1) },
     );
 
+    for (const [boardId, name] of Object.entries(s.boards)) {
+      list.push({
+        id: `board-${boardId}`,
+        group: "boards",
+        label: `switch to board — ${name}`,
+        hint: boardId === s.activeBoard ? "current" : undefined,
+        run: () => s.setActiveBoard(boardId),
+      });
+    }
     for (const a of Object.values(automations)) {
       list.push({
         id: `run-auto-${a.id}`,
