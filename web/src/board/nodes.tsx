@@ -293,6 +293,25 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           <span className="nodrag" style={{ display: "inline-flex", alignItems: "center", gap: 7, flex: "none", color: "var(--cv-ink-faint)", fontSize: 12 }}>
             <span
               role="button"
+              title="pin a note to this agent — dashed connector to the card"
+              style={{ cursor: "pointer", lineHeight: 1, fontSize: 11 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!data.id) return;
+                const p = useBoard.getState().positions[data.id];
+                useBoard.getState().pinCard(
+                  `${data.name} — note`,
+                  "",
+                  undefined,
+                  `agent:${data.id}`,
+                  p ? { x: p.x + 380, y: p.y } : undefined,
+                );
+              }}
+            >
+              ◈
+            </span>
+            <span
+              role="button"
               title="collapse"
               style={{ cursor: "pointer", lineHeight: 1 }}
               onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }}

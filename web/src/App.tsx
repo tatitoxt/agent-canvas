@@ -75,11 +75,26 @@ function AnchorCables({ nav }: { nav: string }) {
   const activeBoard = useBoard((s) => s.activeBoard);
   const lines: { x1: number; y1: number; x2: number; y2: number }[] = [];
   for (const [id, key] of Object.entries(anchors[activeBoard] ?? {})) {
-    if (key !== nav) continue;
-    const el = document.querySelector(`[data-panel="${key}"]`);
-    if (!el) continue;
-    const r = el.getBoundingClientRect();
-    const panel: Rect = { x: r.left, y: r.top, w: r.width, h: r.height };
+    // Two anchor kinds: a panel key (draw only while that panel is open) or
+    // `agent:<id>` — a note pinned next to an agent card, always drawn.
+    let target: Rect | null = null;
+    let skipSel = "";
+    if (key.startsWith("agent:")) {
+      const agentId = key.slice(6);
+      const p = positions[agentId];
+      if (!p) continue;
+      const tl = flowToScreenPosition({ x: p.x, y: p.y });
+      const br = flowToScreenPosition({ x: p.x + 340, y: p.y + 260 });
+      target = { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
+      skipSel = `[data-id="${agentId}"]`;
+    } else {
+      if (key !== nav) continue;
+      const el = document.querySelector(`[data-panel="${key}"]`);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      target = { x: r.left, y: r.top, w: r.width, h: r.height };
+      skipSel = `[data-panel="${key}"]`;
+    }
     const sh = (shapes[activeBoard] ?? {})[id];
     let card: Rect | null = null;
     if (sh) {
@@ -92,12 +107,12 @@ function AnchorCables({ nav }: { nav: string }) {
       card = { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
     }
     if (!card) continue;
-    const panelC = { x: panel.x + panel.w / 2, y: panel.y + panel.h / 2 };
+    const targetC = { x: target.x + target.w / 2, y: target.y + target.h / 2 };
     const cardC = { x: card.x + card.w / 2, y: card.y + card.h / 2 };
-    const a = edgePoint(card, panelC);
-    const b = edgePoint(panel, cardC);
+    const a = edgePoint(card, targetC);
+    const b = edgePoint(target, cardC);
     // Draw only through free space — never across another node or panel.
-    const obstacles = obstacleRects([`[data-id="${id}"]`, `[data-panel="${key}"]`]);
+    const obstacles = obstacleRects([`[data-id="${id}"]`, skipSel]);
     if (obstacles.some((o) => segmentHitsRect(a, b, o))) continue;
     lines.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
   }
