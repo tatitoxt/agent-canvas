@@ -25,6 +25,8 @@ export type LiveAgent = {
   /** Present in the connect snapshot — a pre-existing (restored) session. */
   restored?: boolean;
   output_bytes?: number;
+  /** Client-side first-seen time — drives the elapsed chip on live agents. */
+  seenAt?: number;
 };
 
 /** OS-level notification when the tab isn't focused (agent awaiting input). */
@@ -479,6 +481,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                   status: "working",
                   workspace_id: msg.workspace_id ?? null,
                   board_id: msg.board_id ?? "main",
+                  seenAt: Date.now(),
                 },
               },
             });

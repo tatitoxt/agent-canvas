@@ -1,5 +1,5 @@
 import { Handle, Position, useReactFlow, type NodeProps, type Node } from "@xyflow/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CliMark } from "../components/CliMark";
 import { agentPinSpot } from "../components/PinBtn";
 import { Icon } from "../components/icons";
@@ -523,6 +523,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           </button>
         )}
         <span style={{ marginLeft: "auto", fontFamily: "ui-monospace, SFMono-Regular, monospace" }}>
+          <FooterElapsed agentId={data.id} />
           <FooterSize agentId={data.id} />
           <FooterModel agentId={data.id} />
         </span>
@@ -532,6 +533,23 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       <Handle type="source" position={Position.Right} />
     </div>
   );
+}
+
+/** Live uptime for agents spawned this session (restored ones show nothing —
+ * their real start predates the window). Ticks once a minute. */
+function FooterElapsed({ agentId }: { agentId?: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  const seenAt = useBoard((s) => (agentId ? s.agents[agentId]?.seenAt : undefined));
+  const live = useBoard((s) => (agentId ? s.agents[agentId]?.status !== "exited" : false));
+  useEffect(() => {
+    if (!seenAt || !live) return;
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [seenAt, live]);
+  if (!seenAt || !live) return null;
+  const m = Math.max(0, Math.floor((now - seenAt) / 60000));
+  const label = m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`;
+  return <span title="running for">{label}&nbsp;&nbsp;</span>;
 }
 
 function FooterSize({ agentId }: { agentId?: string }) {
