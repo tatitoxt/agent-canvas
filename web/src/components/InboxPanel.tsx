@@ -122,7 +122,27 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
         )}
         {held.length > 0 && (
           <>
-            <div style={{ ...groupLabel, color: "var(--cv-waiting)" }}>approve commands</div>
+            <div style={{ ...groupLabel, color: "var(--cv-waiting)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              approve commands
+              {held.length > 1 && (
+                <span style={{ display: "flex", gap: 8 }}>
+                  <button
+                    title="approve every held command"
+                    style={{ border: "none", background: "none", cursor: "pointer", fontSize: 10, fontWeight: 600, color: "var(--cv-done)" }}
+                    onClick={() => held.forEach((h) => useBoard.getState().approveInput(h.id))}
+                  >
+                    approve all
+                  </button>
+                  <button
+                    title="deny every held command"
+                    style={{ border: "none", background: "none", cursor: "pointer", fontSize: 10, fontWeight: 600, color: "var(--cv-danger, #c66)" }}
+                    onClick={() => held.forEach((h) => useBoard.getState().denyInput(h.id))}
+                  >
+                    deny all
+                  </button>
+                </span>
+              )}
+            </div>
             {held.map((h) => (
               <div key={h.id} style={{ ...rowStyle, cursor: "default" }}>
                 <button
