@@ -67,8 +67,11 @@ export function agentPinSpot(nodeId: string): Pt | null {
     { x: agent.x, y: agent.y - CARD_H - 24 },                      // above
     { x: agent.x + agent.w + 24, y: agent.y + agent.h + 24 },      // bottom-right
   ];
+  const onscreen = (card: Rect) =>
+    card.x >= 8 && card.y >= 8 && card.x + card.w <= window.innerWidth - 8 && card.y + card.h <= window.innerHeight - 8;
   for (const c of cands) {
     const card: Rect = { x: c.x, y: c.y, w: CARD_W, h: CARD_H };
+    if (!onscreen(card)) continue;
     if (obstacles.some((o) => rectsOverlap(card, o, 6))) continue;
     const a = edgePoint(card, agentC);
     const b = edgePoint(agent, { x: card.x + card.w / 2, y: card.y + card.h / 2 });
@@ -76,7 +79,7 @@ export function agentPinSpot(nodeId: string): Pt | null {
   }
   for (const c of cands) {
     const card: Rect = { x: c.x, y: c.y, w: CARD_W, h: CARD_H };
-    if (!obstacles.some((o) => rectsOverlap(card, o, 6))) return c;
+    if (onscreen(card) && !obstacles.some((o) => rectsOverlap(card, o, 6))) return c;
   }
   return null;
 }
