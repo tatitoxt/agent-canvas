@@ -1585,6 +1585,7 @@ fn main() {
             create_automation,
             create_loop,
             delete_loop,
+            delete_delegation,
             run_loop,
             set_loop_enabled,
             pause_all,
