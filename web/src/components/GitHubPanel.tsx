@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { useBoard } from "../store/board";
 
+const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
+  new URLSearchParams(location.search).get("token") ??
+  "";
+
 type Item = {
   number: number;
   title: string;
@@ -36,13 +40,19 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
     let dead = false;
     setItems(null);
     setErr(null);
-    fetch(`https://api.github.com/repos/${slug}/${kind === "prs" ? "pulls" : "issues"}?state=open&per_page=30`, {
-      headers: { Accept: "application/vnd.github+json" },
-    })
+    const rest = `repos/${slug}/${kind === "prs" ? "pulls" : "issues"}?state=open&per_page=30`;
+    // canvasd proxies api.github.com (gh CLI auth when installed) — no
+    // anonymous rate limit and private repos work too. No daemon → direct.
+    const viaDaemon = fetch(`http://127.0.0.1:4242/api/github/${rest}`, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    viaDaemon
+      .catch(() => fetch(`https://api.github.com/${rest}`))
       .then(async (r) => {
         if (!r.ok) throw new Error(r.status === 403 ? "GitHub rate limit — retry in a bit" : `GitHub ${r.status}`);
-        const data = (await r.json()) as any[];
+        const data = (await r.json()) as any;
         if (dead) return;
+        if (!Array.isArray(data)) throw new Error(data?.message ?? "unexpected GitHub response");
         setItems(
           data
             .filter((it) => kind === "prs" || !it.pull_request)

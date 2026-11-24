@@ -104,6 +104,51 @@ async fn health() -> Json<Health> {
     Json(Health { status: "ok", version: env!("CARGO_PKG_VERSION") })
 }
 
+/// GET /api/github/{*rest}?query — proxies the GitHub REST API so the web
+/// client never hits anonymous rate limits: `gh api` when the CLI is
+/// installed (it carries auth), unauthenticated curl otherwise. Returns the
+/// upstream body verbatim.
+async fn github_proxy(
+    axum::extract::Path(rest): axum::extract::Path<String>,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
+) -> axum::response::Response {
+    let path = match &query {
+        Some(q) => format!("{rest}?{q}"),
+        None => rest.clone(),
+    };
+    async fn run(cmd: &str, args: Vec<String>) -> Option<std::process::Output> {
+        tokio::process::Command::new(cmd)
+            .args(&args)
+            .output()
+            .await
+            .ok()
+    }
+    let out = run("gh", vec!["api".into(), path.clone()]).await;
+    let body = match out {
+        Some(o) if o.status.success() => o.stdout,
+        _ => run(
+            "curl",
+            vec![
+                "-sf".into(),
+                "-H".into(),
+                "Accept: application/vnd.github+json".into(),
+                format!("https://api.github.com/{path}"),
+            ],
+        )
+        .await
+        .filter(|o| o.status.success())
+        .map(|o| o.stdout)
+        .unwrap_or_else(|| {
+            br#"{"message":"github unavailable - install gh or retry later"}"#.to_vec()
+        }),
+    };
+    (
+        [(header::CONTENT_TYPE, "application/json")],
+        axum::body::Body::from(body),
+    )
+        .into_response()
+}
+
 /// Spawn a PTY agent wired to the event bus + store. Used by both
 /// `spawn_agent` (standalone node) and `delegate` (edge-owned child).
 /// Memory file for a node: the board repo's `.canvas/memory.md`, or the
@@ -1388,6 +1433,7 @@ async fn main() -> Result<()> {
 
     let api = Router::new()
         .route("/health", get(health))
+        .route("/github/{*rest}", get(github_proxy))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
