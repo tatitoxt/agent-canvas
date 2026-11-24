@@ -1076,10 +1076,11 @@ export const useBoard = create<BoardState>((set, get) => ({
   shapes: (() => {
     try {
       const raw = JSON.parse(localStorage.getItem("cv-shapes") ?? "{}");
-      // migrate old pinned stickies (kind "sticky" + anchor) to glass pin cards
+      // migrate old pinned stickies to glass pin cards — first pins were
+      // stickies with an anchor, the very first had the "card-" id prefix
       for (const board of Object.values(raw)) {
-        for (const sh of Object.values(board as Record<string, { kind: string; anchor?: string; title?: string; text: string; color: string }>)) {
-          if (sh.kind === "sticky" && sh.anchor) {
+        for (const [id, sh] of Object.entries(board as Record<string, { kind: string; anchor?: string; title?: string; text: string; color: string }>)) {
+          if (sh.kind === "sticky" && (sh.anchor || id.startsWith("card-"))) {
             sh.kind = "pin";
             const lines = sh.text.split("\n");
             sh.title = sh.title ?? lines[0]?.slice(0, 60) ?? "pinned";
