@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useBoard } from "../store/board";
 import { PinBtn } from "./PinBtn";
+import { Icon } from "./icons";
 
 const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
   new URLSearchParams(location.search).get("token") ??
@@ -131,6 +132,13 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
           body={(items ?? []).map((it) => `#${it.number} ${it.title} — ${it.user}`).join("\n") || slug || ""}
          anchor={kind} />
         <span style={{ fontSize: 10, color: "var(--cv-ink-dim)", paddingLeft: 8 }}>{slug ?? "no repo"}</span>
+        <button
+          title="Open on github.com — this repo in your browser"
+          onClick={() => window.open(slug ? `https://github.com/${slug}` : "https://github.com", "_blank")}
+          style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", padding: "0 0 0 8px", display: "flex", alignItems: "center" }}
+        >
+          <Icon name="openin" size={12} />
+        </button>
         <button
           title="refresh"
           onClick={() => setTick((t) => t + 1)}

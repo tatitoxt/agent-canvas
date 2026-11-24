@@ -62,10 +62,10 @@ const edgeTypes = { delegation: DelegationEdge };
 /** Keeps the zoom % readout fresh — Deska's bottom-right zoom %. */
 
 /** Dashed cables tying pinned cards / obsidian notes to the panel they
- * were pinned from — the anchor vanishes when that panel closes. */
+ * were pinned from — border to border, hidden when the panel closes. */
 function AnchorCables({ nav }: { nav: string }) {
   const { flowToScreenPosition } = useReactFlow();
-  useViewport();
+  const { zoom } = useViewport();
   const anchors = useBoard((s) => s.anchors);
   const shapes = useBoard((s) => s.shapes);
   const positions = useBoard((s) => s.positions);
@@ -77,21 +77,27 @@ function AnchorCables({ nav }: { nav: string }) {
     if (!el) continue;
     const r = el.getBoundingClientRect();
     const sh = (shapes[activeBoard] ?? {})[id];
-    const pos = sh
-      ? { x: sh.x + sh.w / 2, y: sh.y + sh.h / 2 }
-      : positions[id]
-        ? { x: positions[id].x + 170, y: positions[id].y + 130 }
-        : null;
-    if (!pos) continue;
-    const sp = flowToScreenPosition(pos);
-    lines.push({ x1: sp.x, y1: sp.y, x2: r.left + 6, y2: r.top + r.height / 2 });
+    const flow = sh ? { x: sh.x + sh.w / 2, y: sh.y + sh.h / 2 } : positions[id] ? { x: positions[id].x + 170, y: positions[id].y + 130 } : null;
+    if (!flow) continue;
+    const hw = (sh ? sh.w : 340) / 2 * zoom;
+    const hh = (sh ? sh.h : 260) / 2 * zoom;
+    const c = flowToScreenPosition(flow);
+    const pc = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    // card edge point, along the direction to the panel center
+    const dx = pc.x - c.x, dy = pc.y - c.y;
+    const t1 = Math.min(dx !== 0 ? hw / Math.abs(dx) : Infinity, dy !== 0 ? hh / Math.abs(dy) : Infinity);
+    const a = { x: c.x + dx * t1, y: c.y + dy * t1 };
+    // panel edge point, along the direction to the card center
+    const t2 = Math.min(dx !== 0 ? (r.width / 2) / Math.abs(dx) : Infinity, dy !== 0 ? (r.height / 2) / Math.abs(dy) : Infinity);
+    const b = { x: pc.x - dx * t2, y: pc.y - dy * t2 };
+    lines.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
   }
   if (!lines.length) return null;
   return (
     <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 18 }}>
       {lines.map((l, i) => (
         <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
-          stroke="var(--cv-accent)" strokeWidth={2.5} strokeDasharray="8 6" opacity={0.85} strokeLinecap="round" />
+          stroke="var(--cv-accent)" strokeWidth={1.5} strokeDasharray="6 5" opacity={0.8} strokeLinecap="round" />
       ))}
     </svg>
   );

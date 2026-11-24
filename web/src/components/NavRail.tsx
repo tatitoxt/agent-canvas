@@ -416,12 +416,13 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
     <div ref={railRef} style={railCol}>
       <button
         className="glass"
-        title="Expand tools — icon names"
+        title="Library — expand for panel names"
         onClick={() => setExpanded(true)}
         style={{ ...btn(false), borderRadius: 999, width: 30, height: 30 }}
       >
         <Icon name="collapse" size={13} />
       </button>
+      <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 0.4, color: "var(--cv-ink-dim)", textTransform: "uppercase" }}>Library</span>
       <nav className="glass" style={bubble}>
         <div style={{ position: "relative" }}>
           <button
@@ -497,9 +498,9 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         {repoUrl && (
           <>
             <button
-              title="Open the repo on github.com in your browser"
-              onClick={() => window.open(repoUrl, "_blank")}
-              style={btn(false)}
+              title="Pull requests — live list; the panel has an Open on github.com button"
+              onClick={() => onSelect("prs")}
+              style={btn(active === "prs")}
             >
               <Icon name="github" />
             </button>
@@ -684,7 +685,7 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
         left: 0,
         right: 0,
         bottom: 12,
-        zIndex: 20,
+        zIndex: 25,
         display: "grid",
         gridTemplateColumns: "1fr auto 1fr",
         alignItems: "end",
