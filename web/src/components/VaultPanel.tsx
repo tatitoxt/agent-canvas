@@ -799,16 +799,52 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
 function SourceEditor({ path, text }: { path: string; text: string }) {
   const vaultWrite = useBoard((st) => st.vaultWrite);
   const notify = useBoard((st) => st.notify);
+  const entries = useBoard((st) => st.vaultEntries);
   const [draft, setDraft] = useState(text);
   const [saved, setSaved] = useState(text);
-  useEffect(() => { setDraft(text); setSaved(text); }, [path, text]);
+  const [suggest, setSuggest] = useState<{ query: string; start: number } | null>(null);
+  const [sel, setSel] = useState(0);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { setDraft(text); setSaved(text); setSuggest(null); }, [path, text]);
   const dirty = draft !== saved;
+
+  const notes = useMemo(() => entries.filter((e) => e.endsWith(".md")).map((e) => e.replace(/\.md$/, "")), [entries]);
+  const matches = suggest
+    ? notes.filter((n) => n.toLowerCase().includes(suggest.query.toLowerCase())).slice(0, 8)
+    : [];
+
+  const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const v = e.target.value;
+    setDraft(v);
+    const pos = e.target.selectionStart;
+    const m = v.slice(0, pos).match(/\[\[[^\]\n]*$/);
+    setSuggest(m ? { query: m[0].slice(2), start: pos - m[0].length } : null);
+    setSel(0);
+  };
+
+  const apply = (name: string) => {
+    if (!suggest) return;
+    const ta = taRef.current;
+    const pos = ta?.selectionStart ?? draft.length;
+    const caret = suggest.start + name.length + 4;
+    setDraft(draft.slice(0, suggest.start) + `[[${name}]]` + draft.slice(pos));
+    setSuggest(null);
+    requestAnimationFrame(() => { ta?.focus(); ta?.setSelectionRange(caret, caret); });
+  };
+
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, position: "relative" }}>
       <textarea
+        ref={taRef}
         value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={onChange}
         onKeyDown={(e) => {
+          if (suggest && matches.length > 0) {
+            if (e.key === "ArrowDown") { e.preventDefault(); setSel((s) => (s + 1) % matches.length); return; }
+            if (e.key === "ArrowUp") { e.preventDefault(); setSel((s) => (s - 1 + matches.length) % matches.length); return; }
+            if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); apply(matches[sel]); return; }
+            if (e.key === "Escape") { e.preventDefault(); setSuggest(null); return; }
+          }
           if ((e.metaKey || e.ctrlKey) && e.key === "s") {
             e.preventDefault();
             vaultWrite(path, draft);
@@ -826,6 +862,34 @@ function SourceEditor({ path, text }: { path: string; text: string }) {
           lineHeight: 1.55, whiteSpace: "pre-wrap", outline: "none",
         }}
       />
+      {suggest && matches.length > 0 && (
+        <div
+          className="glass"
+          style={{
+            position: "absolute", bottom: 36, left: 0, right: 0, zIndex: 60,
+            borderRadius: 10, overflow: "hidden",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.5)",
+          }}
+        >
+          <div style={{ padding: "4px 10px", fontSize: 9, color: "var(--cv-ink-faint)", borderBottom: "1px solid var(--cv-glass-edge)" }}>
+            [[{suggest.query} — {matches.length} note{matches.length === 1 ? "" : "s"}
+          </div>
+          {matches.map((m, i) => (
+            <div
+              key={m}
+              onMouseDown={(e) => { e.preventDefault(); apply(m); }}
+              onMouseEnter={() => setSel(i)}
+              style={{
+                padding: "5px 10px", fontSize: 11, cursor: "pointer",
+                color: i === sel ? "var(--cv-ink)" : "var(--cv-ink-dim)",
+                background: i === sel ? "color-mix(in srgb, var(--cv-accent) 18%, transparent)" : "transparent",
+              }}
+            >
+              {m}
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
         <button
           onClick={() => { vaultWrite(path, draft); setSaved(draft); notify(`saved → ${path}`); }}
