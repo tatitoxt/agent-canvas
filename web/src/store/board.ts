@@ -1594,6 +1594,14 @@ export const useBoard = create<BoardState>((set, get) => ({
       reply(`spawned ${Math.min(Math.max(n, 1), 8)} × ${cli}`);
       return;
     }
+    if (/^close (?:all )?(?:panels|cards|tools)/.test(low)) {
+      const board = get().activeBoard;
+      const m = { ...get().panelNodes, [board]: {} };
+      localStorage.setItem("cv-panelnodes", JSON.stringify(m));
+      set({ panelNodes: m });
+      reply("closed all panels");
+      return;
+    }
     const km = low.match(/^(?:kill|stop|close)\s+(.+)$/);
     if (km && !/^all\b/.test(km[1])) {
       const q = km[1].trim();
