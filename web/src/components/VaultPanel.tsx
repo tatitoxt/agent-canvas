@@ -96,9 +96,15 @@ function mdInline(text: string, onLink?: (name: string) => void): React.ReactNod
  * bullet/numbered lists, tasks, blockquotes, fenced code. */
 function ReadingView({ text, onLink }: { text: string; onLink?: (name: string) => void }) {
   const lines = text.split("\n");
+  // Obsidian hides YAML frontmatter (--- ... ---) at the top of the note.
+  let start = 0;
+  if (lines[0]?.trim() === "---") {
+    const end = lines.findIndex((l, i) => i > 0 && l.trim() === "---");
+    if (end > 0) start = end + 1;
+  }
   const els: React.ReactNode[] = [];
   let inCode = false, codeBuf: string[] = [];
-  for (let i = 0; i < lines.length; i++) {
+  for (let i = start; i < lines.length; i++) {
     const l = lines[i];
     if (/^\s*```/.test(l)) {
       if (inCode) {
