@@ -81,6 +81,7 @@ fn gated_write(state: &Arc<AppState>, agent_id: &str, bytes: &[u8]) -> bool {
 
 /// Wire event: control (JSON) or raw PTY output (binary).
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 enum Event {
     Control(ServerMsg),
     PtyOutput(AgentId, Vec<u8>),
@@ -123,6 +124,7 @@ fn memory_path(state: &Arc<AppState>, node_id: &str) -> PathBuf {
 
 /// A workspace-scoped agent runs inside that workspace's repo, not the
 /// daemon's default board repo.
+#[allow(clippy::too_many_arguments)]
 fn spawn_agent(
     state: &Arc<AppState>,
     name: &str,
@@ -1015,7 +1017,7 @@ fn handle_client_msg(
                 if let Some(l) = acct {
                     md.push_str(&format!(" · @{l}"));
                 }
-                md.push_str("\n");
+                md.push('\n');
                 let tail = state
                     .agents
                     .scrollback(id)
@@ -1023,14 +1025,13 @@ fn handle_client_msg(
                     .unwrap_or_default();
                 let lines: Vec<String> = tail
                     .lines()
-                    .map(canvasd::agent::last_visible_line)
-                    .flatten()
+                    .filter_map(canvasd::agent::last_visible_line)
                     .filter(|l| !l.is_empty())
                     .collect();
                 for l in lines.iter().rev().take(6).rev() {
                     md.push_str(&format!("    {l}\n"));
                 }
-                md.push_str("\n");
+                md.push('\n');
             }
             send_control(ServerMsg::SessionDigest { text: md });
         }
@@ -1285,7 +1286,7 @@ async fn auth_middleware(
     let ok = headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
-        .map(|v| token_eq(&v, &format!("Bearer {}", state.token)))
+        .map(|v| token_eq(v, &format!("Bearer {}", state.token)))
         .unwrap_or(false);
     if ok {
         next.run(req).await
@@ -1523,24 +1524,21 @@ async fn main() -> Result<()> {
                     match store.loops_enabled() {
                         Ok(rows) => {
                             for row in &rows {
-                                match row.4.as_str() {
-                                    "match" => {
-                                        let Some(pat) = row.6.as_deref() else { continue };
-                                        if pat.is_empty() { continue; }
-                                        for id in loop_targets(&sched_state, &row.1, &row.2) {
-                                            let key = format!("{}:{}", row.0, id);
-                                            let hit = sched_state
-                                                .agents
-                                                .tail_text(&id)
-                                                .map(|t| t.contains(pat))
-                                                .unwrap_or(false);
-                                            if hit && !match_seen.get(&key).copied().unwrap_or(false) {
-                                                fire_loop(&sched_state, row);
-                                            }
-                                            match_seen.insert(key, hit);
+                                if row.4.as_str() == "match" {
+                                    let Some(pat) = row.6.as_deref() else { continue };
+                                    if pat.is_empty() { continue; }
+                                    for id in loop_targets(&sched_state, &row.1, &row.2) {
+                                        let key = format!("{}:{}", row.0, id);
+                                        let hit = sched_state
+                                            .agents
+                                            .tail_text(&id)
+                                            .map(|t| t.contains(pat))
+                                            .unwrap_or(false);
+                                        if hit && !match_seen.get(&key).copied().unwrap_or(false) {
+                                            fire_loop(&sched_state, row);
                                         }
+                                        match_seen.insert(key, hit);
                                     }
-                                    _ => {}
                                 }
                             }
                         }

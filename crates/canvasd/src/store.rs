@@ -52,6 +52,22 @@ pub type LoopRow = (
     bool,
     Option<String>,
 );
+/// Row of the workspaces table: (id, name, repo, board_id).
+pub type WorkspaceRow = (String, String, String, Option<String>);
+/// Row of the artifacts table: (id, board_id, agent_id, kind, title, path,
+/// text, created_at).
+pub type ArtifactRow = (
+    String,
+    String,
+    Option<String>,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    String,
+);
+/// Row of the notes table: (id, board_id, col, text, pos, due).
+pub type NoteRow = (String, String, String, String, i64, Option<String>);
 
 pub struct Store {
     conn: Mutex<Connection>,
@@ -242,6 +258,7 @@ impl Store {
         Ok(Self { conn: Mutex::new(conn) })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn agent_spawned(
         &self,
         id: &str,
@@ -393,7 +410,7 @@ impl Store {
     }
 
     /// Tuple: (id, name, repo, board_id).
-    pub fn workspaces_snapshot(&self) -> Result<Vec<(String, String, String, Option<String>)>> {
+    pub fn workspaces_snapshot(&self) -> Result<Vec<WorkspaceRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare("SELECT id, name, repo, board_id FROM workspaces ORDER BY created_at")?;
         let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
@@ -469,7 +486,7 @@ impl Store {
     /// (id, cli, label) for the snapshot replay.
     /// (id, board_id, agent_id, kind, title, path, text, created_at) —
     /// every artifact, newest first.
-    pub fn artifacts_snapshot(&self) -> Result<Vec<(String, String, Option<String>, String, String, Option<String>, Option<String>, String)>> {
+    pub fn artifacts_snapshot(&self) -> Result<Vec<ArtifactRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
             "SELECT id, board_id, agent_id, kind, title, path, text, created_at FROM artifacts ORDER BY created_at DESC, id",
@@ -482,6 +499,7 @@ impl Store {
         Ok(rows)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn artifact_created(
         &self,
         id: &str,
@@ -513,7 +531,7 @@ impl Store {
     }
 
     /// (id, board_id, col, text, pos, due) — the kanban cards of one board.
-    pub fn notes_snapshot(&self, board_id: &str) -> Result<Vec<(String, String, String, String, i64, Option<String>)>> {
+    pub fn notes_snapshot(&self, board_id: &str) -> Result<Vec<NoteRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
             "SELECT id, board_id, col, text, pos, due FROM notes WHERE board_id = ?1 ORDER BY col, pos",
@@ -526,7 +544,7 @@ impl Store {
 
     /// All notes across boards — the full snapshot embeds them so a
     /// board switch needs no round-trip.
-    pub fn all_notes(&self) -> Result<Vec<(String, String, String, String, i64, Option<String>)>> {
+    pub fn all_notes(&self) -> Result<Vec<NoteRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
             "SELECT id, board_id, col, text, pos, due FROM notes ORDER BY board_id, col, pos",
@@ -761,6 +779,7 @@ impl Store {
     /// the board). `trigger`: 'interval' (needs interval_secs), 'idle'
     /// (fires when the agent finishes/goes idle) or 'match' (fires when
     /// the PTY tail starts containing `pattern`, edge-detected).
+    #[allow(clippy::too_many_arguments)]
     pub fn loop_insert(
         &self,
         id: &str,

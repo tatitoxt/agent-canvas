@@ -40,7 +40,7 @@ Wire protocol is versioned: JSON control frames (`cmd`/`type`) plus binary PTY f
 ```sh
 cd web && npm install
 cargo run -p canvasd        # daemon on 127.0.0.1:4242, prints CANVASD_TOKEN
-cd web && npm run dev       # web on :5174 — open ?token=<token>
+cd web && npm run dev       # web on :5173 — open ?token=<token>
 ```
 
 `cargo test -p canvasd` covers path sanitization and ANSI stripping; `npm run build` typechecks strict and bundles.
