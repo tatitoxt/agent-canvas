@@ -12,6 +12,9 @@ export function BoardTabs() {
   const createBoard = useBoard((s) => s.createBoard);
   const renameBoard = useBoard((s) => s.renameBoard);
   const deleteBoard = useBoard((s) => s.deleteBoard);
+  const agents = useBoard((s) => s.agents);
+  const countByBoard = (id: string) =>
+    Object.values(agents).filter((a) => (a.board_id ?? "main") === id).length;
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -103,6 +106,18 @@ export function BoardTabs() {
             }}
           >
             {n}
+            {countByBoard(id) > 0 && (
+              <span
+                style={{
+                  marginLeft: 5,
+                  fontSize: 9,
+                  color: "var(--cv-ink-faint)",
+                  fontWeight: 400,
+                }}
+              >
+                {countByBoard(id)}
+              </span>
+            )}
             {id !== "main" && id === activeBoard && (
               <span
                 role="button"
