@@ -246,3 +246,41 @@ body,
   --cv-idle: #9aa0a6;
   color-scheme: dark;
 }
+
+/* ---------- status ring — a comet of the state color walking the border */
+@property --cv-ring-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.card-ring {
+  isolation: isolate;
+}
+.card-ring::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: calc(var(--cv-radius) + 3px);
+  padding: 3px;
+  background: conic-gradient(
+    from var(--cv-ring-angle),
+    transparent 0deg,
+    var(--cv-ring) 40deg,
+    transparent 95deg,
+    transparent 180deg,
+    var(--cv-ring) 220deg,
+    transparent 275deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: cv-ring-spin 3s linear infinite;
+  z-index: -1;
+  filter: saturate(1.4) brightness(1.15);
+}
+@keyframes cv-ring-spin {
+  to {
+    --cv-ring-angle: 360deg;
+  }
+}

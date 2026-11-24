@@ -148,7 +148,7 @@ function MiniTerm({ agentId }: { agentId: string }) {
       .map(parseAnsiLine)
       .map((spans) => ({ spans, text: spans.map((p) => p.text).join("") }))
       .filter((l) => l.text.trim().length > 0)
-      .slice(-8);
+      .slice(-14);
     return parsed;
   }, [buf]);
   if (lines.length === 0) return null;
@@ -217,6 +217,9 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const glow = attention || selected
     ? `0 0 22px color-mix(in srgb, ${statusColor} 30%, transparent), 0 12px 32px rgba(0,0,0,0.35)`
     : undefined;
+  // The comet ring walks the border in the state color — working green,
+  // waiting amber, blocked red (idle/done keep a quiet hairline).
+  const ring = attention || selected || data.status === "working";
   if (collapsed) {
     // Deska's collapsed terminal — glyph tile + number in a small pill.
     return (
@@ -263,9 +266,11 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   }
   return (
     <div
-      className={`glass ${data.status === "waiting" ? "node-waiting" : ""}`}
+      className={`glass ${ring ? "card-ring" : ""} ${data.status === "waiting" ? "node-waiting" : ""}`}
       style={{
-        width: 384,
+        ["--cv-ring" as string]: statusColor,
+        position: "relative",
+        width: 460,
         padding: 0,
         overflow: "hidden",
         // Deska's card is near-opaque glass — the dot canvas barely bleeds.
