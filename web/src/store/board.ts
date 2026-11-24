@@ -1606,7 +1606,35 @@ export const useBoard = create<BoardState>((set, get) => ({
       get().spawn("terminal", "bash");
       return "spawning a terminal";
     }
-    return "try: bigger text · smaller text · undo · fit · tidy · close panels · clear done · new terminal";
+    if (/^(new |spawn |open )?agent/.test(t)) {
+      get().setSpawnOpen(true);
+      return "opening the agent spawner";
+    }
+    const panelAlias: Record<string, string> = {
+      inbox: "inbox", notifications: "inbox",
+      automations: "automations", automation: "automations",
+      loops: "loops", loop: "loops",
+      presets: "presets", preset: "presets",
+      thread: "thread",
+      accounts: "accounts", account: "accounts",
+      juice: "usage", usage: "usage",
+      memory: "memory",
+      "pull requests": "prs", prs: "prs", pr: "prs",
+      issues: "issues", issue: "issues",
+      "dex tickets": "notes", tickets: "notes", ticket: "notes", notes: "notes",
+      artifacts: "artifacts", artifact: "artifacts",
+      obsidian: "vault", vault: "vault", files: "vault",
+      calendar: "calendar",
+      settings: "settings", setting: "settings",
+      skills: "skills", skill: "skills",
+      tasks: "history", history: "history",
+    };
+    const pm = t.match(/^(?:open |show )?(.+)$/);
+    if (pm && panelAlias[pm[1]]) {
+      get().openPanelNode(panelAlias[pm[1]]);
+      return `opened ${pm[1]}`;
+    }
+    return "try: open <panel> · new agent · new terminal · bigger text · smaller text · undo · fit · tidy · close panels · clear done";
   },
 
   threadLog: loadThreadLog(),
