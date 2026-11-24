@@ -1378,6 +1378,13 @@ export const useBoard = create<BoardState>((set, get) => ({
         return;
       }
     }
+    const nm = low.match(/^(?:note|todo|task)\s*[:=-]?\s*(.+)$/);
+    if (nm && !/^(?:new\s)/.test(low)) {
+      const text = t.replace(/^(?:note|todo|task)\s*[:=-]?\s*/i, "").trim();
+      get().noteUpsert(null, "todo", text);
+      reply(`noted: ${text.slice(0, 80)}`);
+      return;
+    }
     const nb = low.match(/^new\s+(?:board|space)\s+(.+)$/);
     if (nb) {
       const name = nb[1].replace(/[?.\s]+$/, "").trim();
