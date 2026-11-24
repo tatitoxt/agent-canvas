@@ -204,6 +204,41 @@ async fn share_get(
     }
 }
 
+/// Recursively list `.md` files under a vault root. Skips dotfiles,
+/// node_modules/target/dist/build, never follows symlinks, caps the
+/// traversal at 5000 pending+found paths.
+fn vault_list_entries(root: &PathBuf) -> Vec<String> {
+    let mut entries = Vec::new();
+    let mut stack = vec![root.clone()];
+    while let Some(d) = stack.pop() {
+        if let Ok(rd) = std::fs::read_dir(&d) {
+            for e in rd.flatten() {
+                let p = e.path();
+                let name = e.file_name().to_string_lossy().to_string();
+                if name.starts_with('.')
+                    || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build")
+                {
+                    continue;
+                }
+                // Never follow symlinks — a vault must not escape
+                // itself through a linked dir.
+                if e.file_type().map(|t| t.is_symlink()).unwrap_or(true) {
+                    continue;
+                }
+                if p.is_dir() && stack.len() + entries.len() < 5000 {
+                    stack.push(p);
+                } else if name.ends_with(".md") {
+                    if let Ok(rel) = p.strip_prefix(root) {
+                        entries.push(rel.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+    entries.sort();
+    entries
+}
+
 /// Spawn a PTY agent wired to the event bus + store. Used by both
 /// `spawn_agent` (standalone node) and `delegate` (edge-owned child).
 /// Memory file for a node: the board repo's `.canvas/memory.md`, or the
@@ -1064,37 +1099,25 @@ fn handle_client_msg(
             }
         }
         ClientMsg::VaultList { dir } => {
-            let root = PathBuf::from(&dir);
-            let mut entries = Vec::new();
-            let mut stack = vec![root.clone()];
-            while let Some(d) = stack.pop() {
-                if let Ok(rd) = std::fs::read_dir(&d) {
-                    for e in rd.flatten() {
-                        let p = e.path();
-                        let name = e.file_name().to_string_lossy().to_string();
-                        if name.starts_with('.')
-                            || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build")
-                        {
-                            continue;
-                        }
-                        // Never follow symlinks — a vault must not escape
-                        // itself through a linked dir.
-                        if e.file_type().map(|t| t.is_symlink()).unwrap_or(true) {
-                            continue;
-                        }
-                        if p.is_dir() && stack.len() + entries.len() < 5000 {
-                            stack.push(p);
-                        } else if name.ends_with(".md") {
-                            if let Ok(rel) = p.strip_prefix(&root) {
-                                entries.push(rel.to_string_lossy().to_string());
-                            }
-                        }
-                    }
-                }
-            }
-            entries.sort();
+            let mut entries = vault_list_entries(&PathBuf::from(&dir));
             entries.truncate(2000);
             send_control(ServerMsg::VaultListing { dir, entries });
+        }
+        ClientMsg::VaultDelete { dir, path } => {
+            let root = PathBuf::from(&dir);
+            let file = root.join(&path);
+            if path.contains("..") || !path.ends_with(".md") || !file.is_file() {
+                send_control(ServerMsg::Error { agent_id: None, message: format!("vault delete refused: {path}") });
+            } else {
+                match std::fs::remove_file(&file) {
+                    Ok(()) => {
+                        let mut entries = vault_list_entries(&root);
+                        entries.truncate(2000);
+                        send_control(ServerMsg::VaultListing { dir, entries });
+                    }
+                    Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault delete failed: {e}") }),
+                }
+            }
         }
         ClientMsg::VaultRead { dir, path } => {
             // Constrain to the vault root and markdown files only.

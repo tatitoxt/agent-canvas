@@ -484,6 +484,16 @@ fn vault_append(app: AppHandle, dir: String, path: String, text: String) -> Resu
 }
 
 #[tauri::command]
+fn vault_delete(app: AppHandle, dir: String, path: String) -> Result<(), String> {
+    let file = PathBuf::from(&dir).join(&path);
+    if path.contains("..") || !path.ends_with(".md") || !file.is_file() {
+        return Err("vault delete refused".into());
+    }
+    std::fs::remove_file(&file).map_err(|e| e.to_string())?;
+    vault_list(app, dir)
+}
+
+#[tauri::command]
 fn vault_write(app: AppHandle, dir: String, path: String, text: String) -> Result<(), String> {
     let file = PathBuf::from(&dir).join(&path);
     if path.contains("..") || !path.ends_with(".md") {
@@ -1587,6 +1597,7 @@ fn main() {
             vault_read,
             vault_append,
             vault_write,
+            vault_delete,
             create_workspace,
             move_to_board,
             delegate,

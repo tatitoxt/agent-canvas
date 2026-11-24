@@ -323,7 +323,7 @@ function sortDir(d: TreeDir): TreeDir[] {
 const BOOKMARKS_KEY = "cv-vault-bookmarks";
 const COLLAPSED_KEY = "cv-vault-collapsed";
 
-function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBookmark, bookmarks, depth = 0 }: {
+function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBookmark, onDelete, armedDel, bookmarks, depth = 0 }: {
   entries: TreeDir;
   collapsed: Set<string>;
   toggle: (p: string) => void;
@@ -331,6 +331,8 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
   onOpen: (p: string) => void;
   onPin: (p: string) => void;
   onBookmark: (p: string) => void;
+  onDelete: (p: string) => void;
+  armedDel: string | null;
   bookmarks: Set<string>;
   depth?: number;
 }) {
@@ -357,7 +359,7 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
               <FileTree
                 entries={d} collapsed={collapsed} toggle={toggle}
                 vaultFile={vaultFile} onOpen={onOpen} onPin={onPin}
-                onBookmark={onBookmark} bookmarks={bookmarks} depth={depth + 1}
+                onBookmark={onBookmark} onDelete={onDelete} armedDel={armedDel} bookmarks={bookmarks} depth={depth + 1}
               />
             )}
           </div>
@@ -395,6 +397,14 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
               style={{ color: "var(--cv-ink-faint)", cursor: "pointer", padding: "0 3px" }}
             >
               ⌖
+            </span>
+            <span
+              role="button"
+              title={armedDel === e ? "click again to delete for real" : "delete this note (removes the real file)"}
+              onClick={(ev) => { ev.stopPropagation(); onDelete(e); }}
+              style={{ color: armedDel === e ? "#e07070" : "var(--cv-ink-faint)", cursor: "pointer", padding: "0 3px", fontSize: 11, fontWeight: armedDel === e ? 700 : 400 }}
+            >
+              {armedDel === e ? "×?" : "×"}
             </span>
           </span>
         </button>
@@ -466,6 +476,9 @@ export function VaultPanel() {
   const closeVaultFile = useBoard((s) => s.closeVaultFile);
   const vaultHits = useBoard((s) => s.vaultHits);
   const vaultSearch = useBoard((s) => s.vaultSearch);
+  const vaultWrite = useBoard((s) => s.vaultWrite);
+  const vaultDelete = useBoard((s) => s.vaultDelete);
+  const notify = useBoard((s) => s.notify);
   const [dir, setDir] = useState(vaultDir || "/home/ubuntu/repos/agent-canvas");
   const [filter, setFilter] = useState("");
   const [panelW, setPanelW] = useState(320);
@@ -518,6 +531,30 @@ export function VaultPanel() {
   }, [filter, vaultDir, vaultSearch]);
   const [view, setView] = useState<"reading" | "source" | "graph">("reading");
   const [genOpen, setGenOpen] = useState(false);
+  const [newNote, setNewNote] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [armedDel, setArmedDel] = useState<string | null>(null);
+
+  const createNote = () => {
+    const name = newName.trim().replace(/\.md$/i, "").replace(/[\\:*?"<>|]/g, "-");
+    if (!name || !vaultDir) return;
+    vaultWrite(`${name}.md`, `# ${name.split("/").pop()}\n`);
+    setTimeout(() => vaultList(vaultDir), 150);
+    setNewNote(false); setNewName("");
+    notify(`created ${name}.md`);
+  };
+
+  const onDeleteFile = (p: string) => {
+    if (armedDel === p) {
+      vaultDelete(p);
+      setArmedDel(null);
+      if (vaultFile?.path === p) closeVaultFile();
+      notify(`deleted ${p}`);
+    } else {
+      setArmedDel(p);
+      setTimeout(() => setArmedDel((c) => (c === p ? null : c)), 2500);
+    }
+  };
 
   const shown = vaultEntries.filter((e) =>
     e.toLowerCase().includes(filter.toLowerCase()),
@@ -576,14 +613,35 @@ export function VaultPanel() {
         <span style={{ fontSize: 12.5, fontWeight: 650, color: "var(--cv-ink)", display: "flex", alignItems: "center", gap: 6 }}>
           <img src="/obsidian.svg" alt="" width={13} height={13} /> Vault
         </span>
-        <div style={{ position: "relative" }}>
-          <button style={actionBtn} title="Generate a PDF document from the board" onClick={() => setGenOpen((o) => !o)}>
+        <div style={{ position: "relative", display: "flex", gap: 4 }}>
+          {vaultDir && (
+            <button style={actionBtn} title="new note in this vault" onClick={() => { setNewNote((o) => !o); setGenOpen(false); }}>
+              + note
+            </button>
+          )}
+          <button style={actionBtn} title="Generate a PDF document from the board" onClick={() => { setGenOpen((o) => !o); setNewNote(false); }}>
             <Icon name="shot" size={11} /> PDF
           </button>
           {genOpen && (
             <div className="cv-menu" style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: 240, padding: 8, zIndex: 50 }}>
               <GeneratePdfMenu onPick={generate} onAsk={askAnything} />
             </div>
+          )}
+          {newNote && (
+            <form
+              className="cv-menu"
+              style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: 220, padding: 8, zIndex: 50, display: "flex", gap: 6 }}
+              onSubmit={(e) => { e.preventDefault(); createNote(); }}
+            >
+              <input
+                autoFocus
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="folder/note name"
+                style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 8, padding: "5px 9px", fontSize: 11, color: "var(--cv-ink)", outline: "none" }}
+              />
+              <button type="submit" style={{ fontSize: 10.5, color: "var(--cv-accent)", background: "none", border: "none", cursor: "pointer" }}>create</button>
+            </form>
           )}
         </div>
       </div>
@@ -690,6 +748,8 @@ export function VaultPanel() {
           onOpen={vaultRead}
           onPin={(e) => useBoard.getState().mdNodeAdd(e)}
           onBookmark={toggleBookmark}
+          onDelete={onDeleteFile}
+          armedDel={armedDel}
           bookmarks={bookmarks}
         />
         {shown.length === 0 && (

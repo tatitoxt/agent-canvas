@@ -79,6 +79,8 @@ pub enum ClientMsg {
     /// the app. Same constraints as vault_append (root-scoped, .md only,
     /// creates parent dirs).
     VaultWrite { dir: String, path: String, text: String },
+    /// Delete a markdown file from the vault (root-scoped, .md only).
+    VaultDelete { dir: String, path: String },
     /// Full-text search across the vault's markdown files.
     VaultSearch { dir: String, query: String },
     /// Push an agent's worktree branch to origin (its committed work).

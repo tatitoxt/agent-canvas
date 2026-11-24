@@ -213,6 +213,10 @@ export class CanvasClient {
     this.send({ cmd: "vault_write", dir, path, text });
   }
 
+  vaultDelete(dir: string, path: string) {
+    this.send({ cmd: "vault_delete", dir, path });
+  }
+
   vaultSearch(dir: string, query: string) {
     this.send({ cmd: "vault_search", dir, query });
   }
