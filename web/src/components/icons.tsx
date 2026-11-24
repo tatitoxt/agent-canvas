@@ -52,6 +52,8 @@ const PATHS: Record<string, string[]> = {
   windows: ["M3 5h9v9H3z", "M15 5h6v5h-6z", "M15 12h6v7h-6z", "M3 16h9v3H3z"],
   orchestrator: ["M9 3h6v5H9z", "M3 16h6v5H3z", "M15 16h6v5h-6z", "M12 8v3", "M12 11H6v3", "M12 11h6v3"],
   ticket: ["M3 9V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v3a2 2 0 0 0 0 6v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a2 2 0 0 0 0-6Z", "M13 5v2", "M13 11v2", "M13 17v2"],
+  collapse: ["M4 4h16v16H4z", "M9.5 4v16", "M15 9l-2.5 3 2.5 3"],
+  expand: ["M9 18l6-6-6-6"],
 };
 
 export function Icon({ name, size = 15, color = "currentColor" }: { name: string; size?: number; color?: string }) {
@@ -63,7 +65,7 @@ export function Icon({ name, size = 15, color = "currentColor" }: { name: string
       viewBox="0 0 24 24"
       fill="none"
       stroke={color}
-      strokeWidth={1.9}
+      strokeWidth={1.6}
       strokeLinecap="round"
       strokeLinejoin="round"
       style={{ display: "block", flex: "none" }}

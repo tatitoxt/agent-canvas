@@ -57,6 +57,13 @@ const miniBtn = (active: boolean): React.CSSProperties => ({
   borderRadius: 7,
 });
 
+const tinyBtn = (active: boolean): React.CSSProperties => ({
+  ...btn(active),
+  width: 21,
+  height: 21,
+  borderRadius: 6,
+});
+
 const sectionLabel: React.CSSProperties = {
   fontSize: 8,
   fontWeight: 700,
@@ -298,6 +305,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
   const gitAgents = openAgents.filter((a) => a.worktree);
 
   const [menu, setMenu] = useState<"git" | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const railRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -308,8 +316,31 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
     return () => window.removeEventListener("mousedown", onDown);
   }, [menu]);
 
+  if (collapsed) {
+    return (
+      <div ref={railRef} style={railCol}>
+        <button
+          className="glass"
+          title="Expand tools"
+          onClick={() => setCollapsed(false)}
+          style={{ ...btn(false), borderRadius: 999, width: 30, height: 30 }}
+        >
+          <Icon name="expand" size={13} />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div ref={railRef} style={railCol}>
+      <button
+        className="glass"
+        title="Collapse tools"
+        onClick={() => setCollapsed(true)}
+        style={{ ...btn(false), borderRadius: 999, width: 30, height: 30 }}
+      >
+        <Icon name="collapse" size={13} />
+      </button>
       <nav className="glass" style={bubble}>
         <div style={{ position: "relative" }}>
           <button
@@ -499,36 +530,36 @@ export function RightRail() {
 
       <div style={{ flex: 1 }} />
 
-      <nav className="glass" style={bubbleRow}>
-        <button title="Zoom out" onClick={() => useBoard.getState().requestZoom(-1)} style={btn(false)}>
-          <Icon name="minus" />
+      <nav className="glass" style={{ ...bubbleRow, padding: "3px 4px", gap: 1, borderRadius: 999 }}>
+        <button title="Zoom out" onClick={() => useBoard.getState().requestZoom(-1)} style={tinyBtn(false)}>
+          <Icon name="minus" size={11} />
         </button>
-        <button title="Zoom in" onClick={() => useBoard.getState().requestZoom(1)} style={btn(false)}>
-          <Icon name="plus" />
+        <button title="Zoom in" onClick={() => useBoard.getState().requestZoom(1)} style={tinyBtn(false)}>
+          <Icon name="plus" size={11} />
         </button>
-        <button title="Zoom to fit — frame the whole board" onClick={() => useBoard.getState().requestView()} style={btn(false)}>
-          <Icon name="zoom" />
+        <button title="Zoom to fit — frame the whole board" onClick={() => useBoard.getState().requestView()} style={tinyBtn(false)}>
+          <Icon name="zoom" size={11} />
         </button>
         <button
           title="Gather loose windows into a group"
           onClick={() => useBoard.getState().gatherLoose()}
-          style={btn(false)}
+          style={tinyBtn(false)}
         >
-          <Icon name="gather" />
+          <Icon name="gather" size={11} />
         </button>
         <button
           title="Hide panels and menus — chrome away, canvas only"
           onClick={() => useBoard.getState().toggleChrome()}
-          style={btn(false)}
+          style={tinyBtn(false)}
         >
-          <Icon name="hide" />
+          <Icon name="hide" size={11} />
         </button>
         <button
           title="Show panel summaries — last line + mini preview per card"
           onClick={() => useBoard.getState().togglePanelSummaries()}
-          style={btn(!summaries)}
+          style={tinyBtn(!summaries)}
         >
-          <Icon name="eye" color={summaries ? "var(--cv-ink)" : "var(--cv-ink-faint)"} />
+          <Icon name="eye" size={11} color={summaries ? "var(--cv-ink)" : "var(--cv-ink-faint)"} />
         </button>
       </nav>
     </div>
@@ -567,41 +598,41 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
     >
       {/* ── left of Dex · create ──────────────────────────── */}
       <div style={{ justifySelf: "end", display: "flex", alignItems: "flex-end", gap: 8, marginRight: 16, pointerEvents: "auto" }}>
-        <nav className="glass" style={{ ...bubbleRow, padding: 4, gap: 2 }}>
+        <nav className="glass" style={{ ...bubbleRow, padding: "4px 6px", gap: 4, borderRadius: 999 }}>
           <button
             title="New task — open the spawn chooser (lives on the Orchestrator)"
             onClick={() => useBoard.getState().focusSpawn()}
-            style={miniBtn(false)}
+            style={{ ...btn(false), borderRadius: 999 }}
           >
-            <Icon name="newtask" size={13} />
+            <Icon name="newtask" size={16} />
           </button>
           <button
             title="File Explorer — vault files"
             onClick={() => onSelect("vault")}
-            style={miniBtn(active === "vault")}
+            style={{ ...btn(active === "vault"), borderRadius: 999 }}
           >
-            <Icon name="explorer" size={13} />
+            <Icon name="explorer" size={16} />
           </button>
           <button
             title="Terminal — spawn a plain shell"
             onClick={() => useBoard.getState().spawn("Terminal", "bash")}
-            style={miniBtn(false)}
+            style={{ ...btn(false), borderRadius: 999 }}
           >
-            <Icon name="terminal" size={13} />
+            <Icon name="terminal" size={16} />
           </button>
           <button
             title="Code Editor — notes"
             onClick={() => onSelect("notes")}
-            style={miniBtn(active === "notes")}
+            style={{ ...btn(active === "notes"), borderRadius: 999 }}
           >
-            <Icon name="code" size={13} />
+            <Icon name="code" size={16} />
           </button>
           <button
             title="New orchestrator — spawn a board commander"
             onClick={() => useBoard.getState().spawnOrchestrator()}
-            style={miniBtn(false)}
+            style={{ ...btn(false), borderRadius: 999 }}
           >
-            <Icon name="orchestrator" size={13} />
+            <Icon name="orchestrator" size={16} />
           </button>
         </nav>
       </div>
