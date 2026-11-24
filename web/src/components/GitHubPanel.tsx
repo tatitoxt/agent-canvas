@@ -13,6 +13,15 @@ type Item = {
   updated: string;
   url: string;
   draft?: boolean;
+  sha?: string;
+  ci?: "pass" | "fail" | "pending" | "none";
+};
+
+const CI_COLOR: Record<NonNullable<Item["ci"]>, string> = {
+  pass: "var(--cv-working)",
+  fail: "var(--cv-blocked)",
+  pending: "var(--cv-waiting)",
+  none: "var(--cv-ink-faint)",
 };
 
 function repoSlug(repoUrl: string | null): string | null {
@@ -40,32 +49,52 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
     let dead = false;
     setItems(null);
     setErr(null);
-    const rest = `repos/${slug}/${kind === "prs" ? "pulls" : "issues"}?state=open&per_page=30`;
     // canvasd proxies api.github.com (gh CLI auth when installed) — no
     // anonymous rate limit and private repos work too. No daemon → direct.
-    const viaDaemon = fetch(`http://127.0.0.1:4242/api/github/${rest}`, {
-      headers: { Authorization: `Bearer ${TOKEN}` },
-    });
-    viaDaemon
-      .catch(() => fetch(`https://api.github.com/${rest}`))
+    const gh = (rest: string) =>
+      fetch(`http://127.0.0.1:4242/api/github/${rest}`, {
+        headers: { Authorization: `Bearer ${TOKEN}` },
+      }).catch(() => fetch(`https://api.github.com/${rest}`));
+    gh(`repos/${slug}/${kind === "prs" ? "pulls" : "issues"}?state=open&per_page=30`)
       .then(async (r) => {
         if (!r.ok) throw new Error(r.status === 403 ? "GitHub rate limit — retry in a bit" : `GitHub ${r.status}`);
         const data = (await r.json()) as any;
         if (dead) return;
         if (!Array.isArray(data)) throw new Error(data?.message ?? "unexpected GitHub response");
-        setItems(
-          data
-            .filter((it) => kind === "prs" || !it.pull_request)
-            .map((it) => ({
-              number: it.number,
-              title: it.title,
-              user: it.user?.login ?? "?",
-              labels: (it.labels ?? []).map((l: any) => l.name),
-              updated: it.updated_at,
-              url: it.html_url,
-              draft: it.draft,
-            })),
-        );
+        const rows: Item[] = data
+          .filter((it) => kind === "prs" || !it.pull_request)
+          .map((it) => ({
+            number: it.number,
+            title: it.title,
+            user: it.user?.login ?? "?",
+            labels: (it.labels ?? []).map((l: any) => l.name),
+            updated: it.updated_at,
+            url: it.html_url,
+            draft: it.draft,
+            sha: it.head?.sha,
+          }));
+        setItems(rows);
+        // Second pass: CI roll-up per PR head (status check aggregate).
+        if (kind === "prs") {
+          rows.forEach((it, i) => {
+            if (!it.sha) return;
+            gh(`repos/${slug}/commits/${it.sha}/check-runs?per_page=50`)
+              .then((res) => res.json())
+              .then((cr: any) => {
+                if (dead || !Array.isArray(cr?.check_runs)) return;
+                const runs = cr.check_runs;
+                const ci: Item["ci"] =
+                  runs.length === 0 ? "none"
+                  : runs.some((x: any) => x.conclusion === "failure" || x.conclusion === "cancelled") ? "fail"
+                  : runs.every((x: any) => x.status === "completed") ? "pass"
+                  : "pending";
+                setItems((cur) =>
+                  cur ? cur.map((c, j) => (j === i ? { ...c, ci } : c)) : cur,
+                );
+              })
+              .catch(() => {});
+          });
+        }
       })
       .catch((e) => !dead && setErr(String(e.message ?? e)));
     return () => {
@@ -130,6 +159,12 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
               {it.draft && <span style={{ color: "var(--cv-ink-dim)", fontSize: 10 }}> · draft</span>}
             </div>
             <div style={{ display: "flex", gap: 6, marginTop: 4, fontSize: 10, color: "var(--cv-ink-dim)", alignItems: "center", flexWrap: "wrap" }}>
+              {it.ci && (
+                <span
+                  title={`CI: ${it.ci}`}
+                  style={{ width: 7, height: 7, borderRadius: "50%", background: CI_COLOR[it.ci], flexShrink: 0 }}
+                />
+              )}
               <span>{it.user}</span>
               <span>·</span>
               <span>{age(it.updated)}</span>
