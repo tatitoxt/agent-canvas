@@ -252,6 +252,7 @@ type BoardState = {
   vaultList: (dir: string) => void;
   vaultRead: (path: string) => void;
   vaultPeek: (path: string) => void;
+  vaultAsset: (path: string) => void;
   vaultSearch: (query: string) => void;
   vaultAppend: (path: string, text: string) => void;
   vaultWrite: (path: string, text: string) => void;
@@ -266,6 +267,8 @@ type BoardState = {
    * so an agent editing the file shows up live on the card. */
   mdNodes: Record<string, Record<string, string>>;
   mdContents: Record<string, string>;
+  /** Binary vault assets (images) as data URLs — filled by vault_asset. */
+  vaultAssets: Record<string, string>;
   mdNodeAdd: (path: string, anchor?: string) => void;
   mdNodeRemove: (id: string) => void;
   studioDocNow: () => void;
@@ -742,6 +745,9 @@ export const useBoard = create<BoardState>((set, get) => ({
           case "vault_peeked":
             set({ mdContents: { ...get().mdContents, [msg.path]: msg.text } });
             break;
+          case "vault_asset_data":
+            set({ vaultAssets: { ...get().vaultAssets, [msg.path]: `data:${msg.mime};base64,${msg.data}` } });
+            break;
           case "git_pushed": {
             set({ notice: `pushed — ${msg.output || "done"}` });
             break;
@@ -870,6 +876,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   },
   vaultRead: (path) => client?.vaultRead(get().vaultDir, path),
   vaultPeek: (path) => client?.vaultPeek(get().vaultDir, path),
+  vaultAsset: (path) => client?.vaultAsset(get().vaultDir, path),
   vaultAppend: (path, text) => client?.vaultAppend(get().vaultDir, path, text),
   vaultWrite: (path, text) => client?.vaultWrite(get().vaultDir, path, text),
   vaultDelete: (path) => client?.vaultDelete(get().vaultDir, path),
@@ -904,6 +911,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     try { return JSON.parse(localStorage.getItem("cv-mdnodes") ?? "{}"); } catch { return {}; }
   })(),
   mdContents: {},
+  vaultAssets: {},
   anchors: (() => {
     try { return JSON.parse(localStorage.getItem("cv-anchors") ?? "{}"); } catch { return {}; }
   })(),

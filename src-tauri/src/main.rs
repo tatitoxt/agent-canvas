@@ -359,6 +359,15 @@ fn studio_doc(app: AppHandle, state: State<'_, CanvasState>, board_id: Option<St
     Ok(())
 }
 
+/// Image attachments Obsidian shows in the file explorer — listed beside
+/// the notes so `![[img.png]]` embeds can resolve them.
+fn is_vault_image(name: &str) -> bool {
+    matches!(
+        name.rsplit('.').next().unwrap_or("").to_ascii_lowercase().as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "ico"
+    )
+}
+
 fn vault_list_entries(root: &PathBuf) -> Vec<String> {
     let mut entries = Vec::new();
     let mut stack = vec![root.clone()];
@@ -377,7 +386,7 @@ fn vault_list_entries(root: &PathBuf) -> Vec<String> {
                 }
                 if p.is_dir() && stack.len() + entries.len() < 5000 {
                     stack.push(p);
-                } else if name.ends_with(".md") {
+                } else if name.ends_with(".md") || is_vault_image(&name) {
                     if let Ok(rel) = p.strip_prefix(root) {
                         entries.push(rel.to_string_lossy().to_string());
                     }
@@ -543,6 +552,32 @@ fn vault_peek(app: AppHandle, dir: String, path: String) -> Result<(), String> {
     }
     let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
     emit_control(&app, &ServerMsg::VaultPeeked { path, text });
+    Ok(())
+}
+
+/// Read a binary vault asset (image) as base64 — powers `![[image.png]]`.
+#[tauri::command]
+fn vault_asset(app: AppHandle, dir: String, path: String) -> Result<(), String> {
+    let file = PathBuf::from(&dir).join(&path);
+    let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    let mime = match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "ico" => "image/x-icon",
+        _ => return Err("not an image asset".into()),
+    };
+    if path.contains("..") || !file.is_file() {
+        return Err("not a file in the vault".into());
+    }
+    let bytes = std::fs::read(&file).map_err(|e| e.to_string())?;
+    if bytes.len() > 8 * 1024 * 1024 {
+        return Err("asset too large".into());
+    }
+    let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+    emit_control(&app, &ServerMsg::VaultAssetData { path, mime: mime.to_string(), data });
     Ok(())
 }
 
@@ -1706,6 +1741,7 @@ fn main() {
             vault_search,
             vault_read,
             vault_peek,
+            vault_asset,
             vault_append,
             vault_write,
             vault_delete,

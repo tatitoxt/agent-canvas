@@ -100,13 +100,17 @@ function mdInline(text: string, onLink?: (name: string) => void): React.ReactNod
 
 /** Reading view styled on real Obsidian: amber headings, amber link underlines,
  * bullet/numbered lists, tasks, blockquotes, fenced code. */
-function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embedFetch }: {
+const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|ico)$/i;
+
+function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embedFetch, embedAsset, embedAssetFetch }: {
   text: string;
   onLink?: (name: string) => void;
   onToggleTask?: (line: number, done: boolean) => void;
   depth?: number;
   embedLookup?: (name: string) => { path: string; text?: string } | null;
   embedFetch?: (path: string) => void;
+  embedAsset?: (path: string) => string | undefined;
+  embedAssetFetch?: (path: string) => void;
 }) {
   const lines = text.split("\n");
   // YAML frontmatter (--- ... ---): Obsidian renders it as a "Properties"
@@ -178,7 +182,7 @@ function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embed
         els.push(<div key={i} style={{ margin: "4px 0" }}>{mdInline(`[[${emb[1].trim()}]]`, onLink)}</div>);
       } else {
         els.push(
-          <NoteEmbed key={i} name={emb[1].trim()} lookup={embedLookup} fetchPath={embedFetch} onLink={onLink} />,
+          <NoteEmbed key={i} name={emb[1].trim()} lookup={embedLookup} fetchPath={embedFetch} onLink={onLink} assetSrc={embedAsset} assetFetch={embedAssetFetch} />,
         );
       }
       continue;
@@ -346,21 +350,43 @@ function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embed
 /** Obsidian-style note transclusion: renders another note's content in a
  * bordered embed box. Fetches the text on demand via vault_peek so the open
  * note is untouched; the title opens the real note. */
-function NoteEmbed({ name, lookup, fetchPath, onLink }: {
+function NoteEmbed({ name, lookup, fetchPath, onLink, assetSrc, assetFetch }: {
   name: string;
   lookup: (n: string) => { path: string; text?: string } | null;
   fetchPath?: (p: string) => void;
   onLink?: (name: string) => void;
+  assetSrc?: (p: string) => string | undefined;
+  assetFetch?: (p: string) => void;
 }) {
   const hit = lookup(name);
-  const missing = hit?.text === undefined;
+  const isImg = !!hit && IMAGE_RE.test(hit.path);
+  const src = hit && isImg ? assetSrc?.(hit.path) : undefined;
+  const missing = hit ? (isImg ? src === undefined : hit.text === undefined) : false;
   useEffect(() => {
-    if (hit && missing) fetchPath?.(hit.path);
-  }, [hit?.path, missing]);
+    if (!hit) return;
+    if (isImg && src === undefined) assetFetch?.(hit.path);
+    else if (!isImg && hit.text === undefined) fetchPath?.(hit.path);
+  }, [hit?.path, hit?.text === undefined, src === undefined]);
   if (!hit) {
     return (
       <div style={{ margin: "6px 0", fontSize: 11.5, color: "var(--cv-ink-faint)", fontStyle: "italic" }}>
         ![[{name}]] — note not found
+      </div>
+    );
+  }
+  if (isImg) {
+    return (
+      <div style={{ margin: "10px 0", maxWidth: 640 }}>
+        {src === undefined ? (
+          <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", fontStyle: "italic" }}>loading image…</div>
+        ) : (
+          <img
+            src={src}
+            alt={hit.path}
+            title={hit.path}
+            style={{ maxWidth: "100%", maxHeight: 420, borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", display: "block" }}
+          />
+        )}
       </div>
     );
   }
@@ -768,6 +794,8 @@ export function VaultPanel() {
   const vaultList = useBoard((s) => s.vaultList);
   const vaultRead = useBoard((s) => s.vaultRead);
   const vaultPeek = useBoard((s) => s.vaultPeek);
+  const vaultAsset = useBoard((s) => s.vaultAsset);
+  const vaultAssets = useBoard((s) => s.vaultAssets);
   const mdContents = useBoard((s) => s.mdContents);
   const closeVaultFile = useBoard((s) => s.closeVaultFile);
   const vaultHits = useBoard((s) => s.vaultHits);
@@ -921,9 +949,14 @@ export function VaultPanel() {
     if (hit) vaultRead(hit);
   };
 
-  // Embed resolution for ![[note]] transclusion: name → {path, cached text}.
+  // Embed resolution for ![[note]] / ![[img.png]] transclusion:
+  // name → {path, cached text}. Images resolve by exact filename like Obsidian.
   const resolveEmbed = (name: string) => {
-    const hit = vaultEntries.find((e) => e === name || e.endsWith(`/${name}.md`) || e === `${name}.md` || e.replace(/\.md$/, "") === name);
+    const isImg = IMAGE_RE.test(name);
+    const hit = vaultEntries.find((e) =>
+      e === name || e.endsWith(`/${name}`) ||
+      (!isImg && (e === `${name}.md` || e.endsWith(`/${name}.md`) || e.replace(/\.md$/, "") === name)),
+    );
     return hit ? { path: hit, text: mdContents[hit] } : null;
   };
 
@@ -1294,6 +1327,8 @@ export function VaultPanel() {
               onLink={openByName}
               embedLookup={resolveEmbed}
               embedFetch={vaultPeek}
+              embedAsset={(p) => vaultAssets[p]}
+              embedAssetFetch={vaultAsset}
               onToggleTask={(ln, done) => {
                 const ls = vaultFile.text.split("\n");
                 ls[ln] = ls[ln].replace(/- \[[ xX]\]/, done ? "- [x]" : "- [ ]");

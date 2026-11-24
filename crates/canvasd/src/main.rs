@@ -204,6 +204,15 @@ async fn share_get(
     }
 }
 
+/// Image attachments Obsidian shows in the file explorer — listed beside
+/// the notes so `![[img.png]]` embeds can resolve them.
+fn is_vault_image(name: &str) -> bool {
+    matches!(
+        name.rsplit('.').next().unwrap_or("").to_ascii_lowercase().as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "ico"
+    )
+}
+
 /// Recursively list `.md` files under a vault root. Skips dotfiles,
 /// node_modules/target/dist/build, never follows symlinks, caps the
 /// traversal at 5000 pending+found paths.
@@ -227,7 +236,7 @@ fn vault_list_entries(root: &PathBuf) -> Vec<String> {
                 }
                 if p.is_dir() && stack.len() + entries.len() < 5000 {
                     stack.push(p);
-                } else if name.ends_with(".md") {
+                } else if name.ends_with(".md") || is_vault_image(&name) {
                     if let Ok(rel) = p.strip_prefix(root) {
                         entries.push(rel.to_string_lossy().to_string());
                     }
@@ -1223,6 +1232,28 @@ fn handle_client_msg(
             match ok.then(|| std::fs::read_to_string(&file)) {
                 Some(Ok(text)) => send_control(ServerMsg::VaultPeeked { path, text }),
                 _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault peek failed: {path}") }),
+            }
+        }
+        ClientMsg::VaultAsset { dir, path } => {
+            let root = PathBuf::from(&dir);
+            let file = root.join(&path);
+            let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+            let mime = match ext.as_str() {
+                "png" => "image/png",
+                "jpg" | "jpeg" => "image/jpeg",
+                "gif" => "image/gif",
+                "webp" => "image/webp",
+                "svg" => "image/svg+xml",
+                "ico" => "image/x-icon",
+                _ => "",
+            };
+            let ok = !path.contains("..") && !mime.is_empty() && file.is_file();
+            match ok.then(|| std::fs::read(&file)) {
+                Some(Ok(bytes)) if bytes.len() <= 8 * 1024 * 1024 => {
+                    let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+                    send_control(ServerMsg::VaultAssetData { path, mime: mime.to_string(), data });
+                }
+                _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault asset failed: {path}") }),
             }
         }
         ClientMsg::VaultAppend { dir, path, text } => {
