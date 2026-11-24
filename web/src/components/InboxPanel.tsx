@@ -1,4 +1,5 @@
 import { useBoard } from "../store/board";
+import { PinBtn } from "./PinBtn";
 
 const rowStyle: React.CSSProperties = {
   display: "flex",
@@ -72,9 +73,13 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
           fontWeight: 650,
           padding: "0 12px 8px",
           color: "var(--cv-ink)",
+          display: "flex",
+          alignItems: "center",
         }}
       >
         Inbox
+        <span style={{ flex: 1 }} />
+        <PinBtn title="Inbox" body={needsYou.map((a) => `${a.name} — ${a.lastLine ?? a.status}`).join("\n")} />
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
         {empty && (

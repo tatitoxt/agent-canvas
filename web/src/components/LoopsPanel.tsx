@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useBoard } from "../store/board";
+import { PinBtn } from "./PinBtn";
 
 const input: React.CSSProperties = {
   width: "100%",
@@ -115,6 +116,8 @@ export function LoopsPanel() {
         }}
       >
         Loops
+        <span style={{ flex: 1 }} />
+        <PinBtn title="Loops" body={list.map((l) => `${l.enabled ? "on" : "off"} · ${l.instruction}`).join("\n")} />
         <button
           className="glass-pill"
           style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}

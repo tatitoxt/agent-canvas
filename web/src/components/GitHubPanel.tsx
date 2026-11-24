@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useBoard } from "../store/board";
+import { PinBtn } from "./PinBtn";
 
 const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
   new URLSearchParams(location.search).get("token") ??
@@ -124,7 +125,11 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
           {kind === "prs" ? "Pull requests" : "Issues"}
         </span>
         <span style={{ flex: 1 }} />
-        <span style={{ fontSize: 10, color: "var(--cv-ink-dim)" }}>{slug ?? "no repo"}</span>
+        <PinBtn
+          title={kind === "prs" ? "Pull requests" : "Issues"}
+          body={(items ?? []).map((it) => `#${it.number} ${it.title} — ${it.user}`).join("\n") || slug || ""}
+        />
+        <span style={{ fontSize: 10, color: "var(--cv-ink-dim)", paddingLeft: 8 }}>{slug ?? "no repo"}</span>
         <button
           title="refresh"
           onClick={() => setTick((t) => t + 1)}

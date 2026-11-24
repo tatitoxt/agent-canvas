@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useBoard } from "../store/board";
+import { PinBtn } from "./PinBtn";
 
 const COLS = [
   { key: "todo", label: "todo" },
@@ -47,8 +48,9 @@ export function NotesPanel() {
         overflow: "hidden",
       }}
     >
-      <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 8px", color: "var(--cv-ink)" }}>
+      <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 8px", color: "var(--cv-ink)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         Notes
+        <PinBtn title="Dex Tickets" body={Object.values(notes).map((n) => `[${n.col}] ${n.text}`).join("\n")} />
       </div>
       <form
         style={{ display: "flex", gap: 6, margin: "0 4px 10px" }}

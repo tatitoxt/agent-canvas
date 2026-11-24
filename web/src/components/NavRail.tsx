@@ -44,7 +44,7 @@ const btn = (active: boolean): React.CSSProperties => ({
   borderRadius: 9,
   border: "none",
   cursor: "pointer",
-  color: active ? "var(--cv-ink)" : "var(--cv-ink-faint)",
+  color: "var(--cv-ink)",
   background: active ? "var(--cv-glass-hi)" : "transparent",
   position: "relative",
   boxShadow: active ? "inset 0 1px 0 var(--cv-glass-shine)" : "none",
@@ -359,7 +359,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
           </div>
           {toolRow("git", "Source Control", `worktrees, push an agent's branch${gitAgents.length ? ` — ${gitAgents.length} live` : ""}`, () => setMenu((m) => (m === "git" ? null : "git")))}
           {toolRow("obsidian-real", "Obsidian", "your real vault — browse markdown; 'obsidian <note>' in Dex writes to it", () => onSelect("vault"), "vault", "#8B5CF6")}
-          {toolRow("pr", "Pull requests", "live list from the repo's GitHub", () => onSelect("prs"), "prs", undefined, ghCounts.prs != null ? `${ghCounts.prs} open` : undefined)}
+          {toolRow("github", "Pull requests", "live list from the repo's GitHub", () => onSelect("prs"), "prs", undefined, ghCounts.prs != null ? `${ghCounts.prs} open` : undefined)}
           {toolRow("issue", "Issues", "live list from the repo's GitHub", () => onSelect("issues"), "issues", undefined, ghCounts.issues != null ? `${ghCounts.issues} open` : undefined)}
           {toolRow("ticket", "Dex Tickets", "notes and tasks on the board", () => onSelect("notes"), "notes", undefined, noteCount ? `${noteCount}` : undefined)}
           {toolRow("artifacts", "Artifacts", "shots, docs and files the agents produced", () => onSelect("artifacts"), "artifacts", undefined, artifactCount ? `${artifactCount}` : undefined)}
@@ -501,7 +501,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
               onClick={() => onSelect("prs")}
               style={btn(active === "prs")}
             >
-              <Icon name="pr" />
+              <Icon name="github" />
             </button>
             <button
               title="Issues — live list from the repo's GitHub"
@@ -551,7 +551,7 @@ function OrchestratorsBubble() {
         onClick={() => setOpen((o) => !o)}
         style={btn(open)}
       >
-        <Icon name="orchestrator" color="var(--cv-accent)" />
+        <Icon name="orchestrator" />
         {list.length > 0 && (
           <span style={badge("var(--cv-accent-dim)")}>{list.length}</span>
         )}

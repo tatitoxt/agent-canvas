@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useBoard } from "../store/board";
+import { PinBtn } from "./PinBtn";
 
 const input: React.CSSProperties = {
   width: "100%",
@@ -93,6 +94,8 @@ export function AutomationsPanel() {
         }}
       >
         Automations
+        <span style={{ flex: 1 }} />
+        <PinBtn title="Automations" body={list.map((a) => a.name).join("\n")} />
         <button
           className="glass-pill"
           style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}
