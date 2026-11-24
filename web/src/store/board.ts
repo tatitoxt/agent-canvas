@@ -66,6 +66,8 @@ type BoardState = {
   vaultDir: string;
   vaultEntries: string[];
   vaultFile: { path: string; text: string } | null;
+  /** Studio dossier markdown (Studios: repo → material). */
+  studioDoc: string | null;
   /** Embedded web pages on the canvas: node id -> url, per board. */
   webNodes: Record<string, Record<string, string>>;
   /** UI theme — swaps the seed tokens; glass derives via color-mix. */
@@ -124,6 +126,8 @@ type BoardState = {
   closeVaultFile: () => void;
   webNodeAdd: (url: string) => void;
   webNodeRemove: (id: string) => void;
+  studioDocNow: () => void;
+  closeStudioDoc: () => void;
   artifactDelete: (artifactId: string) => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
@@ -182,6 +186,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   vaultDir: "",
   vaultEntries: [],
   vaultFile: null,
+  studioDoc: null,
   theme: localStorage.getItem("cv-theme") ?? "obsidian",
   setTheme: (t) => {
     localStorage.setItem("cv-theme", t);
@@ -450,6 +455,9 @@ export const useBoard = create<BoardState>((set, get) => ({
             });
             break;
           }
+          case "studio_doc_md":
+            set({ studioDoc: msg.text });
+            break;
           case "vault_listing":
             set({ vaultEntries: msg.entries });
             break;
@@ -566,6 +574,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   },
   vaultRead: (path) => client?.vaultRead(get().vaultDir, path),
   closeVaultFile: () => set({ vaultFile: null }),
+  studioDocNow: () => client?.studioDoc(),
+  closeStudioDoc: () => set({ studioDoc: null }),
   webNodeAdd: (url) => {
     const board = get().activeBoard;
     const id = `web-${Math.random().toString(16).slice(2, 10)}`;

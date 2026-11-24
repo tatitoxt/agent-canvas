@@ -281,6 +281,57 @@ fn delete_board(
 }
 
 #[tauri::command]
+fn studio_doc(app: AppHandle, state: State<'_, CanvasState>, board_id: Option<String>) -> Result<(), String> {
+    let board = board_id.unwrap_or_else(|| "main".to_string());
+    let mut md = String::from("# Studio — repo dossier
+
+");
+    let repo = &state.repo_root;
+    md.push_str(&format!("## Tree — {}\n\n```\n", repo.display()));
+    fn walk(d: &std::path::Path, depth: usize, prefix: &str, out: &mut String) {
+        if depth > 2 { return; }
+        let mut entries: Vec<_> = std::fs::read_dir(d).map(|rd| rd.flatten().collect()).unwrap_or_default();
+        entries.sort_by_key(|e| e.file_name());
+        for e in entries {
+            let name = e.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build") { continue; }
+            out.push_str(&format!("{prefix}{name}{}\n", if e.path().is_dir() { "/" } else { "" }));
+            if e.path().is_dir() { walk(&e.path(), depth + 1, &format!("{prefix}  "), out); }
+        }
+    }
+    walk(repo, 0, "", &mut md);
+    md.push_str("```\n\n");
+    if let Ok(readme) = std::fs::read_to_string(repo.join("README.md")) {
+        let head: String = readme.lines().take(40).collect::<Vec<_>>().join("\n");
+        md.push_str(&format!("## README (head)\n\n{head}\n\n"));
+    }
+    let agents = state.store.agents_snapshot().unwrap_or_default();
+    md.push_str("## Agents\n\n");
+    for (_id, name, command, _wt, status, _ws, _perm, bd, acct) in &agents {
+        if bd.as_deref().unwrap_or("main") != board { continue; }
+        md.push_str(&format!("- **{name}** (`{command}`) — {status}{}\n", acct.as_ref().map(|l| format!(" · @{l}")).unwrap_or_default()));
+    }
+    let notes = state.store.all_notes().unwrap_or_default();
+    let board_notes: Vec<_> = notes.iter().filter(|n| n.1 == board).collect();
+    if !board_notes.is_empty() {
+        md.push_str("\n## Notes\n\n");
+        for (_id, _b, col, text, _pos, due) in &board_notes {
+            md.push_str(&format!("- [{col}] {text}{}\n", due.as_ref().map(|d| format!(" (due {d})")).unwrap_or_default()));
+        }
+    }
+    let arts = state.store.artifacts_snapshot().unwrap_or_default();
+    let board_arts: Vec<_> = arts.iter().filter(|a| a.1 == board).collect();
+    if !board_arts.is_empty() {
+        md.push_str("\n## Artifacts\n\n");
+        for (id, _bd, agent, kind, title, _p, _t, at) in &board_arts {
+            md.push_str(&format!("- `{kind}` **{title}** — {} ({at}, `{id}`)\n", agent.as_deref().unwrap_or("-")));
+        }
+    }
+    emit_control(&app, &ServerMsg::StudioDocMd { text: md });
+    Ok(())
+}
+
+#[tauri::command]
 fn vault_list(app: AppHandle, dir: String) -> Result<(), String> {
     let root = PathBuf::from(&dir);
     let mut entries = Vec::new();
@@ -1133,6 +1184,7 @@ fn main() {
             artifact_create,
             artifact_delete,
             git_push,
+            studio_doc,
             vault_list,
             vault_read,
             create_workspace,

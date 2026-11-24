@@ -78,6 +78,9 @@ pub enum ClientMsg {
     ArtifactDelete { artifact_id: String },
     /// A digest of every agent: status, files touched, transcript tail.
     Digest,
+    /// Build a "studio" document: repo materialized as a markdown dossier
+    /// (tree + README + agents + notes + artifacts) — repo→material.
+    StudioDoc { board_id: Option<String> },
     /// Read a node's memory file — "main" is the board repo's memory,
     /// a workspace id reads that workspace's repo memory.
     MemoryRead { node_id: String },
@@ -258,6 +261,8 @@ pub enum ServerMsg {
     Memory { node_id: String, text: String },
     /// Session digest markdown (Digest answer).
     SessionDigest { text: String },
+    /// Studio document markdown (StudioDoc answer).
+    StudioDocMd { text: String },
     /// A kanban note was created or edited.
     NoteUpserted { note: SnapshotNote },
     /// A kanban note was removed.

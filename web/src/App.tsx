@@ -30,6 +30,7 @@ import { ArtifactsPanel } from "./components/ArtifactsPanel";
 import { VaultPanel } from "./components/VaultPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { SkillsPanel } from "./components/SkillsPanel";
+import { StudioPanel } from "./components/StudioPanel";
 import { DigestPanel } from "./components/DigestPanel";
 import { NoticePill } from "./components/NoticePill";
 import { HistoryPanel } from "./components/HistoryPanel";
@@ -372,6 +373,25 @@ function Board() {
       </button>
       <button
         className="glass-pill"
+        title="studio — repo → markdown dossier"
+        onClick={() => useBoard.getState().studioDocNow()}
+        style={{
+          position: "absolute",
+          right: 196,
+          bottom: 36,
+          zIndex: 20,
+          fontSize: 11,
+          fontWeight: 600,
+          padding: "6px 14px",
+          cursor: "pointer",
+          border: "none",
+          color: "var(--cv-ink)",
+        }}
+      >
+        ▤ studio
+      </button>
+      <button
+        className="glass-pill"
         title="pencil — draw markups on the canvas (baked into shots)"
         onClick={() => setPencil((m) => !m)}
         style={{
@@ -538,6 +558,7 @@ function Board() {
       {nav === "settings" && <SettingsPanel />}
       {nav === "skills" && <SkillsPanel />}
       <DigestPanel />
+      <StudioPanel />
       <NoticePill />
       {nav === "history" && (
         <HistoryPanel onOpenEdge={(id) => { setEdgeDetail(id); setNav("canvas"); }} />

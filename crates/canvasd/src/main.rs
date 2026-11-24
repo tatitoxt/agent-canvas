@@ -918,6 +918,86 @@ fn handle_client_msg(
             }
             send_control(ServerMsg::SessionDigest { text: md });
         }
+        ClientMsg::StudioDoc { board_id } => {
+            let board = board_id.unwrap_or_else(|| "main".to_string());
+            let mut md = String::from("# Studio — repo dossier
+
+");
+            // Repo structure (depth 2, skipping dependency dirs).
+            let repo = &state.repo_root;
+            md.push_str(&format!("## Tree — {}
+
+```
+", repo.display()));
+            fn walk(d: &std::path::Path, depth: usize, prefix: &str, out: &mut String) {
+                if depth > 2 { return; }
+                let mut entries: Vec<_> = std::fs::read_dir(d).map(|rd| rd.flatten().collect()).unwrap_or_default();
+                entries.sort_by_key(|e| e.file_name());
+                for e in entries {
+                    let name = e.file_name().to_string_lossy().to_string();
+                    if name.starts_with('.') || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build") {
+                        continue;
+                    }
+                    out.push_str(&format!("{prefix}{name}{}
+", if e.path().is_dir() { "/" } else { "" }));
+                    if e.path().is_dir() {
+                        walk(&e.path(), depth + 1, &format!("{prefix}  "), out);
+                    }
+                }
+            }
+            walk(repo, 0, "", &mut md);
+            md.push_str("```
+
+");
+            // README first section.
+            if let Ok(readme) = std::fs::read_to_string(repo.join("README.md")) {
+                let head: String = readme.lines().take(40).collect::<Vec<_>>().join("
+");
+                md.push_str(&format!("## README (head)
+
+{head}
+
+"));
+            }
+            // Agents on this board.
+            let agents = state.store.agents_snapshot().unwrap_or_default();
+            md.push_str("## Agents
+
+");
+            for (_id, name, command, _wt, status, _ws, _perm, bd, acct) in &agents {
+                if bd.as_deref().unwrap_or("main") != board { continue; }
+                md.push_str(&format!("- **{name}** (`{command}`) — {status}{}
+",
+                    acct.as_ref().map(|l| format!(" · @{l}")).unwrap_or_default()));
+            }
+            // Notes + artifacts index.
+            let notes = state.store.all_notes().unwrap_or_default();
+            let board_notes: Vec<_> = notes.iter().filter(|n| n.1 == board).collect();
+            if !board_notes.is_empty() {
+                md.push_str("
+## Notes
+
+");
+                for (_id, _b, col, text, _pos, due) in &board_notes {
+                    md.push_str(&format!("- [{col}] {text}{}
+", due.as_ref().map(|d| format!(" (due {d})")).unwrap_or_default()));
+                }
+            }
+            let arts = state.store.artifacts_snapshot().unwrap_or_default();
+            if !arts.is_empty() {
+                md.push_str("
+## Artifacts
+
+");
+                for (id, bd, agent, kind, title, _p, _t, at) in &arts {
+                    if bd != &board { continue; }
+                    md.push_str(&format!("- `{kind}` **{title}** — {} ({at}, `{id}`)
+",
+                        agent.as_deref().unwrap_or("-")));
+                }
+            }
+            send_control(ServerMsg::StudioDocMd { text: md });
+        }
         ClientMsg::MemoryRead { node_id } => {
             let path = memory_path(state, &node_id);
             let text = std::fs::read_to_string(&path).unwrap_or_default();

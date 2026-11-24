@@ -112,6 +112,10 @@ export class TauriCanvasClient {
     );
   }
 
+  studioDoc() {
+    void invoke("studio_doc", {}).catch(console.error);
+  }
+
   vaultList(dir: string) {
     void invoke("vault_list", { dir }).catch(console.error);
   }
