@@ -113,11 +113,18 @@ body,
 
 /* edges — quiet hairlines, not glowing wires */
 .react-flow__edge-path {
-  stroke: rgba(255, 255, 255, 0.16);
+  stroke: rgba(255, 255, 255, 0.38);
   stroke-width: 1.25;
 }
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: rgba(255, 255, 255, 0.4);
+}
+/* Selected cards get a clear amber ring — works for single clicks and the
+ * ghost multi-select alike (React Flow adds .selected to every picked node). */
+.react-flow__node.selected {
+  box-shadow: 0 0 0 2px var(--cv-accent), 0 0 18px rgba(245, 165, 36, 0.28);
+  border-radius: 12px;
+  z-index: 20 !important;
 }
 .edge-delegated .react-flow__edge-path {
   stroke-dasharray: 5 5;

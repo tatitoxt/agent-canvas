@@ -307,6 +307,8 @@ type BoardState = {
   /** Live terminals living ON the canvas as cards — `term-<agentId>` per
    * board. Popped out of the bottom drawer; movable/resizable/closable. */
   termNodes: Record<string, Record<string, { x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number; locked?: boolean }>>;
+  /** Clone a panel card beside it (Deska Split Right/Down). */
+  splitPanelCard: (id: string, dir: "right" | "down") => void;
   /** Deska card ops: z-order and position lock for canvas cards. */
   cardZ: Record<string, number>;
   toggleCardLock: (id: string) => void;
@@ -1219,6 +1221,20 @@ export const useBoard = create<BoardState>((set, get) => ({
     localStorage.setItem("cv-termnodes", JSON.stringify(next));
     set({ termNodes: next });
   },
+  splitPanelCard: (id, dir) => {
+    const board = get().activeBoard;
+    const n = get().panelNodes[board]?.[id];
+    if (!n) return;
+    let i = 2;
+    let newId = `${id}-${i}`;
+    while (get().panelNodes[board]?.[newId]) newId = `${id}-${++i}`;
+    const off = dir === "right" ? { x: n.x + n.w + 16, y: n.y } : { x: n.x, y: n.y + n.h + 16 };
+    const m = { ...(get().panelNodes[board] ?? {}), [newId]: { ...n, ...off } };
+    const next = { ...get().panelNodes, [board]: m };
+    localStorage.setItem("cv-panelnodes", JSON.stringify(next));
+    set({ panelNodes: next });
+    get().requestFocus(newId);
+  },
   cardZ: (() => {
     try { return JSON.parse(localStorage.getItem("cv-cardz") ?? "{}"); } catch { return {}; }
   })(),
@@ -1853,7 +1869,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     const n = Object.keys(shapes[activeBoard] ?? {}).filter(
       (k) => shapes[activeBoard][k].text?.startsWith("Group")).length + 1;
     const id = `shape-${Math.random().toString(36).slice(2, 10)}`;
-    const def = { id, kind: "rect" as const, x, y, w, h, color: "#5f7fd9", text: `Group ${n}` };
+    const def = { id, kind: "rect" as const, x, y, w, h, color: "#e8b25a", text: `Group ${n}` };
     const next = { ...shapes, [activeBoard]: { ...(shapes[activeBoard] ?? {}), [id]: def } };
     localStorage.setItem("cv-shapes", JSON.stringify(next));
     set({ shapes: next });

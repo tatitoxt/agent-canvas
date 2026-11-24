@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { useBoard } from "../store/board";
+import { Icon } from "./icons";
 
 /** Deska-style window menu for canvas cards (right-click / two-finger
  * press on a panel or terminal card): summaries, close, minimize,
@@ -46,20 +47,38 @@ export function CardMenu({
   const boards = useBoard((s) => s.boards);
   const activeBoard = useBoard((s) => s.activeBoard);
 
-  const item: React.CSSProperties = {
-    display: "block",
-    width: "100%",
-    textAlign: "left",
-    border: "none",
-    background: "transparent",
-    color: "var(--cv-ink)",
-    fontSize: 12,
-    padding: "7px 12px",
-    borderRadius: 8,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  };
-  const dim = { ...item, color: "var(--cv-ink-dim)" };
+  const row = (
+    icon: string,
+    label: string,
+    onClick: () => void,
+    opts?: { danger?: boolean; checked?: boolean },
+  ) => (
+    <button
+      key={label}
+      onClick={onClick}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 9,
+        width: "100%",
+        textAlign: "left",
+        border: "none",
+        background: "transparent",
+        color: opts?.danger ? "#e05d5d" : "var(--cv-ink-dim)",
+        fontSize: 12,
+        padding: "6px 10px",
+        borderRadius: 8,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <Icon name={icon} size={13} color={opts?.danger ? "#e05d5d" : "var(--cv-ink-faint)"} />
+      <span style={{ flex: 1 }}>{label}</span>
+      {opts?.checked && <span style={{ fontSize: 11, color: "var(--cv-accent)" }}>✓</span>}
+    </button>
+  );
   const sep = (
     <div style={{ height: 1, background: "var(--cv-glass-edge)", margin: "4px 6px" }} />
   );
@@ -94,41 +113,33 @@ export function CardMenu({
       style={{
         position: "fixed",
         left: Math.min(x, window.innerWidth - 230),
-        top: Math.min(y, window.innerHeight - 320),
+        top: Math.min(y, window.innerHeight - 340),
         zIndex: 60,
-        minWidth: 200,
+        minWidth: 205,
         padding: 6,
         borderRadius: 12,
       }}
     >
-      <button style={dim} onClick={() => { useBoard.getState().togglePanelSummaries(); onClose(); }}>
-        View panel summary
-      </button>
+      {row("eye", "View panel summary", () => { st.togglePanelSummaries(); onClose(); })}
       {sep}
-      <button style={item} onClick={() => { close(); onClose(); }}>Close</button>
-      <button style={dim} onClick={() => { useBoard.getState().closeAllCards(); onClose(); }}>
-        Close All
-      </button>
+      {row("x", "Close", () => { close(); onClose(); }, { danger: true })}
+      {row("x", "Close All", () => { st.closeAllCards(); onClose(); })}
       {sep}
-      <button style={item} onClick={() => { collapse(); onClose(); }}>
-        {card?.collapsed ? "Expand" : "Minimize"}
-      </button>
-      <button style={dim} onClick={() => { maximize(); onClose(); }}>Maximize</button>
-      <button style={dim} onClick={() => { dockRight(); onClose(); }}>Pin to the screen</button>
-      <button style={dim} onClick={() => { useBoard.getState().toggleCardLock(nodeId); onClose(); }}>
-        {card?.locked ? "Unlock position" : "Lock position"}
-      </button>
+      {row("minus", card?.collapsed ? "Expand" : "Minimize", () => { collapse(); onClose(); })}
+      {isPanel && (
+        <>
+          {row("split", "Split Right", () => { st.splitPanelCard(nodeId, "right"); onClose(); })}
+          {row("split", "Split Down", () => { st.splitPanelCard(nodeId, "down"); onClose(); })}
+        </>
+      )}
+      {row("zoom", "Maximize", () => { maximize(); onClose(); })}
+      {row("pin", "Pin to the screen", () => { dockRight(); onClose(); })}
+      {row("lock", "Lock position", () => { st.toggleCardLock(nodeId); onClose(); }, { checked: !!card?.locked })}
       {sep}
-      <button style={dim} onClick={() => { useBoard.getState().bringCardToFront(nodeId); onClose(); }}>
-        Move to front
-      </button>
-      <button style={dim} onClick={() => { useBoard.getState().sendCardToBack(nodeId); onClose(); }}>
-        Move to back
-      </button>
+      {row("arrowup", "Move to front", () => { st.bringCardToFront(nodeId); onClose(); })}
+      {row("arrowdown", "Move to back", () => { st.sendCardToBack(nodeId); onClose(); })}
       <div style={{ position: "relative" }}>
-        <button style={dim} onClick={() => setBoardsOpen((o) => !o)}>
-          move to board ▸
-        </button>
+        {row("boards", "Move to board ▸", () => setBoardsOpen((o) => !o))}
         {boardsOpen && (
           <div
             className="glass"
@@ -144,8 +155,20 @@ export function CardMenu({
             {Object.entries(boards).map(([id, name]) => (
               <button
                 key={id}
-                style={{ ...item, fontSize: 11 }}
-                onClick={() => { useBoard.getState().moveCardToBoard(nodeId, id); onClose(); }}
+                onClick={() => { st.moveCardToBoard(nodeId, id); onClose(); }}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--cv-ink-dim)",
+                  fontSize: 11,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
               >
                 {id === activeBoard ? "✓ " : ""}{name}
               </button>
@@ -156,9 +179,7 @@ export function CardMenu({
       {onAgentMenu && (
         <>
           {sep}
-          <button style={dim} onClick={() => { onAgentMenu(); onClose(); }}>
-            agent actions…
-          </button>
+          {row("terminal", "Agent actions…", () => { onAgentMenu(); onClose(); })}
         </>
       )}
     </div>

@@ -663,7 +663,7 @@ function Board() {
         source: id.slice(5),
         target: id,
         type: "default" as const,
-        style: { stroke: "var(--cv-ink-faint)", strokeDasharray: "4 6", strokeWidth: 1, opacity: 0.5 },
+        style: { stroke: "var(--cv-accent)", strokeDasharray: "4 6", strokeWidth: 1.5, opacity: 0.85 },
         animated: false,
         selectable: false,
       }));
