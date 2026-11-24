@@ -83,6 +83,8 @@ function newOutput(
         !l.endsWith("$") &&
         !l.endsWith("%") &&
         !l.endsWith("#") &&
+        !/[❯›⟩»]\s*$/.test(l) &&
+        !/^[\s─━═┄┈╌╍╴╶│┃┆┊╎╏┌┐└┘├┤┬┴┼╔╗╚╝╠╣╦╩╬▏▎▍▌▋▊▉█▔▁_\-–—=~·•∙]+$/.test(l) &&
         !l.includes(sent),
     )
     .slice(0, 3)
