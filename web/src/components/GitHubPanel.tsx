@@ -168,6 +168,8 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
               )}
               <span>{it.user}</span>
               <span>·</span>
+              <span>{slug?.split("/")[1]}</span>
+              <span>·</span>
               <span>{age(it.updated)}</span>
               {it.labels.map((l) => (
                 <span key={l} style={{ background: "var(--cv-glass-hi)", borderRadius: 999, padding: "1px 7px", fontSize: 9.5 }}>

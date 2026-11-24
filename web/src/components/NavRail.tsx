@@ -333,7 +333,11 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
       onMouseEnter={(e) => hoverRow(e, true)}
       onMouseLeave={(e) => hoverRow(e, activeKey === active)}
     >
-      <Icon name={icon} size={14} color={iconColor ?? (activeKey && active === activeKey ? "var(--cv-accent)" : "var(--cv-ink-dim)")} />
+      {icon === "obsidian-real" ? (
+        <img src="/obsidian.svg" alt="" width={14} height={14} />
+      ) : (
+        <Icon name={icon} size={14} color={iconColor ?? (activeKey && active === activeKey ? "var(--cv-accent)" : "var(--cv-ink-dim)")} />
+      )}
       <span style={{ flex: 1 }}>{label}</span>
       {fact && <span style={{ fontSize: 9, color: "var(--cv-ink-dim)", fontWeight: 600 }}>{fact}</span>}
     </button>
@@ -354,7 +358,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
             </button>
           </div>
           {toolRow("git", "Source Control", `worktrees, push an agent's branch${gitAgents.length ? ` — ${gitAgents.length} live` : ""}`, () => setMenu((m) => (m === "git" ? null : "git")))}
-          {toolRow("obsidian", "Obsidian", "your real vault — browse markdown; 'obsidian <note>' in Dex writes to it", () => onSelect("vault"), "vault", "#8B5CF6")}
+          {toolRow("obsidian-real", "Obsidian", "your real vault — browse markdown; 'obsidian <note>' in Dex writes to it", () => onSelect("vault"), "vault", "#8B5CF6")}
           {toolRow("pr", "Pull requests", "live list from the repo's GitHub", () => onSelect("prs"), "prs", undefined, ghCounts.prs != null ? `${ghCounts.prs} open` : undefined)}
           {toolRow("issue", "Issues", "live list from the repo's GitHub", () => onSelect("issues"), "issues", undefined, ghCounts.issues != null ? `${ghCounts.issues} open` : undefined)}
           {toolRow("ticket", "Dex Tickets", "notes and tasks on the board", () => onSelect("notes"), "notes", undefined, noteCount ? `${noteCount}` : undefined)}
@@ -488,7 +492,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
           onClick={() => onSelect("vault")}
           style={btn(active === "vault")}
         >
-          <Icon name="obsidian" color="#8B5CF6" />
+          <img src="/obsidian.svg" alt="" width={15} height={15} />
         </button>
         {repoUrl && (
           <>
@@ -547,7 +551,7 @@ function OrchestratorsBubble() {
         onClick={() => setOpen((o) => !o)}
         style={btn(open)}
       >
-        <Icon name="orchestrator" />
+        <Icon name="orchestrator" color="var(--cv-accent)" />
         {list.length > 0 && (
           <span style={badge("var(--cv-accent-dim)")}>{list.length}</span>
         )}

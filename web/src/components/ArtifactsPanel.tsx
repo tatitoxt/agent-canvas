@@ -253,10 +253,34 @@ export function ArtifactsPanel() {
               </div>
               <button
                 title="Add to Board — pin as a card on the canvas"
-                style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-ink-dim)", display: "grid", placeItems: "center" }}
-                onClick={() => pinCard(a.title, a.text?.slice(0, 400) ?? a.path ?? "", meta.color)}
+                style={{
+                  border: "1px solid color-mix(in srgb, var(--cv-accent) 45%, transparent)",
+                  borderRadius: 999,
+                  background: "color-mix(in srgb, var(--cv-accent) 10%, transparent)",
+                  cursor: "pointer",
+                  color: "var(--cv-accent)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "3px 8px",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  flexShrink: 0,
+                }}
+                onClick={() =>
+                  pinCard(
+                    a.title,
+                    (a.text ?? a.path ?? "")
+                      .split("\n")
+                      .filter((l) => l.trim() && !/^#{1,6}\s/.test(l.trim()))
+                      .slice(0, 6)
+                      .join("\n")
+                      .slice(0, 260),
+                  )
+                }
               >
-                <Icon name="pin" size={13} />
+                <Icon name="pin" size={11} />
+                board
               </button>
               {a.kind === "pdf" && a.text && (
                 <button

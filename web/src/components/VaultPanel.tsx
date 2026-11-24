@@ -353,7 +353,7 @@ export function VaultPanel() {
                   window.open(`obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(file)}`, "_self");
                 }}
               >
-                <Icon name="obsidian" size={11} color="#8B5CF6" /> Obsidian
+                <img src="/obsidian.svg" alt="" width={11} height={11} /> Obsidian
               </button>
               <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 14 }} onClick={closeVaultFile}>
                 ×
