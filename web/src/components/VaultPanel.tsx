@@ -219,11 +219,50 @@ function ReadingView({ text, onLink }: { text: string; onLink?: (name: string) =
       continue;
     }
     if (/^\s*>\s?/.test(l)) {
-      els.push(
-        <div key={i} style={{ margin: "6px 0", paddingLeft: 12, borderLeft: "2px solid var(--cv-accent)", color: "var(--cv-ink-dim)", fontStyle: "italic" }}>
-          {mdInline(l.replace(/^\s*>\s?/, ""), onLink)}
-        </div>,
-      );
+      const quote: string[] = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) { quote.push(lines[i].replace(/^\s*>\s?/, "")); i++; }
+      i--;
+      const co = quote[0]?.match(/^\[!([a-zA-Z-]+)\][+-]?\s*(.*)/);
+      if (co) {
+        const kind = co[1].toLowerCase();
+        const palette: Record<string, string> = {
+          note: "#7aa2f7", abstract: "#56d4c2", summary: "#56d4c2", tldr: "#56d4c2",
+          info: "#7aa2f7", todo: "#7aa2f7",
+          tip: "#56d4c2", hint: "#56d4c2", important: "#56d4c2",
+          success: "#9ece6a", check: "#9ece6a", done: "#9ece6a",
+          question: "#e0af68", help: "#e0af68", faq: "#e0af68",
+          warning: "#e0af68", caution: "#e0af68", attention: "#e0af68",
+          failure: "#f7768e", fail: "#f7768e", missing: "#f7768e",
+          danger: "#f7768e", error: "#f7768e", bug: "#f7768e",
+          example: "#bb9af7", quote: "#a9b1d6", cite: "#a9b1d6",
+        };
+        const color = palette[kind] ?? "#7aa2f7";
+        const title = co[2].trim() || kind[0].toUpperCase() + kind.slice(1);
+        els.push(
+          <div
+            key={i}
+            style={{
+              margin: "8px 0", maxWidth: 640, borderRadius: 8,
+              background: `color-mix(in srgb, ${color} 9%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
+              borderLeft: `3px solid ${color}`, padding: "7px 12px",
+            }}
+          >
+            <div style={{ color, fontWeight: 700, fontSize: 11.5, marginBottom: quote.length > 1 ? 2 : 0 }}>{title}</div>
+            {quote.slice(1).filter((q) => q.trim()).map((q, j) => (
+              <div key={j} style={{ margin: "2px 0" }}>{mdInline(q, onLink)}</div>
+            ))}
+          </div>,
+        );
+      } else {
+        quote.forEach((q, j) => {
+          els.push(
+            <div key={`${i}-${j}`} style={{ margin: "6px 0", paddingLeft: 12, borderLeft: "2px solid var(--cv-accent)", color: "var(--cv-ink-dim)", fontStyle: "italic" }}>
+              {mdInline(q, onLink)}
+            </div>,
+          );
+        });
+      }
       continue;
     }
     if (/^\s*(-{3,}|\*{3,})\s*$/.test(l)) {
