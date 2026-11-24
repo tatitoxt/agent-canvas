@@ -91,6 +91,7 @@ export function LoopsPanel() {
   return (
     <div
       className="glass"
+      data-panel="loops"
       style={{
         position: "absolute",
         left: 64,
@@ -117,7 +118,7 @@ export function LoopsPanel() {
       >
         Loops
         <span style={{ flex: 1 }} />
-        <PinBtn title="Loops" body={list.map((l) => `${l.enabled ? "on" : "off"} · ${l.instruction}`).join("\n")} />
+        <PinBtn anchor="loops" title="Loops" body={list.map((l) => `${l.enabled ? "on" : "off"} · ${l.instruction}`).join("\n")} />
         <button
           className="glass-pill"
           style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}

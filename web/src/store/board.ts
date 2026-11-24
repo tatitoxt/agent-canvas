@@ -252,7 +252,7 @@ type BoardState = {
    * so an agent editing the file shows up live on the card. */
   mdNodes: Record<string, Record<string, string>>;
   mdContents: Record<string, string>;
-  mdNodeAdd: (path: string) => void;
+  mdNodeAdd: (path: string, anchor?: string) => void;
   mdNodeRemove: (id: string) => void;
   studioDocNow: () => void;
   closeStudioDoc: () => void;
@@ -351,7 +351,9 @@ type BoardState = {
   shapes: Record<string, Record<string, import("../board/types").ShapeDef>>;
   addShape: (kind: import("../board/types").ShapeKind) => void;
   /** Pin arbitrary content onto the canvas as a card (Deska's "Open in canvas"). */
-  pinCard: (title: string, body: string, color?: string) => void;
+  pinCard: (title: string, body: string, color?: string, anchor?: string) => void;
+  /** nodeId -> panel key the card was pinned from (dashed anchor cable). */
+  anchors: Record<string, Record<string, string>>;
   moveShape: (id: string, x: number, y: number) => void;
   updateShape: (id: string, patch: Partial<import("../board/types").ShapeDef>) => void;
   deleteShape: (id: string) => void;
@@ -823,11 +825,19 @@ export const useBoard = create<BoardState>((set, get) => ({
     try { return JSON.parse(localStorage.getItem("cv-mdnodes") ?? "{}"); } catch { return {}; }
   })(),
   mdContents: {},
-  mdNodeAdd: (path) => {
+  anchors: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-anchors") ?? "{}"); } catch { return {}; }
+  })(),
+  mdNodeAdd: (path, anchor) => {
     const board = get().activeBoard;
     const id = `md-${Math.random().toString(16).slice(2, 10)}`;
     const next = { ...get().mdNodes, [board]: { ...(get().mdNodes[board] ?? {}), [id]: path } };
     localStorage.setItem("cv-mdnodes", JSON.stringify(next));
+    if (anchor) {
+      const a = { ...get().anchors, [board]: { ...(get().anchors[board] ?? {}), [id]: anchor } };
+      localStorage.setItem("cv-anchors", JSON.stringify(a));
+      set({ anchors: a });
+    }
     set({ mdNodes: next });
     client?.moveNode(id, 300 + Math.random() * 200, 140 + Math.random() * 160);
     client?.vaultRead(get().vaultDir, path);
@@ -1010,7 +1020,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     set({ shapes: next });
   },
 
-  pinCard: (title, body, color) => {
+  pinCard: (title, body, color, anchor) => {
     const { activeBoard, shapes } = get();
     const id = `card-${Math.random().toString(36).slice(2, 10)}`;
     const def = {
@@ -1022,10 +1032,17 @@ export const useBoard = create<BoardState>((set, get) => ({
       h: 160,
       color: color ?? "#e8e6e3",
       text: body ? `${title}\n\n${body}` : title,
+      anchor,
     };
     const next = { ...shapes, [activeBoard]: { ...(shapes[activeBoard] ?? {}), [id]: def } };
     localStorage.setItem("cv-shapes", JSON.stringify(next));
-    set({ shapes: next });
+    if (anchor) {
+      const a = { ...get().anchors, [activeBoard]: { ...(get().anchors[activeBoard] ?? {}), [id]: anchor } };
+      localStorage.setItem("cv-anchors", JSON.stringify(a));
+      set({ shapes: next, anchors: a });
+    } else {
+      set({ shapes: next });
+    }
   },
 
   moveShape: (id, x, y) => {

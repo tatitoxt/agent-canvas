@@ -321,6 +321,7 @@ export function VaultPanel() {
       {vaultFile && (
         <div
           className="glass"
+          data-panel="vault"
           style={{
             position: "absolute",
             left: 396,
@@ -338,7 +339,7 @@ export function VaultPanel() {
               {vaultFile.path}
             </span>
             <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
-              <button style={actionBtn} title="Pin this note as a live card on the board" onClick={() => useBoard.getState().mdNodeAdd(vaultFile.path)}>
+              <button style={actionBtn} title="Pin this note as a live card on the board" onClick={() => useBoard.getState().mdNodeAdd(vaultFile.path, "vault")}>
                 Add to Board
               </button>
               <button style={actionBtn} title="Export as PDF (saved to artifacts)" onClick={exportFile}>

@@ -60,6 +60,43 @@ const nodeTypes = {
 const edgeTypes = { delegation: DelegationEdge };
 
 /** Keeps the zoom % readout fresh — Deska's bottom-right zoom %. */
+
+/** Dashed cables tying pinned cards / obsidian notes to the panel they
+ * were pinned from — the anchor vanishes when that panel closes. */
+function AnchorCables({ nav }: { nav: string }) {
+  const { flowToScreenPosition } = useReactFlow();
+  useViewport();
+  const anchors = useBoard((s) => s.anchors);
+  const shapes = useBoard((s) => s.shapes);
+  const positions = useBoard((s) => s.positions);
+  const activeBoard = useBoard((s) => s.activeBoard);
+  const lines: { x1: number; y1: number; x2: number; y2: number }[] = [];
+  for (const [id, key] of Object.entries(anchors[activeBoard] ?? {})) {
+    if (key !== nav) continue;
+    const el = document.querySelector(`[data-panel="${key}"]`);
+    if (!el) continue;
+    const r = el.getBoundingClientRect();
+    const sh = (shapes[activeBoard] ?? {})[id];
+    const pos = sh
+      ? { x: sh.x + sh.w / 2, y: sh.y + sh.h / 2 }
+      : positions[id]
+        ? { x: positions[id].x + 170, y: positions[id].y + 130 }
+        : null;
+    if (!pos) continue;
+    const sp = flowToScreenPosition(pos);
+    lines.push({ x1: sp.x, y1: sp.y, x2: r.left + 6, y2: r.top + r.height / 2 });
+  }
+  if (!lines.length) return null;
+  return (
+    <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 18 }}>
+      {lines.map((l, i) => (
+        <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
+          stroke="var(--cv-accent)" strokeWidth={2.5} strokeDasharray="8 6" opacity={0.85} strokeLinecap="round" />
+      ))}
+    </svg>
+  );
+}
+
 function ViewportTracker() {
   const { zoom } = useViewport();
   useEffect(() => {
@@ -635,6 +672,7 @@ function Board() {
           }}
         />
         <ViewportTracker />
+        <AnchorCables nav={nav} />
       </ReactFlow>
       {connected === false && null}
       {nav === "inbox" && (

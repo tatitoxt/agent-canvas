@@ -57,6 +57,7 @@ export type ShapeDef = {
   h: number;
   color: string;
   text: string;
+  anchor?: string;
 };
 
 export type ShapeNodeData = {

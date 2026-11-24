@@ -107,6 +107,7 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
   return (
     <div
       className="glass"
+      data-panel={kind}
       style={{
         position: "absolute",
         left: 64,
@@ -128,7 +129,7 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
         <PinBtn
           title={kind === "prs" ? "Pull requests" : "Issues"}
           body={(items ?? []).map((it) => `#${it.number} ${it.title} — ${it.user}`).join("\n") || slug || ""}
-        />
+         anchor={kind} />
         <span style={{ fontSize: 10, color: "var(--cv-ink-dim)", paddingLeft: 8 }}>{slug ?? "no repo"}</span>
         <button
           title="refresh"

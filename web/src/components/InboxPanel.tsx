@@ -54,6 +54,7 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
   return (
     <div
       className="glass"
+      data-panel="inbox"
       style={{
         position: "absolute",
         left: 64,
@@ -79,7 +80,7 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
       >
         Inbox
         <span style={{ flex: 1 }} />
-        <PinBtn title="Inbox" body={needsYou.map((a) => `${a.name} — ${a.lastLine ?? a.status}`).join("\n")} />
+        <PinBtn anchor="inbox" title="Inbox" body={needsYou.map((a) => `${a.name} — ${a.lastLine ?? a.status}`).join("\n")} />
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
         {empty && (

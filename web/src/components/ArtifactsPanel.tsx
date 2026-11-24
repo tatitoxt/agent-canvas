@@ -44,6 +44,7 @@ export function ArtifactsPanel() {
   return (
     <div
       className="glass"
+      data-panel="artifacts"
       style={{
         position: "absolute",
         left: 64,
@@ -276,6 +277,7 @@ export function ArtifactsPanel() {
                       .slice(0, 6)
                       .join("\n")
                       .slice(0, 260),
+                    "artifacts",
                   )
                 }
               >

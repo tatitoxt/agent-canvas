@@ -2,12 +2,12 @@ import { Icon } from "./icons";
 import { useBoard } from "../store/board";
 
 /** Deska's "Open in canvas" — pins this panel's content as a card on the board. */
-export function PinBtn({ title, body }: { title: string; body: string }) {
+export function PinBtn({ title, body, anchor }: { title: string; body: string; anchor?: string }) {
   const pinCard = useBoard((s) => s.pinCard);
   return (
     <button
       title="Add to Board — pin this panel as a card on the canvas"
-      onClick={() => pinCard(title, body)}
+      onClick={() => pinCard(title, body, undefined, anchor)}
       style={{
         border: "1px solid color-mix(in srgb, var(--cv-accent) 45%, transparent)",
         borderRadius: 999,

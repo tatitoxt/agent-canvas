@@ -69,6 +69,7 @@ export function AutomationsPanel() {
   return (
     <div
       className="glass"
+      data-panel="automations"
       style={{
         position: "absolute",
         left: 64,
@@ -95,7 +96,7 @@ export function AutomationsPanel() {
       >
         Automations
         <span style={{ flex: 1 }} />
-        <PinBtn title="Automations" body={list.map((a) => a.name).join("\n")} />
+        <PinBtn anchor="automations" title="Automations" body={list.map((a) => a.name).join("\n")} />
         <button
           className="glass-pill"
           style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}

@@ -35,6 +35,7 @@ export function NotesPanel() {
   return (
     <div
       className="glass"
+      data-panel="notes"
       style={{
         position: "absolute",
         left: 64,
@@ -50,7 +51,7 @@ export function NotesPanel() {
     >
       <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 8px", color: "var(--cv-ink)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         Notes
-        <PinBtn title="Dex Tickets" body={Object.values(notes).map((n) => `[${n.col}] ${n.text}`).join("\n")} />
+        <PinBtn anchor="notes" title="Dex Tickets" body={Object.values(notes).map((n) => `[${n.col}] ${n.text}`).join("\n")} />
       </div>
       <form
         style={{ display: "flex", gap: 6, margin: "0 4px 10px" }}
