@@ -494,16 +494,17 @@ pub fn canvas_result_line(tail: &str) -> Option<String> {
     tail.lines()
         .rev()
         .find_map(|l| {
-            // Check each \r-segment (newest first) BEFORE stripping:
+            // Check the last non-empty \r-segment BEFORE stripping:
             // strip_ansi drops carriage returns, which would fuse a redrawn
-            // prompt with the real output — and a CRLF-writing child yields
-            // \r\r\n, leaving an empty trailing segment.
-            l.split('\r').rev().find_map(|seg| {
-                strip_ansi(seg)
-                    .trim()
-                    .strip_prefix("CANVAS_RESULT:")
-                    .map(|s| s.trim().to_string())
-            })
+            // prompt with the real output. Only the final segment is what
+            // the screen actually shows — a result overwritten by later
+            // output on the same line doesn't count, while a CRLF-writing
+            // child leaves \r\r\n and its empty tail must be skipped.
+            l.split('\r')
+                .map(strip_ansi)
+                .rev()
+                .find(|s| !s.trim().is_empty())
+                .and_then(|s| s.trim().strip_prefix("CANVAS_RESULT:").map(|v| v.trim().to_string()))
         })
         .filter(|s| !s.is_empty())
 }
@@ -668,6 +669,9 @@ mod tests {
         // (\r\r\n on the wire): the empty last segment must not hide it.
         let tail = "user@box:~/repo$ \rCANVAS_RESULT: shipped it\r\r\nuser@box:~/repo$ ";
         assert_eq!(canvas_result_line(tail).as_deref(), Some("shipped it"));
+        // Result-looking text overwritten by later output on the same
+        // line is not a result — the screen no longer shows it.
+        assert_eq!(canvas_result_line("x \rCANVAS_RESULT: stale\rnext output"), None);
         assert_eq!(canvas_result_line("$ echo hi\r\nhi\r\n$ "), None);
     }
 
