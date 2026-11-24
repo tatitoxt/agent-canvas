@@ -69,7 +69,10 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
     if (useBoard.getState().agents[agentId]?.status === "exited") {
       requestTranscript(agentId);
     }
-    const sub = term.onData((d) => sendInput(agentId, new TextEncoder().encode(d)));
+    const alive = () => useBoard.getState().agents[agentId]?.status !== "exited";
+    const sub = term.onData((d) => {
+      if (alive()) sendInput(agentId, new TextEncoder().encode(d));
+    });
 
     // CLIs that query terminal colors (OSC 10/11/12, e.g. Hermes) block
     // until the emulator answers — xterm.js doesn't by itself, so answer
@@ -92,7 +95,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
       fit.fit();
       // The PTY follows the panel's real size — a maximized terminal gives
       // the CLI the full viewport, not the 80×24 it spawned with.
-      if (term.cols && term.rows) {
+      if (term.cols && term.rows && alive()) {
         useBoard.getState().resizePty(agentId, term.cols, term.rows);
       }
     });
