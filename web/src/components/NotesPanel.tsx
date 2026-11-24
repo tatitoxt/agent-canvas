@@ -20,6 +20,9 @@ export function NotesPanel() {
     (n) => n.board_id === (activeBoard ?? "main"),
   );
   const byCol = (col: string) => cards.filter((n) => n.col === col).sort((a, b) => a.pos - b.pos);
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = cards.filter((n) => n.due).sort((a, b) => (a.due ?? "").localeCompare(b.due ?? ""));
+  const overdue = (n: (typeof cards)[number]) => !!n.due && n.due < today && n.col !== "done";
 
   const move = (note: (typeof cards)[number], dir: -1 | 1) => {
     const i = COLS.findIndex((c) => c.key === note.col);
@@ -73,6 +76,16 @@ export function NotesPanel() {
           }}
         />
       </form>
+      {upcoming.length > 0 && (
+        <div style={{ margin: "0 4px 8px", display: "flex", flexDirection: "column", gap: 2, maxHeight: 90, overflowY: "auto" }}>
+          {upcoming.map((n) => (
+            <div key={n.note_id} style={{ display: "flex", gap: 6, fontSize: 10.5, color: overdue(n) ? "var(--cv-waiting)" : "var(--cv-ink-dim)", alignItems: "baseline" }}>
+              <span style={{ fontFamily: "ui-monospace, monospace", flexShrink: 0 }}>{n.due}</span>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--cv-ink)" }}>{n.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{ flex: 1, display: "flex", gap: 6, minHeight: 0 }}>
         {COLS.map((col) => (
           <div key={col.key} style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
@@ -84,7 +97,7 @@ export function NotesPanel() {
                 <div
                   key={n.note_id}
                   className="glass"
-                  style={{ margin: "0 0 6px", padding: "8px 10px", fontSize: 11.5, color: "var(--cv-ink)", lineHeight: 1.4 }}
+                  style={{ margin: "0 0 6px", padding: "8px 10px", fontSize: 11.5, color: "var(--cv-ink)", lineHeight: 1.4, outline: overdue(n) ? "1px solid var(--cv-waiting)" : "none" }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
                     <span style={{ flex: 1, wordBreak: "break-word" }}>{n.text}</span>
@@ -96,7 +109,14 @@ export function NotesPanel() {
                       ×
                     </button>
                   </div>
-                  <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+                  <div style={{ display: "flex", gap: 4, marginTop: 6, alignItems: "center" }}>
+                    <input
+                      type="date"
+                      value={n.due ?? ""}
+                      onChange={(e) => noteUpsert(n.note_id, n.col, n.text, n.pos, e.target.value || undefined)}
+                      title="due date"
+                      style={{ background: "none", border: "none", color: overdue(n) ? "var(--cv-waiting)" : "var(--cv-ink-dim)", fontSize: 10, fontFamily: "ui-monospace, monospace", width: 92, padding: 0 }}
+                    />
                     <button
                       disabled={col.key === "todo"}
                       style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11, padding: 0, opacity: col.key === "todo" ? 0.3 : 1 }}

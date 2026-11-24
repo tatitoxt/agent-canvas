@@ -71,7 +71,7 @@ type BoardState = {
   /** Artifacts by id — deliverables agents produced. */
   artifacts: Record<string, import("../daemon/client").SnapshotArtifact>;
   /** Kanban notes by id (all boards; filtered by activeBoard in UI). */
-  notes: Record<string, { note_id: string; board_id: string; col: string; text: string; pos: number }>;
+  notes: Record<string, { note_id: string; board_id: string; col: string; text: string; pos: number; due?: string }>;
   /** Saved node positions — replayed from the daemon's layout table. */
   positions: Record<string, { x: number; y: number }>;
   /** Drop position for a delegation child, keyed by parent agent id —
@@ -111,7 +111,7 @@ type BoardState = {
   memoryWrite: (nodeId: string, text: string) => void;
   digestNow: () => void;
   closeDigest: () => void;
-  noteUpsert: (noteId: string | null, col: string, text: string, pos?: number) => void;
+  noteUpsert: (noteId: string | null, col: string, text: string, pos?: number, due?: string) => void;
   noteDelete: (noteId: string) => void;
   artifactCreate: (kind: string, title: string, path?: string, text?: string) => void;
   gitPush: (agentId: string) => void;
@@ -546,8 +546,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   memoryRead: (nodeId) => client?.memoryRead(nodeId),
   digestNow: () => client?.digest(),
   closeDigest: () => set({ digest: null }),
-  noteUpsert: (noteId, col, text, pos) =>
-    client?.noteUpsert(noteId, get().activeBoard ?? undefined, col, text, pos),
+  noteUpsert: (noteId, col, text, pos, due) =>
+    client?.noteUpsert(noteId, get().activeBoard ?? undefined, col, text, pos, due),
   noteDelete: (noteId) => client?.noteDelete(noteId),
   gitPush: (agentId) => client?.gitPush(agentId),
   notify: (text) => set({ notice: text }),

@@ -199,6 +199,12 @@ impl Store {
                  PRAGMA user_version = 9;",
             )?;
         }
+        // v9 → v10: optional due date on notes — the calendar dimension
+        // of the kanban.
+        if version < 10 {
+            conn.execute_batch("ALTER TABLE notes ADD COLUMN due TEXT;
+                 PRAGMA user_version = 10;")?;
+        }
         Ok(Self { conn: Mutex::new(conn) })
     }
 
@@ -472,36 +478,36 @@ impl Store {
         Ok(())
     }
 
-    /// (id, board_id, col, text, pos) — the kanban cards of one board.
-    pub fn notes_snapshot(&self, board_id: &str) -> Result<Vec<(String, String, String, String, i64)>> {
+    /// (id, board_id, col, text, pos, due) — the kanban cards of one board.
+    pub fn notes_snapshot(&self, board_id: &str) -> Result<Vec<(String, String, String, String, i64, Option<String>)>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
-            "SELECT id, board_id, col, text, pos FROM notes WHERE board_id = ?1 ORDER BY col, pos",
+            "SELECT id, board_id, col, text, pos, due FROM notes WHERE board_id = ?1 ORDER BY col, pos",
         )?;
         let rows = st
-            .query_map([board_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?
+            .query_map([board_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)))?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows)
     }
 
     /// All notes across boards — the full snapshot embeds them so a
     /// board switch needs no round-trip.
-    pub fn all_notes(&self) -> Result<Vec<(String, String, String, String, i64)>> {
+    pub fn all_notes(&self) -> Result<Vec<(String, String, String, String, i64, Option<String>)>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
-            "SELECT id, board_id, col, text, pos FROM notes ORDER BY board_id, col, pos",
+            "SELECT id, board_id, col, text, pos, due FROM notes ORDER BY board_id, col, pos",
         )?;
         let rows = st
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)))?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows)
     }
 
-    pub fn note_upsert(&self, id: &str, board_id: &str, col: &str, text: &str, pos: i64) -> Result<()> {
+    pub fn note_upsert(&self, id: &str, board_id: &str, col: &str, text: &str, pos: i64, due: Option<&str>) -> Result<()> {
         self.conn.lock().unwrap().execute(
-            "INSERT INTO notes (id, board_id, col, text, pos) VALUES (?1, ?2, ?3, ?4, ?5)
-             ON CONFLICT(id) DO UPDATE SET board_id=excluded.board_id, col=excluded.col, text=excluded.text, pos=excluded.pos",
-            rusqlite::params![id, board_id, col, text, pos],
+            "INSERT INTO notes (id, board_id, col, text, pos, due) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(id) DO UPDATE SET board_id=excluded.board_id, col=excluded.col, text=excluded.text, pos=excluded.pos, due=excluded.due",
+            rusqlite::params![id, board_id, col, text, pos, due],
         )?;
         Ok(())
     }

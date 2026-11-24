@@ -360,12 +360,13 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .all_notes()
                 .unwrap_or_default()
                 .into_iter()
-                .map(|(note_id, board_id, col, text, pos)| protocol::SnapshotNote {
+                .map(|(note_id, board_id, col, text, pos, due)| protocol::SnapshotNote {
                     note_id,
                     board_id,
                     col,
                     text,
                     pos,
+                    due,
                 })
                 .collect(),
             approvals: state
@@ -775,16 +776,16 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::NoteUpsert { note_id, board_id, col, text, pos } => {
+        ClientMsg::NoteUpsert { note_id, board_id, col, text, pos, due } => {
             let id = note_id.unwrap_or_else(|| format!("note-{}", uuid_like()));
             let board = board_id.unwrap_or_else(|| "main".to_string());
             let p = match pos {
                 Some(p) => p,
                 None => state.store.note_next_pos(&board, &col).unwrap_or(0),
             };
-            match state.store.note_upsert(&id, &board, &col, &text, p) {
+            match state.store.note_upsert(&id, &board, &col, &text, p, due.as_deref()) {
                 Ok(()) => send_control(ServerMsg::NoteUpserted {
-                    note: protocol::SnapshotNote { note_id: id, board_id: board, col, text, pos: p },
+                    note: protocol::SnapshotNote { note_id: id, board_id: board, col, text, pos: p, due },
                 }),
                 Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
             }

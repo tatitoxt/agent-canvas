@@ -395,6 +395,7 @@ fn note_upsert(
     col: String,
     text: String,
     pos: Option<i64>,
+    due: Option<String>,
 ) -> Result<(), String> {
     let id = note_id.unwrap_or_else(|| format!("note-{}", &uuid_v4ish()[..8]));
     let board = board_id.unwrap_or_else(|| "main".to_string());
@@ -402,9 +403,9 @@ fn note_upsert(
         Some(p) => p,
         None => state.store.note_next_pos(&board, &col).map_err(|e| e.to_string())?,
     };
-    state.store.note_upsert(&id, &board, &col, &text, p).map_err(|e| e.to_string())?;
+    state.store.note_upsert(&id, &board, &col, &text, p, due.as_deref()).map_err(|e| e.to_string())?;
     emit_control(&app, &ServerMsg::NoteUpserted {
-        note: canvasd::protocol::SnapshotNote { note_id: id, board_id: board, col, text, pos: p },
+        note: canvasd::protocol::SnapshotNote { note_id: id, board_id: board, col, text, pos: p, due },
     });
     Ok(())
 }
@@ -918,8 +919,8 @@ fn snapshot(
             .all_notes()
             .unwrap_or_default()
             .into_iter()
-            .map(|(note_id, board_id, col, text, pos)| canvasd::protocol::SnapshotNote {
-                note_id, board_id, col, text, pos,
+            .map(|(note_id, board_id, col, text, pos, due)| canvasd::protocol::SnapshotNote {
+                note_id, board_id, col, text, pos, due,
             })
             .collect::<Vec<_>>(),
         "automations": state

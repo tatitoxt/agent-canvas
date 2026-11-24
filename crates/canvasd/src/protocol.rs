@@ -53,6 +53,8 @@ pub enum ClientMsg {
         col: String,
         text: String,
         pos: Option<i64>,
+        /// Optional due date (YYYY-MM-DD) — the calendar dimension.
+        due: Option<String>,
     },
     /// Delete a kanban note.
     NoteDelete { note_id: String },
@@ -310,6 +312,8 @@ pub struct SnapshotNote {
     pub col: String,
     pub text: String,
     pub pos: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -132,8 +132,8 @@ export class TauriCanvasClient {
     void invoke("artifact_delete", { artifactId }).catch(console.error);
   }
 
-  noteUpsert(noteId: string | null, boardId: string | undefined, col: string, text: string, pos?: number) {
-    void invoke("note_upsert", { noteId, boardId, col, text, pos }).catch(console.error);
+  noteUpsert(noteId: string | null, boardId: string | undefined, col: string, text: string, pos?: number, due?: string) {
+    void invoke("note_upsert", { noteId, boardId, col, text, pos, due }).catch(console.error);
   }
 
   noteDelete(noteId: string) {

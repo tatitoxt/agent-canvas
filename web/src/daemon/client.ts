@@ -189,8 +189,8 @@ export class CanvasClient {
     this.send({ cmd: "artifact_delete", artifact_id: artifactId });
   }
 
-  noteUpsert(noteId: string | null, boardId: string | undefined, col: string, text: string, pos?: number) {
-    this.send({ cmd: "note_upsert", note_id: noteId, board_id: boardId, col, text, pos });
+  noteUpsert(noteId: string | null, boardId: string | undefined, col: string, text: string, pos?: number, due?: string) {
+    this.send({ cmd: "note_upsert", note_id: noteId, board_id: boardId, col, text, pos, due });
   }
 
   noteDelete(noteId: string) {
