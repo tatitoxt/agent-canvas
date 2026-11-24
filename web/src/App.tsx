@@ -712,6 +712,13 @@ function Board() {
 export function App() {
   return (
     <ReactFlowProvider>
+      {/* Excalidraw-style sloppiness for whiteboard shapes */}
+      <svg width="0" height="0" style={{ position: "absolute" }}>
+        <filter id="cv-sloppy">
+          <feTurbulence type="turbulence" baseFrequency="0.015" numOctaves="2" result="n" seed="3" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="4" />
+        </filter>
+      </svg>
       <Board />
     </ReactFlowProvider>
   );

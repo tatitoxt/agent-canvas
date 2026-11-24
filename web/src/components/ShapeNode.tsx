@@ -8,7 +8,9 @@ const PALETTE = [
 ];
 
 function ShapeSvg({ s }: { s: ShapeDef }) {
+  const sloppy = s.kind === "sticky" ? {} : { filter: "url(#cv-sloppy)" as const };
   const common = {
+    ...sloppy,
     stroke: s.color,
     strokeWidth: 2,
     fill: s.kind === "sticky" ? s.color : `${s.color}26`,
