@@ -8,8 +8,11 @@ import {
   getViewportForBounds,
   useReactFlow,
   useViewport,
+  applyNodeChanges,
+  useNodesState,
   type FinalConnectionState,
   type Node,
+  type NodeChange,
   type NodeMouseHandler,
   type OnNodeDrag,
 } from "@xyflow/react";
@@ -419,7 +422,7 @@ function Board() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const nodes = useMemo<Node<BoardNodeData>[]>(() => {
+  const baseNodes = useMemo<Node<BoardNodeData>[]>(() => {
     const wsNodes: Node<BoardNodeData>[] = Object.values(workspaces)
       .filter((w) => (w.board_id ?? "main") === activeBoard)
       .map((w) => ({
@@ -544,6 +547,33 @@ function Board() {
       ? [...initialNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs]
       : [...wsNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs];
   }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges, shapes, mdNodes, panelNodes, termNodes, cardZ]);
+
+  // Controlled React Flow needs change application for selection and drag to
+  // stick. rfNodes is the rendered array: baseNodes is re-derived from the
+  // store, then merged over rfNodes so each node's `selected`/`dragging` flags
+  // (and in-flight drag position) survive every store re-render.
+  const [rfNodes, setRfNodes] = useNodesState<Node<BoardNodeData>>(baseNodes);
+  useEffect(() => {
+    setRfNodes((prev) => {
+      const byId = new Map(prev.map((n) => [n.id, n]));
+      return baseNodes.map((b) => {
+        const p = byId.get(b.id);
+        return p
+          ? {
+              ...b,
+              selected: p.selected,
+              dragging: p.dragging,
+              position: p.dragging ? p.position : b.position,
+            }
+          : b;
+      });
+    });
+  }, [baseNodes, setRfNodes]);
+  const onNodesChange = useCallback(
+    (changes: NodeChange<Node<BoardNodeData>>[]) =>
+      setRfNodes((ns) => applyNodeChanges(changes, ns)),
+    [setRfNodes],
+  );
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     // In Connect mode a click on an agent card wires/unwires it to the
@@ -790,10 +820,11 @@ function Board() {
       )}
       {!chromeHidden && <SpawnBar />}
       <ReactFlow
-        nodes={nodes}
+        nodes={rfNodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        onNodesChange={onNodesChange}
         onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeDragStop={onNodeDragStop}
