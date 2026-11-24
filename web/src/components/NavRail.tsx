@@ -300,6 +300,10 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
   const repoUrl = useBoard((s) => s.repoUrl);
   const agents = useBoard((s) => s.agents);
   const activeBoard = useBoard((s) => s.activeBoard);
+  const ghCounts = useBoard((s) => s.ghCounts);
+  const noteCount = useBoard((s) => Object.keys(s.notes).length);
+  const artifactCount = useBoard((s) => Object.keys(s.artifacts).length);
+  const loopCount = useBoard((s) => Object.values(s.loops).filter((l) => l.enabled).length);
   const openAgents = Object.values(agents)
     .filter((a) => (a.board_id ?? "main") === activeBoard && a.status !== "exited");
   const gitAgents = openAgents.filter((a) => a.worktree);
@@ -316,7 +320,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
     return () => window.removeEventListener("mousedown", onDown);
   }, [menu]);
 
-  const toolRow = (icon: string, label: string, hint: string, onClick: () => void, activeKey?: string, iconColor?: string) => (
+  const toolRow = (icon: string, label: string, hint: string, onClick: () => void, activeKey?: string, iconColor?: string, fact?: string) => (
     <button
       key={label}
       style={{
@@ -331,6 +335,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
     >
       <Icon name={icon} size={14} color={iconColor ?? (activeKey && active === activeKey ? "var(--cv-accent)" : "var(--cv-ink-dim)")} />
       <span style={{ flex: 1 }}>{label}</span>
+      {fact && <span style={{ fontSize: 9, color: "var(--cv-ink-dim)", fontWeight: 600 }}>{fact}</span>}
     </button>
   );
 
@@ -350,11 +355,11 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
           </div>
           {toolRow("git", "Source Control", `worktrees, push an agent's branch${gitAgents.length ? ` — ${gitAgents.length} live` : ""}`, () => setMenu((m) => (m === "git" ? null : "git")))}
           {toolRow("obsidian", "Obsidian", "your real vault — browse markdown; 'obsidian <note>' in Dex writes to it", () => onSelect("vault"), "vault", "#8B5CF6")}
-          {toolRow("pr", "Pull requests", "live list from the repo's GitHub", () => onSelect("prs"), "prs")}
-          {toolRow("issue", "Issues", "live list from the repo's GitHub", () => onSelect("issues"), "issues")}
-          {toolRow("ticket", "Dex Tickets", "notes and tasks on the board", () => onSelect("notes"), "notes")}
-          {toolRow("artifacts", "Artifacts", "shots, docs and files the agents produced", () => onSelect("artifacts"), "artifacts")}
-          {toolRow("loops", "Loops", "recurring instructions per agent", () => onSelect("loops"), "loops")}
+          {toolRow("pr", "Pull requests", "live list from the repo's GitHub", () => onSelect("prs"), "prs", undefined, ghCounts.prs != null ? `${ghCounts.prs} open` : undefined)}
+          {toolRow("issue", "Issues", "live list from the repo's GitHub", () => onSelect("issues"), "issues", undefined, ghCounts.issues != null ? `${ghCounts.issues} open` : undefined)}
+          {toolRow("ticket", "Dex Tickets", "notes and tasks on the board", () => onSelect("notes"), "notes", undefined, noteCount ? `${noteCount}` : undefined)}
+          {toolRow("artifacts", "Artifacts", "shots, docs and files the agents produced", () => onSelect("artifacts"), "artifacts", undefined, artifactCount ? `${artifactCount}` : undefined)}
+          {toolRow("loops", "Loops", "recurring instructions per agent", () => onSelect("loops"), "loops", undefined, loopCount ? `${loopCount} active` : undefined)}
         </nav>
         {menu === "git" && (
           <div

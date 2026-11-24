@@ -285,6 +285,8 @@ type BoardState = {
   threadLog: ThreadLine[];
   threadSend: (text: string) => void;
   navRequest: { key: string; n: number } | null;
+  /** Open counts the GitHub panels last fetched — shown as live facts in the Library rail. */
+  ghCounts: { prs?: number; issues?: number };
   requestNav: (key: string) => void;
   /** Deska's "Show Panel Summaries" — hides each card's last line +
    * inline mini-terminal preview for a quieter board. */
@@ -1159,6 +1161,7 @@ export const useBoard = create<BoardState>((set, get) => ({
 
   threadLog: loadThreadLog(),
   navRequest: null,
+  ghCounts: {},
   requestNav: (key) => set((s) => ({ navRequest: { key, n: (s.navRequest?.n ?? 0) + 1 } })),
   panelSummaries: true,
   togglePanelSummaries: () => set((s) => ({ panelSummaries: !s.panelSummaries })),

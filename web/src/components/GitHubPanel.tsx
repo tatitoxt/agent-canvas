@@ -74,6 +74,7 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
             sha: it.head?.sha,
           }));
         setItems(rows);
+        useBoard.setState((s) => ({ ghCounts: { ...s.ghCounts, [kind]: rows.length } }));
         // Second pass: CI roll-up per PR head (status check aggregate).
         if (kind === "prs") {
           rows.forEach((it, i) => {
