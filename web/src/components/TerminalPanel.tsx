@@ -172,7 +172,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
 
   return (
     <div
-      className="glass"
+      className="glass group"
       style={{
         ...panelStyle,
         display: "flex",
@@ -256,7 +256,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
           </span>
         </span>
         <div
-          className="flex items-center gap-2"
+          className={`flex items-center gap-2 transition-opacity ${confirmingKill || listening ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
           onPointerDown={(e) => e.stopPropagation()}
         >
           <button

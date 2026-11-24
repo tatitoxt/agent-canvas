@@ -18,9 +18,34 @@ const REAL_PATHS: Record<string, string[]> = {
   "vibe": ["M17.143 3.429v3.428h-3.429v3.429h-3.428V6.857H6.857V3.43H3.43v13.714H0v3.428h10.286v-3.428H6.857v-3.429h3.429v3.429h3.429v-3.429h3.428v3.429h-3.428v3.428H24v-3.428h-3.43V3.429z"],
 };
 
+import hermesSvgUrl from "../assets/hermes.svg";
+
 export function CliMark({ cli, color, size = 12 }: { cli: string; color: string; size?: number }) {
   const s = { width: size, height: size, flex: "none" as const, display: "inline-block" };
   const key = cli.toLowerCase();
+  // Official Hermes Agent mark (Nous Research "nous-girl" art, brand kit
+  // SVG — too detailed to inline). Used as a mask so it picks up the
+  // CLI's brand color like every other mark.
+  if (key === "hermes") {
+    return (
+      <span
+        role="img"
+        aria-label="Hermes"
+        style={{
+          ...s,
+          backgroundColor: color,
+          WebkitMaskImage: `url(${hermesSvgUrl})`,
+          maskImage: `url(${hermesSvgUrl})`,
+          WebkitMaskSize: "contain",
+          maskSize: "contain",
+          WebkitMaskRepeat: "no-repeat",
+          maskRepeat: "no-repeat",
+          WebkitMaskPosition: "center",
+          maskPosition: "center",
+        }}
+      />
+    );
+  }
   const real = REAL_PATHS[key];
   if (real) {
     return (
