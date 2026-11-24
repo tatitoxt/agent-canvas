@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useBoard } from "../store/board";
 import { downloadPdf } from "../lib/pdf";
 import { buildDoc, buildAskDoc } from "../lib/boardDocs";
@@ -129,7 +129,7 @@ function ReadingView({ text, onLink }: { text: string; onLink?: (name: string) =
     if (h) {
       const size = [19, 16, 14, 12.5, 11.5, 11][h[1].length - 1];
       els.push(
-        <div key={i} style={{ fontSize: size, fontWeight: 700, margin: "16px 0 6px", color: "var(--cv-accent)", letterSpacing: 0.2 }}>
+        <div key={i} id={`vh-${i}`} style={{ fontSize: size, fontWeight: 700, margin: "16px 0 6px", color: "var(--cv-accent)", letterSpacing: 0.2 }}>
           {mdInline(h[2], onLink)}
         </div>,
       );
@@ -694,6 +694,23 @@ export function VaultPanel() {
   const [renaming, setRenaming] = useState(false);
   const [renName, setRenName] = useState("");
   const [graphScope, setGraphScope] = useState<"local" | "vault">("local");
+  const [outlineOpen, setOutlineOpen] = useState(false);
+
+  /** Headings of the open note for the Outline dropdown (Obsidian's Outline
+   * panel): skips frontmatter and fenced code, keeps the line index used by
+   * the `vh-<line>` ids ReadingView renders. */
+  const headings = useMemo(() => {
+    if (!vaultFile) return [] as { line: number; depth: number; title: string }[];
+    const out: { line: number; depth: number; title: string }[] = [];
+    let inCode = false;
+    vaultFile.text.split("\n").forEach((l, i) => {
+      if (/^\s*```/.test(l)) { inCode = !inCode; return; }
+      if (inCode) return;
+      const m = l.match(/^(#{1,6})\s+(.*)/);
+      if (m) out.push({ line: i, depth: m[1].length, title: m[2].replace(/[*_~=`[\]]/g, "") });
+    });
+    return out;
+  }, [vaultFile]);
 
   const openDaily = () => {
     if (!vaultDir) { notify("open a vault first"); return; }
@@ -1058,6 +1075,46 @@ export function VaultPanel() {
                 >
                   vault
                 </button>
+              </>
+            )}
+            {view === "reading" && headings.length > 0 && (
+              <>
+                <span style={{ width: 1, background: "var(--cv-glass-edge)", margin: "2px 2px" }} />
+                <div style={{ position: "relative" }}>
+                  <button
+                    style={tabBtn(outlineOpen)}
+                    title="Outline — jump to a heading (Obsidian's Outline panel)"
+                    onClick={() => setOutlineOpen((o) => !o)}
+                  >
+                    outline
+                  </button>
+                  {outlineOpen && (
+                    <div
+                      className="glass"
+                      style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 40, minWidth: 190, maxWidth: 280, maxHeight: 300, overflow: "auto", borderRadius: 8, padding: 5 }}
+                    >
+                      {headings.map((h) => (
+                        <button
+                          key={h.line}
+                          onClick={() => {
+                            document.getElementById(`vh-${h.line}`)?.scrollIntoView({ block: "start" });
+                            setOutlineOpen(false);
+                          }}
+                          style={{
+                            display: "block", width: "100%", textAlign: "left",
+                            background: "none", border: "none", cursor: "pointer",
+                            color: h.depth === 1 ? "var(--cv-ink)" : "var(--cv-ink-dim)",
+                            fontSize: 11, fontWeight: h.depth <= 2 ? 600 : 400,
+                            padding: `4px 8px 4px ${8 + (h.depth - 1) * 10}px`,
+                            borderRadius: 5,
+                          }}
+                        >
+                          {h.title}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>
