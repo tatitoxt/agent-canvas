@@ -170,6 +170,10 @@ export class TauriCanvasClient {
     void invoke("vault_read", { dir, path }).catch(console.error);
   }
 
+  vaultPeek(dir: string, path: string) {
+    void invoke("vault_peek", { dir, path }).catch(console.error);
+  }
+
   vaultAppend(dir: string, path: string, text: string) {
     void invoke("vault_append", { dir, path, text }).catch(console.error);
   }

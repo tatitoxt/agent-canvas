@@ -100,7 +100,14 @@ function mdInline(text: string, onLink?: (name: string) => void): React.ReactNod
 
 /** Reading view styled on real Obsidian: amber headings, amber link underlines,
  * bullet/numbered lists, tasks, blockquotes, fenced code. */
-function ReadingView({ text, onLink, onToggleTask }: { text: string; onLink?: (name: string) => void; onToggleTask?: (line: number, done: boolean) => void }) {
+function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embedFetch }: {
+  text: string;
+  onLink?: (name: string) => void;
+  onToggleTask?: (line: number, done: boolean) => void;
+  depth?: number;
+  embedLookup?: (name: string) => { path: string; text?: string } | null;
+  embedFetch?: (path: string) => void;
+}) {
   const lines = text.split("\n");
   // YAML frontmatter (--- ... ---): Obsidian renders it as a "Properties"
   // table at the top of the note instead of raw YAML.
@@ -162,6 +169,20 @@ function ReadingView({ text, onLink, onToggleTask }: { text: string; onLink?: (n
       continue;
     }
     if (inCode) { codeBuf.push(l); continue; }
+    // Obsidian transclusion: ![[Note]] embeds the note's content inline.
+    // Rendered one level deep — a nested embed falls back to a plain link
+    // so cycles can never recurse.
+    const emb = l.match(/^\s*!\[\[([^\]|#]+?)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]\s*$/);
+    if (emb && embedLookup) {
+      if (depth >= 1) {
+        els.push(<div key={i} style={{ margin: "4px 0" }}>{mdInline(`[[${emb[1].trim()}]]`, onLink)}</div>);
+      } else {
+        els.push(
+          <NoteEmbed key={i} name={emb[1].trim()} lookup={embedLookup} fetchPath={embedFetch} onLink={onLink} />,
+        );
+      }
+      continue;
+    }
     const h = l.match(/^(#{1,6})\s+(.*)/);
     if (h) {
       const size = [19, 16, 14, 12.5, 11.5, 11][h[1].length - 1];
@@ -318,6 +339,56 @@ function ReadingView({ text, onLink, onToggleTask }: { text: string; onLink?: (n
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "10px 18px", fontSize: 12.5, lineHeight: 1.7, color: "var(--cv-ink)", fontFamily: "inherit" }}>
       {els}
+    </div>
+  );
+}
+
+/** Obsidian-style note transclusion: renders another note's content in a
+ * bordered embed box. Fetches the text on demand via vault_peek so the open
+ * note is untouched; the title opens the real note. */
+function NoteEmbed({ name, lookup, fetchPath, onLink }: {
+  name: string;
+  lookup: (n: string) => { path: string; text?: string } | null;
+  fetchPath?: (p: string) => void;
+  onLink?: (name: string) => void;
+}) {
+  const hit = lookup(name);
+  const missing = hit?.text === undefined;
+  useEffect(() => {
+    if (hit && missing) fetchPath?.(hit.path);
+  }, [hit?.path, missing]);
+  if (!hit) {
+    return (
+      <div style={{ margin: "6px 0", fontSize: 11.5, color: "var(--cv-ink-faint)", fontStyle: "italic" }}>
+        ![[{name}]] — note not found
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        margin: "10px 0", maxWidth: 640, borderRadius: 8,
+        border: "1px solid color-mix(in srgb, var(--cv-accent) 32%, transparent)",
+        borderLeft: "3px solid var(--cv-accent)",
+        background: "rgba(255,255,255,0.025)", padding: "8px 12px 10px",
+      }}
+    >
+      <button
+        onClick={() => onLink?.(hit.path)}
+        title={`Open ${hit.path}`}
+        style={{
+          background: "none", border: "none", padding: 0, cursor: "pointer",
+          fontSize: 10.5, fontWeight: 700, color: "var(--cv-accent)",
+          display: "block", marginBottom: 4,
+        }}
+      >
+        {hit.path.replace(/\.md$/, "")}
+      </button>
+      {missing ? (
+        <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", fontStyle: "italic" }}>loading…</div>
+      ) : (
+        <ReadingView text={hit.text!} depth={1} onLink={onLink} />
+      )}
     </div>
   );
 }
@@ -696,6 +767,8 @@ export function VaultPanel() {
   const vaultFile = useBoard((s) => s.vaultFile);
   const vaultList = useBoard((s) => s.vaultList);
   const vaultRead = useBoard((s) => s.vaultRead);
+  const vaultPeek = useBoard((s) => s.vaultPeek);
+  const mdContents = useBoard((s) => s.mdContents);
   const closeVaultFile = useBoard((s) => s.closeVaultFile);
   const vaultHits = useBoard((s) => s.vaultHits);
   const vaultSearch = useBoard((s) => s.vaultSearch);
@@ -846,6 +919,12 @@ export function VaultPanel() {
   const openByName = (name: string) => {
     const hit = vaultEntries.find((e) => e === name || e.endsWith(`/${name}.md`) || e === `${name}.md` || e.replace(/\.md$/, "") === name);
     if (hit) vaultRead(hit);
+  };
+
+  // Embed resolution for ![[note]] transclusion: name → {path, cached text}.
+  const resolveEmbed = (name: string) => {
+    const hit = vaultEntries.find((e) => e === name || e.endsWith(`/${name}.md`) || e === `${name}.md` || e.replace(/\.md$/, "") === name);
+    return hit ? { path: hit, text: mdContents[hit] } : null;
   };
 
   const exportFile = () => {
@@ -1213,6 +1292,8 @@ export function VaultPanel() {
             <ReadingView
               text={vaultFile.text}
               onLink={openByName}
+              embedLookup={resolveEmbed}
+              embedFetch={vaultPeek}
               onToggleTask={(ln, done) => {
                 const ls = vaultFile.text.split("\n");
                 ls[ln] = ls[ln].replace(/- \[[ xX]\]/, done ? "- [x]" : "- [ ]");

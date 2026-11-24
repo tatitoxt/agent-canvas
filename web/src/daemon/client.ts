@@ -75,6 +75,7 @@ export type ServerMsg =
   | { type: "studio_doc_md"; text: string }
   | { type: "vault_listing"; dir: string; entries: string[] }
   | { type: "vault_file"; path: string; text: string }
+  | { type: "vault_peeked"; path: string; text: string }
   | { type: "vault_hits"; dir: string; query: string; hits: { path: string; line: number; text: string }[] }
   | { type: "vault_graph"; dir: string; nodes: string[]; edges: [string, string][] }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
@@ -210,6 +211,10 @@ export class CanvasClient {
 
   vaultRead(dir: string, path: string) {
     this.send({ cmd: "vault_read", dir, path });
+  }
+
+  vaultPeek(dir: string, path: string) {
+    this.send({ cmd: "vault_peek", dir, path });
   }
 
   vaultAppend(dir: string, path: string, text: string) {

@@ -251,6 +251,7 @@ type BoardState = {
   notify: (text: string) => void;
   vaultList: (dir: string) => void;
   vaultRead: (path: string) => void;
+  vaultPeek: (path: string) => void;
   vaultSearch: (query: string) => void;
   vaultAppend: (path: string, text: string) => void;
   vaultWrite: (path: string, text: string) => void;
@@ -738,6 +739,9 @@ export const useBoard = create<BoardState>((set, get) => ({
               mdContents: { ...get().mdContents, [msg.path]: msg.text },
             });
             break;
+          case "vault_peeked":
+            set({ mdContents: { ...get().mdContents, [msg.path]: msg.text } });
+            break;
           case "git_pushed": {
             set({ notice: `pushed — ${msg.output || "done"}` });
             break;
@@ -865,6 +869,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     client?.vaultList(dir);
   },
   vaultRead: (path) => client?.vaultRead(get().vaultDir, path),
+  vaultPeek: (path) => client?.vaultPeek(get().vaultDir, path),
   vaultAppend: (path, text) => client?.vaultAppend(get().vaultDir, path, text),
   vaultWrite: (path, text) => client?.vaultWrite(get().vaultDir, path, text),
   vaultDelete: (path) => client?.vaultDelete(get().vaultDir, path),

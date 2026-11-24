@@ -1216,6 +1216,15 @@ fn handle_client_msg(
                 _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault read failed: {path}") }),
             }
         }
+        ClientMsg::VaultPeek { dir, path } => {
+            let root = PathBuf::from(&dir);
+            let file = root.join(&path);
+            let ok = !path.contains("..") && path.ends_with(".md") && file.is_file();
+            match ok.then(|| std::fs::read_to_string(&file)) {
+                Some(Ok(text)) => send_control(ServerMsg::VaultPeeked { path, text }),
+                _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault peek failed: {path}") }),
+            }
+        }
         ClientMsg::VaultAppend { dir, path, text } => {
             let root = PathBuf::from(&dir);
             let file = root.join(&path);

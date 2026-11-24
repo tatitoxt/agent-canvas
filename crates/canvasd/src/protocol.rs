@@ -71,6 +71,8 @@ pub enum ClientMsg {
     VaultList { dir: String },
     /// Read one file from the vault.
     VaultRead { dir: String, path: String },
+    /// Read one file without making it "the open note" — powers `![[embeds]]`.
+    VaultPeek { dir: String, path: String },
     /// Append markdown text to a vault file — Dex's "leave it in Obsidian"
     /// path. Creates the file (and parent dirs) when missing; the path is
     /// constrained to the vault root and must end in .md.
@@ -335,6 +337,9 @@ pub enum ServerMsg {
     VaultListing { dir: String, entries: Vec<String> },
     /// Vault file contents (VaultRead answer).
     VaultFile { path: String, text: String },
+    /// Vault file contents for an embed (VaultPeek answer) — cached client-side,
+    /// never replaces the open note.
+    VaultPeeked { path: String, text: String },
     /// Vault search hits (VaultSearch answer).
     VaultHits { dir: String, query: String, hits: Vec<VaultHit> },
     /// Whole-vault link graph (VaultGraph answer): every note plus every

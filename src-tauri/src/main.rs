@@ -534,6 +534,18 @@ fn vault_read(app: AppHandle, dir: String, path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Read a vault file without making it the open note — powers `![[embeds]]`.
+#[tauri::command]
+fn vault_peek(app: AppHandle, dir: String, path: String) -> Result<(), String> {
+    let file = PathBuf::from(&dir).join(&path);
+    if path.contains("..") || !path.ends_with(".md") || !file.is_file() {
+        return Err("not a markdown file in the vault".into());
+    }
+    let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::VaultPeeked { path, text });
+    Ok(())
+}
+
 #[tauri::command]
 fn vault_append(app: AppHandle, dir: String, path: String, text: String) -> Result<(), String> {
     let file = PathBuf::from(&dir).join(&path);
@@ -1693,6 +1705,7 @@ fn main() {
             vault_list,
             vault_search,
             vault_read,
+            vault_peek,
             vault_append,
             vault_write,
             vault_delete,
