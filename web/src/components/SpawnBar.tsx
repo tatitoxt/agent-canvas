@@ -37,6 +37,10 @@ const AGENT_CHOICES = [
   { cmd: "kilocode", label: "◈ Kilocode" },
   { cmd: "qwen", label: "✧ Qwen Code" },
   { cmd: "hermes", label: "◧ Hermes" },
+  { cmd: "kimi", label: "◻ Kimi Code" },
+  { cmd: "vibe", label: "▦ Mistral Vibe" },
+  { cmd: "pi", label: "▶ Pi" },
+  { cmd: "antigravity", label: "▲ Antigravity" },
   { cmd: "bash", label: "›_ Terminal" },
   { cmd: "custom", label: "… custom command" },
 ];

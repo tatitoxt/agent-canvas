@@ -43,7 +43,11 @@ const CLI_META: Record<string, { mark: string; label: string; color: string }> =
   goose: { mark: "◈", label: "Goose", color: "#6b93cf" },
   kilocode: { mark: "◈", label: "Kilocode", color: "#5b8dd6" },
   qwen: { mark: "✧", label: "Qwen Code", color: "#8f7fd4" },
-  hermes: { mark: "◧", label: "Hermes", color: "#8a94a6" },
+  hermes: { mark: "◧", label: "Hermes", color: "#c9a24a" },
+  kimi: { mark: "◻", label: "Kimi Code", color: "#4a8ec2" },
+  vibe: { mark: "▦", label: "Mistral Vibe", color: "#cf5a3a" },
+  pi: { mark: "▶", label: "Pi", color: "#7ba3cf" },
+  antigravity: { mark: "▲", label: "Antigravity", color: "#b8573e" },
   bash: { mark: "›_", label: "Terminal", color: "#86817a" },
   live: { mark: "›_", label: "Terminal", color: "#86817a" },
 };
@@ -62,6 +66,68 @@ function cliMeta(cli: string) {
 const ANSI_RE = /\u001b\[[0-9;?><=!$]*[a-zA-Z@]|\u001b\][^\u0007]*(?:\u0007|\u001b\\)|\u001b[()][0-9A-B]|\u001b[=>#]?[0-9]*.?/g;
 const decoder = new TextDecoder();
 
+/** ANSI SGR → colored spans: keeps each CLI's real colors (Claude coral,
+ * Codex green, OpenCode violet) inside the node preview. */
+type AnsiSpan = { text: string; color?: string; bold?: boolean };
+const BASIC = [
+  "#8a817a", "#c07a6a", "#7ba389", "#c2a15e",
+  "#7ba3cf", "#9a7fd4", "#6ba3a8", "#eceae6",
+];
+const BRIGHT = BASIC.map((c) => c);
+const SGR_RE = /\u001b\[([0-9;]*)m/g;
+const PALETTE_256: string[] = (() => {
+  const base = ["#4a4640","#c07a6a","#7ba389","#c2a15e","#7ba3cf","#9a7fd4","#6ba3a8","#eceae6",
+                "#86817a","#d68a7a","#8bb39b","#d2b16e","#8bb3df","#aa8fe4","#7bb3b8","#fffdfa"];
+  const cube: string[] = [];
+  const lv = [0, 95, 135, 175, 215, 255];
+  for (const r of lv) for (const g of lv) for (const b of lv) cube.push(`rgb(${r},${g},${b})`);
+  const grays: string[] = [];
+  for (let i = 0; i < 24; i++) { const v = 8 + i * 10; grays.push(`rgb(${v},${v},${v})`); }
+  return [...base, ...cube, ...grays];
+})();
+
+function parseAnsiLine(raw: string): AnsiSpan[] {
+  const clean = raw.replace(ANSI_RE, "");
+  const spans: AnsiSpan[] = [];
+  let color: string | undefined;
+  let bold = false;
+  let last = 0;
+  const push = (end: number) => {
+    const t = clean.slice(last, end).replace(/[^\x20-\x7e\u00a0-\uffff\u{1f300}-\u{1faff}]/gu, "");
+    if (t) spans.push({ text: t, color, bold });
+  };
+  for (const m of clean.matchAll(SGR_RE)) {
+    push(m.index!);
+    last = m.index! + m[0].length;
+    const codes = m[1].split(";");
+    for (let i = 0; i < codes.length; i++) {
+      const n = parseInt(codes[i] || "0", 10);
+      if (n === 0) { color = undefined; bold = false; }
+      else if (n === 1) bold = true;
+      else if (n === 22) bold = false;
+      else if (n === 39) color = undefined;
+      else if (n >= 30 && n <= 37) color = BASIC[n - 30];
+      else if (n >= 90 && n <= 97) color = BRIGHT[n - 90];
+      else if (n === 38) {
+        // 38;5;idx (256-color) or 38;2;r;g;b (truecolor) — consume params.
+        const mode = parseInt(codes[i + 1] || "0", 10);
+        if (mode === 5) {
+          const idx = parseInt(codes[i + 2] || "0", 10);
+          color = PALETTE_256[idx] ?? color;
+          i += 2;
+        } else if (mode === 2) {
+          const r = codes[i + 2], g = codes[i + 3], b = codes[i + 4];
+          color = `rgb(${r},${g},${b})`;
+          i += 4;
+        }
+      }
+    }
+  }
+  push(clean.length);
+  return spans;
+}
+
+
 /** Live tail of the agent's real PTY rendered inside the node — the
  * actual Claude Code / Codex / Gemini interface, like Deska's panels. */
 function MiniTerm({ agentId }: { agentId: string }) {
@@ -69,8 +135,13 @@ function MiniTerm({ agentId }: { agentId: string }) {
   const lines = useMemo(() => {
     if (!buf || buf.length === 0) return [];
     const tail = buf.slice(Math.max(0, buf.length - 4000));
-    const text = decoder.decode(tail).replace(ANSI_RE, "").replace(/\r/g, "");
-    return text.split("\n").map((l) => l.trimEnd()).filter((l) => l.length > 0).slice(-5);
+    const text = decoder.decode(tail).replace(/\r/g, "");
+    return text
+      .split("\n")
+      .map(parseAnsiLine)
+      .map((spans) => ({ spans, text: spans.map((p) => p.text).join("") }))
+      .filter((l) => l.text.trim().length > 0)
+      .slice(-5);
   }, [buf]);
   if (lines.length === 0) return null;
   return (
@@ -98,10 +169,15 @@ function MiniTerm({ agentId }: { agentId: string }) {
           style={{
             overflow: "hidden",
             textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
             opacity: 0.45 + (0.55 * (i + 1)) / lines.length,
           }}
         >
-          {l.length > 46 ? l.slice(0, 46) : l}
+          {l.spans.map((sp, j) => (
+            <span key={j} style={{ color: sp.color, fontWeight: sp.bold ? 600 : undefined }}>
+              {sp.text}
+            </span>
+          ))}
         </div>
       ))}
     </div>
