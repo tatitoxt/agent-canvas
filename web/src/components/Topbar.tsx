@@ -92,7 +92,6 @@ export function Topbar({
   const notifCount = Object.keys(approvals).length + waiting + blockedN;
 
   const activeBoard = useBoard((s) => s.activeBoard);
-  const openAgents = liveAgents.filter((a) => (a.board_id ?? "main") === activeBoard);
   const shapes = useBoard((s) => s.shapes);
   const positions = useBoard((s) => s.positions);
   const panelNodes = useBoard((s) => s.panelNodes);
@@ -109,9 +108,11 @@ export function Topbar({
   // the region rect its center sits in. Click focuses the card.
   type PanelItem = { id: string; icon: string; label: string; hint: string; cx: number; cy: number };
   const panelItems: PanelItem[] = [];
-  for (const a of openAgents) {
+  for (const a of Object.values(agents)) {
+    if ((a.board_id ?? "main") !== activeBoard) continue;
     const p = positions[a.id] ?? { x: 0, y: 0 };
-    panelItems.push({ id: a.id, icon: "bot", label: a.name, hint: `${a.status} — click to focus`, cx: p.x + 180, cy: p.y + 110 });
+    const done = a.status === "exited";
+    panelItems.push({ id: a.id, icon: "bot", label: a.name, hint: `${done ? "done" : a.status} — click to focus`, cx: p.x + 180, cy: p.y + 110 });
   }
   for (const [id, o] of Object.entries(orchestrators)) {
     if (o.board !== activeBoard) continue;

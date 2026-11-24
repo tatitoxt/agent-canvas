@@ -151,7 +151,31 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
   return (
     <div style={{ position: "relative", width: s.w, height: s.h }}>
       <ShapeSvg s={s} />
-      {(isSticky || s.text) && (
+      {s.kind === "rect" && s.text != null && (
+        // Region label — Deska-style: small caption pinned just above the
+        // frame's top-left corner, not a floating centered blob.
+        <input
+          className="nodrag"
+          value={s.text}
+          onChange={(e) => updateShape(id, { text: e.target.value })}
+          placeholder="region"
+          style={{
+            position: "absolute",
+            top: -24,
+            left: 2,
+            width: Math.min(220, s.w - 12),
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            fontSize: 12,
+            fontWeight: 650,
+            fontFamily: "inherit",
+            color: s.color,
+            letterSpacing: 0.3,
+          }}
+        />
+      )}
+      {s.kind !== "rect" && (isSticky || s.text) && (
         <textarea
           className="nodrag"
           value={s.text}
