@@ -1378,6 +1378,21 @@ export const useBoard = create<BoardState>((set, get) => ({
         return;
       }
     }
+    const bm = low.match(/^(?:board|space|switch(?:\s+to)?)\s+(.+)$/);
+    if (bm) {
+      const q = bm[1].replace(/[?.\s]+$/, "").replace(/^(?:board|space)\s+/, "").trim();
+      const hit = Object.entries(get().boards).find(
+        ([id, name]) =>
+          name.toLowerCase() === q || id === q || name.toLowerCase().startsWith(q),
+      );
+      if (hit) {
+        get().setActiveBoard(hit[0]);
+        reply(`switched to ${hit[1]}`);
+      } else {
+        reply(`no board "${q}" — boards: ${Object.values(get().boards).join(", ")}`);
+      }
+      return;
+    }
     if (/whole board|fit view|zoom out|overview/.test(low)) {
       get().requestView();
       reply("fitted the whole board");
