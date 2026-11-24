@@ -235,21 +235,22 @@ export function VaultPanel() {
   };
 
   return (
-    <div
-      className="glass"
-      style={{
-        position: "absolute",
-        left: 64,
-        top: 64,
-        bottom: 64,
-        width: 320,
-        zIndex: 19,
-        display: "flex",
-        flexDirection: "column",
-        padding: "12px 10px",
-        overflow: "hidden",
-      }}
-    >
+    <>
+      <div
+        className="glass"
+        style={{
+          position: "absolute",
+          left: 64,
+          top: 64,
+          bottom: 64,
+          width: 320,
+          zIndex: 19,
+          display: "flex",
+          flexDirection: "column",
+          padding: "12px 10px",
+          overflow: "hidden",
+        }}
+      >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px 8px" }}>
         <span style={{ fontSize: 12.5, fontWeight: 650, color: "var(--cv-ink)" }}>Vault</span>
         <div style={{ position: "relative" }}>
@@ -325,15 +326,15 @@ export function VaultPanel() {
           </button>
         ))}
       </div>
+      </div>
       {vaultFile && (
         <div
           className="glass"
           style={{
             position: "absolute",
-            left: "100%",
-            top: 0,
-            bottom: 0,
-            marginLeft: 12,
+            left: 396,
+            top: 64,
+            bottom: 64,
             width: 520,
             zIndex: 20,
             display: "flex",
@@ -394,6 +395,6 @@ export function VaultPanel() {
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
