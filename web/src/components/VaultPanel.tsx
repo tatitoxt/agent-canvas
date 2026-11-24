@@ -535,6 +535,20 @@ export function VaultPanel() {
   const [newName, setNewName] = useState("");
   const [armedDel, setArmedDel] = useState<string | null>(null);
 
+  const openDaily = () => {
+    if (!vaultDir) { notify("open a vault first"); return; }
+    const d = new Date();
+    const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const path = `Daily/${stamp}.md`;
+    if (vaultEntries.includes(path)) {
+      vaultRead(path);
+    } else {
+      vaultWrite(path, `# ${stamp}\n\n`);
+      setTimeout(() => vaultList(vaultDir), 150);
+      notify(`daily note → ${path}`);
+    }
+  };
+
   const createNote = () => {
     const name = newName.trim().replace(/\.md$/i, "").replace(/[\\:*?"<>|]/g, "-");
     if (!name || !vaultDir) return;
@@ -614,6 +628,11 @@ export function VaultPanel() {
           <img src="/obsidian.svg" alt="" width={13} height={13} /> Vault
         </span>
         <div style={{ position: "relative", display: "flex", gap: 4 }}>
+          {vaultDir && (
+            <button style={actionBtn} title="open today's daily note (creates Daily/YYYY-MM-DD.md)" onClick={openDaily}>
+              today
+            </button>
+          )}
           {vaultDir && (
             <button style={actionBtn} title="new note in this vault" onClick={() => { setNewNote((o) => !o); setGenOpen(false); }}>
               + note
