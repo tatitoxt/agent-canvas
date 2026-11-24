@@ -106,6 +106,7 @@ pub struct AgentManager {
     agents: Mutex<HashMap<AgentId, Agent>>,
     automation_meta: Mutex<HashMap<AgentId, AutoMeta>>,
     transcript_dir: Mutex<PathBuf>,
+    extra_env: Mutex<HashMap<String, String>>,
 }
 
 /// Cap transcripts at ~1MB; when exceeded keep the newest 512KB.
@@ -185,7 +186,17 @@ impl AgentManager {
                     .join(".canvas")
                     .join("transcripts"),
             ),
+            extra_env: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Extra env injected into every spawned PTY — the daemon seeds
+    /// CANVAS_TOKEN/CANVAS_PORT here so `canvasctl` can reach it.
+    pub fn set_env(&self, key: &str, value: &str) {
+        self.extra_env
+            .lock()
+            .unwrap()
+            .insert(key.to_string(), value.to_string());
     }
 
     /// Where per-agent transcript files live (`<dir>/<agent_id>.bin`).
@@ -229,7 +240,18 @@ impl AgentManager {
         cmd.env("TERM", "xterm-256color");
         cmd.env("CANVAS_AGENT_ID", &id);
         cmd.env("HOME", std::env::var("HOME").unwrap_or_else(|_| "/".into()));
-        cmd.env("PATH", std::env::var("PATH").unwrap_or_default());
+        for (k, v) in self.extra_env.lock().unwrap().iter() {
+            cmd.env(k, v);
+        }
+        // Put the directory holding this binary (canvasd / the app) first
+        // on PATH so `canvasctl` is reachable inside every PTY.
+        let path = std::env::var("PATH").unwrap_or_default();
+        let path = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+            .map(|d| format!("{}:{path}", d.display()))
+            .unwrap_or(path);
+        cmd.env("PATH", path);
 
         let child = pair.slave.spawn_command(cmd)?;
         drop(pair.slave);

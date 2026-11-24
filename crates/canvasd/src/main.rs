@@ -125,10 +125,34 @@ fn spawn_agent(
     let ev2 = state.events.clone();
     let store2 = state.store.clone();
     let pending = state.pending_results.clone();
+    let agents3 = state.agents.clone();
     tokio::spawn(async move {
         while let Some(id) = exit_rx.recv().await {
             let _ = store2.agent_status(&id, "exited");
-            pending.lock().unwrap().remove(&id);
+            // Final result scan: a fast child may print CANVAS_RESULT and
+            // exit inside the same second — before the ticker runs. The
+            // transcript on disk still has the line.
+            if let Some(edge_id) = pending.lock().unwrap().remove(&id) {
+                let summary = agents3
+                    .scrollback(&id)
+                    .map(|b| String::from_utf8_lossy(&b).to_string())
+                    .and_then(|t| canvas_result_line(&t))
+                    .map(|s| s.trim().to_string());
+                if let Some(summary) = summary {
+                    let files = store2
+                        .agent_worktree(&id)
+                        .ok()
+                        .flatten()
+                        .map(|w| dirty_file_count(std::path::Path::new(&w)))
+                        .unwrap_or(0);
+                    let _ = store2.delegation_resolved(&edge_id, &summary, files);
+                    let _ = ev2.send(Event::Control(ServerMsg::Result {
+                        edge_id,
+                        summary,
+                        files,
+                    }));
+                }
+            }
             let _ = ev2.send(Event::Control(ServerMsg::Status {
                 agent_id: id,
                 status: AgentStatus::Exited,
@@ -777,6 +801,25 @@ async fn main() -> Result<()> {
     let (events, _) = broadcast::channel(512);
     let store = Arc::new(store::Store::open(&repo_root)?);
     store.mark_all_exited()?;
+    // Sweep: children that printed CANVAS_RESULT while the daemon was
+    // down still resolve — their transcript files survived the restart.
+    {
+        let tdir = repo_root.join(".canvas").join("transcripts");
+        for (edge_id, to_node) in store.unresolved_delegations().unwrap_or_default() {
+            let path = tdir.join(format!("{to_node}.bin"));
+            let summary = std::fs::read(&path)
+                .ok()
+                .map(|b| {
+                    let tail = &b[b.len().saturating_sub(8192)..];
+                    String::from_utf8_lossy(tail).to_string()
+                })
+                .and_then(|t| canvas_result_line(&t))
+                .map(|s| s.trim().to_string());
+            if let Some(summary) = summary {
+                let _ = store.delegation_resolved(&edge_id, &summary, 0);
+            }
+        }
+    }
     let agents = Arc::new(AgentManager::new());
     agents.set_transcript_dir(repo_root.join(".canvas").join("transcripts"));
     let state = Arc::new(AppState {
@@ -805,6 +848,10 @@ async fn main() -> Result<()> {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(4242);
+    // Agents orchestrate the board themselves via canvasctl — the daemon
+    // hands each PTY the address and token it needs to call home.
+    state.agents.set_env("CANVAS_PORT", &port.to_string());
+    state.agents.set_env("CANVAS_TOKEN", &token);
     // Status ticker: re-derive every agent's status each second and emit a
     // Status event only when it changed (CLI-agnostic until real hooks land).
     {
@@ -834,6 +881,11 @@ async fn main() -> Result<()> {
                         for (agent_id, edge_id) in map.iter() {
                             let summary = agents
                                 .tail_text(agent_id)
+                                .or_else(|| {
+                                    agents
+                                        .scrollback(agent_id)
+                                        .map(|b| String::from_utf8_lossy(&b).to_string())
+                                })
                                 .and_then(|t| canvas_result_line(&t));
                             if let Some(summary) = summary {
                                 resolved.push((

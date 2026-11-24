@@ -644,6 +644,22 @@ fn main() {
                 .unwrap_or_else(|_| std::env::current_dir().unwrap());
             let store = Arc::new(Store::open(&repo_root)?);
             store.mark_all_exited()?;
+            // Sweep: results that landed while the app was closed.
+            {
+                let tdir = repo_root.join(".canvas").join("transcripts");
+                for (edge_id, to_node) in store.unresolved_delegations().unwrap_or_default() {
+                    let summary = std::fs::read(tdir.join(format!("{to_node}.bin")))
+                        .ok()
+                        .map(|b| {
+                            let tail = &b[b.len().saturating_sub(8192)..];
+                            String::from_utf8_lossy(tail).to_string()
+                        })
+                        .and_then(|t| canvas_result_line(&t));
+                    if let Some(summary) = summary {
+                        let _ = store.delegation_resolved(&edge_id, summary.trim(), 0);
+                    }
+                }
+            }
             let agents = AgentManager::new();
             agents.set_transcript_dir(repo_root.join(".canvas").join("transcripts"));
             app.manage(CanvasState {
@@ -674,6 +690,12 @@ fn main() {
                             let summary = state
                                 .agents
                                 .tail_text(agent_id)
+                                .or_else(|| {
+                                    state
+                                        .agents
+                                        .scrollback(agent_id)
+                                        .map(|b| String::from_utf8_lossy(&b).to_string())
+                                })
                                 .and_then(|t| canvas_result_line(&t));
                             if let Some(s) = summary {
                                 resolved.push((agent_id.clone(), edge_id.clone(), s));

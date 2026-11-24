@@ -18,7 +18,13 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 anyhow = "1"
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
-
-[dev-dependencies]
 tokio-tungstenite = "0.29"
 futures-util = "0.3"
+
+[[bin]]
+name = "canvasd"
+path = "src/main.rs"
+
+[[bin]]
+name = "canvasctl"
+path = "src/bin/canvasctl.rs"

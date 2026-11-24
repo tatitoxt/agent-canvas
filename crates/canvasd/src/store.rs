@@ -362,6 +362,18 @@ impl Store {
         Ok(())
     }
 
+    /// Delegation edges still waiting on a CANVAS_RESULT — used by the
+    /// startup sweep to resolve results that landed before a restart.
+    pub fn unresolved_delegations(&self) -> Result<Vec<(String, String)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut q = conn
+            .prepare("SELECT id, to_node FROM delegations WHERE state = 'delegated'")?;
+        let rows = q
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
     pub fn save_node_position(&self, node_id: &str, x: f64, y: f64) -> Result<()> {
         self.conn.lock().unwrap().execute(
             "INSERT INTO layout (node_id, x, y) VALUES (?1, ?2, ?3)
