@@ -34,7 +34,7 @@ const actionBtn: React.CSSProperties = {
  * Obsidian) and [md](url) links. */
 function mdInline(text: string, onLink?: (name: string) => void): React.ReactNode[] {
   const out: React.ReactNode[] = [];
-  const re = /(\[\[[^\]|]+(?:\|[^\]]*)?\]\]|\[[^\]]+\]\([^)]*\)|\*\*[^*]+\*\*|\*[^*\n]+\*|==[^=]+==|~~[^~]+~~|`[^`]+`)/g;
+  const re = /(\[\[[^\]|]+(?:\|[^\]]*)?\]\]|\[[^\]]+\]\([^)]*\)|\*\*[^*]+\*\*|\*[^*\n]+\*|==[^=]+==|~~[^~]+~~|`[^`]+`|(?<![\p{L}\p{N}])#[\p{L}_][\p{L}\p{N}_/-]*)/gu;
   let last = 0, k = 0;
   for (const m of text.matchAll(re)) {
     if (m.index! > last) out.push(text.slice(last, m.index));
@@ -79,6 +79,12 @@ function mdInline(text: string, onLink?: (name: string) => void): React.ReactNod
       );
     } else if (t.startsWith("~~")) {
       out.push(<s key={k++} style={{ opacity: 0.6 }}>{t.slice(2, -2)}</s>);
+    } else if (t.startsWith("#")) {
+      out.push(
+        <span key={k++} style={{ color: "var(--cv-accent)", background: "color-mix(in srgb, var(--cv-accent) 12%, transparent)", borderRadius: 4, padding: "0 4px", fontSize: "0.92em" }}>
+          {t}
+        </span>,
+      );
     } else {
       out.push(
         <code key={k++} style={{ background: "rgba(255,255,255,0.07)", borderRadius: 4, padding: "0 4px", fontSize: "0.92em", fontFamily: "ui-monospace, monospace" }}>
