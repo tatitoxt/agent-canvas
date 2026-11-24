@@ -614,11 +614,11 @@ function Board() {
             if (data.kind === "workspace") return "#1d1d20";
             if (data.kind === "agent" && data.status) {
               const map: Record<AgentStatus, string> = {
-                working: "#7d9cb8",
-                waiting: "#c2a15e",
-                blocked: "#b06a5e",
-                done: "#7ba389",
-                idle: "#86817a",
+                working: "#3ddc84",
+                waiting: "#ffb224",
+                blocked: "#ff5d5d",
+                done: "#34d399",
+                idle: "#9aa0a6",
               };
               return map[data.status] ?? "#33333a";
             }
