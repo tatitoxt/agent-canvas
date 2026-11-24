@@ -114,6 +114,13 @@ export function CommandPalette({
       { id: "font-down", group: "view", label: "smaller terminal text", run: () => s.bumpFont(-1) },
     );
 
+    list.push({
+      id: "board-duplicate",
+      group: "boards",
+      label: "duplicate this board",
+      hint: "copies shapes, notes, panels + web cards — not agents",
+      run: () => s.duplicateBoard(),
+    });
     for (const [boardId, name] of Object.entries(s.boards)) {
       list.push({
         id: `board-${boardId}`,

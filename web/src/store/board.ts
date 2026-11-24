@@ -249,6 +249,9 @@ type BoardState = {
   connect: (token: string) => void;
   setActiveBoard: (boardId: string) => void;
   createBoard: (name: string) => void;
+  /** Pending client-side board duplication — consumed by board_created. */
+  pendingBoardCopy: { src: string } | null;
+  duplicateBoard: () => void;
   moveToBoard: (nodeId: string, boardId: string) => void;
   renameNode: (nodeId: string, name: string) => void;
   renameBoard: (boardId: string, name: string) => void;
@@ -560,11 +563,43 @@ export const useBoard = create<BoardState>((set, get) => ({
             set({ workspaces: rest, agents });
             break;
           }
-          case "board_created":
+          case "board_created": {
             set({
               boards: { ...get().boards, [msg.board_id]: msg.name },
             });
+            // duplicateBoard queued a client-side copy: clone the source
+            // board's shapes/notes/panels/web cards into the new board.
+            const dup = get().pendingBoardCopy;
+            if (dup) {
+              set({ pendingBoardCopy: null });
+              const src = dup.src;
+              const dst = msg.board_id;
+              const clone = <T,>(all: Record<string, Record<string, T>>, key: string) => {
+                const next = { ...all, [dst]: { ...(all[dst] ?? {}), ...(all[src] ?? {}) } };
+                localStorage.setItem(key, JSON.stringify(next));
+                return next;
+              };
+              const shapes = clone(get().shapes, "cv-shapes");
+              const mdNodes = clone(get().mdNodes, "cv-mdnodes");
+              const panelNodes = clone(get().panelNodes, "cv-panelnodes");
+              const webNodes = clone(get().webNodes, "cv-webnodes");
+              // positions is a flat id → {x,y} map: copy the entries for the
+              // cards we just cloned so they land in the same spots.
+              const positions = { ...get().positions };
+              for (const id of [
+                ...Object.keys(shapes[dst] ?? {}),
+                ...Object.keys(mdNodes[dst] ?? {}),
+                ...Object.keys(panelNodes[dst] ?? {}),
+                ...Object.keys(webNodes[dst] ?? {}),
+              ]) {
+                if (positions[id]) positions[id] = { ...positions[id] };
+              }
+              set({ shapes, mdNodes, panelNodes, webNodes, positions });
+              get().setActiveBoard(dst);
+              get().notify(`board duplicated — cards copied (agents stay on ${get().boards[src] ?? src})`);
+            }
             break;
+          }
           case "node_renamed": {
             const a = get().agents[msg.node_id];
             const w = get().workspaces[msg.node_id];
@@ -981,6 +1016,14 @@ export const useBoard = create<BoardState>((set, get) => ({
   createBoard: (name) => {
     if (!client) { get().notify("daemon offline"); return; }
     client.createBoard(name);
+  },
+
+  pendingBoardCopy: null,
+  duplicateBoard: () => {
+    if (!client) { get().notify("daemon offline"); return; }
+    const src = get().activeBoard;
+    set({ pendingBoardCopy: { src } });
+    client.createBoard(`${get().boards[src] ?? src} copy`);
   },
 
   moveToBoard: (nodeId, boardId) => {
