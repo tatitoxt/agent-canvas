@@ -408,6 +408,11 @@ function Board() {
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
         e.preventDefault();
         useBoard.getState().undoMove();
+      } else if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) {
+        e.preventDefault();
+        const st = useBoard.getState();
+        const id = Object.keys(st.boards)[Number(e.key) - 1];
+        if (id) st.setActiveBoard(id);
       } else if (!e.metaKey && !e.ctrlKey && !e.altKey) {
         const t = e.target as HTMLElement;
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
@@ -810,6 +815,14 @@ function Board() {
         onPaneClick={() => {
           setEdgeDetail(null);
           setWiring(null);
+        }}
+        onDoubleClick={(e) => {
+          // Deska-style: double-click empty canvas spawns an agent there.
+          const t = e.target as HTMLElement;
+          if (!t.classList.contains("react-flow__pane")) return;
+          const st = useBoard.getState();
+          st.setPendingSpawnPos(screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+          st.setSpawnOpen(true);
         }}
         onInit={(rf) => rf.fitView({ padding: 0.18, maxZoom: 1.1 })}
         minZoom={0.15}
