@@ -494,12 +494,16 @@ pub fn canvas_result_line(tail: &str) -> Option<String> {
     tail.lines()
         .rev()
         .find_map(|l| {
-            // Split on \r BEFORE stripping: strip_ansi drops carriage returns,
-            // which would fuse a redrawn prompt with the real output.
-            strip_ansi(l.rsplit('\r').next().unwrap_or(""))
-                .trim()
-                .strip_prefix("CANVAS_RESULT:")
-                .map(|s| s.trim().to_string())
+            // Check each \r-segment (newest first) BEFORE stripping:
+            // strip_ansi drops carriage returns, which would fuse a redrawn
+            // prompt with the real output — and a CRLF-writing child yields
+            // \r\r\n, leaving an empty trailing segment.
+            l.split('\r').rev().find_map(|seg| {
+                strip_ansi(seg)
+                    .trim()
+                    .strip_prefix("CANVAS_RESULT:")
+                    .map(|s| s.trim().to_string())
+            })
         })
         .filter(|s| !s.is_empty())
 }
@@ -659,6 +663,10 @@ mod tests {
         // A real shell prints its prompt, then \r-overwrites with output —
         // the visible line is only what follows the last carriage return.
         let tail = "user@box:~/repo$ \u{1b}[?2004l\rCANVAS_RESULT: shipped it\r\nuser@box:~/repo$ ";
+        assert_eq!(canvas_result_line(tail).as_deref(), Some("shipped it"));
+        // A child that writes CRLF gets its LF expanded again by the PTY
+        // (\r\r\n on the wire): the empty last segment must not hide it.
+        let tail = "user@box:~/repo$ \rCANVAS_RESULT: shipped it\r\r\nuser@box:~/repo$ ";
         assert_eq!(canvas_result_line(tail).as_deref(), Some("shipped it"));
         assert_eq!(canvas_result_line("$ echo hi\r\nhi\r\n$ "), None);
     }
