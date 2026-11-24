@@ -254,6 +254,24 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .into_iter()
                 .map(|(board_id, name)| protocol::SnapshotBoard { board_id, name })
                 .collect(),
+            artifacts: {
+                let names: std::collections::HashMap<String, String> = agents
+                    .iter()
+                    .map(|a| (a.0.clone(), a.1.clone()))
+                    .collect();
+                state
+                    .store
+                    .artifacts_snapshot()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(artifact_id, board_id, agent_id, kind, title, path, text, created_at)| {
+                        let agent_name = agent_id.as_ref().and_then(|a| names.get(a).cloned());
+                        protocol::SnapshotArtifact {
+                            artifact_id, board_id, agent_id, agent_name, kind, title, path, text, created_at,
+                        }
+                    })
+                    .collect()
+            },
             agents: {
                 let acct_labels: std::collections::HashMap<String, String> = state
                     .store
@@ -768,6 +786,30 @@ fn handle_client_msg(
                 Ok(()) => send_control(ServerMsg::NoteUpserted {
                     note: protocol::SnapshotNote { note_id: id, board_id: board, col, text, pos: p },
                 }),
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
+            }
+        }
+        ClientMsg::ArtifactCreate { board_id, agent_id, kind, title, path, text } => {
+            let id = format!("art-{}", uuid_like());
+            let board = board_id
+                .or_else(|| agent_id.as_deref().and_then(|a| state.store.agent_board(a).ok().flatten()))
+                .unwrap_or_else(|| "main".to_string());
+            let agent_name = agent_id
+                .as_deref()
+                .and_then(|a| state.store.agent_name(a).ok().flatten());
+            match state.store.artifact_created(&id, &board, agent_id.as_deref(), &kind, &title, path.as_deref(), text.as_deref()) {
+                Ok(()) => send_control(ServerMsg::ArtifactCreated {
+                    artifact: protocol::SnapshotArtifact {
+                        artifact_id: id, board_id: board, agent_id, agent_name, kind, title, path, text,
+                        created_at: String::new(),
+                    },
+                }),
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
+            }
+        }
+        ClientMsg::ArtifactDelete { artifact_id } => {
+            match state.store.artifact_deleted(&artifact_id) {
+                Ok(()) => send_control(ServerMsg::ArtifactDeleted { artifact_id }),
                 Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
             }
         }

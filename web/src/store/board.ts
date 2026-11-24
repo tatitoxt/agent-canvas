@@ -60,6 +60,8 @@ type BoardState = {
   memories: Record<string, string>;
   /** Last "lose nothing" digest markdown, when requested. */
   digest: string | null;
+  /** Artifacts by id — deliverables agents produced. */
+  artifacts: Record<string, import("../daemon/client").SnapshotArtifact>;
   /** Kanban notes by id (all boards; filtered by activeBoard in UI). */
   notes: Record<string, { note_id: string; board_id: string; col: string; text: string; pos: number }>;
   /** Saved node positions — replayed from the daemon's layout table. */
@@ -103,6 +105,8 @@ type BoardState = {
   closeDigest: () => void;
   noteUpsert: (noteId: string | null, col: string, text: string, pos?: number) => void;
   noteDelete: (noteId: string) => void;
+  artifactCreate: (kind: string, title: string, path?: string, text?: string) => void;
+  artifactDelete: (artifactId: string) => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
   kill: (agentId: string) => void;
@@ -157,6 +161,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   memories: {},
   digest: null,
   notes: {},
+  artifacts: {},
   positions: {},
   pendingPositions: {},
   approvals: {},
@@ -363,6 +368,9 @@ export const useBoard = create<BoardState>((set, get) => ({
             const accounts = Object.fromEntries(
               (msg.accounts ?? []).map((a) => [a.account_id, a]),
             );
+            const artifacts = Object.fromEntries(
+              (msg.artifacts ?? []).map((a) => [a.artifact_id, a]),
+            );
             const notes = Object.fromEntries(
               (msg.notes ?? []).map((n) => [n.note_id, n]),
             );
@@ -407,7 +415,18 @@ export const useBoard = create<BoardState>((set, get) => ({
               boards: { main: "Main", ...boards },
               accounts,
               notes,
+              artifacts,
             });
+            break;
+          }
+          case "artifact_created": {
+            set((st) => ({ artifacts: { ...st.artifacts, [msg.artifact.artifact_id]: msg.artifact } }));
+            break;
+          }
+          case "artifact_deleted": {
+            const artifacts = { ...get().artifacts };
+            delete artifacts[msg.artifact_id];
+            set({ artifacts });
             break;
           }
           case "note_upserted": {
@@ -497,6 +516,9 @@ export const useBoard = create<BoardState>((set, get) => ({
   noteUpsert: (noteId, col, text, pos) =>
     client?.noteUpsert(noteId, get().activeBoard ?? undefined, col, text, pos),
   noteDelete: (noteId) => client?.noteDelete(noteId),
+  artifactCreate: (kind, title, path, text) =>
+    client?.artifactCreate(get().activeBoard ?? undefined, kind, title, path, text),
+  artifactDelete: (artifactId) => client?.artifactDelete(artifactId),
   memoryWrite: (nodeId, text) => {
     client?.memoryWrite(nodeId, text);
     set((st) => ({ memories: { ...st.memories, [nodeId]: text } }));

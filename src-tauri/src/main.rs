@@ -281,6 +281,44 @@ fn delete_board(
 }
 
 #[tauri::command]
+fn artifact_create(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    board_id: Option<String>,
+    agent_id: Option<String>,
+    kind: String,
+    title: String,
+    path: Option<String>,
+    text: Option<String>,
+) -> Result<(), String> {
+    let id = format!("art-{}", &uuid_v4ish()[..8]);
+    let board = board_id
+        .or_else(|| agent_id.as_deref().and_then(|a| state.store.agent_board(a).ok().flatten()))
+        .unwrap_or_else(|| "main".to_string());
+    let agent_name = agent_id
+        .as_deref()
+        .and_then(|a| state.store.agent_name(a).ok().flatten());
+    state
+        .store
+        .artifact_created(&id, &board, agent_id.as_deref(), &kind, &title, path.as_deref(), text.as_deref())
+        .map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::ArtifactCreated {
+        artifact: canvasd::protocol::SnapshotArtifact {
+            artifact_id: id, board_id: board, agent_id, agent_name, kind, title, path, text,
+            created_at: String::new(),
+        },
+    });
+    Ok(())
+}
+
+#[tauri::command]
+fn artifact_delete(app: AppHandle, state: State<'_, CanvasState>, artifact_id: String) -> Result<(), String> {
+    state.store.artifact_deleted(&artifact_id).map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::ArtifactDeleted { artifact_id });
+    Ok(())
+}
+
+#[tauri::command]
 fn note_upsert(
     app: AppHandle,
     state: State<'_, CanvasState>,
@@ -786,6 +824,27 @@ fn snapshot(
         "delegations": delegations,
         "workspaces": workspaces,
         "layout": layout,
+        "artifacts": {
+            let names: std::collections::HashMap<String, String> = state
+                .store
+                .agents_snapshot()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|a| (a.0, a.1))
+                .collect();
+            state
+                .store
+                .artifacts_snapshot()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(artifact_id, board_id, agent_id, kind, title, path, text, created_at)| {
+                    let agent_name = agent_id.as_ref().and_then(|a| names.get(a).cloned());
+                    canvasd::protocol::SnapshotArtifact {
+                        artifact_id, board_id, agent_id, agent_name, kind, title, path, text, created_at,
+                    }
+                })
+                .collect::<Vec<_>>()
+        },
         "notes": state
             .store
             .all_notes()
@@ -1002,6 +1061,8 @@ fn main() {
             session_digest,
             note_upsert,
             note_delete,
+            artifact_create,
+            artifact_delete,
             create_workspace,
             move_to_board,
             delegate,

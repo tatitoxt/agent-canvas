@@ -182,6 +182,23 @@ impl Store {
                  PRAGMA user_version = 8;",
             )?;
         }
+        // v8 → v9: artifacts — deliverables an agent produces (a report,
+        // a plan, a diff summary) each with a kind the UI symbols+colors.
+        if version < 9 {
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS artifacts (
+                   id TEXT PRIMARY KEY,
+                   board_id TEXT NOT NULL DEFAULT 'main',
+                   agent_id TEXT,
+                   kind TEXT NOT NULL DEFAULT 'note',
+                   title TEXT NOT NULL,
+                   path TEXT,
+                   text TEXT,
+                   created_at TEXT DEFAULT (datetime('now'))
+                 );
+                 PRAGMA user_version = 9;",
+            )?;
+        }
         Ok(Self { conn: Mutex::new(conn) })
     }
 
@@ -410,6 +427,51 @@ impl Store {
     }
 
     /// (id, cli, label) for the snapshot replay.
+    /// (id, board_id, agent_id, kind, title, path, text, created_at) —
+    /// every artifact, newest first.
+    pub fn artifacts_snapshot(&self) -> Result<Vec<(String, String, Option<String>, String, String, Option<String>, Option<String>, String)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare(
+            "SELECT id, board_id, agent_id, kind, title, path, text, created_at FROM artifacts ORDER BY created_at DESC, id",
+        )?;
+        let rows = st
+            .query_map([], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn artifact_created(
+        &self,
+        id: &str,
+        board_id: &str,
+        agent_id: Option<&str>,
+        kind: &str,
+        title: &str,
+        path: Option<&str>,
+        text: Option<&str>,
+    ) -> Result<()> {
+        self.conn.lock().unwrap().execute(
+            "INSERT INTO artifacts (id, board_id, agent_id, kind, title, path, text) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![id, board_id, agent_id, kind, title, path, text],
+        )?;
+        Ok(())
+    }
+
+    /// An agent's display name, for artifact attribution.
+    pub fn agent_name(&self, id: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        Ok(conn
+            .query_row("SELECT name FROM agents WHERE id = ?1", [id], |r| r.get(0))
+            .optional()?)
+    }
+
+    pub fn artifact_deleted(&self, id: &str) -> Result<()> {
+        self.conn.lock().unwrap().execute("DELETE FROM artifacts WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
     /// (id, board_id, col, text, pos) — the kanban cards of one board.
     pub fn notes_snapshot(&self, board_id: &str) -> Result<Vec<(String, String, String, String, i64)>> {
         let conn = self.conn.lock().unwrap();

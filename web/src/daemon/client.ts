@@ -15,6 +15,18 @@ export type SnapshotAgent = {
   output_bytes?: number;
 };
 
+export type SnapshotArtifact = {
+  artifact_id: string;
+  board_id: string;
+  agent_id?: string | null;
+  agent_name?: string | null;
+  kind: string;
+  title: string;
+  path?: string | null;
+  text?: string | null;
+  created_at: string;
+};
+
 export type SnapshotNote = {
   note_id: string;
   board_id: string;
@@ -53,6 +65,8 @@ export type ServerMsg =
   | { type: "session_digest"; text: string }
   | { type: "note_upserted"; note: SnapshotNote }
   | { type: "note_deleted"; note_id: string }
+  | { type: "artifact_created"; artifact: SnapshotArtifact }
+  | { type: "artifact_deleted"; artifact_id: string }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
   | { type: "result"; edge_id: string; summary: string; files?: number }
   | {
@@ -66,6 +80,7 @@ export type ServerMsg =
       automations?: AutomationDef[];
       accounts?: SnapshotAccount[];
     notes?: SnapshotNote[];
+    artifacts?: SnapshotArtifact[];
     };
 
 export type SnapshotWorkspace = {
@@ -149,6 +164,14 @@ export class CanvasClient {
 
   spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string, accountId?: string) {
     this.send({ cmd: "spawn_agent", name, command, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null, board_id: boardId ?? null, account_id: accountId ?? null });
+  }
+
+  artifactCreate(boardId: string | undefined, kind: string, title: string, path?: string, text?: string) {
+    this.send({ cmd: "artifact_create", board_id: boardId, kind, title, path, text });
+  }
+
+  artifactDelete(artifactId: string) {
+    this.send({ cmd: "artifact_delete", artifact_id: artifactId });
   }
 
   noteUpsert(noteId: string | null, boardId: string | undefined, col: string, text: string, pos?: number) {

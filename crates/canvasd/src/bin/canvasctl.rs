@@ -29,7 +29,8 @@ fn usage() -> ! {
          \n  agents                          list agents\n\
            boards                          list boards\n\
            spawn  --name N --cmd C [--cwd .] [--workspace W] [--board B]\n\
-           delegate --name N --cli C --task T [--cwd .] [--workspace W] [--permission P]"
+           delegate --name N --cli C --task T [--cwd .] [--workspace W] [--permission P]
+           artifact --kind K --title T [--path P] [--text T]"
     );
     std::process::exit(2);
 }
@@ -159,6 +160,35 @@ async fn main() -> Result<()> {
             } else {
                 println!("spawned {}", reply["agent_id"].as_str().unwrap_or(""));
             }
+        }
+        "artifact" => {
+            let mut ws = connect().await?;
+            let kind = flag(rest, "--kind").unwrap_or_else(|| "note".into());
+            let title = flag(rest, "--title")
+                .unwrap_or_else(|| usage());
+            let mut msg = json!({
+                "cmd": "artifact_create",
+                "kind": kind,
+                "title": title,
+            });
+            if let Some(v) = flag(rest, "--path") {
+                msg["path"] = json!(v);
+            }
+            if let Some(v) = flag(rest, "--text") {
+                msg["text"] = json!(v);
+            }
+            if let Ok(id) = std::env::var("CANVAS_AGENT_ID") {
+                msg["agent_id"] = json!(id);
+            }
+            ws.send(Message::text(msg.to_string())).await?;
+            let reply = wait_for(&mut ws, Duration::from_secs(30), |v| {
+                v["type"] == "artifact_created" || v["type"] == "error"
+            })
+            .await?;
+            if reply["type"] == "error" {
+                anyhow::bail!("{}", reply["message"].as_str().unwrap_or("error"));
+            }
+            println!("artifact {}", reply["artifact"]["artifact_id"].as_str().unwrap_or(""));
         }
         _ => usage(),
     }

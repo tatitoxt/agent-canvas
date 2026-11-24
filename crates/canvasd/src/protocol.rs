@@ -56,6 +56,18 @@ pub enum ClientMsg {
     },
     /// Delete a kanban note.
     NoteDelete { note_id: String },
+    /// Register an artifact (an agent's deliverable — a report, plan,
+    /// exported file). Agents emit these via canvasctl.
+    ArtifactCreate {
+        board_id: Option<String>,
+        agent_id: Option<String>,
+        kind: String,
+        title: String,
+        path: Option<String>,
+        text: Option<String>,
+    },
+    /// Remove an artifact.
+    ArtifactDelete { artifact_id: String },
     /// A digest of every agent: status, files touched, transcript tail.
     Digest,
     /// Read a node's memory file — "main" is the board repo's memory,
@@ -227,6 +239,8 @@ pub enum ServerMsg {
         accounts: Vec<SnapshotAccount>,
         /// Kanban notes across boards.
         notes: Vec<SnapshotNote>,
+        /// Agent-produced artifacts.
+        artifacts: Vec<SnapshotArtifact>,
     },
     /// A named account was registered.
     AccountCreated { account_id: String, cli: String, label: String },
@@ -240,6 +254,10 @@ pub enum ServerMsg {
     NoteUpserted { note: SnapshotNote },
     /// A kanban note was removed.
     NoteDeleted { note_id: String },
+    /// An artifact was registered.
+    ArtifactCreated { artifact: SnapshotArtifact },
+    /// An artifact was removed.
+    ArtifactDeleted { artifact_id: String },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -255,6 +273,21 @@ pub struct SnapshotAutomation {
     pub last_run_at: Option<String>,
     pub interval_secs: Option<u64>,
     pub next_run_at: Option<String>,
+}
+
+/// A deliverable produced by an agent (or dropped in by the user):
+/// kind drives the panel's symbol + color (report/plan/diff/log/image/note).
+#[derive(Debug, Clone, Serialize)]
+pub struct SnapshotArtifact {
+    pub artifact_id: String,
+    pub board_id: String,
+    pub agent_id: Option<String>,
+    pub agent_name: Option<String>,
+    pub kind: String,
+    pub title: String,
+    pub path: Option<String>,
+    pub text: Option<String>,
+    pub created_at: String,
 }
 
 /// A kanban card in a snapshot.

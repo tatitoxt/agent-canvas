@@ -112,6 +112,14 @@ export class TauriCanvasClient {
     );
   }
 
+  artifactCreate(boardId: string | undefined, kind: string, title: string, path?: string, text?: string) {
+    void invoke("artifact_create", { boardId, kind, title, path, text }).catch(console.error);
+  }
+
+  artifactDelete(artifactId: string) {
+    void invoke("artifact_delete", { artifactId }).catch(console.error);
+  }
+
   noteUpsert(noteId: string | null, boardId: string | undefined, col: string, text: string, pos?: number) {
     void invoke("note_upsert", { noteId, boardId, col, text, pos }).catch(console.error);
   }
