@@ -75,7 +75,10 @@ export function Topbar({
   const blockedN = Object.values(agents).filter((a) => a.status === "blocked").length;
   const notifCount = Object.keys(approvals).length + waiting + blockedN;
 
-  const [menu, setMenu] = useState<"machine" | "ws" | "wt" | "tasks" | "usage" | null>(null);
+  const activeBoard = useBoard((s) => s.activeBoard);
+  const openAgents = liveAgents.filter((a) => (a.board_id ?? "main") === activeBoard);
+
+  const [menu, setMenu] = useState<"machine" | "ws" | "wt" | "tasks" | "usage" | "panels" | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -86,7 +89,7 @@ export function Topbar({
     return () => window.removeEventListener("mousedown", onDown);
   }, [menu]);
 
-  const drop = (key: "machine" | "ws" | "wt" | "tasks" | "usage", node: React.ReactNode) =>
+  const drop = (key: "machine" | "ws" | "wt" | "tasks" | "usage" | "panels", node: React.ReactNode) =>
     menu === key ? (
       <div
         className="cv-menu cv-menu-scroll"
@@ -261,6 +264,48 @@ export function Topbar({
           pointerEvents: "auto",
         }}
       >
+        <div style={{ position: "relative" }}>
+          <button
+            className="glass-pill"
+            style={{ ...iconBtn(menu === "panels"), background: "transparent", border: "none" }}
+            title="Panels on the canvas — which terminals are open"
+            onClick={() => setMenu((m) => (m === "panels" ? null : "panels"))}
+          >
+            <Icon name="panels" size={15} color={menu === "panels" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+            {openAgents.length > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: 2,
+                  right: 2,
+                  minWidth: 13,
+                  height: 13,
+                  borderRadius: 999,
+                  background: "var(--cv-glass-hi)",
+                  color: "var(--cv-ink)",
+                  fontSize: 8.5,
+                  fontWeight: 700,
+                  display: "grid",
+                  placeItems: "center",
+                  padding: "0 3px",
+                }}
+              >
+                {openAgents.length}
+              </span>
+            )}
+          </button>
+          {drop("panels", (
+            <>
+              <div style={sectionLabel}>Panels on the canvas</div>
+              {openAgents.length === 0 &&
+                row("panels", "no open panels", "spawn one from the Orchestrator's + spawn")}
+              {openAgents.map((a) =>
+                row("terminal", a.name, `${a.status} — click to open its panel`, () =>
+                  useBoard.getState().requestTerm(a.id, a.name)),
+              )}
+            </>
+          ))}
+        </div>
         <div style={{ position: "relative" }}>
           <button
             className="glass-pill"

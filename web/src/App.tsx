@@ -415,12 +415,10 @@ function Board() {
       {!chromeHidden && (
         <>
           <NavRail
-            onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
-          />
-          <RightRail
             active={nav}
             onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
           />
+          <RightRail />
           <BottomDock
             active={nav}
             onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
