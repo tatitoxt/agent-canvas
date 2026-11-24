@@ -75,7 +75,7 @@ export function Topbar({
   const blockedN = Object.values(agents).filter((a) => a.status === "blocked").length;
   const notifCount = Object.keys(approvals).length + waiting + blockedN;
 
-  const [menu, setMenu] = useState<"machine" | "ws" | "wt" | null>(null);
+  const [menu, setMenu] = useState<"machine" | "ws" | "wt" | "tasks" | "usage" | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -86,7 +86,7 @@ export function Topbar({
     return () => window.removeEventListener("mousedown", onDown);
   }, [menu]);
 
-  const drop = (key: "machine" | "ws" | "wt", node: React.ReactNode) =>
+  const drop = (key: "machine" | "ws" | "wt" | "tasks" | "usage", node: React.ReactNode) =>
     menu === key ? (
       <div
         className="cv-menu cv-menu-scroll"
@@ -215,22 +215,42 @@ export function Topbar({
             </>
           ))}
         </div>
-        <button
-          style={{ ...pill, border: "none", background: "transparent" }}
-          title={`Tasks — ${delegated} in flight`}
-          onClick={() => onNav("history")}
-        >
-          <Icon name="tasks" size={13} color="var(--cv-ink-dim)" />
-          Tasks{delegated > 0 ? ` ${delegated}` : ""}
-        </button>
-        <span style={{ fontSize: 10.5, color: "var(--cv-ink-faint)", padding: "0 6px" }}>
-          {connected ? `${liveAgents.length} live` : "offline"}
-        </span>
+        <div style={{ position: "relative" }}>
+          <button
+            style={{ ...pill, border: "none", background: "transparent" }}
+            title={`Tasks — ${delegated} in flight`}
+            onClick={() => setMenu((m) => (m === "tasks" ? null : "tasks"))}
+          >
+            <Icon name="tasks" size={13} color="var(--cv-ink-dim)" />
+            Tasks{delegated > 0 ? ` ${delegated}` : ""}
+            <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>▾</span>
+          </button>
+          {drop("tasks", (
+            <>
+              <div style={sectionLabel}>Tasks</div>
+              {Object.values(edges).filter((e) => e.state === "delegated").length === 0 &&
+                row("tasks", "no tasks in flight", "history lives in the Tasks panel", () => onNav("history"))}
+              {Object.values(edges)
+                .filter((e) => e.state === "delegated")
+                .map((e) => {
+                  const to = agents[e.to];
+                  return row("tasks", `${to?.name ?? e.to} · ${e.task.slice(0, 28)}`, "click to focus the agent", () =>
+                    useBoard.getState().requestFocus(e.to));
+                })}
+              {row("tasks", "Open task history", "all delegated runs", () => onNav("history"))}
+            </>
+          ))}
+        </div>
+        {!connected && (
+          <span style={{ fontSize: 10.5, color: "var(--cv-blocked)", padding: "0 6px" }}>
+            offline
+          </span>
+        )}
       </div>
 
       <div style={{ flex: 1 }} />
 
-      {/* ── right: icons only ── */}
+      {/* ── right: usage pill + icons only ── */}
       <div
         className="glass-pill"
         style={{
@@ -241,6 +261,33 @@ export function Topbar({
           pointerEvents: "auto",
         }}
       >
+        <div style={{ position: "relative" }}>
+          <button
+            className="glass-pill"
+            style={{ ...pill, border: "none", background: "transparent", fontSize: 10.5, color: "var(--cv-ink-dim)" }}
+            title="Usage — PTY output captured per agent"
+            onClick={() => setMenu((m) => (m === "usage" ? null : "usage"))}
+          >
+            {liveAgents.length} live
+            <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>▾</span>
+          </button>
+          {drop("usage", (
+            <>
+              <div style={sectionLabel}>Usage</div>
+              {liveAgents.length === 0 &&
+                row("monitor", "no live agents", "spawn one from the + button")}
+              {liveAgents.map((a) => {
+                const kb = (a.output_bytes ?? 0) / 1024;
+                return row(
+                  "terminal",
+                  a.name,
+                  `${a.status} · ${kb < 1024 ? `${kb.toFixed(1)} KB` : `${(kb / 1024).toFixed(1)} MB`} output`,
+                  () => useBoard.getState().requestFocus(a.id),
+                );
+              })}
+            </>
+          ))}
+        </div>
         <button
           className="glass-pill"
           style={{ ...iconBtn(false), background: "transparent", border: "none" }}
