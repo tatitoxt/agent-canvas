@@ -37,6 +37,7 @@ import { DelegationPanel } from "./components/DelegationPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { Topbar } from "./components/Topbar";
 import { ContextMenu } from "./components/ContextMenu";
+import { PaneMenu } from "./components/PaneMenu";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
 
@@ -307,6 +308,7 @@ function Board() {
   const setEdgeDetail = useBoard((s) => s.setEdgeDetail);
   const [search, setSearch] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
   const [mmSize, setMmSize] = useState({ w: 148, h: 96 });
   const [sel, setSel] = useState<Array<{ id: string; x: number; y: number; w: number; h: number }>>([]);
   // Region shot: marquee-select part of the canvas → PNG of just that area.
@@ -715,6 +717,10 @@ function Board() {
         onConnectEnd={onConnectEnd}
         onEdgeClick={(_, edge) => setEdgeDetail(edge.id)}
         onNodeContextMenu={onNodeContextMenu}
+        onPaneContextMenu={(e) => {
+          e.preventDefault();
+          setPaneMenu({ x: e.clientX, y: e.clientY });
+        }}
         onPaneClick={() => {
           setEdgeDetail(null);
           setWiring(null);
@@ -858,6 +864,9 @@ function Board() {
         >
           Group {sel.length} windows
         </button>
+      )}
+      {paneMenu && (
+        <PaneMenu x={paneMenu.x} y={paneMenu.y} onClose={() => setPaneMenu(null)} />
       )}
       {menu && (
         <ContextMenu
