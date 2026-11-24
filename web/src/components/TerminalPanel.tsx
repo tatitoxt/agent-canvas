@@ -22,6 +22,9 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   // Deska's metered voice minutes. Dictates text into the PTY.
   const [listening, setListening] = useState(false);
   const recRef = useRef<any>(null);
+  // Fullscreen: the complete terminal view (banner, tools, model, input
+  // line) like a standalone TUI window — toggled by the ⤢ button.
+  const [maxed, setMaxed] = useState(false);
 
   useEffect(() => {
     const term = new Terminal({
@@ -103,9 +106,11 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   };
 
   const popped = pos.x >= 0;
-  const panelStyle: React.CSSProperties = popped
-    ? { position: "absolute", left: pos.x, top: pos.y, zIndex: 20 }
-    : { position: "absolute", bottom: 16 + index * 28, right: 16 + index * 28, zIndex: 20 };
+  const panelStyle: React.CSSProperties = maxed
+    ? { position: "fixed", inset: 12, zIndex: 40 }
+    : popped
+      ? { position: "absolute", left: pos.x, top: pos.y, zIndex: 20 }
+      : { position: "absolute", bottom: 16 + index * 28, right: 16 + index * 28, zIndex: 20 };
 
   const onHeaderDown = (e: React.PointerEvent) => {
     const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
@@ -134,8 +139,8 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
         ...panelStyle,
         display: "flex",
         flexDirection: "column",
-        height: 300,
-        width: "36rem",
+        height: maxed ? undefined : 300,
+        width: maxed ? undefined : "36rem",
         overflow: "hidden",
       }}
     >
@@ -158,6 +163,19 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
           className="flex items-center gap-2"
           onPointerDown={(e) => e.stopPropagation()}
         >
+          <button
+            title={maxed ? "restore" : "maximize — full terminal"}
+            onClick={() => setMaxed((m) => !m)}
+            style={{
+              border: "none",
+              background: "transparent",
+              fontSize: 12,
+              cursor: "pointer",
+              color: "var(--cv-ink-dim)",
+            }}
+          >
+            ⤢
+          </button>
           <button
             title={listening ? "stop dictation" : "dictate into this terminal"}
             onClick={toggleDictation}
