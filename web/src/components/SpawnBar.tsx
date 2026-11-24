@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useBoard } from "../store/board";
-import { TeamBuilder } from "./TeamBuilder";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--cv-glass-hi)",
@@ -27,14 +26,6 @@ const buttonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const sepStyle: React.CSSProperties = {
-  width: 1,
-  alignSelf: "stretch",
-  margin: "6px 4px",
-  background: "var(--cv-glass-edge)",
-  flex: "none",
-};
-
 /** Official agent CLIs offered by the picker — Deska-style agent chooser.
  * "custom" keeps free-text for anything else (aider, scripts, …). */
 const AGENT_CHOICES = [
@@ -58,33 +49,29 @@ const AGENT_CHOICES = [
   { cmd: "custom", label: "custom command…" },
 ];
 
+/** Slim composer — just "what do you want to run". Everything else
+ * (orchestrator, team, shapes, workspaces, pause/resume, web pins)
+ * lives in the Tools menu top-right, Symvibe-style. */
 export function SpawnBar() {
   const connected = useBoard((s) => s.connected);
   const connect = useBoard((s) => s.connect);
   const spawn = useBoard((s) => s.spawn);
   const workspaces = useBoard((s) => s.workspaces);
   const accounts = useBoard((s) => s.accounts);
-  const createWorkspace = useBoard((s) => s.createWorkspace);
-  const spawnOrchestrator = useBoard((s) => s.spawnOrchestrator);
-  const pauseAll = useBoard((s) => s.pauseAll);
-  const resumeAll = useBoard((s) => s.resumeAll);
-  const activeBoard = useBoard((s) => s.activeBoard);
+  const spawnFocusN = useBoard((s) => s.spawnFocusN);
   const [choice, setChoice] = useState("claude");
   const [command, setCommand] = useState("");
-  const [name, setName] = useState("");
   const [wsId, setWsId] = useState("");
   const [permission, setPermission] = useState("supervised");
   const [acctId, setAcctId] = useState("");
   // Named sign-ins of the chosen CLI — "default" = the machine login.
   const acctOptions = Object.values(accounts).filter((a) => a.cli === choice);
-  const [makingWs, setMakingWs] = useState(false);
-  const [makingWeb, setMakingWeb] = useState(false);
-  const [webUrl, setWebUrl] = useState("");
-  const [wsName, setWsName] = useState("");
-  const [wsRepo, setWsRepo] = useState("");
-  const [teamOpen, setTeamOpen] = useState(false);
-  const [shapeOpen, setShapeOpen] = useState(false);
-  const addShape = useBoard((s) => s.addShape);
+  const cliRef = useRef<HTMLSelectElement>(null);
+
+  // "New task" in the Spaces rail focuses this picker.
+  useEffect(() => {
+    if (spawnFocusN > 0) cliRef.current?.focus();
+  }, [spawnFocusN]);
 
   return (
     <div
@@ -111,79 +98,10 @@ export function SpawnBar() {
             connect
           </button>
         </>
-      ) : makingWeb ? (
-        <>
-          <input
-            style={{ ...inputStyle, width: 260 }}
-            placeholder="http://localhost:5173"
-            value={webUrl}
-            onChange={(e) => setWebUrl(e.target.value)}
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && webUrl.trim()) {
-                useBoard.getState().webNodeAdd(webUrl.trim());
-                setMakingWeb(false);
-                setWebUrl("");
-              }
-            }}
-          />
-          <button
-            className="glass-pill"
-            style={{ ...buttonStyle, color: "var(--cv-accent)", opacity: webUrl.trim() ? 1 : 0.45 }}
-            disabled={!webUrl.trim()}
-            onClick={() => {
-              useBoard.getState().webNodeAdd(webUrl.trim());
-              setMakingWeb(false);
-              setWebUrl("");
-            }}
-          >
-            pin
-          </button>
-          <button className="glass-pill" style={buttonStyle} onClick={() => setMakingWeb(false)}>
-            ×
-          </button>
-        </>
-      ) : makingWs ? (
-        <>
-          <input
-            style={{ ...inputStyle, width: 130 }}
-            placeholder="workspace name"
-            value={wsName}
-            onChange={(e) => setWsName(e.target.value)}
-            autoFocus
-          />
-          <input
-            style={{ ...inputStyle, width: 220 }}
-            placeholder="repo path (~/repos/my-app)"
-            value={wsRepo}
-            onChange={(e) => setWsRepo(e.target.value)}
-          />
-          <button
-            className="glass-pill"
-            style={{ ...buttonStyle, color: "var(--cv-accent)", opacity: wsName.trim() && wsRepo.trim() ? 1 : 0.45 }}
-            disabled={!wsName.trim() || !wsRepo.trim()}
-            onClick={() => {
-              createWorkspace(wsName.trim(), wsRepo.trim());
-              setMakingWs(false);
-              setWsName("");
-              setWsRepo("");
-            }}
-          >
-            create
-          </button>
-          <button className="glass-pill" style={buttonStyle} onClick={() => setMakingWs(false)}>
-            ×
-          </button>
-        </>
       ) : (
         <>
-          <input
-            style={{ ...inputStyle, width: 110 }}
-            placeholder="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
           <select
+            ref={cliRef}
             style={{ ...inputStyle, cursor: "pointer" }}
             value={choice}
             onChange={(e) => setChoice(e.target.value)}
@@ -257,109 +175,12 @@ export function SpawnBar() {
             disabled={choice === "custom" && !command.trim()}
             onClick={() => {
               const cmd = choice === "custom" ? command.trim() : choice;
-              spawn(name.trim() || cmd, cmd, wsId || undefined, permission, acctId || undefined);
-              setName("");
+              spawn(cmd, cmd, wsId || undefined, permission, acctId || undefined);
             }}
           >
             + agent
           </button>
-          <span style={sepStyle} />
-          <button
-            className="glass-pill"
-            style={{ ...buttonStyle, color: "var(--cv-ink-dim)" }}
-            onClick={() => setMakingWs(true)}
-            title="New workspace"
-          >
-            ◫+
-          </button>
-          <button
-            className="glass-pill"
-            style={{ ...buttonStyle, color: "#7ba3cf" }}
-            onClick={() => setMakingWeb(true)}
-            title="Pin a live web page (e.g. a localhost dev server) to the canvas"
-          >
-            ◍+
-          </button>
-          <button
-            className="glass-pill"
-            style={{ ...buttonStyle, color: "var(--cv-accent)" }}
-            onClick={spawnOrchestrator}
-            title="New orchestrator — wire consoles to it and command them all from its composer"
-          >
-            ◉ orch
-          </button>
-          <button
-            className="glass-pill"
-            style={{ ...buttonStyle, color: "var(--cv-accent)" }}
-            onClick={() => setTeamOpen(!teamOpen)}
-            title="Team builder — pick roles, one CLI for all, Spawn N"
-          >
-            ◨ team
-          </button>
-          <button
-            className="glass-pill"
-            style={{ ...buttonStyle, color: "var(--cv-ink)" }}
-            onClick={() => setShapeOpen(!shapeOpen)}
-            title="Whiteboard shape — rect / ellipse / diamond / sticky"
-          >
-            ▢ shape
-          </button>
-          <span style={sepStyle} />
-          <button
-            className="glass-pill"
-            style={{ ...buttonStyle, color: "var(--cv-waiting)" }}
-            onClick={() => pauseAll(activeBoard)}
-            title="Freeze every agent on this board mid-task (SIGSTOP) — resume continues mid-line"
-          >
-            ⏸ pause all
-          </button>
-          <button
-            className="glass-pill"
-            style={{ ...buttonStyle, color: "var(--cv-done)" }}
-            onClick={() => resumeAll(activeBoard)}
-            title="Resume every paused agent"
-          >
-            ▸ resume all
-          </button>
         </>
-      )}
-      {teamOpen && <TeamBuilder onClose={() => setTeamOpen(false)} />}
-      {shapeOpen && (
-        <div
-          className="glass-panel"
-          style={{
-            position: "absolute",
-            left: "50%",
-            bottom: 84,
-            transform: "translateX(-50%)",
-            zIndex: 20,
-            display: "flex",
-            gap: 6,
-            padding: "8px 10px",
-          }}
-        >
-          {(
-            [
-              ["rect", "▢"],
-              ["ellipse", "◯"],
-              ["diamond", "◇"],
-              ["sticky", "▤"],
-            ] as const
-          ).map(([kind, glyph]) => (
-            <button
-              key={kind}
-              className="glass-pill"
-              style={{ ...buttonStyle, fontSize: 14 }}
-              title={kind}
-              onClick={() => {
-                addShape(kind);
-                setShapeOpen(false);
-              }}
-            >
-              {glyph}
-            </button>
-          ))}
-        </div>
       )}
     </div>
   );

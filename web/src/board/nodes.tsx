@@ -133,6 +133,7 @@ export function StatusBars({ color }: { color: string }) {
 
 export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const meta = cliMeta(data.cli);
+  const summaries = useBoard((s) => s.panelSummaries);
   const [collapsed, setCollapsed] = useState(false);
   const statusColor = STATUS_COLOR[data.status];
   // Outline = the state color (waiting/running/idle/error) — Deska's
@@ -346,7 +347,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           )}
         </div>
       )}
-      {data.task && (
+      {summaries && data.task && (
         <div
           style={{
             marginTop: 10,
@@ -364,7 +365,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           {data.task}
         </div>
       )}
-      {data.id && <MiniTerm agentId={data.id} />}
+      {summaries && data.id && <MiniTerm agentId={data.id} />}
       {data.pendingApproval && (
         <div
           className="nodrag"

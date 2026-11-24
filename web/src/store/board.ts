@@ -166,6 +166,16 @@ type BoardState = {
   threadSend: (text: string) => void;
   navRequest: { key: string; n: number } | null;
   requestNav: (key: string) => void;
+  /** Deska's "Show Panel Summaries" — hides each card's last line +
+   * inline mini-terminal preview for a quieter board. */
+  panelSummaries: boolean;
+  togglePanelSummaries: () => void;
+  /** Bump counter that focuses the spawn bar's agent picker (New Task). */
+  spawnFocusN: number;
+  focusSpawn: () => void;
+  /** Deska's "Gather loose windows into groups" — pulls every unwired,
+   * unparented agent card into a tight grid and reframes the view. */
+  gatherLoose: () => void;
   createAutomation: (a: {
     name: string;
     prompt: string;
@@ -978,6 +988,33 @@ export const useBoard = create<BoardState>((set, get) => ({
   threadLog: [],
   navRequest: null,
   requestNav: (key) => set((s) => ({ navRequest: { key, n: (s.navRequest?.n ?? 0) + 1 } })),
+  panelSummaries: true,
+  togglePanelSummaries: () => set((s) => ({ panelSummaries: !s.panelSummaries })),
+  spawnFocusN: 0,
+  focusSpawn: () => set((s) => ({ spawnFocusN: s.spawnFocusN + 1 })),
+  gatherLoose: () => {
+    const { agents, edges, positions, activeBoard } = get();
+    const wired = new Set(Object.values(edges).flatMap((e) => [e.from, e.to]));
+    const loose = Object.values(agents).filter(
+      (a) =>
+        (a.board_id ?? "main") === activeBoard &&
+        a.status !== "exited" &&
+        !a.workspace_id &&
+        !wired.has(a.id),
+    );
+    if (!loose.length) {
+      get().notify("gather — no loose windows");
+      return;
+    }
+    const x0 = Math.min(...loose.map((a) => positions[a.id]?.x ?? 0));
+    const y0 = Math.min(...loose.map((a) => positions[a.id]?.y ?? 0));
+    const cols = Math.ceil(Math.sqrt(loose.length));
+    loose.forEach((a, i) =>
+      get().moveNode(a.id, x0 + (i % cols) * 500, y0 + Math.floor(i / cols) * 250),
+    );
+    get().notify(`gathered ${loose.length} loose window${loose.length === 1 ? "" : "s"}`);
+    get().requestView();
+  },
 
   /** Symvibe's THREAD — the built-in board commander. Deterministic
    * intent parsing; falls back to quickRequest for local commands. */

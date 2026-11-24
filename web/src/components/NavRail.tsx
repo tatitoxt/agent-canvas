@@ -265,6 +265,56 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         <Icon name="tasks" />
       </button>
       <div style={{ flex: 1 }} />
+      <button
+        title="New task — pick a CLI and spawn (focuses the spawn bar)"
+        onClick={() => useBoard.getState().focusSpawn()}
+        style={btn(false)}
+      >
+        <Icon name="newtask" />
+      </button>
+      <button
+        title="Terminal — spawn a plain shell"
+        onClick={() => useBoard.getState().spawn("Terminal", "bash")}
+        style={btn(false)}
+      >
+        <Icon name="terminal" />
+      </button>
+      <button
+        title="File Explorer — vault files"
+        onClick={() => onSelect("vault")}
+        style={btn(active === "vault")}
+      >
+        <Icon name="explorer" />
+      </button>
+      <button
+        title="Code Editor — notes"
+        onClick={() => onSelect("notes")}
+        style={btn(active === "notes")}
+      >
+        <Icon name="code" />
+      </button>
+      <div style={divider} />
+      <button
+        title="Gather loose windows into a group"
+        onClick={() => useBoard.getState().gatherLoose()}
+        style={btn(false)}
+      >
+        <Icon name="gather" />
+      </button>
+      <button
+        title="Show panel summaries — last line + mini preview per card"
+        onClick={() => useBoard.getState().togglePanelSummaries()}
+        style={btn(!useBoard((s) => s.panelSummaries))}
+      >
+        <Icon name="eye" color={useBoard((s) => s.panelSummaries) ? "var(--cv-ink)" : "var(--cv-ink-faint)"} />
+      </button>
+      <button
+        title="Zoom — fit the whole board"
+        onClick={() => useBoard.getState().requestView()}
+        style={btn(false)}
+      >
+        <Icon name="zoom" />
+      </button>
       <div
         title={connected ? "daemon connected" : "daemon offline"}
         style={{

@@ -42,7 +42,6 @@ import { CommandPalette } from "./components/CommandPalette";
 import { DelegationPanel } from "./components/DelegationPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { Topbar } from "./components/Topbar";
-import { ToolsRail } from "./components/ToolsRail";
 import { ContextMenu } from "./components/ContextMenu";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
@@ -199,6 +198,15 @@ function Board() {
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
         e.preventDefault();
         setSearch((s) => !s);
+      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void shotCanvas();
+      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        setShotMode((m) => !m);
+      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        setPencil((m) => !m);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -387,21 +395,19 @@ function Board() {
         active={nav}
         onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
       />
-      <ToolsRail
-        active={nav}
-        onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
-        drawOn={pencil}
-        regionOn={shotMode}
-        actions={{
+      <Topbar
+        nav={nav}
+        onNav={(k) => setNav((n) => (n === k ? "canvas" : k))}
+        tools={{
           onDigest: () => useBoard.getState().digestNow(),
           onShot: () => void shotCanvas(),
           onStudio: () => useBoard.getState().studioDocNow(),
           onDraw: () => setPencil((m) => !m),
           onRegion: () => setShotMode((m) => !m),
-          onSettings: () => setNav((n) => (n === "settings" ? "canvas" : "settings")),
+          drawOn: pencil,
+          regionOn: shotMode,
         }}
       />
-      <Topbar />
       {pencil && (
         <div
           style={{ position: "absolute", inset: 0, zIndex: 29, cursor: "crosshair" }}
@@ -490,6 +496,8 @@ function Board() {
         fitViewOptions={{ padding: 0.18, maxZoom: 1.1 }}
         minZoom={0.15}
         maxZoom={2}
+        selectionOnDrag
+        panOnDrag={[1, 2]}
         proOptions={{ hideAttribution: true }}
       >
         <Controls position="bottom-left" showInteractive={false} />

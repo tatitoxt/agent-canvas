@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useBoard } from "../store/board";
 import { Icon } from "./icons";
+import { ToolsMenu, type ToolsMenuActions } from "./ToolsRail";
 
 const pill: React.CSSProperties = {
   padding: "5px 12px",
@@ -21,9 +22,17 @@ const divider: React.CSSProperties = {
 };
 
 /** Deska-style topbar: one pill row — app ▸ machine ▸ board ▸ status —
- * quick-request box on the right. Board switching lives in the left
- * Spaces rail. */
-export function Topbar() {
+ * Mission Map + Tools dropdown + quick-request on the right. Board
+ * switching lives in the left Spaces rail. */
+export function Topbar({
+  nav,
+  onNav,
+  tools,
+}: {
+  nav: string;
+  onNav: (key: string) => void;
+  tools: ToolsMenuActions;
+}) {
   const connected = useBoard((s) => s.connected);
   const workspaces = useBoard((s) => s.workspaces);
   const agents = useBoard((s) => s.agents);
@@ -113,6 +122,26 @@ export function Topbar() {
         </span>
       </div>
       <div style={{ flex: 1 }} />
+      <button
+        className="glass-pill"
+        onClick={() => useBoard.getState().requestView()}
+        title="Mission Map — fit the whole board in view"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "6px 12px",
+          fontSize: 11.5,
+          fontWeight: 650,
+          color: "var(--cv-ink)",
+          cursor: "pointer",
+          pointerEvents: "auto",
+        }}
+      >
+        <Icon name="map" size={13} color="var(--cv-ink-dim)" />
+        Map
+      </button>
+      <ToolsMenu active={nav} onSelect={onNav} actions={tools} />
       <div
         className="glass-pill"
         style={{
