@@ -372,6 +372,26 @@ function Board() {
       } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "p") {
         e.preventDefault();
         setPencil((m) => !m);
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "`") {
+        // Pop the selected agent's terminal out as a canvas card, or put an
+        // existing card back into the drawer — one keystroke both ways.
+        e.preventDefault();
+        const st = useBoard.getState();
+        const boardId = st.activeBoard ?? "main";
+        const selIds = selRef.current.map((s) => s.id);
+        const agentId =
+          selIds.find((id) => st.agents[id]) ??
+          selIds.find((id) => id.startsWith("term-"))?.slice(5);
+        if (agentId) {
+          const termId = `term-${agentId}`;
+          if (st.termNodes[boardId]?.[termId]) {
+            st.closeTermNode(termId);
+            const a = st.agents[agentId];
+            openTerm({ id: agentId, name: a?.name ?? "terminal" });
+          } else {
+            st.openTermNode(agentId);
+          }
+        }
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         const t = e.target as HTMLElement;
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
