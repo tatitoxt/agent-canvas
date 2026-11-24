@@ -1239,6 +1239,27 @@ export const useBoard = create<BoardState>((set, get) => ({
       reply(`spawned ${Math.min(Math.max(n, 1), 8)} × ${cli}`);
       return;
     }
+    const km = low.match(/^(?:kill|stop|close)\s+(.+)$/);
+    if (km && !/^all\b/.test(km[1])) {
+      const q = km[1].trim();
+      const boardAgents = Object.values(get().agents).filter(
+        (a) => (a.board_id ?? "main") === get().activeBoard,
+      );
+      const ktm = q.match(/^terminal\s+(\d+)$/);
+      const target = ktm
+        ? boardAgents[parseInt(ktm[1], 10) - 1]
+        : boardAgents.find(
+            (a) =>
+              a.name.toLowerCase().includes(q) ||
+              (a.command ?? "").toLowerCase().includes(q),
+          );
+      if (!target) reply(`no agent matches "${q}"`);
+      else {
+        get().kill(target.id);
+        reply(`killed ${ktm ? `Terminal ${ktm[1]}` : target.name}`);
+      }
+      return;
+    }
     if (/^kill all/.test(low)) {
       const board = get().activeBoard;
       const ids = Object.values(get().agents).filter((a) => a.board_id === board).map((a) => a.id);
