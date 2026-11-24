@@ -5,7 +5,7 @@ import { Icon } from "./icons";
 const railCol: React.CSSProperties = {
   position: "absolute",
   left: 4,
-  top: 74,
+  top: 226,
   bottom: 12,
   zIndex: 20,
   display: "flex",
@@ -18,7 +18,6 @@ const railColRight: React.CSSProperties = {
   ...railCol,
   left: undefined,
   right: 2,
-  top: 120,
 };
 
 const bubble: React.CSSProperties = {
@@ -320,7 +319,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
           >
             <Icon name="git" />
             {gitAgents.length > 0 && (
-              <span style={badge("var(--cv-glass-hi)")}>{gitAgents.length}</span>
+              <span style={badge("var(--cv-waiting)")}>{gitAgents.length}</span>
             )}
           </button>
           {menu === "git" && (
