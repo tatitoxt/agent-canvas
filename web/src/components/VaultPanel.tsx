@@ -142,6 +142,59 @@ function ReadingView({ text, onLink }: { text: string; onLink?: (name: string) =
       );
       continue;
     }
+    if (/^\s*\|.*\|\s*$/.test(l)) {
+      const rows: string[][] = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+        const cells = lines[i].trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+        if (!cells.every((c) => /^:?-{3,}:?$/.test(c))) rows.push(cells);
+        i++;
+      }
+      i--;
+      if (rows.length) {
+        const [head, ...body] = rows;
+        const cell = "8px 12px";
+        els.push(
+          <table
+            key={`t${i}`}
+            style={{
+              margin: "10px 0",
+              borderCollapse: "collapse",
+              fontSize: 12,
+              width: "100%",
+              maxWidth: 640,
+              border: "1px solid rgba(255,255,255,0.09)",
+              borderRadius: 8,
+              overflow: "hidden",
+            }}
+          >
+            <thead>
+              <tr>
+                {head.map((c, j) => (
+                  <th
+                    key={j}
+                    style={{ padding: cell, textAlign: "left", color: "var(--cv-accent)", borderBottom: "1px solid rgba(255,255,255,0.14)", fontWeight: 700, whiteSpace: "nowrap" }}
+                  >
+                    {mdInline(c, onLink)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {body.map((r, j) => (
+                <tr key={j} style={{ background: j % 2 ? "rgba(255,255,255,0.02)" : "transparent" }}>
+                  {r.map((c, k) => (
+                    <td key={k} style={{ padding: cell, borderBottom: "1px solid rgba(255,255,255,0.06)", color: "var(--cv-ink)" }}>
+                      {mdInline(c, onLink)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>,
+        );
+      }
+      continue;
+    }
     if (/^\s*>\s?/.test(l)) {
       els.push(
         <div key={i} style={{ margin: "6px 0", paddingLeft: 12, borderLeft: "2px solid var(--cv-accent)", color: "var(--cv-ink-dim)", fontStyle: "italic" }}>
