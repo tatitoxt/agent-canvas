@@ -497,9 +497,9 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         {repoUrl && (
           <>
             <button
-              title="Pull requests — live list from the repo's GitHub"
-              onClick={() => onSelect("prs")}
-              style={btn(active === "prs")}
+              title="Open the repo on github.com in your browser"
+              onClick={() => window.open(repoUrl, "_blank")}
+              style={btn(false)}
             >
               <Icon name="github" />
             </button>
