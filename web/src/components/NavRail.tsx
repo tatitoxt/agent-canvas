@@ -4,8 +4,8 @@ import { Icon } from "./icons";
 
 const railCol: React.CSSProperties = {
   position: "absolute",
-  left: 12,
-  top: 58,
+  left: 4,
+  top: 74,
   bottom: 12,
   zIndex: 20,
   display: "flex",
@@ -17,7 +17,7 @@ const railCol: React.CSSProperties = {
 const railColRight: React.CSSProperties = {
   ...railCol,
   left: undefined,
-  right: 12,
+  right: 4,
 };
 
 const bubble: React.CSSProperties = {
