@@ -85,7 +85,7 @@ export function SpawnBar() {
       style={{
         position: "absolute",
         left: "50%",
-        bottom: 22,
+        bottom: 64,
         transform: "translateX(-50%)",
         zIndex: 15,
         display: "flex",
