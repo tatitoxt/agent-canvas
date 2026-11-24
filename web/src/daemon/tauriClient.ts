@@ -171,6 +171,10 @@ export class TauriCanvasClient {
     void invoke("vault_append", { dir, path, text }).catch(console.error);
   }
 
+  vaultWrite(dir: string, path: string, text: string) {
+    void invoke("vault_write", { dir, path, text }).catch(console.error);
+  }
+
   vaultSearch(dir: string, query: string) {
     void invoke("vault_search", { dir, query }).catch(console.error);
   }

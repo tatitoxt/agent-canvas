@@ -75,6 +75,10 @@ pub enum ClientMsg {
     /// path. Creates the file (and parent dirs) when missing; the path is
     /// constrained to the vault root and must end in .md.
     VaultAppend { dir: String, path: String, text: String },
+    /// Overwrite a vault file with the given text — editing notes inside
+    /// the app. Same constraints as vault_append (root-scoped, .md only,
+    /// creates parent dirs).
+    VaultWrite { dir: String, path: String, text: String },
     /// Full-text search across the vault's markdown files.
     VaultSearch { dir: String, query: String },
     /// Push an agent's worktree branch to origin (its committed work).

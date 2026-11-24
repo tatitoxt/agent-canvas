@@ -253,6 +253,7 @@ type BoardState = {
   vaultRead: (path: string) => void;
   vaultSearch: (query: string) => void;
   vaultAppend: (path: string, text: string) => void;
+  vaultWrite: (path: string, text: string) => void;
   closeVaultFile: () => void;
   webNodeAdd: (url: string) => void;
   webNodeRemove: (id: string) => void;
@@ -847,6 +848,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   },
   vaultRead: (path) => client?.vaultRead(get().vaultDir, path),
   vaultAppend: (path, text) => client?.vaultAppend(get().vaultDir, path, text),
+  vaultWrite: (path, text) => client?.vaultWrite(get().vaultDir, path, text),
   vaultSearch: (query) => client?.vaultSearch(get().vaultDir, query),
   closeVaultFile: () => set({ vaultFile: null }),
   studioDocNow: () => client?.studioDoc(),

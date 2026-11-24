@@ -1125,6 +1125,22 @@ fn handle_client_msg(
                 }
             }
         }
+        ClientMsg::VaultWrite { dir, path, text } => {
+            let root = PathBuf::from(&dir);
+            let file = root.join(&path);
+            if path.contains("..") || !path.ends_with(".md") {
+                send_control(ServerMsg::Error { agent_id: None, message: format!("vault write refused: {path}") });
+            } else {
+                let result = (|| {
+                    if let Some(parent) = file.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+                    std::fs::write(&file, &text).map_err(|e| e.to_string())
+                })();
+                match result {
+                    Ok(()) => send_control(ServerMsg::VaultFile { path, text }),
+                    Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault write failed: {e}") }),
+                }
+            }
+        }
         ClientMsg::VaultSearch { dir, query } => {
             let root = PathBuf::from(&dir);
             let needle = query.to_lowercase();

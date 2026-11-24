@@ -403,6 +403,57 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
   );
 }
 
+/** Editable raw markdown — like Obsidian's Source mode. Tracks local
+ *  edits and saves the whole file back to the vault via vault_write. */
+function SourceEditor({ path, text }: { path: string; text: string }) {
+  const vaultWrite = useBoard((st) => st.vaultWrite);
+  const notify = useBoard((st) => st.notify);
+  const [draft, setDraft] = useState(text);
+  const [saved, setSaved] = useState(text);
+  useEffect(() => { setDraft(text); setSaved(text); }, [path, text]);
+  const dirty = draft !== saved;
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+            e.preventDefault();
+            vaultWrite(path, draft);
+            setSaved(draft);
+            notify(`saved → ${path}`);
+          }
+        }}
+        spellCheck={false}
+        style={{
+          flex: 1, minHeight: 0, overflow: "auto", margin: 0,
+          padding: "10px 12px", borderRadius: 14, resize: "none",
+          border: `1px solid ${dirty ? "rgba(255,196,66,.4)" : "var(--cv-glass-edge)"}`,
+          background: "var(--cv-glass-hi)", color: "var(--cv-ink)",
+          fontSize: 11, fontFamily: "ui-monospace, monospace",
+          lineHeight: 1.55, whiteSpace: "pre-wrap", outline: "none",
+        }}
+      />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+        <button
+          onClick={() => { vaultWrite(path, draft); setSaved(draft); notify(`saved → ${path}`); }}
+          disabled={!dirty}
+          style={{
+            padding: "3px 12px", borderRadius: 10, fontSize: 10, cursor: dirty ? "pointer" : "default",
+            border: "1px solid var(--cv-glass-edge)",
+            background: dirty ? "rgba(255,196,66,.2)" : "var(--cv-glass-hi)",
+            color: dirty ? "var(--cv-amber)" : "var(--cv-ink-faint)",
+          }}
+        >
+          {dirty ? "save to vault ⌘S" : "saved"}
+        </button>
+        {dirty && <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>unsaved changes</span>}
+      </div>
+    </div>
+  );
+}
+
 /** Obsidian-style vault browser: point it at a vault directory and read
  * markdown notes in a side column. Reading/Source/Graph views, pin to
  * board, export to PDF (saved as an artifact). */
@@ -708,24 +759,7 @@ export function VaultPanel() {
           </div>
           {view === "reading" && <ReadingView text={vaultFile.text} onLink={openByName} />}
           {view === "source" && (
-            <pre
-              style={{
-                flex: 1,
-                overflow: "auto",
-                margin: 0,
-                padding: "10px 12px",
-                borderRadius: 14,
-                border: "1px solid var(--cv-glass-edge)",
-                background: "var(--cv-glass-hi)",
-                color: "var(--cv-ink)",
-                fontSize: 11,
-                fontFamily: "ui-monospace, monospace",
-                lineHeight: 1.55,
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {vaultFile.text}
-            </pre>
+            <SourceEditor path={vaultFile.path} text={vaultFile.text} />
           )}
           {view === "graph" && (
             <GraphView
