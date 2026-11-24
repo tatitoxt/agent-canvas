@@ -660,7 +660,16 @@ fn snapshot(
         .agents_snapshot()
         .map_err(|e| e.to_string())?
         .into_iter()
-        .map(|(id, name, command, worktree, status, workspace_id, permission, board_id, account_id)| SnapshotAgent {
+        .map(|(id, name, command, worktree, status, workspace_id, permission, board_id, account_id)| {
+            let ob = state
+                .repo_root
+                .join(".canvas")
+                .join("transcripts")
+                .join(format!("{id}.bin"))
+                .metadata()
+                .map(|m| m.len())
+                .unwrap_or(0);
+            SnapshotAgent {
             status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
             account_label: account_id.and_then(|a| acct_labels.get(&a).cloned()),
             agent_id: id,
@@ -670,6 +679,8 @@ fn snapshot(
             permission,
             workspace_id,
             board_id,
+            output_bytes: ob,
+        }
         })
         .collect();
     let workspaces: Vec<canvasd::protocol::SnapshotWorkspace> = state

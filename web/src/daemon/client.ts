@@ -11,6 +11,8 @@ export type SnapshotAgent = {
   workspace_id?: string | null;
   board_id?: string | null;
   account_label?: string | null;
+  /** PTY output bytes captured to disk. */
+  output_bytes?: number;
 };
 
 export type SnapshotAccount = {

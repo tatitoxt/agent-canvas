@@ -284,6 +284,8 @@ pub struct SnapshotAgent {
     pub board_id: Option<String>,
     /// Label of the named account this agent signs in as, if any.
     pub account_label: Option<String>,
+    /// Bytes of PTY output captured to disk (usage metering).
+    pub output_bytes: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

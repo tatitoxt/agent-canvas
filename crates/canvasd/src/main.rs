@@ -268,6 +268,14 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                         let account_label = account_id
                             .as_ref()
                             .and_then(|a| acct_labels.get(a).cloned());
+                        let ob = state
+                            .repo_root
+                            .join(".canvas")
+                            .join("transcripts")
+                            .join(format!("{id}.bin"))
+                            .metadata()
+                            .map(|m| m.len())
+                            .unwrap_or(0);
                         protocol::SnapshotAgent {
                             status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
                             agent_id: id,
@@ -278,6 +286,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                             workspace_id,
                             board_id,
                             account_label,
+                            output_bytes: ob,
                         }
                     })
                     .collect()

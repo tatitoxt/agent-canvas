@@ -39,6 +39,18 @@ export function AccountsPanel() {
       .map((a) => a.account_label)
       .filter((l): l is string => !!l),
   );
+  // Usage per account: agents run under it and their PTY output bytes.
+  const usage = new Map<string, { agents: number; bytes: number }>();
+  for (const a of Object.values(agents)) {
+    if (!a.account_label) continue;
+    const u = usage.get(a.account_label) ?? { agents: 0, bytes: 0 };
+    u.agents += 1;
+    u.bytes += a.output_bytes ?? 0;
+    usage.set(a.account_label, u);
+  }
+  const fmtBytes = (n: number) =>
+    n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : n >= 1000 ? `${(n / 1000).toFixed(1)} KB` : `${n} B`;
+  const totalBytes = Object.values(agents).reduce((t, a) => t + (a.output_bytes ?? 0), 0);
 
   return (
     <div
@@ -130,6 +142,11 @@ export function AccountsPanel() {
             No named accounts — agents use the machine's default sign-in.
           </div>
         )}
+        {list.length > 0 && (
+          <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", padding: "0 12px 6px" }}>
+            all agents · {fmtBytes(totalBytes)} output
+          </div>
+        )}
         {list.map((a) => (
           <div
             key={a.account_id}
@@ -152,6 +169,11 @@ export function AccountsPanel() {
               </div>
               <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)" }}>
                 {a.cli}
+                {usage.has(a.label) && (
+                  <span style={{ color: "var(--cv-accent)", opacity: 0.85 }}>
+                    {" "}· {usage.get(a.label)!.agents} agent{usage.get(a.label)!.agents === 1 ? "" : "s"} · {fmtBytes(usage.get(a.label)!.bytes)}
+                  </span>
+                )}
               </div>
             </div>
             <button

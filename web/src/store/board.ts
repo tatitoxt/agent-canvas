@@ -20,6 +20,7 @@ export type LiveAgent = {
   board_id?: string | null;
   /** Label of the named CLI account this agent signs in as, if any. */
   account_label?: string | null;
+  output_bytes?: number;
 };
 
 export type LiveWorkspace = {
@@ -345,6 +346,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                   workspace_id: a.workspace_id ?? null,
                   board_id: a.board_id ?? "main",
                   account_label: a.account_label ?? null,
+              output_bytes: a.output_bytes,
                 },
               ]),
             );
