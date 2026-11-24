@@ -64,6 +64,39 @@ function Board() {
 
   // Full-canvas PNG export: render every node fitted into a fixed-size
   // bitmap — the "screenshot button" on the board.
+  // Markup pencil — freehand strokes drawn over the canvas (screen coords),
+  // baked into the PNG when a shot exports.
+  const [pencil, setPencil] = useState(false);
+  const [strokes, setStrokes] = useState<Array<Array<{ x: number; y: number }>>>([]);
+  const [drawing, setDrawing] = useState<Array<{ x: number; y: number }> | null>(null);
+
+  const composeShot = useCallback(
+    async (dataUrl: string, screenRect: { x1: number; y1: number; x2: number; y2: number }, name: string) => {
+      const img = new Image();
+      img.src = dataUrl;
+      await img.decode();
+      const cv = document.createElement("canvas");
+      cv.width = img.width; cv.height = img.height;
+      const ctx = cv.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0);
+      const sx = img.width / (screenRect.x2 - screenRect.x1);
+      const sy = img.height / (screenRect.y2 - screenRect.y1);
+      ctx.strokeStyle = "#e8b25a";
+      ctx.lineWidth = 3;
+      ctx.lineJoin = ctx.lineCap = "round";
+      for (const st of strokes) {
+        if (st.length < 2) continue;
+        ctx.beginPath();
+        ctx.moveTo((st[0].x - screenRect.x1) * sx, (st[0].y - screenRect.y1) * sy);
+        for (const p of st.slice(1)) ctx.lineTo((p.x - screenRect.x1) * sx, (p.y - screenRect.y1) * sy);
+        ctx.stroke();
+      }
+      const a = document.createElement("a");
+      a.download = name;
+      a.href = cv.toDataURL("image/png");
+      a.click();
+    }, [strokes]);
   const shotCanvas = useCallback(async () => {
     const ns = getNodes();
     if (ns.length === 0) return;
@@ -87,7 +120,7 @@ function Board() {
     a.download = `canvas-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
     a.href = dataUrl;
     a.click();
-  }, [getNodes]);
+  }, [getNodes, composeShot]);
   const viewCmdN = useBoard((s) => s.viewCmdN);
   useEffect(() => {
     if (viewCmdN > 0) fitView({ padding: 0.18, maxZoom: 1.1, duration: 250 });
@@ -130,10 +163,7 @@ function Board() {
       height: h,
       style: { width: `${w}px`, height: `${h}px`, transform: `translate(${v.x}px, ${v.y}px) scale(${v.zoom})` },
     });
-    const a = document.createElement("a");
-    a.download = `canvas-region-${Date.now()}.png`;
-    a.href = dataUrl;
-    a.click();
+    void composeShot(dataUrl, r, `canvas-region-${Date.now()}.png`);
     useBoard.getState().notify(`region shot — ${picked.length} node(s)`);
   }, [getNodes]);
   // Connect on load when a token is present — no manual "connect" click.
@@ -341,6 +371,25 @@ function Board() {
       </button>
       <button
         className="glass-pill"
+        title="pencil — draw markups on the canvas (baked into shots)"
+        onClick={() => setPencil((m) => !m)}
+        style={{
+          position: "absolute",
+          right: 116,
+          bottom: 36,
+          zIndex: 20,
+          fontSize: 11,
+          fontWeight: 600,
+          padding: "6px 14px",
+          cursor: "pointer",
+          border: "none",
+          color: pencil ? "var(--cv-accent)" : "var(--cv-ink)",
+        }}
+      >
+        ✎ draw
+      </button>
+      <button
+        className="glass-pill"
         title="drag a region → PNG of just that part"
         onClick={() => setShotMode((m) => !m)}
         style={{
@@ -358,6 +407,35 @@ function Board() {
       >
         ◳ region
       </button>
+      {pencil && (
+        <div
+          style={{ position: "absolute", inset: 0, zIndex: 29, cursor: "crosshair" }}
+          onMouseDown={(e) => setDrawing([{ x: e.clientX, y: e.clientY }])}
+          onMouseMove={(e) => { if (drawing) setDrawing([...drawing, { x: e.clientX, y: e.clientY }]); }}
+          onMouseUp={() => { if (drawing && drawing.length > 1) setStrokes((st) => [...st, drawing]); setDrawing(null); }}
+        >
+          <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
+            {[...strokes, ...(drawing ? [drawing] : [])].map((st, i) => (
+              <polyline
+                key={i}
+                points={st.map((p) => `${p.x},${p.y}`).join(" ")}
+                fill="none"
+                stroke="#e8b25a"
+                strokeWidth={3}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            ))}
+          </svg>
+          <button
+            className="glass-pill"
+            style={{ position: "absolute", right: 20, top: 52, fontSize: 10.5, padding: "5px 12px", cursor: "pointer", border: "none", color: "var(--cv-ink-dim)" }}
+            onClick={(e) => { e.stopPropagation(); setStrokes([]); }}
+          >
+            clear strokes
+          </button>
+        </div>
+      )}
       {shotMode && (
         <div
           style={{
