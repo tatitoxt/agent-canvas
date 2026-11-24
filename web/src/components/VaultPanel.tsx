@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useBoard } from "../store/board";
 import { downloadPdf } from "../lib/pdf";
 import { buildDoc, buildAskDoc } from "../lib/boardDocs";
@@ -32,6 +32,72 @@ const actionBtn: React.CSSProperties = {
 /** Inline markdown → Obsidian-style runs: **bold**, *italic*, `code`,
  * ==highlight==, ~~strike~~, [[wiki links]] (clickable, amber like real
  * Obsidian) and [md](url) links. */
+/** Resolve a [[wikilink]] name to a vault entry — Obsidian matches by
+ * filename anywhere in the vault. */
+function resolveNotePath(entries: string[], name: string): string | null {
+  return entries.find((e) =>
+    e === name || e.endsWith(`/${name}`) || e === `${name}.md` || e.endsWith(`/${name}.md`) ||
+    e.replace(/\.md$/, "") === name,
+  ) ?? null;
+}
+
+/** A [[wikilink]] with Obsidian's hover page-preview: hovering ~400ms opens a
+ * glass popover rendering the target note (fetched via vault_peek). Links to
+ * notes that don't exist yet get Obsidian's dashed 'unresolved' underline. */
+function WikiLink({ name, shown, onLink }: { name: string; shown: string; onLink?: (name: string) => void }) {
+  const entries = useBoard((s) => s.vaultEntries);
+  const path = resolveNotePath(entries, name);
+  const text = useBoard((s) => (path ? s.mdContents[path] : undefined));
+  const peek = useBoard((s) => s.vaultPeek);
+  const [open, setOpen] = useState(false);
+  const timer = useRef<number | undefined>(undefined);
+  const enter = () => {
+    timer.current = window.setTimeout(() => {
+      setOpen(true);
+      if (path && text === undefined) peek(path);
+    }, 400);
+  };
+  const leave = () => { window.clearTimeout(timer.current); setOpen(false); };
+  const unresolved = path === null;
+  return (
+    <span style={{ position: "relative" }} onMouseEnter={enter} onMouseLeave={leave}>
+      <a
+        onClick={() => onLink?.(name)}
+        title={unresolved ? `${name} (not created yet)` : name}
+        style={{
+          color: "var(--cv-accent)", cursor: "pointer", textDecoration: "none",
+          opacity: unresolved ? 0.55 : 1,
+          borderBottom: `1px ${unresolved ? "dashed" : "solid"} color-mix(in srgb, var(--cv-accent) 45%, transparent)`,
+        }}
+      >
+        {shown}
+      </a>
+      {open && (
+        <div
+          className="glass"
+          style={{
+            position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 70,
+            width: 300, maxHeight: 240, overflow: "auto", borderRadius: 10,
+            padding: "10px 14px", fontSize: 12, lineHeight: 1.6,
+            boxShadow: "0 12px 40px rgba(0,0,0,0.5)", cursor: "default",
+          }}
+        >
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--cv-accent)", marginBottom: 4 }}>
+            {(path ?? name).replace(/\.md$/, "")}
+          </div>
+          {unresolved ? (
+            <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", fontStyle: "italic" }}>note not created yet</div>
+          ) : text === undefined ? (
+            <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", fontStyle: "italic" }}>loading…</div>
+          ) : (
+            <ReadingView text={text} depth={1} onLink={onLink} />
+          )}
+        </div>
+      )}
+    </span>
+  );
+}
+
 function mdInline(text: string, onLink?: (name: string) => void): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   const re = /(\[\[[^\]|]+(?:\|[^\]]*)?\]\]|\[[^\]]+\]\([^)]*\)|\*\*[^*]+\*\*|\*[^*\n]+\*|==[^=]+==|~~[^~]+~~|`[^`]+`|(?<![\p{L}\p{N}])#[\p{L}_][\p{L}\p{N}_/-]*)/gu;
@@ -43,12 +109,7 @@ function mdInline(text: string, onLink?: (name: string) => void): React.ReactNod
       const inner = t.slice(2, -2);
       const name = inner.split("|")[0].trim();
       const shown = inner.includes("|") ? inner.split("|")[1] : name;
-      out.push(
-        <a key={k++} onClick={() => onLink?.(name)} title={name}
-          style={{ color: "var(--cv-accent)", cursor: "pointer", textDecoration: "none", borderBottom: "1px solid color-mix(in srgb, var(--cv-accent) 45%, transparent)" }}>
-          {shown}
-        </a>,
-      );
+      out.push(<WikiLink key={k++} name={name} shown={shown} onLink={onLink} />);
     } else if (t.startsWith("[")) {
       const mm = t.match(/\[([^\]]+)\]\(([^)]*)\)/)!;
       const href = mm[2];
