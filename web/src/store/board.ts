@@ -1617,6 +1617,14 @@ export const useBoard = create<BoardState>((set, get) => ({
       requestView();
       return "fitted view";
     }
+    if (/close terminals?|cerrar terms?/.test(t)) {
+      const board = get().activeBoard;
+      const n = Object.keys(get().termNodes[board] ?? {}).length;
+      const tm = { ...get().termNodes, [board]: {} };
+      localStorage.setItem("cv-termnodes", JSON.stringify(tm));
+      set({ termNodes: tm });
+      return n ? `closed ${n} terminal card${n === 1 ? "" : "s"}` : "no terminal cards open";
+    }
     if (/close panels|close cards|cerrar/.test(t)) {
       const board = get().activeBoard;
       const m = { ...get().panelNodes, [board]: {} };
