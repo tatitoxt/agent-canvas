@@ -872,6 +872,7 @@ function Board() {
         panOnDrag={[1, 2]}
         panOnScroll
         zoomOnScroll={false}
+        onlyRenderVisibleElements
         onSelectionChange={({ nodes }) =>
           setSel(
             nodes.map((n) => ({

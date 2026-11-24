@@ -457,6 +457,8 @@ type BoardState = {
 };
 
 let client: DaemonTransport | null = null;
+let pendingActivity: Record<string, string> = {};
+let activityFlush: ReturnType<typeof setTimeout> | null = null;
 
 const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
   new URLSearchParams(location.search).get("token") ??
@@ -665,15 +667,26 @@ export const useBoard = create<BoardState>((set, get) => ({
             break;
           case "activity":
             if (agents[msg.agent_id]) {
-              const attention = { ...get().attention };
-              delete attention[msg.agent_id];
-              set({
-                agents: {
-                  ...agents,
-                  [msg.agent_id]: { ...agents[msg.agent_id], lastLine: msg.line },
-                },
-                attention,
-              });
+              // Coalesce bursts — a busy agent can emit a line every few ms;
+              // one store write per 400ms keeps the board fluid.
+              pendingActivity[msg.agent_id] = msg.line;
+              if (!activityFlush) {
+                activityFlush = setTimeout(() => {
+                  activityFlush = null;
+                  const batch = pendingActivity;
+                  pendingActivity = {};
+                  const cur = get().agents;
+                  const next = { ...cur };
+                  const attention = { ...get().attention };
+                  for (const [aid, line] of Object.entries(batch)) {
+                    if (cur[aid]) {
+                      next[aid] = { ...cur[aid], lastLine: line };
+                      delete attention[aid];
+                    }
+                  }
+                  set({ agents: next, attention });
+                }, 400);
+              }
             }
             break;
           case "needs_attention":
