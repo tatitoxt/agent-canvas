@@ -961,9 +961,9 @@ export const useBoard = create<BoardState>((set, get) => ({
     const cur = get().orchestrators[orchId];
     if (!cur || !text.trim()) return;
     const WORDN: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
-    const m = text.trim().match(/^(?:spawn|deploy)\s+(?:(\d+)|(one|two|three|four|five|six))\s+([\w-]+?)(?:\s+(?:agents?|consoles?|terminals?))?$/i);
+    const m = text.trim().match(/^(?:spawn|deploy)\s+(?:(?:(\d+)|(one|two|three|four|five|six))\s+)?([\w-]+?)(?:\s+(?:agents?|consoles?|terminals?))?$/i);
     if (m) {
-      const n = m[1] ? parseInt(m[1], 10) : WORDN[m[2].toLowerCase()];
+      const n = m[1] ? parseInt(m[1], 10) : m[2] ? WORDN[m[2].toLowerCase()] : 1;
       const word = m[3].toLowerCase().replace(/s$/, "");
       const KNOWN = new Set([
         "claude", "claude-code", "codex", "gemini", "gemini-cli", "bash", "aider",
@@ -1101,9 +1101,9 @@ export const useBoard = create<BoardState>((set, get) => ({
       return;
     }
     const WORDN: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
-    const sm = low.match(/^(?:spawn|deploy)\s+(?:(\d+)|(one|two|three|four|five|six))\s+([\w-]+?)(?:\s+(?:agents?|consoles?|terminals?))?$/);
+    const sm = low.match(/^(?:spawn|deploy)\s+(?:(?:(\d+)|(one|two|three|four|five|six))\s+)?([\w-]+?)(?:\s+(?:agents?|consoles?|terminals?))?$/);
     if (sm) {
-      const n = sm[1] ? parseInt(sm[1], 10) : WORDN[sm[2]];
+      const n = sm[1] ? parseInt(sm[1], 10) : sm[2] ? WORDN[sm[2]] : 1;
       const cli = sm[3].replace(/s$/, "");
       for (let i = 0; i < Math.min(Math.max(n, 1), 8); i++) {
         get().spawn(n > 1 ? `${cli}-${i + 1}` : cli, cli);
