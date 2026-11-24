@@ -1077,6 +1077,29 @@ export const useBoard = create<BoardState>((set, get) => ({
     const reply = (r: string) =>
       set((s) => ({ threadLog: [...s.threadLog.slice(-60), { role: "thread", text: r }] }));
     const low = t.toLowerCase();
+    // "@<agent name> <message>" — type the message straight into that
+    // agent's PTY (command the board without touching terminals). Names
+    // have spaces ("Terminal 1"), so match the longest name prefix.
+    if (t.startsWith("@")) {
+      const rest = t.slice(1);
+      const target = Object.values(get().agents)
+        .filter((a) => (a.board_id ?? "main") === get().activeBoard)
+        .sort((a, b) => b.name.length - a.name.length)
+        .find((a) => rest.toLowerCase().startsWith(a.name.toLowerCase() + " "));
+      if (!target) {
+        reply(`no agent matches "${rest.split(/\s+/)[0]}…" on this board`);
+      } else if (target.status === "exited") {
+        reply(`${target.name} already exited`);
+      } else {
+        const msg = rest.slice(target.name.length).trim();
+        if (!msg) reply(`@${target.name} needs a message`);
+        else {
+          get().sendInput(target.id, new TextEncoder().encode(msg + "\n"));
+          reply(`→ ${target.name}: ${msg.slice(0, 60)}`);
+        }
+      }
+      return;
+    }
     const WORDN: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
     const sm = low.match(/^(?:spawn|deploy)\s+(?:(\d+)|(one|two|three|four|five|six))\s+([\w-]+?)(?:\s+(?:agents?|consoles?|terminals?))?$/);
     if (sm) {
