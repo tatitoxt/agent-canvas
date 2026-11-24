@@ -6,44 +6,56 @@ const inputStyle: React.CSSProperties = {
   background: "var(--cv-glass-hi)",
   border: "1px solid var(--cv-glass-edge)",
   borderRadius: 999,
-  padding: "6px 12px",
-  fontSize: 12,
+  height: 30,
+  padding: "0 12px",
+  fontSize: 11.5,
+  lineHeight: 1,
   color: "var(--cv-ink)",
   outline: "none",
 };
 
 const buttonStyle: React.CSSProperties = {
-  padding: "6px 14px",
+  height: 30,
+  padding: "0 12px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
   fontSize: 11.5,
+  lineHeight: 1,
   fontWeight: 600,
   color: "var(--cv-ink)",
   cursor: "pointer",
 };
 
+const sepStyle: React.CSSProperties = {
+  width: 1,
+  alignSelf: "stretch",
+  margin: "6px 4px",
+  background: "var(--cv-glass-edge)",
+  flex: "none",
+};
+
 /** Official agent CLIs offered by the picker — Deska-style agent chooser.
  * "custom" keeps free-text for anything else (aider, scripts, …). */
 const AGENT_CHOICES = [
-  { cmd: "claude", label: "◆ Claude Code" },
-  { cmd: "codex", label: "◈ Codex" },
-  { cmd: "gemini", label: "✦ Gemini CLI" },
-  { cmd: "claude", label: "◆ Claude Code" },
-  { cmd: "codex", label: "◈ Codex" },
-  { cmd: "gemini", label: "✦ Gemini CLI" },
-  { cmd: "aider", label: "▣ Aider" },
-  { cmd: "cursor-agent", label: "◐ Cursor" },
-  { cmd: "opencode", label: "❖ OpenCode" },
-  { cmd: "amp", label: "▲ Amp" },
-  { cmd: "droid", label: "⬡ Droid" },
-  { cmd: "goose", label: "◈ Goose" },
-  { cmd: "kilocode", label: "◈ Kilocode" },
-  { cmd: "qwen", label: "✧ Qwen Code" },
-  { cmd: "hermes", label: "◧ Hermes" },
-  { cmd: "kimi", label: "◻ Kimi Code" },
-  { cmd: "vibe", label: "▦ Mistral Vibe" },
-  { cmd: "pi", label: "▶ Pi" },
-  { cmd: "antigravity", label: "▲ Antigravity" },
-  { cmd: "bash", label: "›_ Terminal" },
-  { cmd: "custom", label: "… custom command" },
+  { cmd: "claude", label: "Claude Code" },
+  { cmd: "codex", label: "Codex" },
+  { cmd: "gemini", label: "Gemini CLI" },
+  { cmd: "aider", label: "Aider" },
+  { cmd: "cursor-agent", label: "Cursor" },
+  { cmd: "opencode", label: "OpenCode" },
+  { cmd: "amp", label: "Amp" },
+  { cmd: "droid", label: "Droid" },
+  { cmd: "goose", label: "Goose" },
+  { cmd: "kilocode", label: "Kilocode" },
+  { cmd: "qwen", label: "Qwen Code" },
+  { cmd: "hermes", label: "Hermes" },
+  { cmd: "kimi", label: "Kimi Code" },
+  { cmd: "vibe", label: "Mistral Vibe" },
+  { cmd: "pi", label: "Pi" },
+  { cmd: "antigravity", label: "Antigravity" },
+  { cmd: "bash", label: "Terminal" },
+  { cmd: "custom", label: "custom command…" },
 ];
 
 export function SpawnBar() {
@@ -85,8 +97,9 @@ export function SpawnBar() {
         zIndex: 15,
         display: "flex",
         alignItems: "center",
-        gap: 8,
-        padding: "8px 10px 8px 16px",
+        gap: 7,
+        height: 46,
+        padding: "8px 10px 8px 12px",
       }}
     >
       {!connected ? (
@@ -230,8 +243,17 @@ export function SpawnBar() {
             </select>
           )}
           <button
-            className="glass-pill"
-            style={{ ...buttonStyle, color: "var(--cv-accent)", opacity: (choice !== "custom" || command.trim()) ? 1 : 0.45 }}
+            style={{
+              ...buttonStyle,
+              borderRadius: 999,
+              border: "none",
+              padding: "0 16px",
+              background: "var(--cv-accent)",
+              color: "#14110d",
+              fontWeight: 700,
+              boxShadow: "0 0 14px rgba(245,165,36,0.35)",
+              opacity: (choice !== "custom" || command.trim()) ? 1 : 0.45,
+            }}
             disabled={choice === "custom" && !command.trim()}
             onClick={() => {
               const cmd = choice === "custom" ? command.trim() : choice;
@@ -241,6 +263,7 @@ export function SpawnBar() {
           >
             + agent
           </button>
+          <span style={sepStyle} />
           <button
             className="glass-pill"
             style={{ ...buttonStyle, color: "var(--cv-ink-dim)" }}
@@ -281,6 +304,7 @@ export function SpawnBar() {
           >
             ▢ shape
           </button>
+          <span style={sepStyle} />
           <button
             className="glass-pill"
             style={{ ...buttonStyle, color: "var(--cv-waiting)" }}

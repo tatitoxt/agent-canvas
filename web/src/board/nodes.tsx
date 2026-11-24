@@ -30,27 +30,27 @@ const STATUS_LABEL: Record<AgentStatus, string> = {
  * neon) the way Deska colors a terminal's title and logo: Claude's clay,
  * OpenAI's green, Google's blue, Cursor's violet. */
 const CLI_META: Record<string, { mark: string; label: string; color: string }> = {
-  "claude-code": { mark: "◆", label: "Claude Code", color: "#cf7f5a" },
-  claude: { mark: "◆", label: "Claude Code", color: "#cf7f5a" },
-  codex: { mark: "◈", label: "Codex", color: "#5da381" },
-  "gemini-cli": { mark: "✦", label: "Gemini CLI", color: "#6b93cf" },
-  gemini: { mark: "✦", label: "Gemini CLI", color: "#6b93cf" },
-  aider: { mark: "▣", label: "Aider", color: "#b08d68" },
-  cursor: { mark: "◐", label: "Cursor", color: "#8f7fd4" },
-  "cursor-agent": { mark: "◐", label: "Cursor", color: "#8f7fd4" },
-  opencode: { mark: "❖", label: "OpenCode", color: "#9a7fd4" },
-  amp: { mark: "▲", label: "Amp", color: "#cf7d5a" },
-  droid: { mark: "⬡", label: "Droid", color: "#7d9a6b" },
-  goose: { mark: "◈", label: "Goose", color: "#6b93cf" },
-  kilocode: { mark: "◈", label: "Kilocode", color: "#5b8dd6" },
-  qwen: { mark: "✧", label: "Qwen Code", color: "#8f7fd4" },
-  hermes: { mark: "◧", label: "Hermes", color: "#c9a24a" },
-  kimi: { mark: "◻", label: "Kimi Code", color: "#4a8ec2" },
-  vibe: { mark: "▦", label: "Mistral Vibe", color: "#cf5a3a" },
-  pi: { mark: "▶", label: "Pi", color: "#7ba3cf" },
-  antigravity: { mark: "▲", label: "Antigravity", color: "#b8573e" },
-  bash: { mark: "›_", label: "Terminal", color: "#86817a" },
-  live: { mark: "›_", label: "Terminal", color: "#86817a" },
+  "claude-code": { mark: "◆", label: "Claude Code", color: "#ee7d53" },
+  claude: { mark: "◆", label: "Claude Code", color: "#ee7d53" },
+  codex: { mark: "◈", label: "Codex", color: "#35d68f" },
+  "gemini-cli": { mark: "✦", label: "Gemini CLI", color: "#4f9bf0" },
+  gemini: { mark: "✦", label: "Gemini CLI", color: "#4f9bf0" },
+  aider: { mark: "▣", label: "Aider", color: "#d4a072" },
+  cursor: { mark: "◐", label: "Cursor", color: "#a78bfa" },
+  "cursor-agent": { mark: "◐", label: "Cursor", color: "#a78bfa" },
+  opencode: { mark: "❖", label: "OpenCode", color: "#b794f4" },
+  amp: { mark: "▲", label: "Amp", color: "#ff8c5a" },
+  droid: { mark: "⬡", label: "Droid", color: "#9ccc65" },
+  goose: { mark: "◈", label: "Goose", color: "#4f9bf0" },
+  kilocode: { mark: "◈", label: "Kilocode", color: "#60a5fa" },
+  qwen: { mark: "✧", label: "Qwen Code", color: "#a855f7" },
+  hermes: { mark: "◧", label: "Hermes", color: "#f0b429" },
+  kimi: { mark: "◻", label: "Kimi Code", color: "#38bdf8" },
+  vibe: { mark: "▦", label: "Mistral Vibe", color: "#ff7a1a" },
+  pi: { mark: "▶", label: "Pi", color: "#fbbf24" },
+  antigravity: { mark: "▲", label: "Antigravity", color: "#ff7043" },
+  bash: { mark: "›_", label: "Terminal", color: "#9aa0a6" },
+  live: { mark: "›_", label: "Terminal", color: "#9aa0a6" },
 };
 
 const PERMISSION_LABEL: Record<string, string> = {
@@ -71,14 +71,17 @@ const decoder = new TextDecoder();
  * Codex green, OpenCode violet) inside the node preview. */
 type AnsiSpan = { text: string; color?: string; bold?: boolean };
 const BASIC = [
-  "#8a817a", "#c07a6a", "#7ba389", "#c2a15e",
-  "#7ba3cf", "#9a7fd4", "#6ba3a8", "#eceae6",
+  "#9aa0a6", "#ff6b64", "#3ddc84", "#f5b942",
+  "#5aa2f7", "#c678dd", "#4fd6d6", "#f4f2ee",
 ];
-const BRIGHT = BASIC.map((c) => c);
+const BRIGHT = [
+  "#b5b9be", "#ff8a82", "#5ff0a0", "#ffd166",
+  "#7cb9ff", "#d89af0", "#6fe6e6", "#ffffff",
+];
 const SGR_RE = /\u001b\[([0-9;]*)m/g;
 const PALETTE_256: string[] = (() => {
-  const base = ["#4a4640","#c07a6a","#7ba389","#c2a15e","#7ba3cf","#9a7fd4","#6ba3a8","#eceae6",
-                "#86817a","#d68a7a","#8bb39b","#d2b16e","#8bb3df","#aa8fe4","#7bb3b8","#fffdfa"];
+  const base = ["#4a4640","#ff6b64","#3ddc84","#f5b942","#5aa2f7","#c678dd","#4fd6d6","#f4f2ee",
+                "#9aa0a6","#ff8a82","#5ff0a0","#ffd166","#7cb9ff","#d89af0","#6fe6e6","#ffffff"];
   const cube: string[] = [];
   const lv = [0, 95, 135, 175, 215, 255];
   for (const r of lv) for (const g of lv) for (const b of lv) cube.push(`rgb(${r},${g},${b})`);
@@ -145,7 +148,7 @@ function MiniTerm({ agentId }: { agentId: string }) {
       .map(parseAnsiLine)
       .map((spans) => ({ spans, text: spans.map((p) => p.text).join("") }))
       .filter((l) => l.text.trim().length > 0)
-      .slice(-5);
+      .slice(-8);
     return parsed;
   }, [buf]);
   if (lines.length === 0) return null;
@@ -154,14 +157,14 @@ function MiniTerm({ agentId }: { agentId: string }) {
       className="nodrag"
       style={{
         marginTop: 10,
-        padding: "7px 9px",
+        padding: "9px 11px",
         borderRadius: 8,
-        background: "rgba(0,0,0,0.22)",
+        background: "rgba(0,0,0,0.34)",
         border: "1px solid var(--cv-glass-edge)",
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-        fontSize: 9,
-        lineHeight: 1.5,
-        color: "rgba(236,234,230,0.72)",
+        fontSize: 10,
+        lineHeight: 1.55,
+        color: "rgba(244,242,238,0.85)",
         overflow: "hidden",
         whiteSpace: "pre",
         textOverflow: "clip",
@@ -175,7 +178,7 @@ function MiniTerm({ agentId }: { agentId: string }) {
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
-            opacity: 0.45 + (0.55 * (i + 1)) / lines.length,
+            opacity: 0.55 + (0.45 * (i + 1)) / lines.length,
           }}
         >
           {l.spans.map((sp, j) => (
@@ -205,21 +208,17 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const meta = cliMeta(data.cli);
   const [collapsed, setCollapsed] = useState(false);
   const statusColor = STATUS_COLOR[data.status];
-  // Symvibe's outline language: needs-you and in-flight delegation glow amber,
-  // everything else keeps a quiet hairline border.
-  const border = data.delegating
-    ? "1.5px solid var(--cv-waiting)"
-    : data.status === "waiting" || data.status === "blocked"
-      ? "1.5px solid color-mix(in srgb, var(--cv-waiting) 70%, transparent)"
-      : selected
-        ? "1px solid var(--cv-glass-shine)"
-        : "1px solid color-mix(in srgb, var(--cv-ink) 10%, transparent)";
-  const glow =
-    data.delegating || data.status === "waiting" || data.status === "blocked"
-      ? "0 0 20px color-mix(in srgb, var(--cv-waiting) 26%, transparent), 0 12px 32px rgba(0,0,0,0.35)"
-      : undefined;
+  // Outline = the state color (waiting/running/idle/error) — Deska's
+  // hairline for quiet states, full vivid ring + halo when it needs you.
+  const attention = data.delegating || data.status === "waiting" || data.status === "blocked";
+  const border = attention || selected
+    ? `1.5px solid ${statusColor}`
+    : `1.5px solid color-mix(in srgb, ${statusColor} 50%, transparent)`;
+  const glow = attention || selected
+    ? `0 0 22px color-mix(in srgb, ${statusColor} 30%, transparent), 0 12px 32px rgba(0,0,0,0.35)`
+    : undefined;
   if (collapsed) {
-    // Deska's collapsed terminal — just the glyph + number in a small pill.
+    // Deska's collapsed terminal — glyph tile + number in a small pill.
     return (
       <div
         className="glass"
@@ -229,8 +228,8 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           display: "inline-flex",
           alignItems: "center",
           gap: 8,
-          padding: "8px 16px",
-          background: "color-mix(in srgb, var(--cv-base) 58%, transparent)",
+          padding: "7px 14px 7px 9px",
+          background: "color-mix(in srgb, var(--cv-base) 68%, transparent)",
           border,
           cursor: "pointer",
           fontSize: 12.5,
@@ -240,10 +239,19 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         <Handle type="target" position={Position.Left} />
         <span
           style={{
+            width: 20,
+            height: 20,
+            borderRadius: 5,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "var(--cv-glass-hi)",
+            border: "1px solid var(--cv-glass-edge)",
             fontFamily: "ui-monospace, SFMono-Regular, monospace",
             fontWeight: 700,
-            color: "#7ba8dd",
-            textShadow: "0 0 8px rgba(123,168,221,0.45)",
+            fontSize: 10.5,
+            color: "#5aa2f7",
+            lineHeight: 1,
           }}
         >
           ›_
@@ -257,27 +265,44 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
     <div
       className={`glass ${data.status === "waiting" ? "node-waiting" : ""}`}
       style={{
-        width: 336,
-        padding: "10px 13px 10px",
-        // Deska's card is real glass — the dot canvas bleeds through.
-        background: "color-mix(in srgb, var(--cv-base) 58%, transparent)",
+        width: 384,
+        padding: 0,
+        overflow: "hidden",
+        // Deska's card is near-opaque glass — the dot canvas barely bleeds.
+        background: "color-mix(in srgb, var(--cv-base) 70%, transparent)",
         border,
         boxShadow: glow,
         cursor: "pointer",
       }}
     >
       <Handle type="target" position={Position.Left} />
-      {/* Deska header: ›_ Terminal N   ▮▮▮ running   [CLI logo] <Cli>  — ⤢ × */}
-      <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+      {/* Deska header: [›_] Terminal N   ▮▮▮ running   [logo] Cli   (— × only when selected) */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 9,
+          minWidth: 0,
+          padding: "10px 12px",
+        }}
+      >
         <span
           title={meta.label}
           style={{
             flex: "none",
-            fontSize: 13,
+            width: 24,
+            height: 24,
+            borderRadius: 6,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "var(--cv-glass-hi)",
+            border: "1px solid var(--cv-glass-edge)",
+            fontSize: 11.5,
             fontWeight: 700,
             fontFamily: "ui-monospace, SFMono-Regular, monospace",
-            color: "#7ba8dd",
-            textShadow: "0 0 8px rgba(123,168,221,0.45)",
+            color: "#5aa2f7",
+            textShadow: "0 0 10px rgba(90,162,247,0.5)",
             lineHeight: 1,
           }}
         >
@@ -316,37 +341,43 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 4.5,
+            gap: 5.5,
             marginLeft: "auto",
-            fontSize: 11,
+            fontSize: 11.5,
+            fontWeight: 600,
             flex: "none",
             whiteSpace: "nowrap",
           }}
         >
-          <CliMark cli={data.cli} color={meta.color} size={11.5} />
+          <CliMark cli={data.cli} color={meta.color} size={13} />
           <span style={{ color: "var(--cv-ink-dim)" }}>{meta.label}</span>
         </span>
-        <span className="nodrag" style={{ display: "inline-flex", alignItems: "center", gap: 7, flex: "none", color: "var(--cv-ink-faint)", fontSize: 12 }}>
-          <span
-            role="button"
-            title="collapse"
-            style={{ cursor: "pointer", lineHeight: 1 }}
-            onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }}
-          >
-            —
+        {selected && (
+          <span className="nodrag" style={{ display: "inline-flex", alignItems: "center", gap: 7, flex: "none", color: "var(--cv-ink-faint)", fontSize: 12 }}>
+            <span
+              role="button"
+              title="collapse"
+              style={{ cursor: "pointer", lineHeight: 1 }}
+              onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }}
+            >
+              —
+            </span>
+            <span
+              role="button"
+              title="kill"
+              style={{ cursor: "pointer", lineHeight: 1, fontSize: 13 }}
+              onClick={(e) => { e.stopPropagation(); if (data.id) useBoard.getState().kill(data.id); }}
+            >
+              ×
+            </span>
           </span>
-          <span
-            role="button"
-            title="kill"
-            style={{ cursor: "pointer", lineHeight: 1, fontSize: 13 }}
-            onClick={(e) => { e.stopPropagation(); if (data.id) useBoard.getState().kill(data.id); }}
-          >
-            ×
-          </span>
-        </span>
+        )}
       </div>
+      {/* Full-width section separator — Deska splits header from body
+          edge to edge, not inside the padding. */}
+      <div style={{ height: 1, background: "var(--cv-glass-edge)" }} />
       {!collapsed && (
-      <>
+      <div style={{ padding: "9px 12px 10px" }}>
       {/* Meta row — files / account / permission. */}
       {(data.files || data.accountLabel || (data.permission && data.permission !== "supervised")) && (
         <div
@@ -493,7 +524,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           <FooterModel agentId={data.id} />
         </span>
       </div>
-      </>
+      </div>
       )}
       <Handle type="source" position={Position.Right} />
     </div>

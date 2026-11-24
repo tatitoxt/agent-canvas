@@ -31,16 +31,16 @@
   --cv-glass-shine: color-mix(in srgb, var(--cv-ink) 15%, transparent);
   --cv-blur: 20px;
 
-  /* one subtle accent — warm sand, felt in highlights not flat fills */
-  --cv-accent: #c9a26b;
-  --cv-accent-dim: rgba(201, 162, 107, 0.14);
+  /* one accent — vivid amber-orange (Deska's saturation, not pastel) */
+  --cv-accent: #f5a524;
+  --cv-accent-dim: rgba(245, 165, 36, 0.16);
 
-  /* muted statuses (desaturated — meaning, not decoration) */
-  --cv-working: #7d9cb8;
-  --cv-waiting: #c2a15e;
-  --cv-blocked: #b06a5e;
-  --cv-done: #7ba389;
-  --cv-idle: #86817a;
+  /* vivid statuses — saturated, the way Deska paints running/needs-you */
+  --cv-working: #3ddc84;
+  --cv-waiting: #ffb224;
+  --cv-blocked: #ff5d5d;
+  --cv-done: #34d399;
+  --cv-idle: #9aa0a6;
 
   /* radii — Deska panel 12 / cluster 14 / pill 999 */
   --cv-radius: 12px;
@@ -188,13 +188,13 @@ body,
     box-shadow:
       inset 0 1px 0 var(--cv-glass-shine),
       0 12px 32px rgba(0, 0, 0, 0.35),
-      0 0 0 0 rgba(194, 161, 94, 0);
+      0 0 0 0 rgba(255, 178, 36, 0);
   }
   50% {
     box-shadow:
       inset 0 1px 0 var(--cv-glass-shine),
       0 12px 32px rgba(0, 0, 0, 0.35),
-      0 0 0 5px rgba(194, 161, 94, 0.10);
+      0 0 0 5px rgba(255, 178, 36, 0.12);
   }
 }
 .node-waiting {
@@ -223,12 +223,12 @@ body,
   --cv-base: #ece8e1;
   --cv-dot: rgba(30, 26, 20, 0.06);
   --cv-ink: #23211d;
-  --cv-accent: #a5783e;
-  --cv-accent-dim: rgba(165, 120, 62, 0.14);
-  --cv-working: #4a6e8c;
-  --cv-waiting: #96742f;
-  --cv-blocked: #8c4f42;
-  --cv-done: #4e7a5e;
+  --cv-accent: #d97706;
+  --cv-accent-dim: rgba(217, 119, 6, 0.14);
+  --cv-working: #16a34a;
+  --cv-waiting: #d97706;
+  --cv-blocked: #dc2626;
+  --cv-done: #16a34a;
   --cv-idle: #7a756c;
   color-scheme: light;
 }
@@ -237,12 +237,12 @@ body,
   --cv-base: #14110d;
   --cv-dot: rgba(255, 240, 220, 0.045);
   --cv-ink: #efe6d8;
-  --cv-accent: #cf9d5c;
-  --cv-accent-dim: rgba(207, 157, 92, 0.16);
-  --cv-working: #8aa3b8;
-  --cv-waiting: #c2a15e;
-  --cv-blocked: #b06a5e;
-  --cv-done: #86a887;
-  --cv-idle: #8a8177;
+  --cv-accent: #f5a524;
+  --cv-accent-dim: rgba(245, 165, 36, 0.16);
+  --cv-working: #3ddc84;
+  --cv-waiting: #ffb224;
+  --cv-blocked: #ff5d5d;
+  --cv-done: #34d399;
+  --cv-idle: #9aa0a6;
   color-scheme: dark;
 }
