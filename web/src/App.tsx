@@ -14,6 +14,7 @@ import {
   type OnNodeDrag,
 } from "@xyflow/react";
 import { AgentNode, OrchestratorNode, WebNode, WorkspaceNode } from "./board/nodes";
+import { ShapeNode } from "./components/ShapeNode";
 import { DelegationEdge } from "./board/edges";
 import { initialEdges, initialNodes } from "./board/mockData";
 import { DelegateDialog } from "./components/DelegateDialog";
@@ -50,6 +51,7 @@ const nodeTypes = {
   orchestrator: OrchestratorNode,
   workspace: WorkspaceNode,
   web: WebNode,
+  shape: ShapeNode,
 };
 const edgeTypes = { delegation: DelegationEdge };
 
@@ -65,6 +67,8 @@ function Board() {
   const attention = useBoard((s) => s.attention);
   const webNodes = useBoard((s) => s.webNodes);
   const orchestrators = useBoard((s) => s.orchestrators);
+  const shapes = useBoard((s) => s.shapes);
+  const moveShape = useBoard((s) => s.moveShape);
   const wiringFrom = useBoard((s) => s.wiringFrom);
   const toggleWire = useBoard((s) => s.toggleWire);
   const setWiring = useBoard((s) => s.setWiring);
@@ -297,8 +301,17 @@ function Board() {
             Object.values(liveEdges).filter((e) => e.from === id).length,
         },
       }));
-    return connected ? [...wsNodes, ...webNs, ...live, ...orchNs] : [...initialNodes, ...webNs, ...live, ...orchNs];
-  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges]);
+    const shapeNs: Node<BoardNodeData>[] = Object.values(shapes[activeBoard] ?? {}).map((s) => ({
+      id: s.id,
+      type: "shape" as const,
+      position: { x: s.x, y: s.y },
+      style: { width: s.w, height: s.h },
+      data: { kind: "shape" as const, shape: s },
+    }));
+    return connected
+      ? [...wsNodes, ...shapeNs, ...webNs, ...live, ...orchNs]
+      : [...initialNodes, ...shapeNs, ...webNs, ...live, ...orchNs];
+  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges, shapes]);
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     // In Connect mode a click on an agent card wires/unwires it to the
@@ -323,7 +336,9 @@ function Board() {
   };
 
   const onNodeDragStop: OnNodeDrag = (_, node) => {
-    if (agents[node.id] || workspaces[node.id] || node.id.startsWith("web-") || node.id.startsWith("orch-")) {
+    if (node.id.startsWith("shape-")) {
+      moveShape(node.id, node.position.x, node.position.y);
+    } else if (agents[node.id] || workspaces[node.id] || node.id.startsWith("web-") || node.id.startsWith("orch-")) {
       moveNode(node.id, node.position.x, node.position.y);
     }
   };

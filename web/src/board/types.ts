@@ -44,11 +44,30 @@ export type WebNodeData = {
   url: string;
 };
 
+export type ShapeKind = "rect" | "ellipse" | "diamond" | "sticky";
+
+export type ShapeDef = {
+  id: string;
+  kind: ShapeKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  color: string;
+  text: string;
+};
+
+export type ShapeNodeData = {
+  kind: "shape";
+  shape: ShapeDef;
+};
+
 export type BoardNodeData =
   | AgentNodeData
   | OrchestratorNodeData
   | WorkspaceNodeData
-  | WebNodeData;
+  | WebNodeData
+  | ShapeNodeData;
 
 export type DelegationEdgeData = {
   task?: string;

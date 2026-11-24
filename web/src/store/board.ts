@@ -184,6 +184,12 @@ type BoardState = {
   savePreset: (name: string) => void;
   applyPreset: (name: string) => void;
   deletePreset: (name: string) => void;
+  /** Whiteboard shapes (Symvibe's shapes tool) — board id → shape id → def. */
+  shapes: Record<string, Record<string, import("../board/types").ShapeDef>>;
+  addShape: (kind: import("../board/types").ShapeKind) => void;
+  moveShape: (id: string, x: number, y: number) => void;
+  updateShape: (id: string, patch: Partial<import("../board/types").ShapeDef>) => void;
+  deleteShape: (id: string) => void;
   /** Symvibe-style orchestrator cards: a board node wired to consoles with
    * cables; its composer broadcasts the command to every wired PTY. */
   orchestrators: Record<string, { name: string; board: string; wired: string[] }>;
@@ -786,6 +792,55 @@ export const useBoard = create<BoardState>((set, get) => ({
     const next = { ...presets, [activeBoard]: boardPresets };
     localStorage.setItem("cv-presets", JSON.stringify(next));
     set({ presets: next });
+  },
+
+  shapes: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-shapes") ?? "{}"); } catch { return {}; }
+  })(),
+
+  addShape: (kind) => {
+    const { activeBoard, shapes } = get();
+    const id = `shape-${Math.random().toString(36).slice(2, 10)}`;
+    const def = {
+      id,
+      kind,
+      x: 300 + Math.random() * 200,
+      y: 200 + Math.random() * 140,
+      w: kind === "sticky" ? 170 : 190,
+      h: kind === "sticky" ? 150 : 120,
+      color: kind === "sticky" ? "#e0c04a" : "#e8e6e3",
+      text: "",
+    };
+    const next = { ...shapes, [activeBoard]: { ...(shapes[activeBoard] ?? {}), [id]: def } };
+    localStorage.setItem("cv-shapes", JSON.stringify(next));
+    set({ shapes: next });
+  },
+
+  moveShape: (id, x, y) => {
+    const { activeBoard, shapes } = get();
+    const s = shapes[activeBoard]?.[id];
+    if (!s) return;
+    const next = { ...shapes, [activeBoard]: { ...shapes[activeBoard], [id]: { ...s, x, y } } };
+    localStorage.setItem("cv-shapes", JSON.stringify(next));
+    set({ shapes: next });
+  },
+
+  updateShape: (id, patch) => {
+    const { activeBoard, shapes } = get();
+    const s = shapes[activeBoard]?.[id];
+    if (!s) return;
+    const next = { ...shapes, [activeBoard]: { ...shapes[activeBoard], [id]: { ...s, ...patch } } };
+    localStorage.setItem("cv-shapes", JSON.stringify(next));
+    set({ shapes: next });
+  },
+
+  deleteShape: (id) => {
+    const { activeBoard, shapes } = get();
+    const boardShapes = { ...(shapes[activeBoard] ?? {}) };
+    delete boardShapes[id];
+    const next = { ...shapes, [activeBoard]: boardShapes };
+    localStorage.setItem("cv-shapes", JSON.stringify(next));
+    set({ shapes: next });
   },
 
   orchestrators: (() => {

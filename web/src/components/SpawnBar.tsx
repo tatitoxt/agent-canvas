@@ -71,6 +71,8 @@ export function SpawnBar() {
   const [wsName, setWsName] = useState("");
   const [wsRepo, setWsRepo] = useState("");
   const [teamOpen, setTeamOpen] = useState(false);
+  const [shapeOpen, setShapeOpen] = useState(false);
+  const addShape = useBoard((s) => s.addShape);
 
   return (
     <div
@@ -273,6 +275,14 @@ export function SpawnBar() {
           </button>
           <button
             className="glass-pill"
+            style={{ ...buttonStyle, color: "var(--cv-ink)" }}
+            onClick={() => setShapeOpen(!shapeOpen)}
+            title="Whiteboard shape — rect / ellipse / diamond / sticky"
+          >
+            ▢ shape
+          </button>
+          <button
+            className="glass-pill"
             style={{ ...buttonStyle, color: "var(--cv-waiting)" }}
             onClick={() => pauseAll(activeBoard)}
             title="Freeze every agent on this board mid-task (SIGSTOP) — resume continues mid-line"
@@ -290,6 +300,43 @@ export function SpawnBar() {
         </>
       )}
       {teamOpen && <TeamBuilder onClose={() => setTeamOpen(false)} />}
+      {shapeOpen && (
+        <div
+          className="glass-panel"
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: 84,
+            transform: "translateX(-50%)",
+            zIndex: 20,
+            display: "flex",
+            gap: 6,
+            padding: "8px 10px",
+          }}
+        >
+          {(
+            [
+              ["rect", "▢"],
+              ["ellipse", "◯"],
+              ["diamond", "◇"],
+              ["sticky", "▤"],
+            ] as const
+          ).map(([kind, glyph]) => (
+            <button
+              key={kind}
+              className="glass-pill"
+              style={{ ...buttonStyle, fontSize: 14 }}
+              title={kind}
+              onClick={() => {
+                addShape(kind);
+                setShapeOpen(false);
+              }}
+            >
+              {glyph}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
