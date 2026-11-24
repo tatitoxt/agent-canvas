@@ -1118,35 +1118,45 @@ export const useBoard = create<BoardState>((set, get) => ({
         else {
           const id = target.id;
           const name = label || target.name;
+          // Keep the ring snapshot NOW — bash does not echo pasted input,
+          // so we cannot find "our text"; instead find where the buffer
+          // first differs from this snapshot and read everything after.
+          // A byte-diff beats a tail signature: the shell prompt repeats,
+          // so any fixed signature also matches the NEW buffer's tail.
+          const before = get().ptyBuffers[id];
           get().sendInput(id, new TextEncoder().encode(msg + "\n"));
           reply(`→ ${name}: ${msg.slice(0, 60)}`);
-          // Round-trip: poll the PTY ring for the agent's answer and post
-          // the first real line back into the thread. `activity` only
-          // carries the last visible line per tick (usually the prompt),
-          // so read the raw buffer instead — and find the sent text rather
-          // than an offset, since the ring caps at 64 KiB.
           const poll = (tries: number) => {
             const buf = get().ptyBuffers[id];
             if (buf) {
-              const text = new TextDecoder()
-                .decode(buf.subarray(Math.max(0, buf.length - 8192)))
-                .replace(ANSI_RX, "")
-                .replace(/\r/g, "\n");
-              const after = text.slice(text.lastIndexOf(msg));
-              const out = after
-                .split("\n")
-                .map((l) => l.trim())
-                .find(
-                  (l) =>
-                    l &&
-                    !l.endsWith("$") &&
-                    !l.endsWith("%") &&
-                    !l.endsWith("#") &&
-                    !l.includes(msg),
-                );
-              if (out && text.lastIndexOf(msg) >= 0) {
-                reply(`← ${name}: ${out.slice(0, 160)}`);
-                return;
+              let start = -1;
+              if (before) {
+                const n = Math.min(before.length, buf.length);
+                let d = 0;
+                while (d < n && buf[d] === before[d]) d++;
+                if (d < n || buf.length > before.length) start = d;
+              } else if (buf.length > 0) {
+                start = 0;
+              }
+              if (start >= 0 && buf.length > start) {
+                const out = new TextDecoder()
+                  .decode(buf.subarray(start))
+                  .replace(ANSI_RX, "")
+                  .replace(/\r/g, "\n")
+                  .split("\n")
+                  .map((l) => l.trim())
+                  .find(
+                    (l) =>
+                      l &&
+                      !l.endsWith("$") &&
+                      !l.endsWith("%") &&
+                      !l.endsWith("#") &&
+                      !l.includes(msg),
+                  );
+                if (out) {
+                  reply(`← ${name}: ${out.slice(0, 160)}`);
+                  return;
+                }
               }
             }
             if (tries > 0) setTimeout(() => poll(tries - 1), 1500);
@@ -1280,3 +1290,8 @@ export const useBoard = create<BoardState>((set, get) => ({
 
   requestTranscript: (agentId) => client?.transcript(agentId),
 }));
+
+// Dev-only handle for console debugging — never shipped to Tauri prod usage.
+if (import.meta.env.DEV) {
+  (window as unknown as { useBoard?: typeof useBoard }).useBoard = useBoard;
+}
