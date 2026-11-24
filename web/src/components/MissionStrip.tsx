@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { AgentStatus } from "../board/types";
 import { useBoard } from "../store/board";
 
@@ -10,9 +11,33 @@ const ITEMS: { key: AgentStatus; label: string; color: string }[] = [
   { key: "done", label: "done", color: "var(--cv-done)" },
 ];
 
-/** Quiet top-center status strip — one glass pill, dots + counts only. */
+/** Quiet top-center status strip — clicking it unfolds into the mission
+ * map: every agent on the board grouped by who is working / resting /
+ * needs you, with the last thing each was doing. */
 export function MissionStrip({ counts }: Props) {
   const connected = useBoard((s) => s.connected);
+  const agents = useBoard((s) => s.agents);
+  const activeBoard = useBoard((s) => s.activeBoard);
+  const attention = useBoard((s) => s.attention);
+  const [open, setOpen] = useState(false);
+
+  const grouped = (st: AgentStatus | "blocked") =>
+    Object.values(agents).filter(
+      (a) =>
+        (a.board_id ?? "main") === activeBoard &&
+        (st === "blocked"
+          ? !!attention[a.id]
+          : !attention[a.id] &&
+            (st === "done" ? a.status === "exited" : a.status === st)),
+    );
+
+  const rows: { label: string; color: string; list: (typeof agents)[string][] }[] = [
+    { label: "needs you", color: "var(--cv-waiting)", list: grouped("waiting") },
+    { label: "blocked", color: "var(--cv-blocked)", list: grouped("blocked") },
+    { label: "working", color: "var(--cv-working)", list: grouped("working") },
+    { label: "resting", color: "var(--cv-done)", list: grouped("done") },
+  ];
+
   return (
     <div
       className="glass-pill"
@@ -23,35 +48,90 @@ export function MissionStrip({ counts }: Props) {
         transform: "translateX(-50%)",
         zIndex: 15,
         display: "flex",
-        alignItems: "center",
-        gap: 16,
+        flexDirection: "column",
+        gap: 10,
         padding: "8px 18px",
+        cursor: "pointer",
       }}
+      onClick={() => setOpen((o) => !o)}
     >
-      <span
-        style={{
-          fontSize: 12,
-          fontWeight: 650,
-          letterSpacing: 0.3,
-          marginRight: 2,
-        }}
-      >
-        canvas
-      </span>
-      {ITEMS.map(({ key, label, color }) => (
-        <span
-          key={key}
-          style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11 }}
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <span style={{ fontSize: 12, fontWeight: 650, letterSpacing: 0.3, marginRight: 2 }}>
+          canvas
+        </span>
+        {ITEMS.map(({ key, label, color }) => (
+          <span key={key} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11 }}>
+            <span className="status-dot" style={{ background: color }} />
+            <span style={{ fontWeight: 600, color }}>{counts[key] ?? 0}</span>
+            <span style={{ color: "var(--cv-ink-faint)" }}>{label}</span>
+          </span>
+        ))}
+        {!connected && (
+          <span style={{ fontSize: 10.5, color: "var(--cv-ink-faint)" }}>demo</span>
+        )}
+      </div>
+      {open && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            borderTop: "1px solid var(--cv-glass-edge)",
+            paddingTop: 10,
+            minWidth: 340,
+            maxWidth: 520,
+            cursor: "default",
+          }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <span className="status-dot" style={{ background: color }} />
-          <span style={{ fontWeight: 600, color }}>{counts[key] ?? 0}</span>
-          <span style={{ color: "var(--cv-ink-faint)" }}>{label}</span>
-        </span>
-      ))}
-      {!connected && (
-        <span style={{ fontSize: 10.5, color: "var(--cv-ink-faint)" }}>
-          demo
-        </span>
+          {rows.map(
+            (r) =>
+              r.list.length > 0 && (
+                <div key={r.label}>
+                  <div
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      color: r.color,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.8,
+                      marginBottom: 3,
+                    }}
+                  >
+                    {r.label} · {r.list.length}
+                  </div>
+                  {r.list.map((a) => (
+                    <div
+                      key={a.id}
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        fontSize: 11,
+                        color: "var(--cv-ink)",
+                        padding: "2px 0",
+                        alignItems: "baseline",
+                      }}
+                    >
+                      <span style={{ fontWeight: 600, flexShrink: 0 }}>{a.name}</span>
+                      <span
+                        style={{
+                          color: "var(--cv-ink-dim)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {a.lastLine ?? ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ),
+          )}
+          {rows.every((r) => r.list.length === 0) && (
+            <div style={{ fontSize: 11, color: "var(--cv-ink-dim)" }}>no agents on this board</div>
+          )}
+        </div>
       )}
     </div>
   );
