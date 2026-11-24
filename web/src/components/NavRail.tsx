@@ -17,7 +17,8 @@ const railCol: React.CSSProperties = {
 const railColRight: React.CSSProperties = {
   ...railCol,
   left: undefined,
-  right: 4,
+  right: 2,
+  top: 120,
 };
 
 const bubble: React.CSSProperties = {
