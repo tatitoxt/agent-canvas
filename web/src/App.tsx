@@ -613,7 +613,7 @@ function Board() {
         <InboxPanel
           onOpenAgent={(id) => {
             const a = agents[id];
-            if (a) openTerm({ id: a.id, name: a.name });
+            if (a) { useBoard.getState().requestFocus(id); openTerm({ id: a.id, name: a.name }); }
           }}
         />
       )}

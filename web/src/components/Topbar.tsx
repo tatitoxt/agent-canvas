@@ -301,7 +301,7 @@ export function Topbar({
                 row("panels", "no open panels", "spawn one from the Orchestrator's + spawn")}
               {openAgents.map((a) =>
                 row("terminal", a.name, `${a.status} — click to open its panel`, () =>
-                  useBoard.getState().requestTerm(a.id, a.name)),
+                  { useBoard.getState().requestFocus(a.id); useBoard.getState().requestTerm(a.id, a.name); }),
               )}
             </>
           ))}
