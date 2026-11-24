@@ -275,6 +275,30 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
           >
             ⤢
           </button>
+          {([
+            ["esc", "\x1b"],
+            ["↵", "\r"],
+            ["^C", "\x03"],
+            ["↑", "\x1b[A"],
+            ["↓", "\x1b[B"],
+          ] as const).map(([label, seq]) => (
+            <button
+              key={label}
+              title={`send ${label === "↵" ? "enter" : label === "^C" ? "ctrl+c" : label} to the PTY`}
+              onClick={() => sendInput(agentId, new TextEncoder().encode(seq))}
+              style={{
+                border: "none",
+                background: "transparent",
+                fontSize: 10.5,
+                cursor: "pointer",
+                color: "var(--cv-ink-dim)",
+                fontFamily: "ui-monospace, monospace",
+                padding: "0 2px",
+              }}
+            >
+              {label}
+            </button>
+          ))}
           <button
             title={listening ? "stop dictation" : "dictate into this terminal"}
             onClick={toggleDictation}
