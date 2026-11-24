@@ -55,6 +55,9 @@ const PATHS: Record<string, string[]> = {
   obsidian: ["M12 2l8 6-8 14L4 8z", "M4 8h16", "M12 2L8 8l4 14 4-14z"],
   collapse: ["M4 4h16v16H4z", "M9.5 4v16", "M15 9l-2.5 3 2.5 3"],
   expand: ["M9 18l6-6-6-6"],
+  download: ["M12 3v11", "M7 10l5 5 5-5", "M4 17v2a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-2"],
+  openin: ["M14 4h6v6", "M20 4 10 14", "M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"],
+  pin: ["M12 17v5", "M7 3h10l-1.5 8 2.5 3h-12l2.5-3z"],
 };
 
 export function Icon({ name, size = 15, color = "currentColor" }: { name: string; size?: number; color?: string }) {

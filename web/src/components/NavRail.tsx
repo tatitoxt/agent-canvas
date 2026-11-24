@@ -316,7 +316,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
     return () => window.removeEventListener("mousedown", onDown);
   }, [menu]);
 
-  const toolRow = (icon: string, label: string, hint: string, onClick: () => void, activeKey?: string) => (
+  const toolRow = (icon: string, label: string, hint: string, onClick: () => void, activeKey?: string, iconColor?: string) => (
     <button
       key={label}
       style={{
@@ -329,7 +329,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
       onMouseEnter={(e) => hoverRow(e, true)}
       onMouseLeave={(e) => hoverRow(e, activeKey === active)}
     >
-      <Icon name={icon} size={14} color={activeKey && active === activeKey ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+      <Icon name={icon} size={14} color={iconColor ?? (activeKey && active === activeKey ? "var(--cv-accent)" : "var(--cv-ink-dim)")} />
       <span style={{ flex: 1 }}>{label}</span>
     </button>
   );
@@ -339,7 +339,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
       <div ref={railRef} style={{ ...railCol, width: 172, alignItems: "stretch" }}>
         <nav className="glass cv-menu-scroll" style={{ ...bubble, alignItems: "stretch", padding: "6px 4px", gap: 1, maxHeight: "70vh", overflowY: "auto" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px 6px" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--cv-ink)" }}>Tools</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--cv-ink)" }}>Library</span>
             <button
               title="Collapse tools — icons only"
               onClick={() => setExpanded(false)}
@@ -349,15 +349,12 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
             </button>
           </div>
           {toolRow("git", "Source Control", `worktrees, push an agent's branch${gitAgents.length ? ` — ${gitAgents.length} live` : ""}`, () => setMenu((m) => (m === "git" ? null : "git")))}
-          {toolRow("obsidian", "Obsidian", "your vault — browse markdown; 'obsidian <note>' in Dex writes to it", () => onSelect("vault"), "vault")}
+          {toolRow("obsidian", "Obsidian", "your real vault — browse markdown; 'obsidian <note>' in Dex writes to it", () => onSelect("vault"), "vault", "#8B5CF6")}
           {toolRow("pr", "Pull requests", "live list from the repo's GitHub", () => onSelect("prs"), "prs")}
           {toolRow("issue", "Issues", "live list from the repo's GitHub", () => onSelect("issues"), "issues")}
-          {toolRow("explorer", "Explorer", "vault files", () => onSelect("vault"), "vault")}
           {toolRow("ticket", "Dex Tickets", "notes and tasks on the board", () => onSelect("notes"), "notes")}
           {toolRow("artifacts", "Artifacts", "shots, docs and files the agents produced", () => onSelect("artifacts"), "artifacts")}
-          {toolRow("automations", "Automations", "saved guardrailed runs", () => onSelect("automations"), "automations")}
           {toolRow("loops", "Loops", "recurring instructions per agent", () => onSelect("loops"), "loops")}
-          {toolRow("history", "History", "delegation and task history", () => onSelect("history"), "history")}
         </nav>
         {menu === "git" && (
           <div
@@ -482,11 +479,11 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
           <Icon name="ticket" />
         </button>
         <button
-          title="Obsidian — your vault, live markdown; tell Dex 'obsidian <note>' to write there"
+          title="Obsidian — your real vault, live markdown; tell Dex 'obsidian <note>' to write there"
           onClick={() => onSelect("vault")}
           style={btn(active === "vault")}
         >
-          <Icon name="obsidian" />
+          <Icon name="obsidian" color="#8B5CF6" />
         </button>
         {repoUrl && (
           <>

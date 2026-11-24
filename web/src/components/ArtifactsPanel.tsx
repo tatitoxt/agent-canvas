@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useBoard } from "../store/board";
 import { downloadPdf } from "../lib/pdf";
+import { Icon } from "./icons";
 
 /** Each artifact kind gets its own symbol + muted color (Deska-style
  * deliverable templates). */
@@ -15,18 +16,29 @@ const KINDS: Record<string, { mark: string; color: string }> = {
 };
 const kindMeta = (k: string) => KINDS[k] ?? KINDS.note;
 
+const SUGGESTIONS: { icon: string; color: string; label: string; dex: string }[] = [
+  { icon: "canvas", color: "#7ba3cf", label: "Design a landing page for my app", dex: "spawn codex to design a landing page for my app" },
+  { icon: "code", color: "#7ba389", label: "Build me a budget calculator", dex: "spawn codex to build me a budget calculator" },
+  { icon: "notes", color: "#c9a26b", label: "Write a new document", dex: "pdf Project overview" },
+];
+
 export function ArtifactsPanel() {
   const artifacts = useBoard((s) => s.artifacts);
   const activeBoard = useBoard((s) => s.activeBoard);
   const artifactCreate = useBoard((s) => s.artifactCreate);
   const artifactDelete = useBoard((s) => s.artifactDelete);
+  const threadSend = useBoard((s) => s.threadSend);
+  const requestNav = useBoard((s) => s.requestNav);
+  const pinCard = useBoard((s) => s.pinCard);
   const [creating, setCreating] = useState(false);
   const [kind, setKind] = useState("note");
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
+  const [query, setQuery] = useState("");
 
   const list = Object.values(artifacts)
     .filter((a) => a.board_id === (activeBoard ?? "main"))
+    .filter((a) => !query || a.title.toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   return (
@@ -37,26 +49,59 @@ export function ArtifactsPanel() {
         left: 64,
         top: 64,
         bottom: 64,
-        width: 320,
+        width: 340,
         zIndex: 19,
         display: "flex",
         flexDirection: "column",
-        padding: "12px 10px",
         overflow: "hidden",
       }}
     >
+      {/* search */}
+      <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid var(--cv-glass-edge)" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            background: "var(--cv-glass-hi)",
+            border: "1px solid var(--cv-glass-edge)",
+            borderRadius: 10,
+            padding: "6px 10px",
+          }}
+        >
+          <Icon name="bot" size={13} color="var(--cv-ink-faint)" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && query.trim()) {
+                threadSend(query.trim());
+                setQuery("");
+                requestNav("thread");
+              }
+            }}
+            placeholder="Search artifacts or ask Dex"
+            style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", color: "var(--cv-ink)", fontSize: 11.5 }}
+          />
+          <span style={{ fontSize: 9, color: "var(--cv-ink-faint)", border: "1px solid var(--cv-glass-edge)", borderRadius: 5, padding: "1px 5px" }}>⌘F</span>
+        </div>
+      </div>
+
       <div
         style={{
-          fontSize: 12.5,
+          fontSize: 13,
           fontWeight: 650,
-          padding: "0 12px 8px",
+          padding: "10px 16px 8px",
           color: "var(--cv-ink)",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
         }}
       >
-        Artifacts
+        <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <Icon name="artifacts" size={15} color="var(--cv-ink)" />
+          Artifacts
+        </span>
         <button
           className="glass-pill"
           style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-ink)" }}
@@ -65,8 +110,9 @@ export function ArtifactsPanel() {
           + new
         </button>
       </div>
+
       {creating && (
-        <div className="glass" style={{ margin: "0 4px 8px", padding: "10px 12px" }}>
+        <div className="glass" style={{ margin: "0 12px 8px", padding: "10px 12px" }}>
           <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
             <select
               value={kind}
@@ -107,12 +153,71 @@ export function ArtifactsPanel() {
           </button>
         </div>
       )}
+
       {list.length === 0 && !creating && (
-        <div style={{ fontSize: 11.5, color: "var(--cv-ink-dim)", padding: "4px 12px" }}>
-          No artifacts yet — agents register them with `canvasctl artifact`.
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 22px", gap: 14 }}>
+          <div
+            style={{
+              width: 58,
+              height: 58,
+              borderRadius: 18,
+              background: "var(--cv-glass-hi)",
+              border: "1px solid var(--cv-glass-edge)",
+              display: "grid",
+              placeItems: "center",
+            }}
+          >
+            <Icon name="bot" size={26} color="var(--cv-ink)" />
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--cv-ink)" }}>What you make with Dex shows up here</div>
+            <div style={{ fontSize: 11, color: "var(--cv-ink-dim)", marginTop: 5, lineHeight: 1.5 }}>
+              Pages, designs, apps and documents your agents make, next to your notes. Ask for something to start.
+            </div>
+          </div>
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 6 }}>
+            {SUGGESTIONS.map((s) => (
+              <button
+                key={s.label}
+                onClick={() => { threadSend(s.dex); requestNav("thread"); }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "9px 12px",
+                  borderRadius: 12,
+                  border: "1px solid var(--cv-glass-edge)",
+                  background: "var(--cv-glass-hi)",
+                  color: "var(--cv-ink)",
+                  fontSize: 11.5,
+                  fontWeight: 550,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <span
+                  style={{
+                    flex: "none",
+                    width: 24,
+                    height: 24,
+                    borderRadius: 7,
+                    display: "grid",
+                    placeItems: "center",
+                    background: `color-mix(in srgb, ${s.color} 14%, transparent)`,
+                    border: `1px solid color-mix(in srgb, ${s.color} 32%, transparent)`,
+                  }}
+                >
+                  <Icon name={s.icon} size={12} color={s.color} />
+                </span>
+                <span style={{ flex: 1 }}>{s.label}</span>
+                <span style={{ color: "var(--cv-ink-faint)" }}>→</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
-      <div style={{ flex: 1, overflowY: "auto" }}>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 8px" }}>
         {list.map((a) => {
           const meta = kindMeta(a.kind);
           return (
@@ -146,13 +251,20 @@ export function ArtifactsPanel() {
                   {a.created_at && ` · ${a.created_at.slice(5, 16)}`}
                 </div>
               </div>
+              <button
+                title="Add to Board — pin as a card on the canvas"
+                style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-ink-dim)", display: "grid", placeItems: "center" }}
+                onClick={() => pinCard(a.title, a.text?.slice(0, 400) ?? a.path ?? "", meta.color)}
+              >
+                <Icon name="pin" size={13} />
+              </button>
               {a.kind === "pdf" && a.text && (
                 <button
                   title="download PDF again"
-                  style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-accent)", fontSize: 13 }}
+                  style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-accent)", display: "grid", placeItems: "center" }}
                   onClick={() => downloadPdf(a.title.replace(/^PDF — /, ""), a.text ?? "")}
                 >
-                  ⭳
+                  <Icon name="download" size={14} />
                 </button>
               )}
               <button

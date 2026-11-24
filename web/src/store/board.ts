@@ -346,6 +346,8 @@ type BoardState = {
   /** Whiteboard shapes (Symvibe's shapes tool) — board id → shape id → def. */
   shapes: Record<string, Record<string, import("../board/types").ShapeDef>>;
   addShape: (kind: import("../board/types").ShapeKind) => void;
+  /** Pin arbitrary content onto the canvas as a card (Deska's "Open in canvas"). */
+  pinCard: (title: string, body: string, color?: string) => void;
   moveShape: (id: string, x: number, y: number) => void;
   updateShape: (id: string, patch: Partial<import("../board/types").ShapeDef>) => void;
   deleteShape: (id: string) => void;
@@ -998,6 +1000,24 @@ export const useBoard = create<BoardState>((set, get) => ({
       h: kind === "sticky" ? 150 : 120,
       color: kind === "sticky" ? "#e0c04a" : "#e8e6e3",
       text: "",
+    };
+    const next = { ...shapes, [activeBoard]: { ...(shapes[activeBoard] ?? {}), [id]: def } };
+    localStorage.setItem("cv-shapes", JSON.stringify(next));
+    set({ shapes: next });
+  },
+
+  pinCard: (title, body, color) => {
+    const { activeBoard, shapes } = get();
+    const id = `card-${Math.random().toString(36).slice(2, 10)}`;
+    const def = {
+      id,
+      kind: "sticky" as const,
+      x: 320 + Math.random() * 240,
+      y: 220 + Math.random() * 160,
+      w: 240,
+      h: 160,
+      color: color ?? "#e8e6e3",
+      text: body ? `${title}\n\n${body}` : title,
     };
     const next = { ...shapes, [activeBoard]: { ...(shapes[activeBoard] ?? {}), [id]: def } };
     localStorage.setItem("cv-shapes", JSON.stringify(next));

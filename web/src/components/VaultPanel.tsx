@@ -344,6 +344,17 @@ export function VaultPanel() {
               <button style={actionBtn} title="Export as PDF (saved to artifacts)" onClick={exportFile}>
                 <Icon name="shot" size={11} /> Export PDF
               </button>
+              <button
+                style={actionBtn}
+                title="Open in Obsidian — jumps to this note in the real app"
+                onClick={() => {
+                  const vaultName = vaultDir.replace(/\/+$/, "").split("/").pop() ?? "";
+                  const file = vaultFile.path.replace(/\.md$/, "");
+                  window.open(`obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(file)}`, "_self");
+                }}
+              >
+                <Icon name="obsidian" size={11} color="#8B5CF6" /> Obsidian
+              </button>
               <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 14 }} onClick={closeVaultFile}>
                 ×
               </button>
