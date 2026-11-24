@@ -174,6 +174,24 @@ export function ContextMenu({
       {isAgent && (
         <button
           style={{ ...item, color: "var(--cv-ink-dim)" }}
+          title="spawn a twin — same CLI, same board, next to this card"
+          onClick={() => {
+            const st = useBoard.getState();
+            const a = st.agents[nodeId];
+            if (a) {
+              const p = st.positions[nodeId];
+              if (p) st.setPendingSpawnPos({ x: p.x + 60, y: p.y + 60 });
+              st.spawn(a.name, a.command ?? "bash", a.workspace_id ?? undefined, a.permission);
+            }
+            onClose();
+          }}
+        >
+          ⧉ duplicate agent
+        </button>
+      )}
+      {isAgent && (
+        <button
+          style={{ ...item, color: "var(--cv-ink-dim)" }}
           title="copy the agent's git worktree path"
           onClick={() => {
             const wt = useBoard.getState().agents[nodeId]?.worktree;
