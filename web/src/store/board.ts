@@ -832,6 +832,16 @@ export const useBoard = create<BoardState>((set, get) => ({
               artifacts,
               ...(tnTouched ? { termNodes } : {}),
             });
+            // Deep link: ?board=<id> opens straight into that board once
+            // the snapshot has landed (name or id both accepted).
+            const want = new URLSearchParams(location.search).get("board");
+            if (want) {
+              const all = { main: "Main", ...boards };
+              const hit =
+                Object.keys(all).find((id) => id === want) ??
+                Object.entries(all).find(([, n]) => n.toLowerCase() === want.toLowerCase())?.[0];
+              if (hit && hit !== get().activeBoard) set({ activeBoard: hit });
+            }
             break;
           }
           case "studio_doc_md":
@@ -957,7 +967,14 @@ export const useBoard = create<BoardState>((set, get) => ({
     });
   },
 
-  setActiveBoard: (boardId) => set({ activeBoard: boardId }),
+  setActiveBoard: (boardId) => {
+    set({ activeBoard: boardId });
+    try {
+      const u = new URL(location.href);
+      u.searchParams.set("board", boardId);
+      history.replaceState(null, "", u);
+    } catch { /* file:// or odd embeds */ }
+  },
 
   createBoard: (name) => client?.createBoard(name),
 
