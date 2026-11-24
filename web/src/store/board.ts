@@ -1035,7 +1035,27 @@ export const useBoard = create<BoardState>((set, get) => ({
     loose.forEach((a, i) =>
       get().moveNode(a.id, x0 + (i % cols) * 500, y0 + Math.floor(i / cols) * 250),
     );
-    get().notify(`gathered ${loose.length} loose window${loose.length === 1 ? "" : "s"}`);
+    // Group frame: a translucent region behind the gathered windows so
+    // the group reads as one object on the board (Deska's groups).
+    const rows = Math.ceil(loose.length / cols);
+    const { shapes } = get();
+    const gid = `shape-${Math.random().toString(36).slice(2, 10)}`;
+    const n = Object.keys(shapes[activeBoard] ?? {}).filter(
+      (k) => shapes[activeBoard][k].text?.startsWith("Group")).length;
+    const def = {
+      id: gid,
+      kind: "rect" as const,
+      x: x0 - 26,
+      y: y0 - 46,
+      w: cols * 500 + 12,
+      h: rows * 250 + 56,
+      color: "#5f7fd9",
+      text: `Group ${n + 1}`,
+    };
+    const nextShapes = { ...shapes, [activeBoard]: { ...(shapes[activeBoard] ?? {}), [gid]: def } };
+    localStorage.setItem("cv-shapes", JSON.stringify(nextShapes));
+    set({ shapes: nextShapes });
+    get().notify(`gathered ${loose.length} loose window${loose.length === 1 ? "" : "s"} into Group ${n + 1}`);
     get().requestView();
   },
   chromeHidden: false,
