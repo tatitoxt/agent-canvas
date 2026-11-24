@@ -1392,6 +1392,20 @@ export const useBoard = create<BoardState>((set, get) => ({
       reply(`created space "${name}"`);
       return;
     }
+    const rm = low.match(/^run\s+(?:automation\s+)?(.+)$/);
+    if (rm) {
+      const q = rm[1].replace(/[?.\s]+$/, "").trim();
+      const hit = Object.values(get().automations).find(
+        (a) => a.name.toLowerCase() === q || a.name.toLowerCase().includes(q),
+      );
+      if (hit) {
+        get().runAutomation(hit.id);
+        reply(`ran automation "${hit.name}"`);
+      } else {
+        reply(`no automation "${q}"`);
+      }
+      return;
+    }
     if (/^new task\b/.test(low)) {
       get().focusSpawn();
       reply("spawn chooser is on the Orchestrator card");
