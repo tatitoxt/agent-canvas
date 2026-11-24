@@ -43,6 +43,7 @@ import { DigestPanel } from "./components/DigestPanel";
 import { NoticePill } from "./components/NoticePill";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { CommandPalette } from "./components/CommandPalette";
+
 import { DelegationPanel } from "./components/DelegationPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { Topbar } from "./components/Topbar";
@@ -233,7 +234,8 @@ function Board() {
   const [delegateFrom, setDelegateFrom] = useState<{ from: string; at: { x: number; y: number } } | null>(null);
   const [nav, setNav] = useState("canvas");
   const [palette, setPalette] = useState(false);
-  const [edgeDetail, setEdgeDetail] = useState<string | null>(null);
+  const edgeDetail = useBoard((s) => s.edgeDetail);
+  const setEdgeDetail = useBoard((s) => s.setEdgeDetail);
   const [search, setSearch] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [mmSize, setMmSize] = useState({ w: 148, h: 96 });

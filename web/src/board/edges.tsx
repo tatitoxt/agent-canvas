@@ -6,6 +6,7 @@ import {
   type EdgeProps,
 } from "@xyflow/react";
 import type { DelegationEdgeData } from "./types";
+import { useBoard } from "../store/board";
 
 /**
  * Edges are quiet hairlines with a small glass label — the record of a
@@ -18,6 +19,7 @@ const STATE_STYLE = {
 } as const;
 
 export function DelegationEdge({
+  id,
   sourceX,
   sourceY,
   targetX,
@@ -52,8 +54,10 @@ export function DelegationEdge({
       {label && (
         <EdgeLabelRenderer>
           <div
-            className="glass-pill nodrag nopan pointer-events-auto absolute max-w-52 -translate-x-1/2 -translate-y-1/2 px-2.5 py-1 text-[10.5px] leading-snug"
+            className="glass-pill nodrag nopan pointer-events-auto absolute max-w-52 -translate-x-1/2 -translate-y-1/2 cursor-pointer px-2.5 py-1 text-[10.5px] leading-snug"
             style={{ left: labelX, top: labelY }}
+            title="Open this delegation's full record"
+            onClick={() => useBoard.getState().setEdgeDetail(id)}
           >
             <span className="mr-1.5" style={{ color: style.stroke }}>
               {style.chip}

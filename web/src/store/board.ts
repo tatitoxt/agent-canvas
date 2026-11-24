@@ -299,6 +299,8 @@ type BoardState = {
   threadLog: ThreadLine[];
   threadSend: (text: string) => void;
   navRequest: { key: string; n: number } | null;
+  edgeDetail: string | null;
+  setEdgeDetail: (id: string | null) => void;
   /** Open counts the GitHub panels last fetched — shown as live facts in the Library rail. */
   ghCounts: { prs?: number; issues?: number };
   requestNav: (key: string) => void;
@@ -1274,6 +1276,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   navRequest: null,
   ghCounts: {},
   requestNav: (key) => set((s) => ({ navRequest: { key, n: (s.navRequest?.n ?? 0) + 1 } })),
+  edgeDetail: null,
+  setEdgeDetail: (id) => set({ edgeDetail: id }),
   panelSummaries: true,
   togglePanelSummaries: () => set((s) => ({ panelSummaries: !s.panelSummaries })),
   spawnOpen: false,
