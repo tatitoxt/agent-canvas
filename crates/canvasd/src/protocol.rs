@@ -131,6 +131,10 @@ pub enum ClientMsg {
         workspace_id: Option<String>,
         permission: Option<String>,
         account_id: Option<String>,
+        /// Explicit target board — the child lands here instead of on the
+        /// delegator's board (delegators that aren't agents, e.g. an
+        /// orchestrator node, have no board row to inherit).
+        board_id: Option<String>,
     },
     /// Register a named account for a CLI (e.g. a second Codex sign-in).
     /// The account gets its own config dir under .canvas/accounts/.

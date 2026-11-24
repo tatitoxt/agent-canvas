@@ -557,14 +557,15 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::Delegate { from, name, command, task, cwd, workspace_id, permission, account_id } => {
+        ClientMsg::Delegate { from, name, command, task, cwd, workspace_id, permission, account_id, board_id } => {
             // A delegation IS a spawn + a persisted edge. The edge returns
             // when the child's PTY prints `CANVAS_RESULT: <summary>`.
             let parent_level = state.store.agent_permission(&from).ok().flatten();
             let requested = protocol::normalize_permission(permission.as_deref());
             let level = protocol::clamp_to_parent(requested, parent_level.as_deref());
-            // The child lands on its parent's board (or its workspace's).
-            let parent_board = state.store.agent_board(&from).ok().flatten();
+            // The child lands on the requested board, else its parent's
+            // (orchestrator nodes aren't agents — they carry theirs over).
+            let parent_board = board_id.or(state.store.agent_board(&from).ok().flatten());
             match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, parent_board.as_deref(), account_id.as_deref()) {
                 Ok((id, board)) => {
                     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);

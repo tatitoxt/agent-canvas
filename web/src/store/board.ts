@@ -130,7 +130,7 @@ type BoardState = {
   closeStudioDoc: () => void;
   artifactDelete: (artifactId: string) => void;
   createWorkspace: (name: string, repo: string) => void;
-  delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
+  delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }, boardId?: string) => void;
   kill: (agentId: string) => void;
   approveInput: (agentId: string) => void;
   denyInput: (agentId: string) => void;
@@ -614,11 +614,11 @@ export const useBoard = create<BoardState>((set, get) => ({
 
   createWorkspace: (name, repo) => client?.createWorkspace(name, repo, get().activeBoard),
 
-  delegate: (from, name, command, task, permission, position) => {
+  delegate: (from, name, command, task, permission, position, boardId) => {
     if (position) {
       set((s) => ({ pendingPositions: { ...s.pendingPositions, [from]: position } }));
     }
-    client?.delegate(from, name, command, task, ".", undefined, permission);
+    client?.delegate(from, name, command, task, ".", undefined, permission, undefined, boardId);
   },
 
   kill: (agentId) => client?.confirmDestructive(agentId, "kill"),
@@ -736,11 +736,36 @@ export const useBoard = create<BoardState>((set, get) => ({
 
   // The composer writes the command straight into each wired console's
   // PTY — like speaking to each terminal at once (Symvibe's "Command N").
+  // It also understands "spawn two codex / three reviewers": every spawn
+  // is a delegation edge from the orchestrator, so the new agent lands
+  // already wired (the cable IS the delegation).
   commandAgents: (orchId, text) => {
     const cur = get().orchestrators[orchId];
     if (!cur || !text.trim()) return;
+    const WORDN: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+    const m = text.trim().match(/^(?:spawn|deploy)\s+(?:(\d+)|(one|two|three|four|five|six))\s+([\w-]+?)(?:\s+(?:agents?|consoles?|terminals?))?$/i);
+    if (m) {
+      const n = m[1] ? parseInt(m[1], 10) : WORDN[m[2].toLowerCase()];
+      const word = m[3].toLowerCase().replace(/s$/, "");
+      const KNOWN = new Set([
+        "claude", "claude-code", "codex", "gemini", "gemini-cli", "bash", "aider",
+        "cursor-agent", "cursor", "opencode", "amp", "droid", "goose", "kilocode",
+        "qwen", "hermes", "kimi", "vibe", "pi", "antigravity", "terminal",
+      ]);
+      const cli = KNOWN.has(word) ? (word === "terminal" ? "bash" : word) : "claude";
+      const role = KNOWN.has(word) ? cli : word;
+      for (let i = 0; i < Math.min(Math.max(n, 1), 8); i++) {
+        const nm = n > 1 ? `${role}-${i + 1}` : role;
+        get().delegate(orchId, nm, cli, `You are ${role} ${i + 1} on the team — await the next message.`, undefined, undefined, cur.board);
+      }
+      return;
+    }
     const payload = new TextEncoder().encode(`${text.trim()}\r`);
-    for (const aid of cur.wired) get().sendInput(aid, payload);
+    // Broadcast to wired consoles + every agent this orchestrator spawned.
+    const targets = new Set(cur.wired);
+    for (const e of Object.values(get().edges))
+      if (e.from === orchId) targets.add(e.to);
+    for (const aid of targets) get().sendInput(aid, payload);
   },
 
   quickRequest: (text) => {

@@ -290,11 +290,13 @@ function Board() {
           kind: "orchestrator" as const,
           id,
           name: o.name,
-          delegations: o.wired.length,
+          delegations:
+            o.wired.length +
+            Object.values(liveEdges).filter((e) => e.from === id).length,
         },
       }));
     return connected ? [...wsNodes, ...webNs, ...live, ...orchNs] : [...initialNodes, ...webNs, ...live, ...orchNs];
-  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators]);
+  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges]);
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     // In Connect mode a click on an agent card wires/unwires it to the
@@ -338,7 +340,13 @@ function Board() {
     if (!connected) return initialEdges;
     // An edge is visible when its delegating node is on this board.
     const delegEdges = Object.values(liveEdges)
-      .filter((e) => (agents[e.from]?.board_id ?? "main") === activeBoard)
+      .filter(
+        (e) =>
+          (agents[e.from]?.board_id ??
+            agents[e.to]?.board_id ??
+            orchestrators[e.from]?.board ??
+            "main") === activeBoard,
+      )
       .map((e) => ({
       id: e.id,
       source: e.from,

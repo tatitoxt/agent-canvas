@@ -18,8 +18,8 @@ const STATUS_COLOR: Record<AgentStatus, string> = {
 };
 
 const STATUS_LABEL: Record<AgentStatus, string> = {
-  working: "working",
-  waiting: "needs input",
+  working: "running",
+  waiting: "waiting",
   blocked: "blocked",
   done: "done",
   idle: "idle",
@@ -228,8 +228,25 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       }}
     >
       <Handle type="target" position={Position.Left} />
-      {/* Deska-style header: name · status · cli mark+label */}
+      {/* Deska-style header: [tile] name · <cli> <status> · [logo] <cli> */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div
+          style={{
+            width: 20,
+            height: 20,
+            flex: "none",
+            display: "grid",
+            placeItems: "center",
+            borderRadius: 5,
+            fontSize: 10.5,
+            color: meta.color,
+            background: `color-mix(in srgb, ${meta.color} 14%, var(--cv-glass-hi))`,
+            border: `1px solid color-mix(in srgb, ${meta.color} 30%, var(--cv-glass-edge))`,
+          }}
+          title={meta.label}
+        >
+          {meta.mark}
+        </div>
         <div
           style={{
             fontSize: 13.5,
@@ -239,99 +256,74 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             overflow: "hidden",
             textOverflow: "ellipsis",
             minWidth: 0,
-            flex: "none",
-            maxWidth: "46%",
+            flex: "1 1 auto",
           }}
         >
           {data.name}
         </div>
-        <span
-          className="status-dot"
-          style={{ background: STATUS_COLOR[data.status], flex: "none" }}
-        />
         <span
           style={{
             fontSize: 11,
             color: STATUS_COLOR[data.status],
             fontWeight: 500,
             flex: "none",
+            whiteSpace: "nowrap",
           }}
         >
-          {STATUS_LABEL[data.status]}
+          ≋ {meta.label} {STATUS_LABEL[data.status]}
         </span>
+        <span
+          style={{
+            fontSize: 11,
+            color: meta.color,
+            fontWeight: 600,
+            flex: "none",
+            whiteSpace: "nowrap",
+            marginLeft: "auto",
+          }}
+        >
+          {meta.mark} {meta.label}
+        </span>
+      </div>
+      {/* Meta row — files / branch / account / permission (Deska keeps the
+          header clean and pushes these under it). */}
+      {(data.files || data.branch || data.accountLabel || (data.permission && data.permission !== "supervised")) && (
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 6,
-            marginLeft: "auto",
-            minWidth: 0,
+            gap: 8,
+            marginTop: 7,
+            fontSize: 9.5,
+            color: "var(--cv-ink-faint)",
           }}
         >
           {data.files != null && data.files > 0 && (
-            <span
-              style={{ fontSize: 10, color: "var(--cv-ink-faint)", fontWeight: 500 }}
-              title={data.paths?.length ? data.paths.join("\n") : "uncommitted changes in worktree"}
-            >
+            <span title={data.paths?.length ? data.paths.join("\n") : "uncommitted changes in worktree"}>
               {data.files} file{data.files === 1 ? "" : "s"}
             </span>
           )}
           {data.branch && (
-            <span
-              style={{
-                fontSize: 9.5,
-                fontFamily: "ui-monospace, SFMono-Regular, monospace",
-                color: "var(--cv-ink-faint)",
-                fontWeight: 500,
-              }}
-              title="worktree branch"
-            >
+            <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace" }} title="worktree branch">
               ⎇ {data.branch}
             </span>
           )}
           {data.accountLabel && (
-            <span style={{ fontSize: 10, color: "var(--cv-accent)" }} title="account">
+            <span style={{ color: "var(--cv-accent)" }} title="account">
               @{data.accountLabel}
             </span>
           )}
-          <div
-            style={{
-              width: 22,
-              height: 22,
-              flex: "none",
-              display: "grid",
-              placeItems: "center",
-              borderRadius: 6,
-              fontSize: 11,
-              color: meta.color,
-              background: `color-mix(in srgb, ${meta.color} 14%, var(--cv-glass-hi))`,
-              border: `1px solid color-mix(in srgb, ${meta.color} 30%, var(--cv-glass-edge))`,
-            }}
-            title={meta.label}
-          >
-            {meta.mark}
-          </div>
-          <span
-            style={{
-              fontSize: 11,
-              color: meta.color,
-              fontWeight: 500,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {meta.label}
-          </span>
           {data.permission && data.permission !== "supervised" && (
             <span
               className="glass-pill"
-              style={{ fontSize: 9.5, padding: "2px 7px", color: "var(--cv-accent)" }}
+              style={{ fontSize: 9, padding: "1px 6px", color: "var(--cv-accent)", marginLeft: "auto" }}
               title="permission level"
             >
               {PERMISSION_LABEL[data.permission] ?? data.permission}
             </span>
           )}
         </div>
-      </div>
+      )}
       {data.task && (
         <div
           style={{
@@ -433,14 +425,26 @@ export function OrchestratorNode({
 }: NodeProps<Node<OrchestratorNodeData>>) {
   const orchId = data.id ?? id;
   const agents = useBoard((s) => s.agents);
+  const edges = useBoard((s) => s.edges);
   const wired = useBoard((s) => s.orchestrators[orchId]?.wired ?? EMPTY_WIRED);
   const wiring = useBoard((s) => s.wiringFrom === orchId);
   const setWiring = useBoard((s) => s.setWiring);
   const commandAgents = useBoard((s) => s.commandAgents);
   const [cmd, setCmd] = useState("");
 
+  // Roster = hand-wired consoles ∪ agents this orchestrator spawned by
+  // delegation — the cable to a spawned child is its delegation edge.
+  const delegated = useMemo(
+    () => Object.values(edges).filter((e) => e.from === orchId).map((e) => e.to),
+    [edges, orchId],
+  );
+  const roster = useMemo(
+    () => [...new Set([...wired, ...delegated])],
+    [wired, delegated],
+  );
+
   const send = () => {
-    if (!cmd.trim() || !wired.length) return;
+    if (!cmd.trim()) return;
     commandAgents(orchId, cmd);
     setCmd("");
   };
@@ -493,13 +497,13 @@ export function OrchestratorNode({
       <div style={{ fontSize: 11, color: "var(--cv-ink-dim)", marginTop: 5 }}>
         {wiring
           ? "click agent cards to wire them — click Connect when done"
-          : wired.length
-            ? `${wired.length} wired`
+          : roster.length
+            ? `${roster.length} agents · General`
             : "No agents wired — Connect and pick consoles"}
       </div>
-      {wired.length > 0 && (
+      {roster.length > 0 && (
         <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-          {wired.map((aid) => {
+          {roster.map((aid) => {
             const a = agents[aid];
             if (!a) return null;
             const cli = (a.command ?? "bash").split(/\s+/)[0].toLowerCase();
@@ -531,11 +535,10 @@ export function OrchestratorNode({
           onChange={(e) => setCmd(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder={
-            wired.length
-              ? `Command ${wired.length} agent${wired.length === 1 ? "" : "s"} · @ to direct…`
-              : "Wire consoles first…"
+            roster.length
+              ? `Command ${roster.length} agent${roster.length === 1 ? "" : "s"} · @ to direct…`
+              : "Try 'spawn two reviewers'…"
           }
-          disabled={!wired.length}
           style={{
             flex: 1,
             background: "rgba(255,255,255,0.05)",
@@ -549,8 +552,8 @@ export function OrchestratorNode({
         />
         <button
           onClick={send}
-          disabled={!wired.length || !cmd.trim()}
-          title="Send the command to every wired console"
+          disabled={!cmd.trim()}
+          title="Send the command to every wired console — 'spawn two codex' also works"
           style={{
             background: "rgba(201,162,107,0.14)",
             border: "1px solid var(--cv-accent-dim)",
@@ -559,7 +562,7 @@ export function OrchestratorNode({
             fontSize: 11,
             padding: "5px 10px",
             cursor: "pointer",
-            opacity: wired.length && cmd.trim() ? 1 : 0.45,
+            opacity: cmd.trim() ? 1 : 0.45,
           }}
         >
           ▸

@@ -573,12 +573,14 @@ fn delegate(
     workspace_id: Option<String>,
     permission: Option<String>,
     account_id: Option<String>,
+    board_id: Option<String>,
 ) -> Result<String, String> {
     let parent_level = state.store.agent_permission(&from).ok().flatten();
     let requested = canvasd::protocol::normalize_permission(permission.as_deref());
     let level = canvasd::protocol::clamp_to_parent(requested, parent_level.as_deref());
-    // The child lands on its parent's board (or its workspace's).
-    let parent_board = state.store.agent_board(&from).ok().flatten();
+    // The child lands on the requested board, else its parent's
+    // (orchestrator nodes aren't agents — they carry theirs over).
+    let parent_board = board_id.or(state.store.agent_board(&from).ok().flatten());
     let (id, board) = spawn_wired(&app, &state, &name, &command, &cwd, workspace_id.as_deref(), level, parent_board.as_deref(), account_id.as_deref())?;
     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
     let _ = state.store.delegation_created(&edge_id, &from, &id, &task);
