@@ -41,6 +41,7 @@ export function AutomationsPanel() {
   const [permission, setPermission] = useState("auto");
   const [idleSecs, setIdleSecs] = useState("300");
   const [onApproval, setOnApproval] = useState("hold");
+  const [everyMins, setEveryMins] = useState("");
   const [workspaceId, setWorkspaceId] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -57,6 +58,7 @@ export function AutomationsPanel() {
       idle_secs: parseInt(idleSecs, 10) || 300,
       on_approval: onApproval,
       workspace_id: workspaceId || undefined,
+      interval_secs: (parseInt(everyMins, 10) || 0) * 60 || undefined,
     });
     setName("");
     setPrompt("");
@@ -139,6 +141,14 @@ export function AutomationsPanel() {
               <option value="hold">on gated input: hold for me</option>
               <option value="deny">on gated input: auto-deny</option>
             </select>
+            <input
+              style={input}
+              type="number"
+              min={0}
+              placeholder="repeat every N minutes (empty = manual)"
+              value={everyMins}
+              onChange={(e) => setEveryMins(e.target.value)}
+            />
             <button
               className="glass-pill"
               style={{ fontSize: 11, fontWeight: 600, padding: "5px 14px", cursor: "pointer", border: "none", color: "var(--cv-done)" }}
@@ -174,6 +184,7 @@ export function AutomationsPanel() {
             </div>
             <div style={{ fontSize: 10, color: "var(--cv-ink-faint)", marginTop: 2 }}>
               {a.command} · {a.permission} · hang {a.idle_secs}s · gated: {a.on_approval}
+              {a.interval_secs ? ` · every ${Math.round(a.interval_secs / 60)}m` : ""}
               {a.last_run_at ? ` · ran ${a.last_run_at.slice(0, 16)}` : " · never ran"}
             </div>
             <div style={{ display: "flex", gap: 6, marginTop: 6 }}>

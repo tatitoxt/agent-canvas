@@ -72,6 +72,8 @@ export type AutomationDef = {
   idle_secs: number;
   on_approval: string;
   last_run_at?: string | null;
+  interval_secs?: number | null;
+  next_run_at?: string | null;
 };
 
 export type Handlers = {
@@ -182,6 +184,7 @@ export class CanvasClient {
     permission?: string;
     idle_secs?: number;
     on_approval?: string;
+    interval_secs?: number;
   }) {
     this.send({ cmd: "create_automation", ...a });
   }

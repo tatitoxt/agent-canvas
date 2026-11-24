@@ -295,14 +295,16 @@ fn create_automation(
     permission: Option<String>,
     idle_secs: Option<u64>,
     on_approval: Option<String>,
+    interval_secs: Option<u64>,
 ) -> Result<String, String> {
     let level = canvasd::protocol::normalize_permission(permission.as_deref());
     let policy = if on_approval.as_deref() == Some("deny") { "deny" } else { "hold" };
     let idle = idle_secs.unwrap_or(300).clamp(10, 86_400);
+    let interval = interval_secs.map(|v| v.clamp(60, 86_400));
     let id = uuid_v4ish();
     state
         .store
-        .automation_created(&id, &name, &prompt, &command, workspace_id.as_deref(), level, idle, policy)
+        .automation_created(&id, &name, &prompt, &command, workspace_id.as_deref(), level, idle, policy, interval)
         .map_err(|e| e.to_string())?;
     emit_control(&app, &ServerMsg::AutomationSaved {
         automation: SnapshotAutomation {
@@ -315,6 +317,8 @@ fn create_automation(
             idle_secs: idle,
             on_approval: policy.to_string(),
             last_run_at: None,
+            interval_secs: interval,
+            next_run_at: None,
         },
     });
     Ok(id)
@@ -326,17 +330,27 @@ fn run_automation(
     state: State<'_, CanvasState>,
     automation_id: String,
 ) -> Result<String, String> {
-    let (_, name, prompt, command, workspace_id, permission, idle_secs, on_approval, _) = state
+    let row = state
         .store
         .automation_row(&automation_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "no such automation".to_string())?;
-    let (id, run_board) = spawn_wired(&app, &state, &name, &command, ".", workspace_id.as_deref(), &permission, None)?;
+    run_automation_row(&app, &state, row)
+}
+
+/// Shared by the manual run_automation command and the schedule ticker.
+fn run_automation_row(
+    app: &AppHandle,
+    state: &CanvasState,
+    row: canvasd::store::AutomationRow,
+) -> Result<String, String> {
+    let (automation_id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, _, _, _) = row;
+    let (id, run_board) = spawn_wired(app, state, &name, &command, ".", workspace_id.as_deref(), &permission, None)?;
     state
         .agents
         .set_automation(&id, idle_secs.max(0) as u64, on_approval == "deny");
     let _ = state.store.automation_ran(&automation_id);
-    emit_control(&app, &ServerMsg::Spawned {
+    emit_control(app, &ServerMsg::Spawned {
         agent_id: id.clone(),
         name,
         command,
@@ -365,10 +379,10 @@ fn run_automation(
                     .lock()
                     .unwrap()
                     .insert(id.clone(), bytes.into_bytes());
-                emit_control(&app, &ServerMsg::NeedsApproval { agent_id: id.clone(), line });
+                emit_control(app, &ServerMsg::NeedsApproval { agent_id: id.clone(), line });
                 return Ok(id);
             }
-            emit_control(&app, &ServerMsg::NeedsAttention {
+            emit_control(app, &ServerMsg::NeedsAttention {
                 agent_id: id.clone(),
                 reason: format!("automation policy denied: {line}"),
             });
@@ -599,9 +613,10 @@ fn snapshot(
             .automations_snapshot()
             .unwrap_or_default()
             .into_iter()
-            .map(|(id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at)| SnapshotAutomation {
+            .map(|(id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at, interval_secs, next_run_at)| SnapshotAutomation {
                 id, name, prompt, command, workspace_id, permission,
                 idle_secs: idle_secs.max(0) as u64, on_approval, last_run_at,
+                interval_secs: interval_secs.map(|v| v.max(0) as u64), next_run_at,
             })
             .collect::<Vec<_>>(),
         "approvals": state
@@ -715,6 +730,28 @@ fn main() {
                                 );
                             } else if silent < 5 && meta.hang_notified {
                                 state.agents.set_hang_notified(&id, false);
+                            }
+                        }
+                    }
+
+                    // Schedule pass (every 15th tick): run due automations.
+                    if tick_n.is_multiple_of(15) {
+                        match state.store.automations_due() {
+                            Ok(rows) => {
+                                for row in rows {
+                                    if let Err(e) = run_automation_row(&handle, &state, row) {
+                                        emit_control(&handle, &ServerMsg::Error {
+                                            agent_id: None,
+                                            message: e,
+                                        });
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                emit_control(&handle, &ServerMsg::Error {
+                                    agent_id: None,
+                                    message: e.to_string(),
+                                });
                             }
                         }
                     }

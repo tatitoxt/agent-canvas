@@ -115,6 +115,7 @@ type BoardState = {
     permission?: string;
     idle_secs?: number;
     on_approval?: string;
+    interval_secs?: number;
   }) => void;
   runAutomation: (automationId: string) => void;
   deleteAutomation: (automationId: string) => void;

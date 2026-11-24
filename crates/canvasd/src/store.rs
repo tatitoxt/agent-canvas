@@ -24,7 +24,7 @@ pub type DelegationRow = (
     Option<String>,
 );
 /// Row of the automations table: (id, name, prompt, command, workspace_id,
-/// permission, idle_secs, on_approval, last_run_at).
+/// permission, idle_secs, on_approval, last_run_at, interval_secs, next_run_at).
 pub type AutomationRow = (
     String,
     String,
@@ -34,6 +34,8 @@ pub type AutomationRow = (
     String,
     i64,
     String,
+    Option<String>,
+    Option<i64>,
     Option<String>,
 );
 
@@ -139,6 +141,14 @@ impl Store {
                  UPDATE agents SET board_id = 'main' WHERE board_id IS NULL;
                  UPDATE workspaces SET board_id = 'main' WHERE board_id IS NULL;
                  PRAGMA user_version = 5;",
+            )?;
+        }
+        if version < 6 {
+            conn.execute_batch(
+                // v5 → v6: automation schedules — repeat every interval_secs.
+                "ALTER TABLE automations ADD COLUMN interval_secs INTEGER;
+                 ALTER TABLE automations ADD COLUMN next_run_at TEXT;
+                 PRAGMA user_version = 6;",
             )?;
         }
         Ok(Self { conn: Mutex::new(conn) })
@@ -415,10 +425,12 @@ impl Store {
         permission: &str,
         idle_secs: u64,
         on_approval: &str,
+        interval_secs: Option<u64>,
     ) -> Result<()> {
         self.conn.lock().unwrap().execute(
-            "INSERT INTO automations (id, name, prompt, command, workspace_id, permission, idle_secs, on_approval) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            (id, name, prompt, command, workspace_id, permission, idle_secs as i64, on_approval),
+            "INSERT INTO automations (id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, interval_secs, next_run_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, CASE WHEN ?9 IS NULL THEN NULL ELSE datetime('now', '+' || ?9 || ' seconds') END)",
+            (id, name, prompt, command, workspace_id, permission, idle_secs as i64, on_approval, interval_secs.map(|v| v as i64)),
         )?;
         Ok(())
     }
@@ -426,7 +438,7 @@ impl Store {
     pub fn automation_row(&self, id: &str) -> Result<Option<AutomationRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
-            "SELECT id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at FROM automations WHERE id = ?1",
+            "SELECT id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at, interval_secs, next_run_at FROM automations WHERE id = ?1",
         )?;
         let mut rows = st.query_map([id], |r| {
             Ok((
@@ -439,6 +451,8 @@ impl Store {
                 r.get::<_, i64>(6)?,
                 r.get(7)?,
                 r.get(8)?,
+                r.get(9)?,
+                r.get(10)?,
             ))
         })?;
         Ok(rows.next().transpose()?)
@@ -447,7 +461,7 @@ impl Store {
     pub fn automations_snapshot(&self) -> Result<Vec<AutomationRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
-            "SELECT id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at FROM automations ORDER BY created_at",
+            "SELECT id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at, interval_secs, next_run_at FROM automations ORDER BY created_at",
         )?;
         let rows = st.query_map([], |r| {
             Ok((
@@ -460,17 +474,48 @@ impl Store {
                 r.get::<_, i64>(6)?,
                 r.get(7)?,
                 r.get(8)?,
+                r.get(9)?,
+                r.get(10)?,
             ))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    /// Record a run: stamp last_run_at and advance the schedule so a
+    /// repeating automation fires again interval_secs from now.
     pub fn automation_ran(&self, id: &str) -> Result<()> {
         self.conn.lock().unwrap().execute(
-            "UPDATE automations SET last_run_at = datetime('now') WHERE id = ?1",
+            "UPDATE automations SET last_run_at = datetime('now'),
+                next_run_at = CASE WHEN interval_secs IS NULL THEN NULL
+                    ELSE datetime('now', '+' || interval_secs || ' seconds') END
+             WHERE id = ?1",
             (id,),
         )?;
         Ok(())
+    }
+
+    /// Scheduled automations whose next_run_at is due now.
+    pub fn automations_due(&self) -> Result<Vec<AutomationRow>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare(
+            "SELECT id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at, interval_secs, next_run_at FROM automations WHERE next_run_at IS NOT NULL AND next_run_at <= datetime('now')",
+        )?;
+        let rows = st.query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get::<_, i64>(6)?,
+                r.get(7)?,
+                r.get(8)?,
+                r.get(9)?,
+                r.get(10)?,
+            ))
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     pub fn automation_deleted(&self, id: &str) -> Result<()> {

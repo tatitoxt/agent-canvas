@@ -554,6 +554,7 @@ fn handle_client_msg(
             permission,
             idle_secs,
             on_approval,
+            interval_secs,
         } => {
             let level = protocol::normalize_permission(permission.as_deref());
             let policy = match on_approval.as_deref() {
@@ -561,6 +562,8 @@ fn handle_client_msg(
                 _ => "hold",
             };
             let idle = idle_secs.unwrap_or(300).clamp(10, 86_400);
+            // 60s floor on schedules — anything faster is a spawn loop.
+            let interval = interval_secs.map(|v| v.clamp(60, 86_400));
             let id = uuid_like();
             match state.store.automation_created(
                 &id,
@@ -571,6 +574,7 @@ fn handle_client_msg(
                 level,
                 idle,
                 policy,
+                interval,
             ) {
                 Ok(()) => send_control(ServerMsg::AutomationSaved {
                     automation: protocol::SnapshotAutomation {
@@ -583,6 +587,8 @@ fn handle_client_msg(
                         idle_secs: idle,
                         on_approval: policy.to_string(),
                         last_run_at: None,
+                        interval_secs: interval,
+                        next_run_at: None,
                     },
                 }),
                 Err(e) => send_control(ServerMsg::Error {
@@ -593,50 +599,7 @@ fn handle_client_msg(
         }
         ClientMsg::RunAutomation { automation_id } => {
             match state.store.automation_row(&automation_id) {
-                Ok(Some((_, name, prompt, command, workspace_id, permission, idle_secs, on_approval, _))) => {
-                    match spawn_agent(
-                        state,
-                        &name,
-                        &command,
-                        ".",
-                        workspace_id.as_deref(),
-                        &permission,
-                        None,
-                    ) {
-                        Ok((agent_id, run_board)) => {
-                            state.agents.set_automation(
-                                &agent_id,
-                                idle_secs.max(0) as u64,
-                                on_approval == "deny",
-                            );
-                            let _ = state.store.automation_ran(&automation_id);
-                            send_control(ServerMsg::Spawned {
-                                agent_id: agent_id.clone(),
-                                name,
-                                command,
-                                permission,
-                                workspace_id,
-                                board_id: run_board,
-                            });
-                            // Inject the saved prompt into the fresh PTY —
-                            // gated, so a supervised run still gets a gate.
-                            let st = state.clone();
-                            let agent_id2 = agent_id;
-                            tokio::spawn(async move {
-                                tokio::time::sleep(
-                                    std::time::Duration::from_millis(800),
-                                )
-                                .await;
-                                gated_write(&st, &agent_id2, prompt.as_bytes());
-                                gated_write(&st, &agent_id2, b"\n");
-                            });
-                        }
-                        Err(e) => send_control(ServerMsg::Error {
-                            agent_id: None,
-                            message: e.to_string(),
-                        }),
-                    }
-                }
+                Ok(Some(row)) => run_automation_row(state, row),
                 Ok(None) => send_control(ServerMsg::Error {
                     agent_id: None,
                     message: "no such automation".into(),
@@ -713,7 +676,7 @@ fn handle_client_msg(
 
 /// DB row → wire shape for the automations snapshot.
 fn automation_to_snapshot(
-    (id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at): store::AutomationRow,
+    (id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at, interval_secs, next_run_at): store::AutomationRow,
 ) -> protocol::SnapshotAutomation {
     protocol::SnapshotAutomation {
         id,
@@ -725,6 +688,46 @@ fn automation_to_snapshot(
         idle_secs: idle_secs.max(0) as u64,
         on_approval,
         last_run_at,
+        interval_secs: interval_secs.map(|v| v.max(0) as u64),
+        next_run_at,
+    }
+}
+
+/// Shared by the manual RunAutomation arm and the schedule ticker:
+/// spawn the automation's agent, mark its guardrails, stamp the run.
+fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
+    let (automation_id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, _, _, _) =
+        row;
+    match spawn_agent(state, &name, &command, ".", workspace_id.as_deref(), &permission, None) {
+        Ok((agent_id, run_board)) => {
+            state
+                .agents
+                .set_automation(&agent_id, idle_secs.max(0) as u64, on_approval == "deny");
+            let _ = state.store.automation_ran(&automation_id);
+            let _ = state.events.send(Event::Control(ServerMsg::Spawned {
+                agent_id: agent_id.clone(),
+                name,
+                command,
+                permission,
+                workspace_id,
+                board_id: run_board,
+            }));
+            // Inject the saved prompt into the fresh PTY — gated, so a
+            // supervised run still gets a gate.
+            let st = state.clone();
+            let agent_id2 = agent_id;
+            tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+                gated_write(&st, &agent_id2, prompt.as_bytes());
+                gated_write(&st, &agent_id2, b"\n");
+            });
+        }
+        Err(e) => {
+            let _ = state.events.send(Event::Control(ServerMsg::Error {
+                agent_id: None,
+                message: e.to_string(),
+            }));
+        }
     }
 }
 
@@ -809,6 +812,7 @@ async fn main() -> Result<()> {
         let ev = state.events.clone();
         let store = state.store.clone();
         let pending = state.pending_results.clone();
+        let sched_state = state.clone();
         tokio::spawn(async move {
             let mut last: std::collections::HashMap<String, &'static str> =
                 std::collections::HashMap::new();
@@ -906,6 +910,18 @@ async fn main() -> Result<()> {
                         } else if silent < 5 && meta.hang_notified {
                             agents.set_hang_notified(&id, false);
                         }
+                    }
+                }
+                // Schedule pass (every 15th tick): run automations whose
+                // next_run_at is due — same path as a manual run.
+                if tick_n.is_multiple_of(15) {
+                    match store.automations_due() {
+                        Ok(rows) => {
+                            for row in rows {
+                                run_automation_row(&sched_state, row);
+                            }
+                        }
+                        Err(e) => warn!(error = %e, "automation schedule check failed"),
                     }
                 }
                 for (id, status) in agents.statuses() {

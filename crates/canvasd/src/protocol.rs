@@ -99,6 +99,8 @@ pub enum ClientMsg {
         idle_secs: Option<u64>,
         /// "hold" (default: wait for operator) or "deny" (drop gated input).
         on_approval: Option<String>,
+        /// Re-run automatically every N seconds (schedule); null = manual.
+        interval_secs: Option<u64>,
     },
     /// Run a saved automation once: spawns its agent and injects the prompt.
     RunAutomation { automation_id: String },
@@ -208,6 +210,8 @@ pub struct SnapshotAutomation {
     pub idle_secs: u64,
     pub on_approval: String,
     pub last_run_at: Option<String>,
+    pub interval_secs: Option<u64>,
+    pub next_run_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

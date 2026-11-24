@@ -83,6 +83,7 @@ export class TauriCanvasClient {
     permission?: string;
     idle_secs?: number;
     on_approval?: string;
+    interval_secs?: number;
   }) {
     void invoke("create_automation", {
       name: a.name,
