@@ -149,8 +149,13 @@ function Board() {
     if (navRequest) setNav(navRequest.key);
   }, [navRequest]);
   const [openTerms, setOpenTerms] = useState<Array<{ id: string; name: string }>>([]);
+  // Re-opening an already-open terminal raises it to the front instead of
+  // doing nothing (later entries render on top).
   const openTerm = (t: { id: string; name: string }) =>
-    setOpenTerms((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]));
+    setOpenTerms((ts) => {
+      const rest = ts.filter((x) => x.id !== t.id);
+      return rest.length === ts.length ? [...ts, t] : [...rest, t];
+    });
   const closeTerm = (id: string) => setOpenTerms((ts) => ts.filter((x) => x.id !== id));
   const termRequest = useBoard((s) => s.termRequest);
   useEffect(() => {
