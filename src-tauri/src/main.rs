@@ -433,6 +433,19 @@ fn default_vault_dir() -> Option<String> {
 }
 
 #[tauri::command]
+fn vault_discover(app: AppHandle) -> Result<(), String> {
+    emit_control(&app, &ServerMsg::VaultDiscovered { vaults: canvasd::vault::discover() });
+    Ok(())
+}
+
+#[tauri::command]
+fn vault_register(app: AppHandle, dir: String) -> Result<(), String> {
+    let vaults = canvasd::vault::register(&dir)?;
+    emit_control(&app, &ServerMsg::VaultDiscovered { vaults });
+    Ok(())
+}
+
+#[tauri::command]
 fn vault_list(app: AppHandle, dir: String) -> Result<(), String> {
     let root = PathBuf::from(&dir);
     let mut entries = vault_list_entries(&root);
@@ -1747,6 +1760,8 @@ fn main() {
             vault_delete,
             vault_rename,
             vault_graph,
+            vault_discover,
+            vault_register,
             default_vault_dir,
             create_workspace,
             move_to_board,

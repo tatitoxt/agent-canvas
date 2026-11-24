@@ -79,6 +79,7 @@ export type ServerMsg =
   | { type: "vault_asset_data"; path: string; mime: string; data: string }
   | { type: "vault_hits"; dir: string; query: string; hits: { path: string; line: number; text: string }[] }
   | { type: "vault_graph"; dir: string; nodes: string[]; edges: [string, string][] }
+  | { type: "vault_discovered"; vaults: { name: string; path: string }[] }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
   | { type: "result"; edge_id: string; summary: string; files?: number }
   | {
@@ -238,6 +239,12 @@ export class CanvasClient {
   }
   vaultGraph(dir: string) {
     this.send({ cmd: "vault_graph", dir });
+  }
+  vaultDiscover() {
+    this.send({ cmd: "vault_discover" });
+  }
+  vaultRegister(dir: string) {
+    this.send({ cmd: "vault_register", dir });
   }
   defaultVaultDir(): Promise<string | null> {
     return Promise.resolve(null);

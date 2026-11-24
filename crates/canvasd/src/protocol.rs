@@ -92,6 +92,12 @@ pub enum ClientMsg {
     VaultGraph { dir: String },
     /// Full-text search across the vault's markdown files.
     VaultSearch { dir: String, query: String },
+    /// Discover Obsidian vaults registered on this machine — the native
+    /// integration surface is obsidian.json plus `.obsidian/` folders.
+    VaultDiscover,
+    /// Register a directory as an Obsidian vault (creates `.obsidian/` and
+    /// adds it to obsidian.json) so it opens from the real Obsidian app too.
+    VaultRegister { dir: String },
     /// Push an agent's worktree branch to origin (its committed work).
     GitPush { agent_id: String },
     /// Register an artifact (an agent's deliverable — a report, plan,
@@ -350,12 +356,23 @@ pub enum ServerMsg {
     /// Whole-vault link graph (VaultGraph answer): every note plus every
     /// resolved [[link]] or (x.md) edge between them.
     VaultGraph { dir: String, nodes: Vec<String>, edges: Vec<(String, String)> },
+    /// Obsidian vaults discovered on this machine (VaultDiscover answer).
+    VaultDiscovered { vaults: Vec<VaultLocation> },
     /// An artifact was removed.
     ArtifactDeleted { artifact_id: String },
     /// A loop was created.
     LoopSaved { l: SnapshotLoop },
     /// A loop was removed.
     LoopDeleted { loop_id: String },
+}
+
+/// One Obsidian vault known on this machine.
+#[derive(Debug, Clone, Serialize)]
+pub struct VaultLocation {
+    /// Display name (folder basename).
+    pub name: String,
+    /// Absolute vault path.
+    pub path: String,
 }
 
 /// One matching line from a vault full-text search.

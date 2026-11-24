@@ -1004,6 +1004,9 @@ export function VaultPanel() {
   const closeVaultFile = useBoard((s) => s.closeVaultFile);
   const vaultHits = useBoard((s) => s.vaultHits);
   const vaultSearch = useBoard((s) => s.vaultSearch);
+  const vaultKnown = useBoard((s) => s.vaultKnown);
+  const vaultDiscover = useBoard((s) => s.vaultDiscover);
+  const vaultRegister = useBoard((s) => s.vaultRegister);
   const vaultWrite = useBoard((s) => s.vaultWrite);
   const vaultDelete = useBoard((s) => s.vaultDelete);
   const vaultRename = useBoard((s) => s.vaultRename);
@@ -1300,7 +1303,34 @@ export function VaultPanel() {
         <button className="glass-pill" style={{ fontSize: 10.5, padding: "5px 12px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }} type="submit">
           open
         </button>
+        <button
+          type="button"
+          title="detect vaults the real Obsidian app registered on this machine"
+          onClick={vaultDiscover}
+          style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", cursor: "pointer", fontSize: 12 }}
+        >
+          ↻
+        </button>
       </form>
+      {vaultKnown.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: "0 4px 8px" }}>
+          {vaultKnown.map((v) => (
+            <button
+              key={v.path}
+              title={`${v.path} — registered Obsidian vault`}
+              onClick={() => { setDir(v.path); vaultList(v.path); }}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
+                background: v.path === vaultDir ? "color-mix(in srgb, var(--cv-accent) 22%, transparent)" : "var(--cv-glass-hi)",
+                border: "1px solid var(--cv-glass-edge)", borderRadius: 999,
+                padding: "3px 9px", fontSize: 10.5, color: "var(--cv-ink)", cursor: "pointer",
+              }}
+            >
+              <img src="/obsidian.svg" alt="" width={10} height={10} /> {v.name}
+            </button>
+          ))}
+        </div>
+      )}
       {vaultEntries.length > 0 && (
         <input
           value={filter}
@@ -1673,6 +1703,7 @@ export function VaultPanel() {
               { label: bookmarks.has(ctxMenu.path) ? "Remove bookmark" : "Bookmark", fn: () => toggleBookmark(ctxMenu.path) },
               { label: "Copy wikilink", fn: () => { const n = ctxMenu.path.replace(/\.md$/, "").split("/").pop()!; void navigator.clipboard?.writeText(`[[${n}]]`).catch(() => {}); notify(`[[${n}]] copied`); } },
               { label: "Open in Obsidian", fn: () => { const v = encodeURIComponent(vaultName); window.open(`obsidian://open?vault=${v}&file=${encodeURIComponent(ctxMenu.path.replace(/\.md$/, ""))}`, "_self"); } },
+              { label: "Register vault in Obsidian", fn: () => { vaultRegister(vaultDir); notify("registered in Obsidian's vault list"); } },
             ].map((it) => (
               <button
                 key={it.label}

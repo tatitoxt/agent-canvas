@@ -189,6 +189,8 @@ type BoardState = {
   vaultFile: { path: string; text: string } | null;
   /** Latest vault full-text search hits. */
   vaultHits: { path: string; line: number; text: string }[];
+  /** Obsidian vaults discovered on this machine (obsidian.json + markers). */
+  vaultKnown: { name: string; path: string }[];
   /** Studio dossier markdown (Studios: repo → material). */
   studioDoc: string | null;
   /** Embedded web pages on the canvas: node id -> url, per board. */
@@ -260,6 +262,8 @@ type BoardState = {
   vaultRename: (path: string, newPath: string) => void;
   vaultGraphReq: () => void;
   vaultGraph: { nodes: string[]; edges: [string, string][] } | null;
+  vaultDiscover: () => void;
+  vaultRegister: (dir: string) => void;
   closeVaultFile: () => void;
   webNodeAdd: (url: string) => void;
   webNodeRemove: (id: string) => void;
@@ -417,6 +421,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   vaultEntries: [],
   vaultFile: null,
   vaultHits: [],
+  vaultKnown: [],
   studioDoc: null,
   theme: localStorage.getItem("cv-theme") ?? "obsidian",
   setTheme: (t) => {
@@ -736,6 +741,9 @@ export const useBoard = create<BoardState>((set, get) => ({
           case "vault_graph":
             set({ vaultGraph: { nodes: msg.nodes, edges: msg.edges } });
             break;
+          case "vault_discovered":
+            set({ vaultKnown: msg.vaults });
+            break;
           case "vault_file":
             set({
               vaultFile: { path: msg.path, text: msg.text },
@@ -839,6 +847,8 @@ export const useBoard = create<BoardState>((set, get) => ({
           if (d && !get().vaultDir) get().vaultList(d);
         });
       }
+      // Offer the vaults the real Obsidian install already registered.
+      client?.vaultDiscover();
     });
   },
 
@@ -884,6 +894,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   vaultGraphReq: () => client?.vaultGraph(get().vaultDir),
   vaultGraph: null,
   vaultSearch: (query) => client?.vaultSearch(get().vaultDir, query),
+  vaultDiscover: () => client?.vaultDiscover(),
+  vaultRegister: (dir) => client?.vaultRegister(dir),
   closeVaultFile: () => set({ vaultFile: null }),
   studioDocNow: () => client?.studioDoc(),
   closeStudioDoc: () => set({ studioDoc: null }),

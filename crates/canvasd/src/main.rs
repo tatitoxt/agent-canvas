@@ -1350,6 +1350,13 @@ fn handle_client_msg(
             }
             send_control(ServerMsg::VaultHits { dir, query, hits });
         }
+        ClientMsg::VaultDiscover => {
+            send_control(ServerMsg::VaultDiscovered { vaults: canvasd::vault::discover() });
+        }
+        ClientMsg::VaultRegister { dir } => match canvasd::vault::register(&dir) {
+            Ok(vaults) => send_control(ServerMsg::VaultDiscovered { vaults }),
+            Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault register failed: {e}") }),
+        },
         ClientMsg::GitPush { agent_id } => {
             let wt = state
                 .store
