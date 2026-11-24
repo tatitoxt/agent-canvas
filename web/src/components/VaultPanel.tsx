@@ -1672,6 +1672,7 @@ export function VaultPanel() {
               { label: "Pin to board", fn: () => useBoard.getState().mdNodeAdd(ctxMenu.path) },
               { label: bookmarks.has(ctxMenu.path) ? "Remove bookmark" : "Bookmark", fn: () => toggleBookmark(ctxMenu.path) },
               { label: "Copy wikilink", fn: () => { const n = ctxMenu.path.replace(/\.md$/, "").split("/").pop()!; void navigator.clipboard?.writeText(`[[${n}]]`).catch(() => {}); notify(`[[${n}]] copied`); } },
+              { label: "Open in Obsidian", fn: () => { const v = encodeURIComponent(vaultName); window.open(`obsidian://open?vault=${v}&file=${encodeURIComponent(ctxMenu.path.replace(/\.md$/, ""))}`, "_self"); } },
             ].map((it) => (
               <button
                 key={it.label}
