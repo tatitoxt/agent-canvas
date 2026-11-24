@@ -163,6 +163,20 @@ export function ContextMenu({
       {isAgent && (
         <button
           style={{ ...item, color: "var(--cv-ink-dim)" }}
+          title="copy the agent's git worktree path"
+          onClick={() => {
+            const wt = useBoard.getState().agents[nodeId]?.worktree;
+            if (wt) { void navigator.clipboard?.writeText(wt).catch(() => {}); useBoard.getState().notify("worktree path copied"); }
+            else useBoard.getState().notify("no worktree for this agent");
+            onClose();
+          }}
+        >
+          ⧉ copy worktree
+        </button>
+      )}
+      {isAgent && (
+        <button
+          style={{ ...item, color: "var(--cv-ink-dim)" }}
           onClick={() => {
             const name = useBoard.getState().agents[nodeId]?.name ?? "agent";
             const spot = agentPinSpot(nodeId);
