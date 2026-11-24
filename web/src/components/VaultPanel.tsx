@@ -1712,6 +1712,16 @@ export function VaultPanel() {
             {[
               { label: IMAGE_RE.test(ctxMenu.path) ? "Open image" : "Open note", fn: () => openEntry(ctxMenu.path) },
               { label: "Pin to board", fn: () => useBoard.getState().mdNodeAdd(ctxMenu.path) },
+              { label: "Run as task", fn: () => {
+                const title = ctxMenu.path.replace(/\.md$/, "").split("/").pop() ?? "note";
+                const abs = `${vaultDir.replace(/\/+$/, "")}/${ctxMenu.path}`;
+                useBoard.getState().spawn(
+                  `task-${title.toLowerCase().replace(/[^\w-]+/g, "-").slice(0, 24)}`,
+                  "claude", undefined, undefined, undefined,
+                  `Work from this vault note: ${abs} — read the file first, then act on it.`,
+                );
+                notify(`spawned agent from "${title}"`);
+              } },
               { label: bookmarks.has(ctxMenu.path) ? "Remove bookmark" : "Bookmark", fn: () => toggleBookmark(ctxMenu.path) },
               { label: "Copy wikilink", fn: () => { const n = ctxMenu.path.replace(/\.md$/, "").split("/").pop()!; void navigator.clipboard?.writeText(`[[${n}]]`).catch(() => {}); notify(`[[${n}]] copied`); } },
               { label: "Open in Obsidian", fn: () => { const v = encodeURIComponent(vaultName); window.open(`obsidian://open?vault=${v}&file=${encodeURIComponent(ctxMenu.path.replace(/\.md$/, ""))}`, "_self"); } },
