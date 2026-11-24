@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toPng } from "html-to-image";
 import {
   Controls,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
+  getNodesBounds,
+  getViewportForBounds,
   useReactFlow,
   type FinalConnectionState,
   type Node,
@@ -49,7 +52,34 @@ function Board() {
   const activeBoard = useBoard((s) => s.activeBoard);
   const approvals = useBoard((s) => s.approvals);
   const attention = useBoard((s) => s.attention);
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, getNodes } = useReactFlow();
+
+  // Full-canvas PNG export: render every node fitted into a fixed-size
+  // bitmap — the "screenshot button" on the board.
+  const shotCanvas = useCallback(async () => {
+    const ns = getNodes();
+    if (ns.length === 0) return;
+    const bounds = getNodesBounds(ns);
+    const w = Math.min(2400, Math.max(800, Math.ceil(bounds.width) + 240));
+    const h = Math.min(2400, Math.max(600, Math.ceil(bounds.height) + 240));
+    const vp = getViewportForBounds(bounds, w, h, 0.2, 2, 0.12);
+    const el = document.querySelector<HTMLElement>(".react-flow__viewport");
+    if (!el) return;
+    const dataUrl = await toPng(el, {
+      backgroundColor: "#0e0e10",
+      width: w,
+      height: h,
+      style: {
+        width: `${w}px`,
+        height: `${h}px`,
+        transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})`,
+      },
+    });
+    const a = document.createElement("a");
+    a.download = `canvas-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
+    a.href = dataUrl;
+    a.click();
+  }, [getNodes]);
   const viewCmdN = useBoard((s) => s.viewCmdN);
   useEffect(() => {
     if (viewCmdN > 0) fitView({ padding: 0.18, maxZoom: 1.1, duration: 250 });
@@ -210,6 +240,25 @@ function Board() {
       <Topbar />
       <BoardTabs />
       <MissionStrip counts={counts} />
+      <button
+        className="glass-pill"
+        title="export the canvas as PNG"
+        onClick={() => void shotCanvas()}
+        style={{
+          position: "absolute",
+          right: 16,
+          bottom: 76,
+          zIndex: 20,
+          fontSize: 11,
+          fontWeight: 600,
+          padding: "6px 14px",
+          cursor: "pointer",
+          border: "none",
+          color: "var(--cv-ink)",
+        }}
+      >
+        ▣ shot
+      </button>
       <SpawnBar />
       <ReactFlow
         nodes={nodes}
