@@ -28,6 +28,7 @@ import { LoopsPanel } from "./components/LoopsPanel";
 import { PresetsPanel } from "./components/PresetsPanel";
 import { ThreadPanel } from "./components/ThreadPanel";
 import { AccountsPanel } from "./components/AccountsPanel";
+import { UsagePanel } from "./components/UsagePanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { GitHubPanel } from "./components/GitHubPanel";
 import { NotesPanel } from "./components/NotesPanel";
@@ -638,6 +639,7 @@ function Board() {
       {nav === "presets" && <PresetsPanel />}
       {nav === "thread" && <ThreadPanel />}
       {nav === "accounts" && <AccountsPanel />}
+      {nav === "usage" && <UsagePanel />}
       {nav === "memory" && <MemoryPanel />}
       {nav === "notes" && <NotesPanel />}
       {nav === "prs" && <GitHubPanel kind="prs" />}

@@ -380,6 +380,14 @@ export function Topbar({
         </button>
         <button
           className="glass-pill"
+          style={{ ...iconBtn(nav === "usage"), background: "transparent", border: "none" }}
+          title="Juice — per-agent usage on this board"
+          onClick={() => onNav("usage")}
+        >
+          <Icon name="juice" size={15} color={nav === "usage" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+        </button>
+        <button
+          className="glass-pill"
           style={{ ...iconBtn(false), background: "transparent", border: "none" }}
           title="Mission Map — fit the whole board in view"
           onClick={() => useBoard.getState().requestView()}

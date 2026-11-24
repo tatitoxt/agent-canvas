@@ -14,6 +14,7 @@ const PANEL_ITEMS = [
   { key: "vault", icon: "vault", label: "Vault" },
   { key: "skills", icon: "skills", label: "Skills" },
   { key: "accounts", icon: "accounts", label: "Accounts" },
+  { key: "usage", icon: "juice", label: "Juice", hint: "per-agent output & files" },
   { key: "settings", icon: "settings", label: "Settings" },
 ] as const;
 
