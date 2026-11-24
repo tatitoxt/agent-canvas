@@ -1381,6 +1381,21 @@ export const useBoard = create<BoardState>((set, get) => ({
         return;
       }
     }
+    const pdfm = low.match(/^(?:pdf|export\s+pdf)\s+(.+)$/);
+    if (pdfm) {
+      const q = pdfm[1].replace(/[?.\s]+$/, "").trim();
+      void import("../lib/boardDocs").then(({ buildDoc, buildAskDoc }) =>
+        import("../lib/pdf").then(({ downloadPdf }) => {
+          const kinds = ["overview", "onboarding", "architecture"] as const;
+          const k = kinds.find((x) => q.toLowerCase().includes(x));
+          const { title, md } = k ? buildDoc(k) : buildAskDoc(q);
+          downloadPdf(title, md);
+          get().artifactCreate("pdf", `PDF — ${title}`, undefined, md);
+          reply(`exported "PDF — ${title}" → Downloads + Artifacts`);
+        }),
+      );
+      return;
+    }
     const ob = low.match(/^obsidian\s+(.+)$/);
     if (ob) {
       const text = t.replace(/^obsidian\s+/i, "").trim();
@@ -1512,7 +1527,7 @@ export const useBoard = create<BoardState>((set, get) => ({
           "approve/deny Terminal N · spawn <cli> · kill Terminal N · kill all · " +
           "pause/resume · board/new board <name> · apply/save preset <n> · " +
           "open <panel> · focus <name> · gather · hide chrome · " +
-          "clear thread · status · summary",
+          "obsidian <note> · pdf <topic> · clear thread · status · summary",
       );
       return;
     }
