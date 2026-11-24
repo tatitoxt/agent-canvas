@@ -216,3 +216,33 @@ body,
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
 }
+
+/* themes — everything derives from base+ink (glass is color-mix), so a
+   theme only redefines the seed tokens */
+[data-theme="paper"] {
+  --cv-base: #ece8e1;
+  --cv-dot: rgba(30, 26, 20, 0.06);
+  --cv-ink: #23211d;
+  --cv-accent: #a5783e;
+  --cv-accent-dim: rgba(165, 120, 62, 0.14);
+  --cv-working: #4a6e8c;
+  --cv-waiting: #96742f;
+  --cv-blocked: #8c4f42;
+  --cv-done: #4e7a5e;
+  --cv-idle: #7a756c;
+  color-scheme: light;
+}
+
+[data-theme="sepia"] {
+  --cv-base: #14110d;
+  --cv-dot: rgba(255, 240, 220, 0.045);
+  --cv-ink: #efe6d8;
+  --cv-accent: #cf9d5c;
+  --cv-accent-dim: rgba(207, 157, 92, 0.16);
+  --cv-working: #8aa3b8;
+  --cv-waiting: #c2a15e;
+  --cv-blocked: #b06a5e;
+  --cv-done: #86a887;
+  --cv-idle: #8a8177;
+  color-scheme: dark;
+}

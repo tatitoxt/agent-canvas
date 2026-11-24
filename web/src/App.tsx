@@ -28,6 +28,7 @@ import { MemoryPanel } from "./components/MemoryPanel";
 import { NotesPanel } from "./components/NotesPanel";
 import { ArtifactsPanel } from "./components/ArtifactsPanel";
 import { VaultPanel } from "./components/VaultPanel";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { DigestPanel } from "./components/DigestPanel";
 import { NoticePill } from "./components/NoticePill";
 import { HistoryPanel } from "./components/HistoryPanel";
@@ -138,6 +139,8 @@ function Board() {
   // Connect on load when a token is present — no manual "connect" click.
   useEffect(() => {
     useBoard.getState().connect("");
+    const t = localStorage.getItem("cv-theme") ?? "obsidian";
+    document.documentElement.dataset.theme = t;
   }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -453,6 +456,7 @@ function Board() {
       {nav === "notes" && <NotesPanel />}
       {nav === "artifacts" && <ArtifactsPanel />}
       {nav === "vault" && <VaultPanel />}
+      {nav === "settings" && <SettingsPanel />}
       <DigestPanel />
       <NoticePill />
       {nav === "history" && (

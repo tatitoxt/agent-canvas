@@ -68,6 +68,9 @@ type BoardState = {
   vaultFile: { path: string; text: string } | null;
   /** Embedded web pages on the canvas: node id -> url, per board. */
   webNodes: Record<string, Record<string, string>>;
+  /** UI theme — swaps the seed tokens; glass derives via color-mix. */
+  theme: string;
+  setTheme: (t: string) => void;
   /** Artifacts by id — deliverables agents produced. */
   artifacts: Record<string, import("../daemon/client").SnapshotArtifact>;
   /** Kanban notes by id (all boards; filtered by activeBoard in UI). */
@@ -179,6 +182,12 @@ export const useBoard = create<BoardState>((set, get) => ({
   vaultDir: "",
   vaultEntries: [],
   vaultFile: null,
+  theme: localStorage.getItem("cv-theme") ?? "obsidian",
+  setTheme: (t) => {
+    localStorage.setItem("cv-theme", t);
+    document.documentElement.dataset.theme = t;
+    set({ theme: t });
+  },
   webNodes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-webnodes") ?? "{}"); } catch { return {}; }
   })(),
