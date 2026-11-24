@@ -63,6 +63,7 @@ export function SpawnBar() {
   const [wsId, setWsId] = useState("");
   const [permission, setPermission] = useState("supervised");
   const [acctId, setAcctId] = useState("");
+  const [task, setTask] = useState("");
   const acctOptions = Object.values(accounts).filter((a) => a.cli === choice);
   const wrap = useRef<HTMLDivElement>(null);
 
@@ -187,6 +188,13 @@ export function SpawnBar() {
                   ))}
                 </select>
               )}
+              <input
+                style={inputStyle}
+                placeholder="initial task (optional) — typed in after boot"
+                value={task}
+                onChange={(e) => setTask(e.target.value)}
+                title="Quick request — typed into the terminal a few seconds after the CLI starts"
+              />
               <button
                 style={{
                   height: 32,
@@ -204,7 +212,8 @@ export function SpawnBar() {
                 disabled={!canSpawn}
                 onClick={() => {
                   const cmd = choice === "custom" ? command.trim() : choice;
-                  spawn(cmd, cmd, wsId || undefined, permission, acctId || undefined);
+                  spawn(cmd, cmd, wsId || undefined, permission, acctId || undefined, task.trim() || undefined);
+                  setTask("");
                   setOpen(false);
                 }}
               >

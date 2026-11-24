@@ -24,6 +24,10 @@ pub enum ClientMsg {
         /// Named account profile this agent signs in as — two terminals of
         /// the same CLI can run different accounts side by side.
         account_id: Option<String>,
+        /// Text typed into the PTY a few seconds after spawn (a "quick
+        /// request" — Deska-style task given at spawn time, Enter appended).
+        #[serde(default)]
+        initial_input: Option<String>,
     },
     /// Create a workspace container — user-defined project groupings that
     /// coexist spatially on the same canvas.

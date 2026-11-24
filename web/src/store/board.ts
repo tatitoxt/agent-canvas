@@ -113,7 +113,7 @@ type BoardState = {
   /** agent_id → latest fetched unified diff text. */
   diffTexts: Record<string, string>;
   requestDiff: (agentId: string) => void;
-  spawn: (name: string, command: string, workspaceId?: string, permission?: string, accountId?: string) => void;
+  spawn: (name: string, command: string, workspaceId?: string, permission?: string, accountId?: string, initialInput?: string) => void;
   createAccount: (cli: string, label: string) => void;
   deleteAccount: (accountId: string) => void;
   memoryRead: (nodeId: string) => void;
@@ -647,8 +647,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   diffTexts: {},
   requestDiff: (agentId) => client?.diffDetail(agentId),
 
-  spawn: (name, command, workspaceId, permission, accountId) =>
-    client?.spawnAgent(name, command, ".", workspaceId, permission, get().activeBoard, accountId),
+  spawn: (name, command, workspaceId, permission, accountId, initialInput) =>
+    client?.spawnAgent(name, command, ".", workspaceId, permission, get().activeBoard, accountId, initialInput),
 
   createAccount: (cli, label) => client?.createAccount(cli, label),
   deleteAccount: (accountId) => client?.deleteAccount(accountId),

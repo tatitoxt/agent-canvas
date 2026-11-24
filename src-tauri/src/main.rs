@@ -162,9 +162,22 @@ fn spawn_agent(
     permission: Option<String>,
     board_id: Option<String>,
     account_id: Option<String>,
+    initial_input: Option<String>,
 ) -> Result<String, String> {
     let level = canvasd::protocol::normalize_permission(permission.as_deref());
     let (id, board) = spawn_wired(&app, state.inner(), &name, &command, &cwd, workspace_id.as_deref(), level, board_id.as_deref(), account_id.as_deref())?;
+    if let Some(text) = initial_input {
+        // Quick request: type the task once the CLI has booted.
+        let app2 = app.clone();
+        let target = id.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            let mut data = text.into_bytes();
+            data.push(b'\r');
+            let st = app2.state::<CanvasState>();
+            let _ = st.agents.write(&target, &data);
+        });
+    }
     emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board });
     Ok(id)
 }

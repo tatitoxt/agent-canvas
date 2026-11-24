@@ -554,10 +554,25 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::SpawnAgent { name, command, cwd, workspace_id, permission, board_id, account_id } => {
+        ClientMsg::SpawnAgent { name, command, cwd, workspace_id, permission, board_id, account_id, initial_input } => {
             let level = protocol::normalize_permission(permission.as_deref());
             match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, board_id.as_deref(), account_id.as_deref()) {
-                Ok((id, board)) => send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id, board_id: board }),
+                Ok((id, board)) => {
+                    // Quick request: type the task into the fresh PTY once the
+                    // CLI has had a moment to boot (CLIs redraw their TUI on
+                    // stdin, so arriving text just queues as the first line).
+                    if let Some(text) = initial_input {
+                        let agents = state.agents.clone();
+                        let target = id.clone();
+                        tokio::spawn(async move {
+                            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                            let mut data = text.into_bytes();
+                            data.push(b'\r');
+                            let _ = agents.write(&target, &data);
+                        });
+                    }
+                    send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id, board_id: board });
+                }
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: None,
                     message: e.to_string(),
