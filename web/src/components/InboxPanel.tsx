@@ -177,6 +177,14 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                 <span style={{ display: "flex", gap: 6, marginTop: 4 }}>
                   <button
                     className="glass-pill"
+                    title="center the canvas on this agent's card"
+                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", color: "var(--cv-ink-dim)", cursor: "pointer", border: "none" }}
+                    onClick={() => useBoard.getState().requestFocus(h.id)}
+                  >
+                    ⌖
+                  </button>
+                  <button
+                    className="glass-pill"
                     style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 11px", color: "var(--cv-done)", cursor: "pointer", border: "none" }}
                     onClick={() => useBoard.getState().approveInput(h.id)}
                   >
@@ -212,6 +220,14 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                   <span style={{ fontSize: 11, color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {a.lastLine ?? (a.status === "blocked" ? "blocked" : "waiting for input")}
                   </span>
+                </button>
+                <button
+                  className="glass-pill"
+                  title="center the canvas on this agent's card"
+                  style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", color: "var(--cv-ink-dim)", cursor: "pointer", border: "none", flexShrink: 0 }}
+                  onClick={() => useBoard.getState().requestFocus(a.id)}
+                >
+                  ⌖
                 </button>
                 {(["↵", "y", "n", "esc"] as const).map((k) => (
                   <button
