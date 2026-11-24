@@ -72,6 +72,9 @@ function WikiLink({ name, shown, onLink }: { name: string; shown: string; onLink
       >
         {shown}
       </a>
+      {name.includes("#") && (
+        <span style={{ fontSize: "0.85em", opacity: 0.6 }}> &gt; {name.split("#")[1]}</span>
+      )}
       {open && (
         <div
           className="glass"
@@ -98,7 +101,7 @@ function WikiLink({ name, shown, onLink }: { name: string; shown: string; onLink
   );
 }
 
-function mdInline(text: string, onLink?: (name: string) => void): React.ReactNode[] {
+function mdInline(text: string, onLink?: (name: string) => void, onTag?: (tag: string) => void): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   const re = /(\[\[[^\]|]+(?:\|[^\]]*)?\]\]|\[[^\]]+\]\([^)]*\)|\*\*[^*]+\*\*|\*[^*\n]+\*|==[^=]+==|~~[^~]+~~|`[^`]+`|(?<![\p{L}\p{N}])#[\p{L}_][\p{L}\p{N}_/-]*)/gu;
   let last = 0, k = 0;
@@ -142,7 +145,12 @@ function mdInline(text: string, onLink?: (name: string) => void): React.ReactNod
       out.push(<s key={k++} style={{ opacity: 0.6 }}>{t.slice(2, -2)}</s>);
     } else if (t.startsWith("#")) {
       out.push(
-        <span key={k++} style={{ color: "var(--cv-accent)", background: "color-mix(in srgb, var(--cv-accent) 12%, transparent)", borderRadius: 4, padding: "0 4px", fontSize: "0.92em" }}>
+        <span
+          key={k++}
+          onClick={() => onTag?.(t)}
+          title={onTag ? `search ${t}` : undefined}
+          style={{ color: "var(--cv-accent)", background: "color-mix(in srgb, var(--cv-accent) 12%, transparent)", borderRadius: 4, padding: "0 4px", fontSize: "0.92em", cursor: onTag ? "pointer" : "default" }}
+        >
           {t}
         </span>,
       );
@@ -163,9 +171,10 @@ function mdInline(text: string, onLink?: (name: string) => void): React.ReactNod
  * bullet/numbered lists, tasks, blockquotes, fenced code. */
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|ico)$/i;
 
-function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embedFetch, embedAsset, embedAssetFetch }: {
+function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup, embedFetch, embedAsset, embedAssetFetch }: {
   text: string;
   onLink?: (name: string) => void;
+  onTag?: (tag: string) => void;
   onToggleTask?: (line: number, done: boolean) => void;
   depth?: number;
   embedLookup?: (name: string) => { path: string; text?: string } | null;
@@ -237,13 +246,13 @@ function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embed
     // Obsidian transclusion: ![[Note]] embeds the note's content inline.
     // Rendered one level deep — a nested embed falls back to a plain link
     // so cycles can never recurse.
-    const emb = l.match(/^\s*!\[\[([^\]|#]+?)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]\s*$/);
+    const emb = l.match(/^\s*!\[\[([^\]|#]+?)(?:#([^\]|]*))?(?:\|[^\]]*)?\]\]\s*$/);
     if (emb && embedLookup) {
       if (depth >= 1) {
-        els.push(<div key={i} style={{ margin: "4px 0" }}>{mdInline(`[[${emb[1].trim()}]]`, onLink)}</div>);
+        els.push(<div key={i} style={{ margin: "4px 0" }}>{mdInline(`[[${emb[1].trim()}]]`, onLink, onTag)}</div>);
       } else {
         els.push(
-          <NoteEmbed key={i} name={emb[1].trim()} lookup={embedLookup} fetchPath={embedFetch} onLink={onLink} assetSrc={embedAsset} assetFetch={embedAssetFetch} />,
+          <NoteEmbed key={i} name={emb[1].trim()} section={emb[2]?.trim()} lookup={embedLookup} fetchPath={embedFetch} onLink={onLink} onTag={onTag} assetSrc={embedAsset} assetFetch={embedAssetFetch} />,
         );
       }
       continue;
@@ -253,7 +262,7 @@ function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embed
       const size = [19, 16, 14, 12.5, 11.5, 11][h[1].length - 1];
       els.push(
         <div key={i} id={`vh-${i}`} style={{ fontSize: size, fontWeight: 700, margin: "16px 0 6px", color: "var(--cv-accent)", letterSpacing: 0.2 }}>
-          {mdInline(h[2], onLink)}
+          {mdInline(h[2], onLink, onTag)}
         </div>,
       );
       continue;
@@ -269,7 +278,7 @@ function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embed
           >
             {task[2] === " " ? "☐" : "☑"}
           </span>
-          <span style={{ opacity: task[2] === " " ? 1 : 0.55, textDecoration: task[2] === " " ? "none" : "line-through" }}>{mdInline(task[3], onLink)}</span>
+          <span style={{ opacity: task[2] === " " ? 1 : 0.55, textDecoration: task[2] === " " ? "none" : "line-through" }}>{mdInline(task[3], onLink, onTag)}</span>
         </div>,
       );
       continue;
@@ -279,7 +288,7 @@ function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embed
       els.push(
         <div key={i} style={{ paddingLeft: 14 + bullet[1].length * 6, margin: "3px 0" }}>
           <span style={{ color: "var(--cv-accent)", marginRight: 7 }}>•</span>
-          {mdInline(bullet[2], onLink)}
+          {mdInline(bullet[2], onLink, onTag)}
         </div>,
       );
       continue;
@@ -289,7 +298,7 @@ function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embed
       els.push(
         <div key={i} style={{ paddingLeft: 14 + num[1].length * 6, margin: "3px 0" }}>
           <span style={{ color: "var(--cv-accent)", marginRight: 7, fontSize: "0.95em" }}>{num[2]}.</span>
-          {mdInline(num[3], onLink)}
+          {mdInline(num[3], onLink, onTag)}
         </div>,
       );
       continue;
@@ -326,7 +335,7 @@ function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embed
                     key={j}
                     style={{ padding: cell, textAlign: "left", color: "var(--cv-accent)", borderBottom: "1px solid rgba(255,255,255,0.14)", fontWeight: 700, whiteSpace: "nowrap" }}
                   >
-                    {mdInline(c, onLink)}
+                    {mdInline(c, onLink, onTag)}
                   </th>
                 ))}
               </tr>
@@ -336,7 +345,7 @@ function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embed
                 <tr key={j} style={{ background: j % 2 ? "rgba(255,255,255,0.02)" : "transparent" }}>
                   {r.map((c, k) => (
                     <td key={k} style={{ padding: cell, borderBottom: "1px solid rgba(255,255,255,0.06)", color: "var(--cv-ink)" }}>
-                      {mdInline(c, onLink)}
+                      {mdInline(c, onLink, onTag)}
                     </td>
                   ))}
                 </tr>
@@ -379,7 +388,7 @@ function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embed
           >
             <div style={{ color, fontWeight: 700, fontSize: 11.5, marginBottom: quote.length > 1 ? 2 : 0 }}>{title}</div>
             {quote.slice(1).filter((q) => q.trim()).map((q, j) => (
-              <div key={j} style={{ margin: "2px 0" }}>{mdInline(q, onLink)}</div>
+              <div key={j} style={{ margin: "2px 0" }}>{mdInline(q, onLink, onTag)}</div>
             ))}
           </div>,
         );
@@ -387,7 +396,7 @@ function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embed
         quote.forEach((q, j) => {
           els.push(
             <div key={`${i}-${j}`} style={{ margin: "6px 0", paddingLeft: 12, borderLeft: "2px solid var(--cv-accent)", color: "var(--cv-ink-dim)", fontStyle: "italic" }}>
-              {mdInline(q, onLink)}
+              {mdInline(q, onLink, onTag)}
             </div>,
           );
         });
@@ -399,7 +408,7 @@ function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embed
       continue;
     }
     if (l.trim() === "") { els.push(<div key={i} style={{ height: 7 }} />); continue; }
-    els.push(<div key={i} style={{ margin: "3px 0" }}>{mdInline(l, onLink)}</div>);
+    els.push(<div key={i} style={{ margin: "3px 0" }}>{mdInline(l, onLink, onTag)}</div>);
   }
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "10px 18px", fontSize: 12.5, lineHeight: 1.7, color: "var(--cv-ink)", fontFamily: "inherit" }}>
@@ -411,11 +420,33 @@ function ReadingView({ text, onLink, onToggleTask, depth = 0, embedLookup, embed
 /** Obsidian-style note transclusion: renders another note's content in a
  * bordered embed box. Fetches the text on demand via vault_peek so the open
  * note is untouched; the title opens the real note. */
-function NoteEmbed({ name, lookup, fetchPath, onLink, assetSrc, assetFetch }: {
+/** Slice a note's markdown to one heading section (Obsidian ![[note#heading]]
+ * transclusion): from the heading line to the next heading of same-or-higher
+ * level. Falls back to the whole note when the heading isn't found. */
+function sectionSlice(text: string, section: string): string {
+  const lines = text.split("\n");
+  const target = section.trim().toLowerCase();
+  const idx = lines.findIndex((l) => {
+    const m = l.match(/^(#{1,6})\s+(.*)/);
+    return !!m && m[2].replace(/[*_~=`[\]]/g, "").trim().toLowerCase() === target;
+  });
+  if (idx < 0) return text;
+  const depth = lines[idx].match(/^(#{1,6})/)?.[1].length ?? 1;
+  let end = lines.length;
+  for (let i = idx + 1; i < lines.length; i++) {
+    const m = lines[i].match(/^(#{1,6})\s/);
+    if (m && m[1].length <= depth) { end = i; break; }
+  }
+  return lines.slice(idx, end).join("\n");
+}
+
+function NoteEmbed({ name, section, lookup, fetchPath, onLink, onTag, assetSrc, assetFetch }: {
   name: string;
+  section?: string;
   lookup: (n: string) => { path: string; text?: string } | null;
   fetchPath?: (p: string) => void;
   onLink?: (name: string) => void;
+  onTag?: (tag: string) => void;
   assetSrc?: (p: string) => string | undefined;
   assetFetch?: (p: string) => void;
 }) {
@@ -474,7 +505,7 @@ function NoteEmbed({ name, lookup, fetchPath, onLink, assetSrc, assetFetch }: {
       {missing ? (
         <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", fontStyle: "italic" }}>loading…</div>
       ) : (
-        <ReadingView text={hit.text!} depth={1} onLink={onLink} />
+        <ReadingView text={section ? sectionSlice(hit.text!, section) : hit.text!} depth={1} onLink={onLink} onTag={onTag} />
       )}
     </div>
   );
@@ -1473,6 +1504,7 @@ export function VaultPanel() {
             <ReadingView
               text={vaultFile.text}
               onLink={openByName}
+              onTag={(t) => setFilter(t)}
               embedLookup={resolveEmbed}
               embedFetch={vaultPeek}
               embedAsset={(p) => vaultAssets[p]}
