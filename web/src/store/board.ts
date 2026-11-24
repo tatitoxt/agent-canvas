@@ -66,6 +66,8 @@ type BoardState = {
   vaultDir: string;
   vaultEntries: string[];
   vaultFile: { path: string; text: string } | null;
+  /** Embedded web pages on the canvas: node id -> url, per board. */
+  webNodes: Record<string, Record<string, string>>;
   /** Artifacts by id — deliverables agents produced. */
   artifacts: Record<string, import("../daemon/client").SnapshotArtifact>;
   /** Kanban notes by id (all boards; filtered by activeBoard in UI). */
@@ -117,6 +119,8 @@ type BoardState = {
   vaultList: (dir: string) => void;
   vaultRead: (path: string) => void;
   closeVaultFile: () => void;
+  webNodeAdd: (url: string) => void;
+  webNodeRemove: (id: string) => void;
   artifactDelete: (artifactId: string) => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
@@ -175,6 +179,9 @@ export const useBoard = create<BoardState>((set, get) => ({
   vaultDir: "",
   vaultEntries: [],
   vaultFile: null,
+  webNodes: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-webnodes") ?? "{}"); } catch { return {}; }
+  })(),
   notes: {},
   artifacts: {},
   positions: {},
@@ -550,6 +557,25 @@ export const useBoard = create<BoardState>((set, get) => ({
   },
   vaultRead: (path) => client?.vaultRead(get().vaultDir, path),
   closeVaultFile: () => set({ vaultFile: null }),
+  webNodeAdd: (url) => {
+    const board = get().activeBoard;
+    const id = `web-${Math.random().toString(16).slice(2, 10)}`;
+    set((st) => ({
+      webNodes: { ...st.webNodes, [board]: { ...(st.webNodes[board] ?? {}), [id]: url } },
+    }));
+    const next = get().webNodes;
+    localStorage.setItem("cv-webnodes", JSON.stringify(next));
+    client?.moveNode(id, 200 + Math.random() * 300, 120 + Math.random() * 200);
+  },
+  webNodeRemove: (id) => {
+    const board = get().activeBoard;
+    set((st) => {
+      const m = { ...(st.webNodes[board] ?? {}) };
+      delete m[id];
+      return { webNodes: { ...st.webNodes, [board]: m } };
+    });
+    localStorage.setItem("cv-webnodes", JSON.stringify(get().webNodes));
+  },
   artifactCreate: (kind, title, path, text) =>
     client?.artifactCreate(get().activeBoard ?? undefined, kind, title, path, text),
   artifactDelete: (artifactId) => client?.artifactDelete(artifactId),

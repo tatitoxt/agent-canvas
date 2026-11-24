@@ -6,6 +6,7 @@ import type {
   AgentStatus,
   OrchestratorNodeData,
   WorkspaceNodeData,
+  WebNodeData,
 } from "./types";
 
 const STATUS_COLOR: Record<AgentStatus, string> = {
@@ -382,6 +383,67 @@ export function WorkspaceNode({
           {data.repo}
         </span>
       </div>
+    </div>
+  );
+}
+
+/** A live web page embedded in the canvas — e.g. a localhost dev server
+ * preview that sits next to the agent building it. */
+export function WebNode({
+  id,
+  data,
+  selected,
+}: NodeProps<Node<WebNodeData>>) {
+  const webNodeRemove = useBoard((s) => s.webNodeRemove);
+  return (
+    <div
+      className="glass"
+      style={{
+        width: "100%",
+        height: "100%",
+        borderRadius: 14,
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        outline: selected ? "1.5px solid var(--cv-glass-shine)" : "none",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "6px 10px",
+          fontSize: 10.5,
+          color: "var(--cv-ink-dim)",
+          borderBottom: "1px solid var(--cv-glass-edge)",
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ color: "#7ba3cf" }}>◍</span>
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {data.url}
+        </span>
+        <button
+          onClick={(e) => { e.stopPropagation(); window.open(data.url, "_blank"); }}
+          style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11 }}
+          title="open in browser"
+        >
+          ↗
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); webNodeRemove(id); }}
+          style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 12 }}
+        >
+          ×
+        </button>
+      </div>
+      <iframe
+        src={data.url}
+        title={data.url}
+        className="nodrag"
+        style={{ flex: 1, border: "none", background: "#fff" }}
+      />
     </div>
   );
 }

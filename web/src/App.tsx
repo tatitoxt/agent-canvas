@@ -13,7 +13,7 @@ import {
   type NodeMouseHandler,
   type OnNodeDrag,
 } from "@xyflow/react";
-import { AgentNode, OrchestratorNode, WorkspaceNode } from "./board/nodes";
+import { AgentNode, OrchestratorNode, WebNode, WorkspaceNode } from "./board/nodes";
 import { DelegationEdge } from "./board/edges";
 import { initialEdges, initialNodes } from "./board/mockData";
 import { DelegateDialog } from "./components/DelegateDialog";
@@ -44,6 +44,7 @@ const nodeTypes = {
   agent: AgentNode,
   orchestrator: OrchestratorNode,
   workspace: WorkspaceNode,
+  web: WebNode,
 };
 const edgeTypes = { delegation: DelegationEdge };
 
@@ -57,6 +58,7 @@ function Board() {
   const activeBoard = useBoard((s) => s.activeBoard);
   const approvals = useBoard((s) => s.approvals);
   const attention = useBoard((s) => s.attention);
+  const webNodes = useBoard((s) => s.webNodes);
   const { screenToFlowPosition, fitView, getNodes } = useReactFlow();
 
   // Full-canvas PNG export: render every node fitted into a fixed-size
@@ -195,8 +197,17 @@ function Board() {
     });
     // Mock board only renders in offline/demo mode — with a daemon the
     // canvas shows reality, not fixtures.
-    return connected ? [...wsNodes, ...live] : [...initialNodes, ...live];
-  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard]);
+    const webNs: Node<BoardNodeData>[] = Object.entries(webNodes[activeBoard] ?? {}).map(
+      ([id, url]) => ({
+        id,
+        type: "web" as const,
+        position: positions[id] ?? { x: 600, y: 120 },
+        style: { width: 520, height: 340 },
+        data: { kind: "web" as const, url },
+      }),
+    );
+    return connected ? [...wsNodes, ...webNs, ...live] : [...initialNodes, ...webNs, ...live];
+  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes]);
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     const a = agents[node.id];
@@ -215,7 +226,7 @@ function Board() {
   };
 
   const onNodeDragStop: OnNodeDrag = (_, node) => {
-    if (agents[node.id] || workspaces[node.id]) {
+    if (agents[node.id] || workspaces[node.id] || node.id.startsWith("web-")) {
       moveNode(node.id, node.position.x, node.position.y);
     }
   };

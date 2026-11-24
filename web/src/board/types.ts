@@ -37,10 +37,16 @@ export type WorkspaceNodeData = {
   repo: string;
 };
 
+export type WebNodeData = {
+  kind: "web";
+  url: string;
+};
+
 export type BoardNodeData =
   | AgentNodeData
   | OrchestratorNodeData
-  | WorkspaceNodeData;
+  | WorkspaceNodeData
+  | WebNodeData;
 
 export type DelegationEdgeData = {
   task?: string;

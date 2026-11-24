@@ -57,6 +57,8 @@ export function SpawnBar() {
   // Named sign-ins of the chosen CLI — "default" = the machine login.
   const acctOptions = Object.values(accounts).filter((a) => a.cli === choice);
   const [makingWs, setMakingWs] = useState(false);
+  const [makingWeb, setMakingWeb] = useState(false);
+  const [webUrl, setWebUrl] = useState("");
   const [wsName, setWsName] = useState("");
   const [wsRepo, setWsRepo] = useState("");
 
@@ -82,6 +84,38 @@ export function SpawnBar() {
           </span>
           <button className="glass-pill" style={buttonStyle} onClick={() => connect("")}>
             connect
+          </button>
+        </>
+      ) : makingWeb ? (
+        <>
+          <input
+            style={{ ...inputStyle, width: 260 }}
+            placeholder="http://localhost:5173"
+            value={webUrl}
+            onChange={(e) => setWebUrl(e.target.value)}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && webUrl.trim()) {
+                useBoard.getState().webNodeAdd(webUrl.trim());
+                setMakingWeb(false);
+                setWebUrl("");
+              }
+            }}
+          />
+          <button
+            className="glass-pill"
+            style={{ ...buttonStyle, color: "var(--cv-accent)", opacity: webUrl.trim() ? 1 : 0.45 }}
+            disabled={!webUrl.trim()}
+            onClick={() => {
+              useBoard.getState().webNodeAdd(webUrl.trim());
+              setMakingWeb(false);
+              setWebUrl("");
+            }}
+          >
+            pin
+          </button>
+          <button className="glass-pill" style={buttonStyle} onClick={() => setMakingWeb(false)}>
+            ×
           </button>
         </>
       ) : makingWs ? (
@@ -202,6 +236,14 @@ export function SpawnBar() {
             title="New workspace"
           >
             ◫+
+          </button>
+          <button
+            className="glass-pill"
+            style={{ ...buttonStyle, color: "#7ba3cf" }}
+            onClick={() => setMakingWeb(true)}
+            title="Pin a live web page (e.g. a localhost dev server) to the canvas"
+          >
+            ◍+
           </button>
         </>
       )}
