@@ -383,7 +383,7 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
           <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {e.split("/").pop()!.replace(/\.md$/, "")}
           </span>
-          <span className="vault-file-actions" style={{ display: "none", gap: 2 }}>
+          <span className="vault-file-actions" style={{ gap: 2 }}>
             <span
               role="button" title={bookmarks.has(e) ? "unbookmark" : "bookmark — pin to the top"}
               onClick={(ev) => { ev.stopPropagation(); onBookmark(e); }}

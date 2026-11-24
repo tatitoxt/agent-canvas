@@ -308,6 +308,15 @@ body,
   background: color-mix(in srgb, var(--cv-ink) 22%, transparent);
   border-radius: 99px;
 }
+
+/* Vault file rows — reveal ★ ⌖ × actions on hover (Obsidian-style). */
+.vault-file .vault-file-actions {
+  display: none;
+}
+.vault-file:hover .vault-file-actions,
+.vault-file:focus-visible .vault-file-actions {
+  display: flex;
+}
 .cv-menu-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
