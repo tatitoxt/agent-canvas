@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useBoard } from "../store/board";
+import { TeamBuilder } from "./TeamBuilder";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--cv-glass-hi)",
@@ -69,6 +70,7 @@ export function SpawnBar() {
   const [webUrl, setWebUrl] = useState("");
   const [wsName, setWsName] = useState("");
   const [wsRepo, setWsRepo] = useState("");
+  const [teamOpen, setTeamOpen] = useState(false);
 
   return (
     <div
@@ -263,6 +265,14 @@ export function SpawnBar() {
           </button>
           <button
             className="glass-pill"
+            style={{ ...buttonStyle, color: "var(--cv-accent)" }}
+            onClick={() => setTeamOpen(!teamOpen)}
+            title="Team builder — pick roles, one CLI for all, Spawn N"
+          >
+            ◨ team
+          </button>
+          <button
+            className="glass-pill"
             style={{ ...buttonStyle, color: "var(--cv-waiting)" }}
             onClick={() => pauseAll(activeBoard)}
             title="Freeze every agent on this board mid-task (SIGSTOP) — resume continues mid-line"
@@ -279,6 +289,7 @@ export function SpawnBar() {
           </button>
         </>
       )}
+      {teamOpen && <TeamBuilder onClose={() => setTeamOpen(false)} />}
     </div>
   );
 }
