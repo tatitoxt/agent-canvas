@@ -16,6 +16,8 @@ export type AgentNodeData = {
   paths?: string[];
   /** Command line held by the supervised-input gate awaiting a decision. */
   pendingApproval?: string;
+  /** Label of the named account this agent signs in as. */
+  accountLabel?: string;
   /** Worktree branch — shown as a muted mono badge. */
   branch?: string;
 };

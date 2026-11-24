@@ -218,6 +218,7 @@ impl AgentManager {
         permission: &str,
         out_tx: mpsc::UnboundedSender<(AgentId, Vec<u8>)>,
         exit_tx: mpsc::UnboundedSender<AgentId>,
+        pty_env: &[(String, String)],
     ) -> Result<AgentId> {
         let rel = sanitize_relpath(cwd)?;
         let id = uuid_like();
@@ -241,6 +242,9 @@ impl AgentManager {
         cmd.env("CANVAS_AGENT_ID", &id);
         cmd.env("HOME", std::env::var("HOME").unwrap_or_else(|_| "/".into()));
         for (k, v) in self.extra_env.lock().unwrap().iter() {
+            cmd.env(k, v);
+        }
+        for (k, v) in pty_env {
             cmd.env(k, v);
         }
         // Put the directory holding this binary (canvasd / the app) first
@@ -633,5 +637,17 @@ mod tests {
         assert!(sanitize_relpath("/tmp").is_err());
         assert!(sanitize_relpath("a/../b").is_err());
         assert!(sanitize_relpath("src/lib").is_ok());
+    }
+}
+
+/// Env var that points a CLI at a per-account config dir, so two
+/// accounts of the same CLI keep separate auth. `None` = the CLI has no
+/// documented config-dir override.
+pub fn account_env_key(cli: &str) -> Option<&'static str> {
+    match cli {
+        c if c.contains("codex") => Some("CODEX_HOME"),
+        c if c.contains("claude") => Some("CLAUDE_CONFIG_DIR"),
+        c if c.contains("gemini") => Some("GEMINI_CLI_HOME"),
+        _ => None,
     }
 }

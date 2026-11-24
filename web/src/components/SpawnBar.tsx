@@ -36,12 +36,16 @@ export function SpawnBar() {
   const connect = useBoard((s) => s.connect);
   const spawn = useBoard((s) => s.spawn);
   const workspaces = useBoard((s) => s.workspaces);
+  const accounts = useBoard((s) => s.accounts);
   const createWorkspace = useBoard((s) => s.createWorkspace);
   const [choice, setChoice] = useState("claude");
   const [command, setCommand] = useState("");
   const [name, setName] = useState("");
   const [wsId, setWsId] = useState("");
   const [permission, setPermission] = useState("supervised");
+  const [acctId, setAcctId] = useState("");
+  // Named sign-ins of the chosen CLI — "default" = the machine login.
+  const acctOptions = Object.values(accounts).filter((a) => a.cli === choice);
   const [makingWs, setMakingWs] = useState(false);
   const [wsName, setWsName] = useState("");
   const [wsRepo, setWsRepo] = useState("");
@@ -154,13 +158,28 @@ export function SpawnBar() {
             <option value="auto">auto</option>
             <option value="full">full access</option>
           </select>
+          {acctOptions.length > 0 && (
+            <select
+              style={{ ...inputStyle, cursor: "pointer", color: acctId ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}
+              value={acctId}
+              onChange={(e) => setAcctId(e.target.value)}
+              title="which sign-in this agent uses — two accounts of the same CLI can run side by side"
+            >
+              <option value="">default account</option>
+              {acctOptions.map((a) => (
+                <option key={a.account_id} value={a.account_id}>
+                  @{a.label}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             className="glass-pill"
             style={{ ...buttonStyle, color: "var(--cv-accent)", opacity: (choice !== "custom" || command.trim()) ? 1 : 0.45 }}
             disabled={choice === "custom" && !command.trim()}
             onClick={() => {
               const cmd = choice === "custom" ? command.trim() : choice;
-              spawn(name.trim() || cmd, cmd, wsId || undefined, permission);
+              spawn(name.trim() || cmd, cmd, wsId || undefined, permission, acctId || undefined);
               setName("");
             }}
           >

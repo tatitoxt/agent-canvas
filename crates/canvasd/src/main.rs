@@ -113,6 +113,7 @@ fn spawn_agent(
     workspace_id: Option<&str>,
     permission: &str,
     board_id: Option<&str>,
+    account_id: Option<&str>,
 ) -> Result<(String, Option<String>)> {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<(String, Vec<u8>)>();
     let (exit_tx, mut exit_rx) = mpsc::unbounded_channel::<String>();
@@ -163,9 +164,20 @@ fn spawn_agent(
         Some(repo) => PathBuf::from(repo),
         None => state.repo_root.clone(),
     };
+    // Named account: give the CLI its own config dir so several sign-ins
+    // of the same agent coexist (e.g. two Codex accounts side by side).
+    let pty_env: Vec<(String, String)> = account_id
+        .and_then(|a| state.store.account_record(a).ok().flatten())
+        .and_then(|(cli, _label, dir)| {
+            let abs = state.repo_root.join(&dir);
+            let _ = std::fs::create_dir_all(&abs);
+            canvasd::agent::account_env_key(&cli)
+                .map(|k| vec![(k.to_string(), abs.to_string_lossy().to_string())])
+        })
+        .unwrap_or_default();
     let id = state
         .agents
-        .spawn(name, command, cwd, &repo_root, permission, out_tx, exit_tx)?;
+        .spawn(name, command, cwd, &repo_root, permission, out_tx, exit_tx, &pty_env)?;
     // Board: explicit, else the workspace's board, else 'main'.
     let board = board_id
         .map(|b| b.to_string())
@@ -180,6 +192,7 @@ fn spawn_agent(
         workspace_id,
         permission,
         board.as_deref(),
+        account_id,
     ) {
         warn!(error = %e, "failed to persist agent");
     }
@@ -214,19 +227,34 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .into_iter()
                 .map(|(board_id, name)| protocol::SnapshotBoard { board_id, name })
                 .collect(),
-            agents: agents
-                .into_iter()
-                .map(|(id, name, command, worktree, status, workspace_id, permission, board_id)| protocol::SnapshotAgent {
-                    status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
-                    agent_id: id,
-                    name,
-                    command,
-                    worktree,
-                    permission,
-                    workspace_id,
-                    board_id,
-                })
-                .collect(),
+            agents: {
+                let acct_labels: std::collections::HashMap<String, String> = state
+                    .store
+                    .accounts_snapshot()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(id, _cli, label)| (id, label))
+                    .collect();
+                agents
+                    .into_iter()
+                    .map(|(id, name, command, worktree, status, workspace_id, permission, board_id, account_id)| {
+                        let account_label = account_id
+                            .as_ref()
+                            .and_then(|a| acct_labels.get(a).cloned());
+                        protocol::SnapshotAgent {
+                            status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
+                            agent_id: id,
+                            name,
+                            command,
+                            worktree,
+                            permission,
+                            workspace_id,
+                            board_id,
+                            account_label,
+                        }
+                    })
+                    .collect()
+            },
             workspaces: state
                 .store
                 .workspaces_snapshot()
@@ -266,6 +294,13 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .map(automation_to_snapshot)
                 .collect(),
             layout: state.store.layout_map().unwrap_or_default(),
+            accounts: state
+                .store
+                .accounts_snapshot()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(account_id, cli, label)| protocol::SnapshotAccount { account_id, cli, label })
+                .collect(),
             approvals: state
                 .pending_inputs
                 .lock()
@@ -442,9 +477,9 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::SpawnAgent { name, command, cwd, workspace_id, permission, board_id } => {
+        ClientMsg::SpawnAgent { name, command, cwd, workspace_id, permission, board_id, account_id } => {
             let level = protocol::normalize_permission(permission.as_deref());
-            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, board_id.as_deref()) {
+            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, board_id.as_deref(), account_id.as_deref()) {
                 Ok((id, board)) => send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id, board_id: board }),
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: None,
@@ -452,7 +487,7 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::Delegate { from, name, command, task, cwd, workspace_id, permission } => {
+        ClientMsg::Delegate { from, name, command, task, cwd, workspace_id, permission, account_id } => {
             // A delegation IS a spawn + a persisted edge. The edge returns
             // when the child's PTY prints `CANVAS_RESULT: <summary>`.
             let parent_level = state.store.agent_permission(&from).ok().flatten();
@@ -460,7 +495,7 @@ fn handle_client_msg(
             let level = protocol::clamp_to_parent(requested, parent_level.as_deref());
             // The child lands on its parent's board (or its workspace's).
             let parent_board = state.store.agent_board(&from).ok().flatten();
-            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, parent_board.as_deref()) {
+            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, parent_board.as_deref(), account_id.as_deref()) {
                 Ok((id, board)) => {
                     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
                     if let Err(e) = state.store.delegation_created(&edge_id, &from, &id, &task) {
@@ -568,6 +603,23 @@ fn handle_client_msg(
         ClientMsg::MoveNode { agent_id, x, y } => {
             if let Err(e) = state.store.save_node_position(&agent_id, x, y) {
                 warn!(error = %e, "failed to save node position");
+            }
+        }
+        ClientMsg::CreateAccount { cli, label } => {
+            let account_id = format!("acct-{}", &uuid_like()[..8]);
+            let dir = format!(".canvas/accounts/{account_id}");
+            if let Err(e) = std::fs::create_dir_all(state.repo_root.join(&dir)) {
+                warn!(error = %e, "failed to create account dir");
+            }
+            match state.store.account_created(&account_id, &cli, &label, &dir) {
+                Ok(()) => send_control(ServerMsg::AccountCreated { account_id, cli, label }),
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
+            }
+        }
+        ClientMsg::DeleteAccount { account_id } => {
+            match state.store.account_deleted(&account_id) {
+                Ok(()) => send_control(ServerMsg::AccountDeleted { account_id }),
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
             }
         }
         ClientMsg::CreateAutomation {
@@ -722,7 +774,7 @@ fn automation_to_snapshot(
 fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
     let (automation_id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, _, _, _) =
         row;
-    match spawn_agent(state, &name, &command, ".", workspace_id.as_deref(), &permission, None) {
+    match spawn_agent(state, &name, &command, ".", workspace_id.as_deref(), &permission, None, None) {
         Ok((agent_id, run_board)) => {
             state
                 .agents

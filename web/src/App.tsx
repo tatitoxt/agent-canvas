@@ -20,6 +20,7 @@ import { SpawnBar } from "./components/SpawnBar";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { InboxPanel } from "./components/InboxPanel";
 import { AutomationsPanel } from "./components/AutomationsPanel";
+import { AccountsPanel } from "./components/AccountsPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { CommandPalette } from "./components/CommandPalette";
 import { DelegationPanel } from "./components/DelegationPanel";
@@ -134,6 +135,7 @@ function Board() {
           name: a.name,
           cli: (a.command ?? "bash").split(/\s+/)[0].toLowerCase(),
           permission: a.permission,
+          accountLabel: a.account_label ?? undefined,
           files: a.files,
           paths: a.paths,
           status: a.status === "exited"
@@ -261,6 +263,7 @@ function Board() {
         />
       )}
       {nav === "automations" && <AutomationsPanel />}
+      {nav === "accounts" && <AccountsPanel />}
       {nav === "history" && (
         <HistoryPanel onOpenEdge={(id) => { setEdgeDetail(id); setNav("canvas"); }} />
       )}

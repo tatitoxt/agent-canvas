@@ -18,6 +18,8 @@ export type LiveAgent = {
   workspace_id?: string | null;
   /** Canvas board this agent lives on (Deska "Spaces"). */
   board_id?: string | null;
+  /** Label of the named CLI account this agent signs in as, if any. */
+  account_label?: string | null;
 };
 
 export type LiveWorkspace = {
@@ -51,6 +53,8 @@ type BoardState = {
   activeBoard: string;
   edges: Record<string, LiveEdge>;
   workspaces: Record<string, LiveWorkspace>;
+  /** Registered named CLI accounts (id → account). */
+  accounts: Record<string, { account_id: string; cli: string; label: string }>;
   /** Saved node positions — replayed from the daemon's layout table. */
   positions: Record<string, { x: number; y: number }>;
   /** Drop position for a delegation child, keyed by parent agent id —
@@ -83,7 +87,9 @@ type BoardState = {
   /** agent_id → latest fetched unified diff text. */
   diffTexts: Record<string, string>;
   requestDiff: (agentId: string) => void;
-  spawn: (name: string, command: string, workspaceId?: string, permission?: string) => void;
+  spawn: (name: string, command: string, workspaceId?: string, permission?: string, accountId?: string) => void;
+  createAccount: (cli: string, label: string) => void;
+  deleteAccount: (accountId: string) => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
   kill: (agentId: string) => void;
@@ -134,6 +140,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   activeBoard: "main",
   edges: {},
   workspaces: {},
+  accounts: {},
   positions: {},
   pendingPositions: {},
   approvals: {},
@@ -332,8 +339,12 @@ export const useBoard = create<BoardState>((set, get) => ({
                   status: a.status as LiveAgent["status"],
                   workspace_id: a.workspace_id ?? null,
                   board_id: a.board_id ?? "main",
+                  account_label: a.account_label ?? null,
                 },
               ]),
+            );
+            const accounts = Object.fromEntries(
+              (msg.accounts ?? []).map((a) => [a.account_id, a]),
             );
             const workspaces = Object.fromEntries(
               (msg.workspaces ?? []).map((w) => [
@@ -374,6 +385,21 @@ export const useBoard = create<BoardState>((set, get) => ({
               approvals: msg.approvals ?? {},
               automations,
               boards: { main: "Main", ...boards },
+              accounts,
+            });
+            break;
+          }
+          case "account_created": {
+            set((s) => ({
+              accounts: { ...s.accounts, [msg.account_id]: { account_id: msg.account_id, cli: msg.cli, label: msg.label } },
+            }));
+            break;
+          }
+          case "account_deleted": {
+            set((s) => {
+              const accounts = { ...s.accounts };
+              delete accounts[msg.account_id];
+              return { accounts };
             });
             break;
           }
@@ -422,8 +448,11 @@ export const useBoard = create<BoardState>((set, get) => ({
   diffTexts: {},
   requestDiff: (agentId) => client?.diffDetail(agentId),
 
-  spawn: (name, command, workspaceId, permission) =>
-    client?.spawnAgent(name, command, ".", workspaceId, permission, get().activeBoard),
+  spawn: (name, command, workspaceId, permission, accountId) =>
+    client?.spawnAgent(name, command, ".", workspaceId, permission, get().activeBoard, accountId),
+
+  createAccount: (cli, label) => client?.createAccount(cli, label),
+  deleteAccount: (accountId) => client?.deleteAccount(accountId),
 
   createWorkspace: (name, repo) => client?.createWorkspace(name, repo, get().activeBoard),
 

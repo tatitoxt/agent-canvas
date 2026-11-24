@@ -10,6 +10,13 @@ export type SnapshotAgent = {
   permission?: string;
   workspace_id?: string | null;
   board_id?: string | null;
+  account_label?: string | null;
+};
+
+export type SnapshotAccount = {
+  account_id: string;
+  cli: string;
+  label: string;
 };
 
 export type ServerMsg =
@@ -30,6 +37,8 @@ export type ServerMsg =
   | { type: "needs_attention"; agent_id: string; reason: string }
   | { type: "automation_saved"; automation: AutomationDef }
   | { type: "automation_deleted"; automation_id: string }
+  | { type: "account_created"; account_id: string; cli: string; label: string }
+  | { type: "account_deleted"; account_id: string }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
   | { type: "result"; edge_id: string; summary: string; files?: number }
   | {
@@ -41,6 +50,7 @@ export type ServerMsg =
       layout: Record<string, [number, number]>;
       approvals?: Record<string, string>;
       automations?: AutomationDef[];
+      accounts?: SnapshotAccount[];
     };
 
 export type SnapshotWorkspace = {
@@ -122,8 +132,16 @@ export class CanvasClient {
     return new Promise((res) => this.ws.addEventListener("open", () => res(), { once: true }));
   }
 
-  spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string) {
-    this.send({ cmd: "spawn_agent", name, command, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null, board_id: boardId ?? null });
+  spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string, accountId?: string) {
+    this.send({ cmd: "spawn_agent", name, command, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null, board_id: boardId ?? null, account_id: accountId ?? null });
+  }
+
+  createAccount(cli: string, label: string) {
+    this.send({ cmd: "create_account", cli, label });
+  }
+
+  deleteAccount(accountId: string) {
+    this.send({ cmd: "delete_account", account_id: accountId });
   }
 
   createWorkspace(name: string, repo: string, boardId?: string) {
@@ -207,8 +225,8 @@ export class CanvasClient {
     this.send({ cmd: "deny_input", agent_id: agentId });
   }
 
-  delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string) {
-    this.send({ cmd: "delegate", from, name, command, task, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null });
+  delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string, accountId?: string) {
+    this.send({ cmd: "delegate", from, name, command, task, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null, account_id: accountId ?? null });
   }
 
   /** Ask the daemon to replay an (exited) agent's saved transcript

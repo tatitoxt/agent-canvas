@@ -2,14 +2,14 @@
 //! `<repo>/.canvas/board.db`. Boards also export to JSON for diffing/git.
 
 use anyhow::Result;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use std::path::Path;
 use std::sync::Mutex;
 
 /// Row of the agents table: (id, name, command, worktree, status,
 /// workspace_id, permission).
 /// (id, name, command, worktree, status, workspace_id, permission, board_id)
-pub type AgentRow = (String, String, String, String, String, Option<String>, String, Option<String>);
+pub type AgentRow = (String, String, String, String, String, Option<String>, String, Option<String>, Option<String>);
 /// Row of the delegations table: (id, from, to, task, result, state,
 /// files_changed, created_at, resolved_at).
 pub type DelegationRow = (
@@ -151,6 +151,22 @@ impl Store {
                  PRAGMA user_version = 6;",
             )?;
         }
+        if version < 7 {
+            conn.execute_batch(
+                // v6 → v7: named CLI accounts — one canvas user, several
+                // sign-ins of the same CLI side by side; each gets its own
+                // config dir so codex/claude/gemini auth never collides.
+                "CREATE TABLE IF NOT EXISTS accounts (
+                   id TEXT PRIMARY KEY,
+                   cli TEXT NOT NULL,
+                   label TEXT NOT NULL,
+                   config_dir TEXT NOT NULL,
+                   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                 );
+                 ALTER TABLE agents ADD COLUMN account_id TEXT;
+                 PRAGMA user_version = 7;",
+            )?;
+        }
         Ok(Self { conn: Mutex::new(conn) })
     }
 
@@ -163,10 +179,11 @@ impl Store {
         workspace_id: Option<&str>,
         permission: &str,
         board_id: Option<&str>,
+        account_id: Option<&str>,
     ) -> Result<()> {
         self.conn.lock().unwrap().execute(
-            "INSERT INTO agents (id, name, command, worktree, workspace_id, permission, board_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, COALESCE(?7, 'main'))",
-            (id, name, command, worktree, workspace_id, permission, board_id),
+            "INSERT INTO agents (id, name, command, worktree, workspace_id, permission, board_id, account_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, COALESCE(?7, 'main'), ?8)",
+            (id, name, command, worktree, workspace_id, permission, board_id, account_id),
         )?;
         Ok(())
     }
@@ -362,6 +379,49 @@ impl Store {
         Ok(())
     }
 
+    pub fn account_created(&self, id: &str, cli: &str, label: &str, config_dir: &str) -> Result<()> {
+        self.conn.lock().unwrap().execute(
+            "INSERT INTO accounts (id, cli, label, config_dir) VALUES (?1, ?2, ?3, ?4)",
+            (id, cli, label, config_dir),
+        )?;
+        Ok(())
+    }
+
+    pub fn account_deleted(&self, id: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("UPDATE agents SET account_id = NULL WHERE account_id = ?1", (id,))?;
+        conn.execute("DELETE FROM accounts WHERE id = ?1", (id,))?;
+        Ok(())
+    }
+
+    /// (id, cli, label) for the snapshot replay.
+    pub fn accounts_snapshot(&self) -> Result<Vec<(String, String, String)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare("SELECT id, cli, label FROM accounts ORDER BY created_at")?;
+        let rows = st
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// (cli, label, config_dir) for a spawn that uses this account.
+    pub fn account_record(&self, id: &str) -> Result<Option<(String, String, String)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare("SELECT cli, label, config_dir FROM accounts WHERE id = ?1")?;
+        Ok(st
+            .query_row((id,), |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .optional()?)
+    }
+
+    /// Label of an agent's account, for the node card.
+    pub fn agent_account_label(&self, id: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare(
+            "SELECT a.label FROM accounts a JOIN agents g ON g.account_id = a.id WHERE g.id = ?1",
+        )?;
+        Ok(st.query_row((id,), |r| r.get(0)).optional()?)
+    }
+
     /// Delegation edges still waiting on a CANVAS_RESULT — used by the
     /// startup sweep to resolve results that landed before a restart.
     pub fn unresolved_delegations(&self) -> Result<Vec<(String, String)>> {
@@ -391,10 +451,10 @@ impl Store {
     ) -> Result<Vec<AgentRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
-            "SELECT id, name, command, worktree, status, workspace_id, permission, board_id FROM agents ORDER BY created_at",
+            "SELECT id, name, command, worktree, status, workspace_id, permission, board_id, account_id FROM agents ORDER BY created_at",
         )?;
         let rows = st.query_map([], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }

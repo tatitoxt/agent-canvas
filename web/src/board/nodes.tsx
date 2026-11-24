@@ -143,6 +143,9 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           </div>
           <div style={{ fontSize: 11, color: "var(--cv-ink-dim)", marginTop: 1 }}>
             {meta.label}
+            {data.accountLabel && (
+              <span style={{ color: "var(--cv-accent)" }}> · @{data.accountLabel}</span>
+            )}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

@@ -37,8 +37,8 @@ export class TauriCanvasClient {
     return Promise.resolve();
   }
 
-  spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string) {
-    void invoke("spawn_agent", { name, command, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null, boardId: boardId ?? null }).catch(
+  spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string, accountId?: string) {
+    void invoke("spawn_agent", { name, command, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null, boardId: boardId ?? null, accountId: accountId ?? null }).catch(
       console.error,
     );
   }
@@ -104,10 +104,18 @@ export class TauriCanvasClient {
     void invoke("delete_automation", { automationId }).catch(console.error);
   }
 
-  delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string) {
-    void invoke("delegate", { from, name, command, task, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null }).catch(
+  delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string, accountId?: string) {
+    void invoke("delegate", { from, name, command, task, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null, accountId: accountId ?? null }).catch(
       console.error,
     );
+  }
+
+  createAccount(cli: string, label: string) {
+    void invoke("create_account", { cli, label }).catch(console.error);
+  }
+
+  deleteAccount(accountId: string) {
+    void invoke("delete_account", { accountId }).catch(console.error);
   }
 
   createBoard(name: string) {

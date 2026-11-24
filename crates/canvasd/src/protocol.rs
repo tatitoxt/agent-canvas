@@ -21,6 +21,9 @@ pub enum ClientMsg {
         permission: Option<String>,
         /// Canvas board this node lives on; None = the default "main" board.
         board_id: Option<String>,
+        /// Named account profile this agent signs in as — two terminals of
+        /// the same CLI can run different accounts side by side.
+        account_id: Option<String>,
     },
     /// Create a workspace container — user-defined project groupings that
     /// coexist spatially on the same canvas.
@@ -86,7 +89,13 @@ pub enum ClientMsg {
         cwd: String,
         workspace_id: Option<String>,
         permission: Option<String>,
+        account_id: Option<String>,
     },
+    /// Register a named account for a CLI (e.g. a second Codex sign-in).
+    /// The account gets its own config dir under .canvas/accounts/.
+    CreateAccount { cli: String, label: String },
+    /// Remove a named account — agents that used it fall back to default.
+    DeleteAccount { account_id: String },
     /// Define an automation: a saved task that runs an agent with a prompt
     /// and guardrails (idle hang limit + approval policy).
     CreateAutomation {
@@ -196,7 +205,13 @@ pub enum ServerMsg {
         /// Replayed so late-joining clients still see pending gates.
         approvals: std::collections::HashMap<String, String>,
         automations: Vec<SnapshotAutomation>,
+        /// Registered named accounts (id, cli, label).
+        accounts: Vec<SnapshotAccount>,
     },
+    /// A named account was registered.
+    AccountCreated { account_id: String, cli: String, label: String },
+    /// A named account was removed.
+    AccountDeleted { account_id: String },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -212,6 +227,13 @@ pub struct SnapshotAutomation {
     pub last_run_at: Option<String>,
     pub interval_secs: Option<u64>,
     pub next_run_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SnapshotAccount {
+    pub account_id: String,
+    pub cli: String,
+    pub label: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -253,6 +275,8 @@ pub struct SnapshotAgent {
     pub permission: String,
     pub workspace_id: Option<String>,
     pub board_id: Option<String>,
+    /// Label of the named account this agent signs in as, if any.
+    pub account_label: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
