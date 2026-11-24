@@ -1239,6 +1239,9 @@ export const useBoard = create<BoardState>((set, get) => ({
     let n = 0;
     for (const [id, a] of Object.entries(agents))
       if (a.status === "exited") {
+        // Kill daemon-side too — otherwise the next snapshot resurrects
+        // every dead agent the client just forgot.
+        client?.confirmDestructive(id, "kill");
         delete next[id];
         n++;
       }
