@@ -265,6 +265,7 @@ function Board() {
           kind: "agent" as const,
           id: a.id,
           name: a.name,
+          termNo: i,
           cli: (a.command ?? "bash").split(/\s+/)[0].toLowerCase(),
           permission: a.permission,
           accountLabel: a.account_label ?? undefined,

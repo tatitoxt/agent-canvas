@@ -1,5 +1,6 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { useMemo, useState } from "react";
+import { CliMark } from "../components/CliMark";
 import { useBoard } from "../store/board";
 import type {
   AgentNodeData,
@@ -204,6 +205,54 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const meta = cliMeta(data.cli);
   const [collapsed, setCollapsed] = useState(false);
   const statusColor = STATUS_COLOR[data.status];
+  // Symvibe's outline language: needs-you and in-flight delegation glow amber,
+  // everything else keeps a quiet hairline border.
+  const border = data.delegating
+    ? "1.5px solid var(--cv-waiting)"
+    : data.status === "waiting" || data.status === "blocked"
+      ? "1.5px solid color-mix(in srgb, var(--cv-waiting) 70%, transparent)"
+      : selected
+        ? "1px solid var(--cv-glass-shine)"
+        : "1px solid color-mix(in srgb, var(--cv-ink) 10%, transparent)";
+  const glow =
+    data.delegating || data.status === "waiting" || data.status === "blocked"
+      ? "0 0 20px color-mix(in srgb, var(--cv-waiting) 26%, transparent), 0 12px 32px rgba(0,0,0,0.35)"
+      : undefined;
+  if (collapsed) {
+    // Deska's collapsed terminal — just the glyph + number in a small pill.
+    return (
+      <div
+        className="glass"
+        onClick={() => setCollapsed(false)}
+        title={`${data.name} — click to expand`}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 16px",
+          background: "color-mix(in srgb, var(--cv-base) 58%, transparent)",
+          border,
+          cursor: "pointer",
+          fontSize: 12.5,
+          fontWeight: 650,
+        }}
+      >
+        <Handle type="target" position={Position.Left} />
+        <span
+          style={{
+            fontFamily: "ui-monospace, SFMono-Regular, monospace",
+            fontWeight: 700,
+            color: "#7ba8dd",
+            textShadow: "0 0 8px rgba(123,168,221,0.45)",
+          }}
+        >
+          ›_
+        </span>
+        {data.termNo ? `Terminal ${data.termNo}` : data.name}
+        <Handle type="source" position={Position.Right} />
+      </div>
+    );
+  }
   return (
     <div
       className={`glass ${data.status === "waiting" ? "node-waiting" : ""}`}
@@ -212,35 +261,24 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         padding: "10px 13px 10px",
         // Deska's card is real glass — the dot canvas bleeds through.
         background: "color-mix(in srgb, var(--cv-base) 58%, transparent)",
-        outline: selected
-          ? "1px solid var(--cv-glass-shine)"
-          : data.delegating
-            ? "1.5px solid var(--cv-waiting)"
-            : "none",
-        boxShadow: data.delegating
-          ? "0 0 18px color-mix(in srgb, var(--cv-waiting) 24%, transparent)"
-          : undefined,
+        border,
+        boxShadow: glow,
         cursor: "pointer",
       }}
     >
       <Handle type="target" position={Position.Left} />
-      {/* Deska header: [>_ icon] Name  ▮▮▮ <Cli> running   [mark] <Cli>  — ⤢ × */}
+      {/* Deska header: ›_ Terminal N   ▮▮▮ running   [CLI logo] <Cli>  — ⤢ × */}
       <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
         <span
           title={meta.label}
           style={{
-            width: 18,
-            height: 18,
             flex: "none",
-            display: "grid",
-            placeItems: "center",
-            borderRadius: 5,
-            fontSize: 9.5,
+            fontSize: 13,
+            fontWeight: 700,
             fontFamily: "ui-monospace, SFMono-Regular, monospace",
-            color: "#5b7fa6",
-            background: "transparent",
-            border: "1px solid var(--cv-glass-shine)",
-            paddingBottom: 1,
+            color: "#7ba8dd",
+            textShadow: "0 0 8px rgba(123,168,221,0.45)",
+            lineHeight: 1,
           }}
         >
           ›_
@@ -248,15 +286,16 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         <div
           style={{
             fontSize: 13,
-            fontWeight: 600,
+            fontWeight: 650,
             letterSpacing: -0.1,
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
             minWidth: 0,
           }}
+          title={data.name}
         >
-          {data.name}
+          {data.termNo ? `Terminal ${data.termNo}` : data.name}
         </div>
         <span
           style={{
@@ -271,20 +310,20 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           }}
         >
           <StatusBars color={statusColor} />
-          {meta.label} {STATUS_LABEL[data.status]}
+          {STATUS_LABEL[data.status]}
         </span>
         <span
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 4,
+            gap: 4.5,
             marginLeft: "auto",
             fontSize: 11,
             flex: "none",
             whiteSpace: "nowrap",
           }}
         >
-          <span style={{ color: meta.color, fontSize: 10.5 }}>{meta.mark}</span>
+          <CliMark cli={data.cli} color={meta.color} size={11.5} />
           <span style={{ color: "var(--cv-ink-dim)" }}>{meta.label}</span>
         </span>
         <span className="nodrag" style={{ display: "inline-flex", alignItems: "center", gap: 7, flex: "none", color: "var(--cv-ink-faint)", fontSize: 12 }}>
@@ -576,9 +615,7 @@ export function OrchestratorNode({
             const meta = CLI_META[cli];
             return (
               <div key={aid} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 10.5 }}>
-                <span style={{ color: meta?.color ?? "var(--cv-ink-dim)", width: 12, textAlign: "center" }}>
-                  {meta?.mark ?? "›_"}
-                </span>
+                <CliMark cli={cli} color={meta?.color ?? "#9a968e"} size={11} />
                 <span style={{ color: "var(--cv-ink)", fontWeight: 600 }}>{a.name}</span>
                 <span style={{ color: "var(--cv-ink-dim)" }}>· {meta?.label ?? cli}</span>
                 <span

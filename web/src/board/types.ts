@@ -5,6 +5,8 @@ export type AgentNodeData = {
   /** Live agent id — needed by node-level actions (approve/deny). */
   id?: string;
   name: string;
+  /** Deska-style "Terminal N" ordinal — position in the board's spawn order. */
+  termNo?: number;
   cli: string;
   status: AgentStatus;
   permission?: string;
