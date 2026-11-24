@@ -1126,38 +1126,43 @@ export const useBoard = create<BoardState>((set, get) => ({
           const before = get().ptyBuffers[id];
           get().sendInput(id, new TextEncoder().encode(msg + "\n"));
           reply(`→ ${name}: ${msg.slice(0, 60)}`);
-          const poll = (tries: number) => {
+          const collect = () => {
             const buf = get().ptyBuffers[id];
-            if (buf) {
-              let start = -1;
-              if (before) {
-                const n = Math.min(before.length, buf.length);
-                let d = 0;
-                while (d < n && buf[d] === before[d]) d++;
-                if (d < n || buf.length > before.length) start = d;
-              } else if (buf.length > 0) {
-                start = 0;
-              }
-              if (start >= 0 && buf.length > start) {
-                const out = new TextDecoder()
-                  .decode(buf.subarray(start))
-                  .replace(ANSI_RX, "")
-                  .replace(/\r/g, "\n")
-                  .split("\n")
-                  .map((l) => l.trim())
-                  .find(
-                    (l) =>
-                      l &&
-                      !l.endsWith("$") &&
-                      !l.endsWith("%") &&
-                      !l.endsWith("#") &&
-                      !l.includes(msg),
-                  );
-                if (out) {
-                  reply(`← ${name}: ${out.slice(0, 160)}`);
-                  return;
-                }
-              }
+            if (!buf) return "";
+            let start = -1;
+            if (before) {
+              const n = Math.min(before.length, buf.length);
+              let d = 0;
+              while (d < n && buf[d] === before[d]) d++;
+              if (d < n || buf.length > before.length) start = d;
+            } else if (buf.length > 0) {
+              start = 0;
+            }
+            if (start < 0 || buf.length <= start) return "";
+            return new TextDecoder()
+              .decode(buf.subarray(start))
+              .replace(ANSI_RX, "")
+              .replace(/\r/g, "\n")
+              .split("\n")
+              .map((l) => l.trim())
+              .filter(
+                (l) =>
+                  l &&
+                  !l.endsWith("$") &&
+                  !l.endsWith("%") &&
+                  !l.endsWith("#") &&
+                  !l.includes(msg),
+              )
+              .slice(0, 3)
+              .join(" · ")
+              .slice(0, 160);
+          };
+          const poll = (tries: number) => {
+            const out = collect();
+            if (out) {
+              // One settle pass — the reply may still be streaming in.
+              setTimeout(() => reply(`← ${name}: ${collect() || out}`), 1500);
+              return;
             }
             if (tries > 0) setTimeout(() => poll(tries - 1), 1500);
           };
