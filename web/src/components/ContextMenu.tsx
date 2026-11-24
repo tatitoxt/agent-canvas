@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useBoard } from "../store/board";
+import { useReactFlow } from "@xyflow/react";
+import { agentPinSpot } from "./PinBtn";
 
 // Right-click menu on a node — Deska-style node actions: open terminal,
 // move to another board, kill (inline two-step confirm).
@@ -30,6 +32,7 @@ export function ContextMenu({
     (s) => s.agents[nodeId]?.board_id ?? s.workspaces[nodeId]?.board_id ?? "main",
   );
   const deleteWorkspace = useBoard((s) => s.deleteWorkspace);
+  const { screenToFlowPosition } = useReactFlow();
   const [confirmKill, setConfirmKill] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -161,14 +164,14 @@ export function ContextMenu({
         <button
           style={{ ...item, color: "var(--cv-ink-dim)" }}
           onClick={() => {
-            const p = useBoard.getState().positions[nodeId];
             const name = useBoard.getState().agents[nodeId]?.name ?? "agent";
+            const spot = agentPinSpot(nodeId);
             useBoard.getState().pinCard(
               `${name} — note`,
               "",
               undefined,
               `agent:${nodeId}`,
-              p ? { x: p.x + 380, y: p.y } : undefined,
+              spot ? screenToFlowPosition(spot) : undefined,
             );
             onClose();
           }}

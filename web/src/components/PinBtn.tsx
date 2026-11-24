@@ -51,6 +51,36 @@ export function cleanPinSpot(anchor: string | undefined): Pt {
   return cands[0];
 }
 
+/** Pick a free drop spot (screen px) beside an agent/workplace node so the
+ * agent→note connector crosses nothing. Tries right, below, left, above. */
+export function agentPinSpot(nodeId: string): Pt | null {
+  const el = document.querySelector(`[data-id="${nodeId}"]`);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  const agent: Rect = { x: r.left, y: r.top, w: r.width, h: r.height };
+  const agentC = { x: agent.x + agent.w / 2, y: agent.y + agent.h / 2 };
+  const obstacles = obstacleRects([`[data-id="${nodeId}"]`]);
+  const cands: Pt[] = [
+    { x: agent.x + agent.w + 24, y: agent.y },                       // right
+    { x: agent.x, y: agent.y + agent.h + 24 },                     // below
+    { x: agent.x - CARD_W - 24, y: agent.y },                      // left
+    { x: agent.x, y: agent.y - CARD_H - 24 },                      // above
+    { x: agent.x + agent.w + 24, y: agent.y + agent.h + 24 },      // bottom-right
+  ];
+  for (const c of cands) {
+    const card: Rect = { x: c.x, y: c.y, w: CARD_W, h: CARD_H };
+    if (obstacles.some((o) => rectsOverlap(card, o, 6))) continue;
+    const a = edgePoint(card, agentC);
+    const b = edgePoint(agent, { x: card.x + card.w / 2, y: card.y + card.h / 2 });
+    if (!obstacles.some((o) => segmentHitsRect(a, b, o))) return c;
+  }
+  for (const c of cands) {
+    const card: Rect = { x: c.x, y: c.y, w: CARD_W, h: CARD_H };
+    if (!obstacles.some((o) => rectsOverlap(card, o, 6))) return c;
+  }
+  return null;
+}
+
 /** Deska's "Open in canvas" — pins this panel's content as a card on the board. */
 export function PinBtn({ title, body, anchor }: { title: string; body: string; anchor?: string }) {
   const pinCard = useBoard((s) => s.pinCard);

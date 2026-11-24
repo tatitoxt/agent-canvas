@@ -1,6 +1,7 @@
-import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
+import { Handle, Position, useReactFlow, type NodeProps, type Node } from "@xyflow/react";
 import { useMemo, useState } from "react";
 import { CliMark } from "../components/CliMark";
+import { agentPinSpot } from "../components/PinBtn";
 import { Icon } from "../components/icons";
 import { useBoard } from "../store/board";
 import { screenLines } from "./ptyScreen";
@@ -135,6 +136,7 @@ export function StatusBars({ color }: { color: string }) {
 export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const meta = cliMeta(data.cli);
   const summaries = useBoard((s) => s.panelSummaries);
+  const { screenToFlowPosition } = useReactFlow();
   const [collapsed, setCollapsed] = useState(false);
   const statusColor = STATUS_COLOR[data.status];
   // Outline = the state color (waiting/running/idle/error) — Deska's
@@ -298,13 +300,13 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
               onClick={(e) => {
                 e.stopPropagation();
                 if (!data.id) return;
-                const p = useBoard.getState().positions[data.id];
+                const spot = agentPinSpot(data.id);
                 useBoard.getState().pinCard(
                   `${data.name} — note`,
                   "",
                   undefined,
                   `agent:${data.id}`,
-                  p ? { x: p.x + 380, y: p.y } : undefined,
+                  spot ? screenToFlowPosition(spot) : undefined,
                 );
               }}
             >
