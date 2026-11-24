@@ -236,7 +236,7 @@ function ExtrasBubble({ side, onSelect }: { side: "left" | "right"; onSelect: (k
   }, [open]);
 
   return (
-    <nav ref={ref} className="glass" style={{ ...bubble, position: "relative" }}>
+    <nav ref={ref} className="glass" style={{ ...bubble, position: "relative", borderRadius: 999 }}>
       <button
         title="Extras — plug other apps into the canvas (VS Code, Obsidian, Discord)"
         onClick={() => setOpen((o) => !o)}
@@ -400,8 +400,8 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
       <div style={{ flex: 1 }} />
 
       <div style={{ display: "flex", gap: 8 }}>
-        <OrchestratorsBubble />
         <ExtrasBubble side="left" onSelect={onSelect} />
+        <OrchestratorsBubble />
       </div>
     </div>
   );
@@ -426,7 +426,7 @@ function OrchestratorsBubble() {
   const list = Object.entries(orchestrators).filter(([, o]) => o.board === activeBoard);
 
   return (
-    <nav ref={ref} className="glass" style={{ ...bubble, position: "relative" }}>
+    <nav ref={ref} className="glass" style={{ ...bubble, position: "relative", borderRadius: 999 }}>
       <button
         title="Orchestrators — commanders on this board; click one to focus it, or spawn a new one"
         onClick={() => setOpen((o) => !o)}

@@ -20,6 +20,7 @@ const iconBtn = (active: boolean): React.CSSProperties => ({
   placeItems: "center",
   width: 34,
   height: 34,
+  borderRadius: 999,
   color: active ? "var(--cv-accent)" : "var(--cv-ink)",
   cursor: "pointer",
   position: "relative",
@@ -264,14 +265,12 @@ export function Topbar({
 
       <div style={{ flex: 1 }} />
 
-      {/* ── right: usage pill + icons only ── */}
+      {/* ── right: loose round glass buttons — no container bubble ── */}
       <div
-        className="glass-pill"
         style={{
           display: "flex",
           alignItems: "center",
-          padding: "3px 4px",
-          gap: 2,
+          gap: 7,
           pointerEvents: "auto",
         }}
       >
