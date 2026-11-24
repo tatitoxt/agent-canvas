@@ -310,6 +310,16 @@ function Board() {
       } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "p") {
         e.preventDefault();
         setPencil((m) => !m);
+      } else if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+        const t = e.target as HTMLElement;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+        if (e.key === "f") {
+          e.preventDefault();
+          fitView({ padding: 0.2, duration: 300 });
+        } else if (e.key === "1") {
+          e.preventDefault();
+          zoomTo(1, { duration: 300 });
+        }
       }
     };
     window.addEventListener("keydown", onKey);
