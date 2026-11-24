@@ -153,6 +153,35 @@ export function BoardTabs() {
           +
         </button>
       )}
+      <button
+        onClick={() => {
+          const st = useBoard.getState();
+          if (!st.vaultDir) { st.notify("mount a vault first — File Explorer panel"); return; }
+          const name = boards[activeBoard] ?? activeBoard;
+          const rows = Object.values(st.agents)
+            .filter((a) => (a.board_id ?? "main") === activeBoard)
+            .map((a) => `- **${a.name}** (${a.command ?? "?"}) — ${a.status}${a.lastLine ? `: ${a.lastLine}` : ""}`);
+          const dels = Object.values(st.edges).map(
+            (e) => `- ${st.agents[e.from]?.name ?? e.from} → ${st.agents[e.to]?.name ?? e.to}: ${e.task} — *${e.state}*${e.result ? `\n  > ${e.result}` : ""}`,
+          );
+          const md = `# Board snapshot — ${name}\n_${new Date().toLocaleString()}_\n\n## Agents\n${rows.join("\n") || "- none"}\n\n## Delegations\n${dels.join("\n") || "- none"}\n`;
+          const path = `Canvas/Snapshot - ${name}.md`;
+          st.vaultWrite(path, md);
+          st.notify(`snapshot saved → ${path}`);
+        }}
+        title="save this board's state as a note in the vault (Canvas/Snapshot - <board>.md)"
+        style={{
+          border: "none",
+          background: "transparent",
+          color: "var(--cv-ink-faint)",
+          fontSize: 11,
+          padding: "3px 8px",
+          borderRadius: 999,
+          cursor: "pointer",
+        }}
+      >
+        ⤓
+      </button>
     </div>
   );
 }
