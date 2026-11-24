@@ -990,8 +990,13 @@ export const useBoard = create<BoardState>((set, get) => ({
   diffTexts: {},
   requestDiff: (agentId) => client?.diffDetail(agentId),
 
-  spawn: (name, command, workspaceId, permission, accountId, initialInput) =>
-    client?.spawnAgent(name, command, ".", workspaceId, permission, get().activeBoard, accountId, initialInput),
+  spawn: (name, command, workspaceId, permission, accountId, initialInput) => {
+    if (!client) {
+      get().notify("daemon offline — can't spawn; reconnect and try again");
+      return;
+    }
+    client.spawnAgent(name, command, ".", workspaceId, permission, get().activeBoard, accountId, initialInput);
+  },
 
   createAccount: (cli, label) => client?.createAccount(cli, label),
   deleteAccount: (accountId) => client?.deleteAccount(accountId),
