@@ -740,6 +740,15 @@ export function VaultPanel() {
   const [renName, setRenName] = useState("");
   const [graphScope, setGraphScope] = useState<"local" | "vault">("local");
   const [outlineOpen, setOutlineOpen] = useState(false);
+  const [backlinksOpen, setBacklinksOpen] = useState(false);
+
+  // Backlinks — Obsidian's "Linked mentions": fetch the vault graph when a
+  // note opens so the footer can list every note that links here.
+  useEffect(() => { if (vaultFile) vaultGraphReq(); }, [vaultFile?.path]);
+  const backlinks = useMemo(() => {
+    if (!vaultFile || !vaultGraph) return [] as string[];
+    return vaultGraph.edges.filter(([, t]) => t === vaultFile.path).map(([s]) => s);
+  }, [vaultFile, vaultGraph]);
 
   /** Headings of the open note for the Outline dropdown (Obsidian's Outline
    * panel): skips frontmatter and fenced code, keeps the line index used by
@@ -1199,10 +1208,32 @@ export function VaultPanel() {
               </div>
             )
           )}
+          {backlinksOpen && (
+            <div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px solid var(--cv-glass-edge)" }}>
+              <div style={{ fontSize: 9.5, color: "var(--cv-ink-faint)", marginBottom: 3 }}>Linked mentions</div>
+              {backlinks.length === 0 && <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", fontStyle: "italic" }}>no notes link here</div>}
+              {backlinks.map((b) => (
+                <button
+                  key={b}
+                  onClick={() => vaultRead(b)}
+                  style={{ display: "block", background: "none", border: "none", cursor: "pointer", padding: "2px 0", fontSize: 11, color: "var(--cv-accent)", textDecoration: "underline", textDecorationColor: "color-mix(in srgb, var(--cv-accent) 55%, transparent)", textUnderlineOffset: 2 }}
+                >
+                  {b.replace(/\.md$/, "")}
+                </button>
+              ))}
+            </div>
+          )}
           <div style={{
             marginTop: 8, paddingTop: 6, borderTop: "1px solid var(--cv-glass-edge)",
             display: "flex", gap: 14, fontSize: 9.5, color: "var(--cv-ink-faint)",
           }}>
+            <span
+              onClick={() => setBacklinksOpen((o) => !o)}
+              title="Linked mentions — notes that link to this one"
+              style={{ cursor: "pointer", color: backlinks.length ? "var(--cv-accent)" : undefined }}
+            >
+              {backlinks.length} backlinks
+            </span>
             <span>{[...vaultFile.text.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)].length} links</span>
             <span>{vaultFile.text.split(/\s+/).filter(Boolean).length} words</span>
             <span>{vaultFile.text.length.toLocaleString()} characters</span>
