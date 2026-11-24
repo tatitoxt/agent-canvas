@@ -24,6 +24,7 @@ import { TerminalPanel } from "./components/TerminalPanel";
 import { InboxPanel } from "./components/InboxPanel";
 import { AutomationsPanel } from "./components/AutomationsPanel";
 import { LoopsPanel } from "./components/LoopsPanel";
+import { PresetsPanel } from "./components/PresetsPanel";
 import { AccountsPanel } from "./components/AccountsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { NotesPanel } from "./components/NotesPanel";
@@ -603,6 +604,7 @@ function Board() {
       )}
       {nav === "automations" && <AutomationsPanel />}
       {nav === "loops" && <LoopsPanel />}
+      {nav === "presets" && <PresetsPanel />}
       {nav === "accounts" && <AccountsPanel />}
       {nav === "memory" && <MemoryPanel />}
       {nav === "notes" && <NotesPanel />}

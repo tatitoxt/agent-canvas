@@ -178,6 +178,12 @@ type BoardState = {
   setLoopEnabled: (loopId: string, enabled: boolean) => void;
   pauseAll: (boardId?: string) => void;
   resumeAll: (boardId?: string) => void;
+  /** Symvibe's saveable layout presets — board id → preset name →
+   * roster with each member's name/command/position. localStorage. */
+  presets: Record<string, Record<string, { agents: { name: string; command: string; x: number; y: number }[] }>>;
+  savePreset: (name: string) => void;
+  applyPreset: (name: string) => void;
+  deletePreset: (name: string) => void;
   /** Symvibe-style orchestrator cards: a board node wired to consoles with
    * cables; its composer broadcasts the command to every wired PTY. */
   orchestrators: Record<string, { name: string; board: string; wired: string[] }>;
@@ -730,6 +736,57 @@ export const useBoard = create<BoardState>((set, get) => ({
   setLoopEnabled: (loopId, enabled) => client?.setLoopEnabled(loopId, enabled),
   pauseAll: (boardId) => client?.pauseAll(boardId),
   resumeAll: (boardId) => client?.resumeAll(boardId),
+
+  presets: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-presets") ?? "{}"); } catch { return {}; }
+  })(),
+
+  savePreset: (name) => {
+    const { activeBoard, positions, agents, presets } = get();
+    const roster = Object.values(agents)
+      .filter((a) => a.board_id === activeBoard)
+      .map((a) => ({
+        name: a.name,
+        command: a.command ?? "",
+        x: positions[a.id]?.x ?? 200,
+        y: positions[a.id]?.y ?? 120,
+      }));
+    const boardPresets = { ...(presets[activeBoard] ?? {}) };
+    boardPresets[name] = { agents: roster };
+    const next = { ...presets, [activeBoard]: boardPresets };
+    localStorage.setItem("cv-presets", JSON.stringify(next));
+    set({ presets: next, notice: `preset "${name}" saved` });
+  },
+
+  applyPreset: (name) => {
+    const { activeBoard, presets } = get();
+    const preset = presets[activeBoard]?.[name];
+    if (!preset) return;
+    const reposition = () => {
+      for (const a of Object.values(get().agents)) {
+        if (a.board_id !== activeBoard) continue;
+        const r = preset.agents.find((m) => m.name === a.name);
+        if (!r) continue;
+        set((s) => ({ positions: { ...s.positions, [a.id]: { x: r.x, y: r.y } } }));
+        client?.moveNode(a.id, r.x, r.y);
+      }
+    };
+    const live = Object.values(get().agents).filter((a) => a.board_id === activeBoard);
+    const missing = preset.agents.filter((r) => !live.some((a) => a.name === r.name));
+    for (const m of missing) get().spawn(m.name, m.command);
+    reposition();
+    if (missing.length) setTimeout(reposition, 2500); // once spawned ids land
+    set({ notice: `preset "${name}" applied${missing.length ? ` (+${missing.length} spawned)` : ""}` });
+  },
+
+  deletePreset: (name) => {
+    const { activeBoard, presets } = get();
+    const boardPresets = { ...(presets[activeBoard] ?? {}) };
+    delete boardPresets[name];
+    const next = { ...presets, [activeBoard]: boardPresets };
+    localStorage.setItem("cv-presets", JSON.stringify(next));
+    set({ presets: next });
+  },
 
   orchestrators: (() => {
     try {
