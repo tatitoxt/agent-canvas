@@ -603,8 +603,9 @@ function Board() {
     const tabEl = document.elementFromPoint(pt.clientX, pt.clientY);
     const target = tabEl?.closest?.("[data-board-tab]")?.getAttribute("data-board-tab");
     if (target) {
-      if (agents[node.id]) {
-        if (target !== (agents[node.id].board_id ?? "main")) {
+      const a = agents[node.id] ?? workspaces[node.id];
+      if (a) {
+        if (target !== (a.board_id ?? "main")) {
           useBoard.getState().moveToBoard(node.id, target);
           return;
         }
