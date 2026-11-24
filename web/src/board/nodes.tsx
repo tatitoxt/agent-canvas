@@ -145,9 +145,12 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const glow = attention || selected
     ? `0 0 22px color-mix(in srgb, ${statusColor} 30%, transparent), 0 12px 32px rgba(0,0,0,0.35)`
     : undefined;
-  // The comet ring walks the border in the state color — working green,
-  // waiting amber, blocked red (idle/done keep a quiet hairline).
-  const ring = attention || selected || data.status === "working";
+  // The ray IS the outline — a comet of the state color walking the
+  // whole border on every live status; idle/done/exited keep a hairline.
+  const ring =
+    attention ||
+    selected ||
+    (data.status !== "idle" && data.status !== "done");
   if (collapsed) {
     // Deska's collapsed terminal — glyph tile + number in a small pill.
     return (
@@ -309,9 +312,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       {/* Full-width section separator — Deska splits header from body
           edge to edge, not inside the padding. */}
       <div style={{ height: 1, background: "var(--cv-glass-edge)" }} />
-      {data.status === "working" && (
-        <div className="card-scanline" style={{ ["--cv-ring" as string]: statusColor }} />
-      )}
+
       {!collapsed && (
       <div style={{ padding: "9px 12px 10px" }}>
       {/* Meta row — files / account / permission. */}
