@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { NodeResizer, type NodeProps } from "@xyflow/react";
+import { NodeResizer, useReactFlow, type NodeProps } from "@xyflow/react";
 import { useBoard } from "../store/board";
 import { Icon } from "../components/icons";
 import { PANEL_DEFS } from "../components/panelRegistry";
@@ -8,6 +8,7 @@ import { PANEL_DEFS } from "../components/panelRegistry";
  * panel UI inside a real card (title bar, close X, resizable, movable
  * like any node). */
 export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
+  const rf = useReactFlow();
   const n = useBoard((s) => s.panelNodes[s.activeBoard]?.[id]);
   if (!n) return null;
   const def = PANEL_DEFS[n.panel];
@@ -54,6 +55,29 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
         )}
         <span style={{ fontSize: 11, fontWeight: 650, color: "var(--cv-ink)" }}>{def.title}</span>
         <span style={{ flex: 1 }} />
+        <button
+          className="nodrag"
+          title="Dock to the right edge of the view"
+          onClick={() => {
+            const { screenToFlowPosition } = rf;
+            const p = screenToFlowPosition({ x: window.innerWidth - (n.w + 20), y: 20 });
+            useBoard.getState().movePanelNode(id, p.x, p.y);
+          }}
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: 6,
+            border: "none",
+            background: "transparent",
+            color: "var(--cv-ink-faint)",
+            fontSize: 11,
+            cursor: "pointer",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          ⬈
+        </button>
         <button
           className="nodrag"
           title="Close panel"
