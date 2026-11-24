@@ -59,6 +59,8 @@ export type ServerMsg =
   | { type: "needs_attention"; agent_id: string; reason: string }
   | { type: "automation_saved"; automation: AutomationDef }
   | { type: "automation_deleted"; automation_id: string }
+  | { type: "loop_saved"; l: LoopDef }
+  | { type: "loop_deleted"; loop_id: string }
   | { type: "account_created"; account_id: string; cli: string; label: string }
   | { type: "account_deleted"; account_id: string }
   | { type: "memory"; node_id: string; text: string }
@@ -82,6 +84,7 @@ export type ServerMsg =
       layout: Record<string, [number, number]>;
       approvals?: Record<string, string>;
       automations?: AutomationDef[];
+      loops?: LoopDef[];
       accounts?: SnapshotAccount[];
     notes?: SnapshotNote[];
     artifacts?: SnapshotArtifact[];
@@ -118,6 +121,22 @@ export type AutomationDef = {
   last_run_at?: string | null;
   interval_secs?: number | null;
   next_run_at?: string | null;
+};
+
+/** An autopilot loop: an instruction the daemon re-sends to a console on
+ * a trigger — interval, agent-went-idle, or PTY output match. */
+export type LoopDef = {
+  loop_id: string;
+  board_id: string;
+  /** agent id or "*" (all live agents on the board) */
+  target: string;
+  instruction: string;
+  /** 'interval' | 'idle' | 'match' */
+  trigger: string;
+  interval_secs?: number | null;
+  pattern?: string | null;
+  enabled: boolean;
+  last_fired_at?: string | null;
 };
 
 export type Handlers = {
@@ -291,6 +310,25 @@ export class CanvasClient {
 
   deleteAutomation(automationId: string) {
     this.send({ cmd: "delete_automation", automation_id: automationId });
+  }
+
+  createLoop(l: {
+    board_id: string;
+    target: string;
+    instruction: string;
+    trigger: string;
+    interval_secs?: number;
+    pattern?: string;
+  }) {
+    this.send({ cmd: "create_loop", ...l });
+  }
+
+  deleteLoop(loopId: string) {
+    this.send({ cmd: "delete_loop", loop_id: loopId });
+  }
+
+  setLoopEnabled(loopId: string, enabled: boolean) {
+    this.send({ cmd: "set_loop_enabled", loop_id: loopId, enabled });
   }
 
   /** Supervised-input gate: release the held payload to the PTY. */

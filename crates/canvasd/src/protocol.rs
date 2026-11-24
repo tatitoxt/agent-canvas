@@ -159,6 +159,20 @@ pub enum ClientMsg {
     /// Run a saved automation once: spawns its agent and injects the prompt.
     RunAutomation { automation_id: String },
     DeleteAutomation { automation_id: String },
+    /// Define a loop: a saved instruction the daemon re-sends to a live
+    /// console on a trigger — 'interval' (every interval_secs), 'idle'
+    /// (when the agent finishes/goes idle) or 'match' (when the PTY tail
+    /// gains `pattern`). `target` is an agent id or "*" for the board.
+    CreateLoop {
+        board_id: String,
+        target: String,
+        instruction: String,
+        trigger: String,
+        interval_secs: Option<u64>,
+        pattern: Option<String>,
+    },
+    DeleteLoop { loop_id: String },
+    SetLoopEnabled { loop_id: String, enabled: bool },
     /// Stream an agent's saved transcript back as PtyOutput frames — for
     /// reading dead agents' terminals after they exited or after a
     /// daemon restart.
@@ -256,6 +270,8 @@ pub enum ServerMsg {
         notes: Vec<SnapshotNote>,
         /// Agent-produced artifacts.
         artifacts: Vec<SnapshotArtifact>,
+        /// Autopilot loops across boards.
+        loops: Vec<SnapshotLoop>,
     },
     /// A named account was registered.
     AccountCreated { account_id: String, cli: String, label: String },
@@ -281,6 +297,26 @@ pub enum ServerMsg {
     VaultFile { path: String, text: String },
     /// An artifact was removed.
     ArtifactDeleted { artifact_id: String },
+    /// A loop was created.
+    LoopSaved { l: SnapshotLoop },
+    /// A loop was removed.
+    LoopDeleted { loop_id: String },
+}
+
+/// An autopilot loop in a snapshot.
+#[derive(Debug, Clone, Serialize)]
+pub struct SnapshotLoop {
+    pub loop_id: String,
+    pub board_id: String,
+    /// Agent id or "*" (all live agents on the board).
+    pub target: String,
+    pub instruction: String,
+    /// 'interval' | 'idle' | 'match'.
+    pub trigger: String,
+    pub interval_secs: Option<u64>,
+    pub pattern: Option<String>,
+    pub enabled: bool,
+    pub last_fired_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

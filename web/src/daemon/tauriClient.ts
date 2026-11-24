@@ -95,7 +95,34 @@ export class TauriCanvasClient {
       permission: a.permission ?? null,
       idleSecs: a.idle_secs ?? null,
       onApproval: a.on_approval ?? null,
+      intervalSecs: a.interval_secs ?? null,
     }).catch(console.error);
+  }
+
+  createLoop(l: {
+    board_id: string;
+    target: string;
+    instruction: string;
+    trigger: string;
+    interval_secs?: number;
+    pattern?: string;
+  }) {
+    void invoke("create_loop", {
+      boardId: l.board_id,
+      target: l.target,
+      instruction: l.instruction,
+      trigger: l.trigger,
+      intervalSecs: l.interval_secs ?? null,
+      pattern: l.pattern ?? null,
+    }).catch(console.error);
+  }
+
+  deleteLoop(loopId: string) {
+    void invoke("delete_loop", { loopId }).catch(console.error);
+  }
+
+  setLoopEnabled(loopId: string, enabled: boolean) {
+    void invoke("set_loop_enabled", { loopId, enabled }).catch(console.error);
   }
 
   runAutomation(automationId: string) {

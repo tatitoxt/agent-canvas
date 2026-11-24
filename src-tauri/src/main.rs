@@ -11,7 +11,7 @@ use base64::Engine;
 use canvasd::agent::{canvas_result_line, dirty_diff, dirty_file_count, dirty_files, sensitive_line, worktree_branch, AgentManager};
 use canvasd::protocol::{AgentStatus, ServerMsg, SnapshotAgent, SnapshotAutomation, SnapshotDelegation};
 use canvasd::store::Store;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -597,6 +597,123 @@ fn delegate(
     Ok(id)
 }
 
+fn loop_to_snapshot(
+    (loop_id, board_id, target, instruction, trigger, interval_secs, pattern, enabled, last_fired_at): canvasd::store::LoopRow,
+) -> canvasd::protocol::SnapshotLoop {
+    canvasd::protocol::SnapshotLoop {
+        loop_id, board_id, target, instruction, trigger,
+        interval_secs: interval_secs.map(|v| v.max(0) as u64),
+        pattern, enabled, last_fired_at,
+    }
+}
+
+fn loop_targets(state: &CanvasState, board_id: &str, target: &str) -> Vec<String> {
+    let live: HashSet<String> = state.agents.ids().into_iter().collect();
+    if target == "*" {
+        state
+            .store
+            .agents_snapshot()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|a| a.7.as_deref() == Some(board_id) && live.contains(&a.0))
+            .map(|a| a.0)
+            .collect()
+    } else {
+        live.contains(target).then(|| target.to_string()).into_iter().collect()
+    }
+}
+
+/// Fire a loop: write its instruction to every resolved target — gated
+/// exactly like the automation prompt (supervised + sensitive → held).
+fn fire_loop(app: &AppHandle, state: &CanvasState, row: &canvasd::store::LoopRow) {
+    let (loop_id, board_id, target, instruction, _, _, _, _, _) = row;
+    for id in loop_targets(state, board_id, target) {
+        let bytes = format!("{instruction}\n");
+        let gated = state
+            .agents
+            .permission(&id)
+            .map(|p| p == "supervised")
+            .unwrap_or(false)
+            && sensitive_line(bytes.as_bytes()).is_some();
+        if gated {
+            if let Some(line) = sensitive_line(bytes.as_bytes()) {
+                state.pending_inputs.lock().unwrap().insert(id.clone(), bytes.into_bytes());
+                emit_control(app, &ServerMsg::NeedsApproval { agent_id: id, line });
+                continue;
+            }
+        }
+        let _ = state.agents.write(&id, bytes.as_bytes());
+    }
+    let _ = state.store.loop_fired(loop_id);
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+fn create_loop(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    board_id: String,
+    target: String,
+    instruction: String,
+    trigger: String,
+    interval_secs: Option<u64>,
+    pattern: Option<String>,
+) -> Result<String, String> {
+    let trigger = match trigger.as_str() {
+        "idle" | "match" => trigger,
+        _ => "interval",
+    };
+    let interval = interval_secs.map(|v| v.clamp(30, 86_400));
+    let id = uuid_v4ish();
+    state
+        .store
+        .loop_insert(&id, &board_id, &target, &instruction, trigger, interval, pattern.as_deref())
+        .map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::LoopSaved {
+        l: canvasd::protocol::SnapshotLoop {
+            loop_id: id.clone(), board_id, target, instruction,
+            trigger: trigger.to_string(), interval_secs: interval,
+            pattern, enabled: true, last_fired_at: None,
+        },
+    });
+    Ok(id)
+}
+
+#[tauri::command]
+fn delete_loop(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    loop_id: String,
+) -> Result<(), String> {
+    state.store.loop_deleted(&loop_id).map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::LoopDeleted { loop_id });
+    Ok(())
+}
+
+#[tauri::command]
+fn set_loop_enabled(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    loop_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    state
+        .store
+        .loop_set_enabled(&loop_id, enabled)
+        .map_err(|e| e.to_string())?;
+    if let Some(l) = state
+        .store
+        .loops_snapshot()
+        .unwrap_or_default()
+        .into_iter()
+        .find(|r| r.0 == loop_id)
+        .map(loop_to_snapshot)
+    {
+        emit_control(&app, &ServerMsg::LoopSaved { l });
+    }
+    Ok(())
+}
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 fn create_automation(
@@ -990,6 +1107,13 @@ fn snapshot(
                 interval_secs: interval_secs.map(|v| v.max(0) as u64), next_run_at,
             })
             .collect::<Vec<_>>(),
+        "loops": state
+            .store
+            .loops_snapshot()
+            .unwrap_or_default()
+            .into_iter()
+            .map(loop_to_snapshot)
+            .collect::<Vec<_>>(),
         "approvals": state
             .pending_inputs
             .lock()
@@ -1046,6 +1170,9 @@ fn main() {
             tauri::async_runtime::spawn(async move {
                 let mut last: HashMap<String, &'static str> = HashMap::new();
                 let mut last_diff: HashMap<String, (Vec<String>, String)> = HashMap::new();
+                // Edge detection for 'match' loops — fire once per
+                // appearance of the pattern, not every tick.
+                let mut match_seen: HashMap<String, bool> = HashMap::new();
                 let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
                 let mut tick_n: u32 = 0;
                 loop {
@@ -1147,12 +1274,57 @@ fn main() {
                                 });
                             }
                         }
+                        // Loops pass: interval loops due + 'match' loops
+                        // edge-detected on the PTY tail.
+                        if let Ok(rows) = state.store.loops_interval_due() {
+                            for row in &rows {
+                                fire_loop(&handle, &state, row);
+                            }
+                        }
+                        if let Ok(rows) = state.store.loops_enabled() {
+                            for row in &rows {
+                                if row.4 != "match" {
+                                    continue;
+                                }
+                                let Some(pat) = row.6.as_deref() else { continue };
+                                if pat.is_empty() { continue; }
+                                for id in loop_targets(&state, &row.1, &row.2) {
+                                    let key = format!("{}:{}", row.0, id);
+                                    let hit = state
+                                        .agents
+                                        .tail_text(&id)
+                                        .map(|t| t.contains(pat))
+                                        .unwrap_or(false);
+                                    if hit && !match_seen.get(&key).copied().unwrap_or(false) {
+                                        fire_loop(&handle, &state, row);
+                                    }
+                                    match_seen.insert(key, hit);
+                                }
+                            }
+                        }
                     }
 
                     // Derived statuses.
                     for (id, status) in state.agents.statuses() {
                         if last.get(&id) != Some(&status) {
+                            let prev = last.get(&id).copied();
                             last.insert(id.clone(), status);
+                            // 'idle' loops: working→quiet transition gets
+                            // the next instruction.
+                            if prev == Some("working") && status == "idle" {
+                                if let Ok(rows) = state.store.loops_enabled() {
+                                    for row in rows.iter().filter(|r| {
+                                        r.4 == "idle" && (r.2 == id || r.2 == "*")
+                                    }) {
+                                        if row.2 == "*"
+                                            && !loop_targets(&state, &row.1, "*").contains(&id)
+                                        {
+                                            continue;
+                                        }
+                                        fire_loop(&handle, &state, row);
+                                    }
+                                }
+                            }
                             let _ = state.store.agent_status(&id, status);
                             let s = match status {
                                 "working" => AgentStatus::Working,
@@ -1202,6 +1374,9 @@ fn main() {
             confirm_destructive,
             move_node,
             create_automation,
+            create_loop,
+            delete_loop,
+            set_loop_enabled,
             run_automation,
             delete_automation,
             transcript,

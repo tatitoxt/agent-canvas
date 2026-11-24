@@ -349,6 +349,13 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .into_iter()
                 .map(automation_to_snapshot)
                 .collect(),
+            loops: state
+                .store
+                .loops_snapshot()
+                .unwrap_or_default()
+                .into_iter()
+                .map(loop_to_snapshot)
+                .collect(),
             layout: state.store.layout_map().unwrap_or_default(),
             accounts: state
                 .store
@@ -766,6 +773,76 @@ fn handle_client_msg(
                 }),
             }
         }
+        ClientMsg::CreateLoop {
+            board_id,
+            target,
+            instruction,
+            trigger,
+            interval_secs,
+            pattern,
+        } => {
+            let trigger = match trigger.as_str() {
+                "idle" | "match" => trigger.as_str(),
+                _ => "interval",
+            };
+            let interval = interval_secs.map(|v| v.clamp(30, 86_400));
+            let loop_id = format!("loop-{}", uuid_like());
+            match state.store.loop_insert(
+                &loop_id,
+                &board_id,
+                &target,
+                &instruction,
+                trigger,
+                interval,
+                pattern.as_deref(),
+            ) {
+                Ok(()) => send_control(ServerMsg::LoopSaved {
+                    l: protocol::SnapshotLoop {
+                        loop_id,
+                        board_id,
+                        target,
+                        instruction,
+                        trigger: trigger.to_string(),
+                        interval_secs: interval,
+                        pattern,
+                        enabled: true,
+                        last_fired_at: None,
+                    },
+                }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
+            }
+        }
+        ClientMsg::DeleteLoop { loop_id } => {
+            match state.store.loop_deleted(&loop_id) {
+                Ok(()) => send_control(ServerMsg::LoopDeleted { loop_id }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
+            }
+        }
+        ClientMsg::SetLoopEnabled { loop_id, enabled } => {
+            match state.store.loop_set_enabled(&loop_id, enabled) {
+                Ok(()) => {
+                    let row = state
+                        .store
+                        .loops_snapshot()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .find(|r| r.0 == loop_id);
+                    if let Some(l) = row.map(loop_to_snapshot) {
+                        send_control(ServerMsg::LoopSaved { l });
+                    }
+                }
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
+            }
+        }
         ClientMsg::Transcript { agent_id } => {
             // Dead agents keep no live PTY — replay their on-disk
             // transcript through the normal output channel.
@@ -1084,6 +1161,54 @@ fn automation_to_snapshot(
 
 /// Shared by the manual RunAutomation arm and the schedule ticker:
 /// spawn the automation's agent, mark its guardrails, stamp the run.
+fn loop_to_snapshot(
+    (loop_id, board_id, target, instruction, trigger, interval_secs, pattern, enabled, last_fired_at): store::LoopRow,
+) -> protocol::SnapshotLoop {
+    protocol::SnapshotLoop {
+        loop_id,
+        board_id,
+        target,
+        instruction,
+        trigger,
+        interval_secs: interval_secs.map(|v| v.max(0) as u64),
+        pattern,
+        enabled,
+        last_fired_at,
+    }
+}
+
+/// Resolve a loop's target to live agent ids: "*" means every live agent
+/// on the loop's board; otherwise the single id if it is still running.
+fn loop_targets(state: &Arc<AppState>, board_id: &str, target: &str) -> Vec<String> {
+    let live: std::collections::HashSet<String> = state.agents.ids().into_iter().collect();
+    if target == "*" {
+        state
+            .store
+            .agents_snapshot()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|a| a.7.as_deref() == Some(board_id) && live.contains(&a.0))
+            .map(|a| a.0)
+            .collect()
+    } else {
+        live.contains(target).then(|| target.to_string()).into_iter().collect()
+    }
+}
+
+/// Fire a loop: write its instruction (gated, so a supervised console
+/// still gets its approval gate) to every resolved target.
+fn fire_loop(state: &Arc<AppState>, row: &store::LoopRow) {
+    let (loop_id, board_id, target, instruction, _, _, _, _, _) = row;
+    let ids = loop_targets(state, board_id, target);
+    for id in &ids {
+        gated_write(state, id, instruction.as_bytes());
+        gated_write(state, id, b"\n");
+    }
+    if !ids.is_empty() {
+        let _ = state.store.loop_fired(loop_id);
+    }
+}
+
 fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
     let (automation_id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, _, _, _) =
         row;
@@ -1236,6 +1361,11 @@ async fn main() -> Result<()> {
         tokio::spawn(async move {
             let mut last: std::collections::HashMap<String, &'static str> =
                 std::collections::HashMap::new();
+            // Edge detection for 'match' loops: loop_id:agent_id → the
+            // pattern was present in the tail on the previous pass, so a
+            // sticky pattern fires once, not every tick.
+            let mut match_seen: std::collections::HashMap<String, bool> =
+                std::collections::HashMap::new();
             let mut last_line: std::collections::HashMap<String, String> =
                 std::collections::HashMap::new();
             let mut last_diff: std::collections::HashMap<String, (Vec<String>, String)> =
@@ -1348,10 +1478,68 @@ async fn main() -> Result<()> {
                         }
                         Err(e) => warn!(error = %e, "automation schedule check failed"),
                     }
+                    // Loops pass: interval loops whose period elapsed,
+                    // plus 'match' loops edge-detected on the PTY tail
+                    // (fire once per appearance of the pattern).
+                    match store.loops_interval_due() {
+                        Ok(rows) => {
+                            for row in &rows {
+                                fire_loop(&sched_state, row);
+                            }
+                        }
+                        Err(e) => warn!(error = %e, "loop schedule check failed"),
+                    }
+                    match store.loops_enabled() {
+                        Ok(rows) => {
+                            for row in &rows {
+                                match row.4.as_str() {
+                                    "match" => {
+                                        let Some(pat) = row.6.as_deref() else { continue };
+                                        if pat.is_empty() { continue; }
+                                        for id in loop_targets(&sched_state, &row.1, &row.2) {
+                                            let key = format!("{}:{}", row.0, id);
+                                            let hit = sched_state
+                                                .agents
+                                                .tail_text(&id)
+                                                .map(|t| t.contains(pat))
+                                                .unwrap_or(false);
+                                            if hit && !match_seen.get(&key).copied().unwrap_or(false) {
+                                                fire_loop(&sched_state, row);
+                                            }
+                                            match_seen.insert(key, hit);
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        Err(e) => warn!(error = %e, "loop schedule check failed"),
+                    }
                 }
                 for (id, status) in agents.statuses() {
                     if last.get(&id) != Some(&status) {
+                        let prev = last.get(&id).copied();
                         last.insert(id.clone(), status);
+                        // 'idle' loops: an agent that was working and just
+                        // went quiet gets its next instruction — Symvibe's
+                        // "keep them moving" autopilot.
+                        if prev == Some("working") && status == "idle" {
+                            if let Ok(rows) = store.loops_enabled() {
+                                for row in rows.iter().filter(|r| {
+                                    r.4 == "idle" && (r.2 == id || r.2 == "*")
+                                }) {
+                                    // A board-wide loop only fires for
+                                    // agents that live on its board.
+                                    if row.2 == "*"
+                                        && !loop_targets(&sched_state, &row.1, "*")
+                                            .contains(&id)
+                                    {
+                                        continue;
+                                    }
+                                    fire_loop(&sched_state, row);
+                                }
+                            }
+                        }
                         let _ = store.agent_status(&id, status);
                         let s = match status {
                             "working" => AgentStatus::Working,

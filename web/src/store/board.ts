@@ -42,7 +42,7 @@ export type LiveEdge = {
   resolved_at?: string | null;
 };
 
-import type { AutomationDef } from "../daemon/client";
+import type { AutomationDef, LoopDef } from "../daemon/client";
 
 type DaemonTransport = CanvasClient | TauriCanvasClient;
 
@@ -92,6 +92,8 @@ type BoardState = {
   viewCmdN: number;
   /** Saved automations (Deska-style guardrailed task runs). */
   automations: Record<string, AutomationDef>;
+  /** Autopilot loops — an instruction re-sent to consoles on a trigger. */
+  loops: Record<string, LoopDef>;
   /** agent_id → latest automation guardrail alert (hang / denied policy). */
   attention: Record<string, string>;
   ptyListeners: Record<string, (bytes: Uint8Array) => void>;
@@ -164,6 +166,16 @@ type BoardState = {
   }) => void;
   runAutomation: (automationId: string) => void;
   deleteAutomation: (automationId: string) => void;
+  createLoop: (l: {
+    board_id: string;
+    target: string;
+    instruction: string;
+    trigger: string;
+    interval_secs?: number;
+    pattern?: string;
+  }) => void;
+  deleteLoop: (loopId: string) => void;
+  setLoopEnabled: (loopId: string, enabled: boolean) => void;
   /** Symvibe-style orchestrator cards: a board node wired to consoles with
    * cables; its composer broadcasts the command to every wired PTY. */
   orchestrators: Record<string, { name: string; board: string; wired: string[] }>;
@@ -214,6 +226,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   moveHistory: [],
   viewCmdN: 0,
   automations: {},
+  loops: {},
   attention: {},
   ptyListeners: {},
   ptyBuffers: {},
@@ -336,6 +349,17 @@ export const useBoard = create<BoardState>((set, get) => ({
             set({ automations: next });
             break;
           }
+          case "loop_saved":
+            set({
+              loops: { ...get().loops, [msg.l.loop_id]: msg.l },
+            });
+            break;
+          case "loop_deleted": {
+            const next = { ...get().loops };
+            delete next[msg.loop_id];
+            set({ loops: next });
+            break;
+          }
           case "diff":
             if (agents[msg.agent_id]) {
               set({
@@ -447,6 +471,9 @@ export const useBoard = create<BoardState>((set, get) => ({
             const automations = Object.fromEntries(
               (msg.automations ?? []).map((a) => [a.id, a]),
             );
+            const loops = Object.fromEntries(
+              (msg.loops ?? []).map((l) => [l.loop_id, l]),
+            );
             const boards = Object.fromEntries(
               (msg.boards ?? []).map((b) => [b.board_id, b.name]),
             );
@@ -457,6 +484,7 @@ export const useBoard = create<BoardState>((set, get) => ({
               workspaces,
               approvals: msg.approvals ?? {},
               automations,
+              loops,
               boards: { main: "Main", ...boards },
               accounts,
               notes,
@@ -695,6 +723,9 @@ export const useBoard = create<BoardState>((set, get) => ({
   createAutomation: (a) => client?.createAutomation(a),
   runAutomation: (automationId) => client?.runAutomation(automationId),
   deleteAutomation: (automationId) => client?.deleteAutomation(automationId),
+  createLoop: (l) => client?.createLoop(l),
+  deleteLoop: (loopId) => client?.deleteLoop(loopId),
+  setLoopEnabled: (loopId, enabled) => client?.setLoopEnabled(loopId, enabled),
 
   orchestrators: (() => {
     try {

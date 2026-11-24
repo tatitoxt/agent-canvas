@@ -39,6 +39,20 @@ pub type AutomationRow = (
     Option<String>,
 );
 
+/// Row of the loops table: (id, board_id, target, instruction,
+/// trigger_kind, interval_secs, pattern, enabled, last_fired_at).
+pub type LoopRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    Option<i64>,
+    Option<String>,
+    bool,
+    Option<String>,
+);
+
 pub struct Store {
     conn: Mutex<Connection>,
 }
@@ -204,6 +218,26 @@ impl Store {
         if version < 10 {
             conn.execute_batch("ALTER TABLE notes ADD COLUMN due TEXT;
                  PRAGMA user_version = 10;")?;
+        }
+        // v10 → v11: loops — a saved instruction the daemon re-sends to a
+        // live console on a trigger (interval / agent-went-idle / output
+        // match), Symvibe's "put your agents on autopilot".
+        if version < 11 {
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS loops (
+                   id TEXT PRIMARY KEY,
+                   board_id TEXT NOT NULL DEFAULT 'main',
+                   target TEXT NOT NULL,
+                   instruction TEXT NOT NULL,
+                   trigger_kind TEXT NOT NULL DEFAULT 'interval',
+                   interval_secs INTEGER,
+                   pattern TEXT,
+                   enabled INTEGER NOT NULL DEFAULT 1,
+                   last_fired_at TEXT,
+                   created_at TEXT DEFAULT (datetime('now'))
+                 );
+                 PRAGMA user_version = 11;",
+            )?;
         }
         Ok(Self { conn: Mutex::new(conn) })
     }
@@ -721,6 +755,119 @@ impl Store {
             ))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Create a loop: `target` is an agent id or "*" (every live agent on
+    /// the board). `trigger`: 'interval' (needs interval_secs), 'idle'
+    /// (fires when the agent finishes/goes idle) or 'match' (fires when
+    /// the PTY tail starts containing `pattern`, edge-detected).
+    pub fn loop_insert(
+        &self,
+        id: &str,
+        board_id: &str,
+        target: &str,
+        instruction: &str,
+        trigger: &str,
+        interval_secs: Option<u64>,
+        pattern: Option<&str>,
+    ) -> Result<()> {
+        self.conn.lock().unwrap().execute(
+            "INSERT INTO loops (id, board_id, target, instruction, trigger_kind, interval_secs, pattern) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            (id, board_id, target, instruction, trigger, interval_secs.map(|v| v as i64), pattern),
+        )?;
+        Ok(())
+    }
+
+    pub fn loops_snapshot(&self) -> Result<Vec<LoopRow>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare(
+            "SELECT id, board_id, target, instruction, trigger_kind, interval_secs, pattern, enabled, last_fired_at FROM loops ORDER BY created_at",
+        )?;
+        let rows = st.query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+                r.get::<_, i64>(7)? != 0,
+                r.get(8)?,
+            ))
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Enabled loops on a board (scheduler read each tick).
+    pub fn loops_enabled(&self) -> Result<Vec<LoopRow>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare(
+            "SELECT id, board_id, target, instruction, trigger_kind, interval_secs, pattern, enabled, last_fired_at FROM loops WHERE enabled = 1",
+        )?;
+        let rows = st.query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+                r.get::<_, i64>(7)? != 0,
+                r.get(8)?,
+            ))
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn loop_set_enabled(&self, id: &str, enabled: bool) -> Result<()> {
+        self.conn.lock().unwrap().execute(
+            "UPDATE loops SET enabled = ?2 WHERE id = ?1",
+            (id, if enabled { 1 } else { 0 }),
+        )?;
+        Ok(())
+    }
+
+    pub fn loop_fired(&self, id: &str) -> Result<()> {
+        self.conn.lock().unwrap().execute(
+            "UPDATE loops SET last_fired_at = datetime('now') WHERE id = ?1",
+            (id,),
+        )?;
+        Ok(())
+    }
+
+    /// Interval loops whose period elapsed since last_fired_at (or never
+    /// fired — those are due immediately).
+    pub fn loops_interval_due(&self) -> Result<Vec<LoopRow>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare(
+            "SELECT id, board_id, target, instruction, trigger_kind, interval_secs, pattern, enabled, last_fired_at FROM loops
+             WHERE enabled = 1 AND trigger_kind = 'interval'
+               AND (last_fired_at IS NULL OR datetime(last_fired_at, '+' || interval_secs || ' seconds') <= datetime('now'))",
+        )?;
+        let rows = st.query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+                r.get::<_, i64>(7)? != 0,
+                r.get(8)?,
+            ))
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn loop_deleted(&self, id: &str) -> Result<()> {
+        self.conn
+            .lock()
+            .unwrap()
+            .execute("DELETE FROM loops WHERE id = ?1", (id,))?;
+        Ok(())
     }
 
     pub fn automation_deleted(&self, id: &str) -> Result<()> {
