@@ -3,6 +3,7 @@ import { useBoard } from "../store/board";
 import { isTauri } from "../daemon/tauriClient";
 import { Icon } from "./icons";
 import { ToolsMenu, type ToolsMenuActions } from "./ToolsRail";
+import { PANEL_META } from "./panelMeta";
 
 const pill: React.CSSProperties = {
   padding: "5px 10px",
@@ -92,10 +93,59 @@ export function Topbar({
 
   const activeBoard = useBoard((s) => s.activeBoard);
   const openAgents = liveAgents.filter((a) => (a.board_id ?? "main") === activeBoard);
+  const shapes = useBoard((s) => s.shapes);
+  const positions = useBoard((s) => s.positions);
+  const panelNodes = useBoard((s) => s.panelNodes);
+  const termNodes = useBoard((s) => s.termNodes);
+  const mdNodes = useBoard((s) => s.mdNodes);
+  const webNodes = useBoard((s) => s.webNodes);
+  const orchestrators = useBoard((s) => s.orchestrators);
 
   const [menu, setMenu] = useState<"machine" | "ws" | "wt" | "tasks" | "usage" | "panels" | null>(null);
   const [wsName, setWsName] = useState("");
   const [wsRepo, setWsRepo] = useState("");
+
+  // ── Deska "Panels" switcher: every open window on the board, grouped by
+  // the region rect its center sits in. Click focuses the card.
+  type PanelItem = { id: string; icon: string; label: string; hint: string; cx: number; cy: number };
+  const panelItems: PanelItem[] = [];
+  for (const a of openAgents) {
+    const p = positions[a.id] ?? { x: 0, y: 0 };
+    panelItems.push({ id: a.id, icon: "bot", label: a.name, hint: `${a.status} — click to focus`, cx: p.x + 180, cy: p.y + 110 });
+  }
+  for (const [id, o] of Object.entries(orchestrators)) {
+    if (o.board !== activeBoard) continue;
+    const p = positions[id] ?? { x: 0, y: 0 };
+    panelItems.push({ id, icon: "orchestrator", label: o.name, hint: "orchestrator — click to focus", cx: p.x + 180, cy: p.y + 110 });
+  }
+  for (const [id, n] of Object.entries(termNodes[activeBoard] ?? {})) {
+    const ag = agents[id.slice(5)];
+    panelItems.push({ id, icon: "terminal", label: ag ? `${ag.name} — terminal` : "Terminal", hint: "popped-out terminal — click to focus", cx: n.x + n.w / 2, cy: n.y + n.h / 2 });
+  }
+  for (const [id, n] of Object.entries(panelNodes[activeBoard] ?? {})) {
+    const meta = PANEL_META[id.slice(6)];
+    panelItems.push({ id, icon: meta?.icon ?? "panels", label: meta?.title ?? id.slice(6), hint: "panel — click to focus", cx: n.x + n.w / 2, cy: n.y + n.h / 2 });
+  }
+  for (const [id, path] of Object.entries(mdNodes[activeBoard] ?? {})) {
+    const p = positions[id] ?? { x: 0, y: 0 };
+    panelItems.push({ id, icon: "notes", label: path.split("/").pop() ?? "note", hint: path, cx: p.x + 170, cy: p.y + 130 });
+  }
+  for (const [id, url] of Object.entries(webNodes[activeBoard] ?? {})) {
+    const p = positions[id] ?? { x: 0, y: 0 };
+    let host = url;
+    try { host = new URL(url).hostname; } catch { /* keep the raw url */ }
+    panelItems.push({ id, icon: "web", label: host, hint: "web card — click to focus", cx: p.x + 260, cy: p.y + 170 });
+  }
+  const regionRects = Object.values(shapes[activeBoard] ?? {}).filter(
+    (s) => s.kind === "rect" && s.w != null && s.h != null,
+  );
+  const itemRegion = (it: PanelItem) =>
+    regionRects.find((r) => it.cx >= r.x && it.cx <= r.x + r.w! && it.cy >= r.y && it.cy <= r.y + r.h!);
+  const panelRegions = regionRects
+    .map((shape) => ({ shape, members: panelItems.filter((it) => itemRegion(it) === shape) }))
+    .sort((a, b) => (a.shape.text ?? "").localeCompare(b.shape.text ?? ""));
+  const looseItems = panelItems.filter((it) => !itemRegion(it));
+
   const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -320,7 +370,7 @@ export function Topbar({
             onClick={() => setMenu((m) => (m === "panels" ? null : "panels"))}
           >
             <Icon name="windows" size={15} color={menu === "panels" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
-            {openAgents.length > 0 && (
+            {panelItems.length > 0 && (
               <span
                 style={{
                   position: "absolute",
@@ -338,18 +388,56 @@ export function Topbar({
                   padding: "0 3px",
                 }}
               >
-                {openAgents.length}
+                {panelItems.length}
               </span>
             )}
           </button>
           {drop("panels", (
             <>
-              <div style={sectionLabel}>Panels on the canvas</div>
-              {openAgents.length === 0 &&
-                row("panels", "no open panels", "spawn one from the Orchestrator's + spawn")}
-              {openAgents.map((a) =>
-                row("terminal", a.name, `${a.status} — click to open its panel`, () =>
-                  { useBoard.getState().requestFocus(a.id); useBoard.getState().requestTerm(a.id, a.name); }),
+              <div style={sectionLabel}>Panels · {panelItems.length + panelRegions.length}</div>
+              {panelItems.length === 0 && panelRegions.length === 0 &&
+                row("panels", "nothing on the board", "right-click the canvas → add to board")}
+              {panelRegions.map((r) => (
+                <div key={r.shape.id}>
+                  <button
+                    style={menuRow}
+                    title={`${r.members.length} window${r.members.length === 1 ? "" : "s"} — click to focus the region`}
+                    onClick={() => { useBoard.getState().requestFocus(r.shape.id); setMenu(null); }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <Icon name="region" size={14} color="var(--cv-accent)" />
+                    <span style={{ flex: 1 }}>{r.shape.text ?? "Region"}</span>
+                    <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>{r.members.length}</span>
+                  </button>
+                  {r.members.map((it) =>
+                    <button
+                      key={it.id}
+                      style={{ ...menuRow, paddingLeft: 24 }}
+                      title={it.hint}
+                      onClick={() => { useBoard.getState().requestFocus(it.id); setMenu(null); }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <Icon name={it.icon} size={13} color="var(--cv-ink-dim)" />
+                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{it.label}</span>
+                    </button>,
+                  )}
+                </div>
+              ))}
+              {looseItems.length > 0 && <div style={sectionLabel}>Not in a region · {looseItems.length}</div>}
+              {looseItems.map((it) =>
+                <button
+                  key={it.id}
+                  style={menuRow}
+                  title={it.hint}
+                  onClick={() => { useBoard.getState().requestFocus(it.id); setMenu(null); }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <Icon name={it.icon} size={13} color="var(--cv-ink-dim)" />
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{it.label}</span>
+                </button>,
               )}
             </>
           ))}
