@@ -46,7 +46,7 @@ function resolveNotePath(entries: string[], name: string): string | null {
  * notes that don't exist yet get Obsidian's dashed 'unresolved' underline. */
 function WikiLink({ name, shown, onLink }: { name: string; shown: string; onLink?: (name: string) => void }) {
   const entries = useBoard((s) => s.vaultEntries);
-  const path = resolveNotePath(entries, name);
+  const path = resolveNotePath(entries, name.split("#")[0]);
   const text = useBoard((s) => (path ? s.mdContents[path] : undefined));
   const peek = useBoard((s) => s.vaultPeek);
   const [open, setOpen] = useState(false);
@@ -1005,6 +1005,7 @@ export function VaultPanel() {
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [backlinksOpen, setBacklinksOpen] = useState(false);
   const [imgView, setImgView] = useState<string | null>(null);
+  const [pendingAnchor, setPendingAnchor] = useState<string | null>(null);
 
   // Click in the tree: .md opens the reader, an image opens a lightbox.
   const openEntry = (e: string) => {
@@ -1035,6 +1036,15 @@ export function VaultPanel() {
     });
     return out;
   }, [vaultFile]);
+
+  // After opening a note via [[note#heading]], scroll to that heading
+  // once its content (and thus the vh-<line> anchors) is rendered.
+  useEffect(() => {
+    if (!pendingAnchor || !vaultFile) return;
+    const h = headings.find((x) => x.title.trim().toLowerCase() === pendingAnchor);
+    if (h) document.getElementById(`vh-${h.line}`)?.scrollIntoView({ block: "start" });
+    setPendingAnchor(null);
+  }, [vaultFile?.path, pendingAnchor, headings]);
 
   const openDaily = () => {
     if (!vaultDir) { notify("open a vault first"); return; }
@@ -1077,8 +1087,14 @@ export function VaultPanel() {
   const tree = buildTree(filter ? shown : vaultEntries);
   const vaultName = vaultDir.replace(/\/+$/, "").split("/").pop() ?? "vault";
   const openByName = (name: string) => {
-    const hit = vaultEntries.find((e) => e === name || e.endsWith(`/${name}.md`) || e === `${name}.md` || e.replace(/\.md$/, "") === name);
-    if (hit) vaultRead(hit);
+    // [[note#heading]] — Obsidian opens the note and scrolls to the heading.
+    const [base, ...rest] = name.split("#");
+    const anchor = rest.join("#").trim().toLowerCase();
+    const hit = resolveNotePath(vaultEntries, base.trim());
+    if (hit) {
+      vaultRead(hit);
+      if (anchor) setPendingAnchor(anchor);
+    }
   };
 
   // Embed resolution for ![[note]] / ![[img.png]] transclusion:
