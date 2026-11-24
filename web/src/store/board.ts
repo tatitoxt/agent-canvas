@@ -22,6 +22,8 @@ export type LiveAgent = {
   board_id?: string | null;
   /** Label of the named CLI account this agent signs in as, if any. */
   account_label?: string | null;
+  /** Present in the connect snapshot — a pre-existing (restored) session. */
+  restored?: boolean;
   output_bytes?: number;
 };
 
@@ -219,6 +221,8 @@ type BoardState = {
   /** Rolling PTY scrollback per agent (~64KB) — transcript shown when a
    * terminal opens, and rebuilt from the daemon's replay on reconnect. */
   ptyBuffers: Record<string, Uint8Array>;
+  /** Last known PTY size per agent (daemon default 80×24). */
+  ptySize: Record<string, { cols: number; rows: number }>;
   connect: (token: string) => void;
   setActiveBoard: (boardId: string) => void;
   createBoard: (name: string) => void;
@@ -412,6 +416,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   attention: {},
   ptyListeners: {},
   ptyBuffers: {},
+  ptySize: {},
 
   connect: (token: string) => {
     const t = token || TOKEN;
@@ -614,6 +619,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                   account_label: a.account_label ?? null,
                   worktree: a.worktree || undefined,
                   output_bytes: a.output_bytes,
+                  restored: true,
                 },
               ]),
             );
@@ -1633,7 +1639,10 @@ export const useBoard = create<BoardState>((set, get) => ({
     }),
 
   sendInput: (agentId, bytes) => client?.ptyInput(agentId, bytes),
-  resizePty: (agentId, cols, rows) => client?.resize(agentId, cols, rows),
+  resizePty: (agentId, cols, rows) => {
+    set({ ptySize: { ...get().ptySize, [agentId]: { cols, rows } } });
+    client?.resize(agentId, cols, rows);
+  },
 
   requestTranscript: (agentId) => client?.transcript(agentId),
 }));

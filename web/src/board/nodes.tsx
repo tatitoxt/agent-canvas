@@ -447,6 +447,11 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         {data.permission === "auto_accept" && (
           <span style={{ color: "#9a7fd4", fontWeight: 600 }}>▸ accept edits on</span>
         )}
+        {data.restored && (
+          <span title="Session pre-dates this window — replayed by the daemon" style={{ color: "var(--cv-ink-faint)" }}>
+            · restored
+          </span>
+        )}
         {data.branch && (
           <span
             style={{
@@ -459,6 +464,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           </span>
         )}
         <span style={{ marginLeft: "auto", fontFamily: "ui-monospace, SFMono-Regular, monospace" }}>
+          <FooterSize agentId={data.id} />
           <FooterModel agentId={data.id} />
         </span>
       </div>
@@ -467,6 +473,14 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       <Handle type="source" position={Position.Right} />
     </div>
   );
+}
+
+function FooterSize({ agentId }: { agentId?: string }) {
+  const size = useBoard((s) => (agentId ? s.ptySize[agentId] : undefined));
+  const live = useBoard((s) => (agentId ? !!s.ptyBuffers[agentId]?.length : false));
+  if (!live && !size) return null;
+  const { cols, rows } = size ?? { cols: 80, rows: 24 };
+  return <>{cols}×{rows}&nbsp;&nbsp;</>;
 }
 
 /** Reads the same pty buffer as MiniTerm and reports the model the CLI

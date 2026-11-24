@@ -24,6 +24,10 @@ export type AgentNodeData = {
   branch?: string;
   /** Part of an in-flight delegation — orange outline (talking to orchestrator). */
   delegating?: boolean;
+  /** Session pre-dates this client's connect — daemon replayed it (Deska "restored session"). */
+  restored?: boolean;
+  /** Live PTY size — footer shows `cols×rows` like Deska. */
+  ptySize?: { cols: number; rows: number };
 };
 
 export type OrchestratorNodeData = {

@@ -339,6 +339,7 @@ function Board() {
           task: a.status === "exited" ? "session ended — transcript" : (a.lastLine ?? "live PTY — click to open"),
           pendingApproval: approvals[a.id],
           branch: a.branch,
+          restored: a.restored,
         },
       };
     });
