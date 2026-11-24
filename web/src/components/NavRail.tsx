@@ -474,6 +474,8 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
     Object.values(agents).filter((a) => a.status === "waiting" || a.status === "blocked").length +
     Object.values(edges).filter((e) => e.state === "delegated").length;
   const [dexText, setDexText] = useState("");
+  const [dexHist, setDexHist] = useState<string[]>([]);
+  const [histIdx, setHistIdx] = useState(-1);
   const dexInputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -555,9 +557,22 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
             onChange={(e) => setDexText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && dexText.trim()) {
-                useBoard.getState().threadSend(dexText.trim());
+                const t = dexText.trim();
+                useBoard.getState().threadSend(t);
+                setDexHist((h) => [...h.slice(-19), t]);
+                setHistIdx(-1);
                 setDexText("");
                 onSelect("thread");
+              } else if (e.key === "ArrowUp" && dexHist.length) {
+                e.preventDefault();
+                const i = histIdx < 0 ? dexHist.length - 1 : Math.max(0, histIdx - 1);
+                setHistIdx(i);
+                setDexText(dexHist[i]);
+              } else if (e.key === "ArrowDown" && histIdx >= 0) {
+                e.preventDefault();
+                const i = histIdx + 1;
+                if (i >= dexHist.length) { setHistIdx(-1); setDexText(""); }
+                else { setHistIdx(i); setDexText(dexHist[i]); }
               }
             }}
             placeholder="Ask Dex…"
