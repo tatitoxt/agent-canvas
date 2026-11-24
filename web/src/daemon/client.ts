@@ -369,8 +369,8 @@ export class CanvasClient {
     this.send({ cmd: "set_permission", agent_id: agentId, permission });
   }
 
-  delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string, accountId?: string, boardId?: string) {
-    this.send({ cmd: "delegate", from, name, command, task, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null, account_id: accountId ?? null, board_id: boardId ?? null });
+  delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string, accountId?: string, boardId?: string, initialInput?: string) {
+    this.send({ cmd: "delegate", from, name, command, task, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null, account_id: accountId ?? null, board_id: boardId ?? null, initial_input: initialInput ?? null });
   }
 
   /** Ask the daemon to replay an (exited) agent's saved transcript

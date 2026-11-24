@@ -149,8 +149,8 @@ export class TauriCanvasClient {
     void invoke("delete_automation", { automationId }).catch(console.error);
   }
 
-  delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string, accountId?: string) {
-    void invoke("delegate", { from, name, command, task, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null, accountId: accountId ?? null }).catch(
+  delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string, accountId?: string, boardId?: string, initialInput?: string) {
+    void invoke("delegate", { from, name, command, task, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null, accountId: accountId ?? null, boardId: boardId ?? null, initialInput: initialInput ?? null }).catch(
       console.error,
     );
   }

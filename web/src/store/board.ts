@@ -925,7 +925,9 @@ export const useBoard = create<BoardState>((set, get) => ({
     ]
       .filter(Boolean)
       .join("\n");
-    get().spawn(name, cmd, a.workspace_id ?? undefined, a.permission, undefined, brief);
+    // The handoff IS a delegation: wire the edge predecessor → successor and
+    // type the brief once the CLI boots.
+    client?.delegate(agentId, name, cmd, `handoff from ${a.name}`, ".", a.workspace_id ?? undefined, a.permission, undefined, undefined, brief);
     get().notify(`handoff: ${a.name} → ${name}`);
   },
 

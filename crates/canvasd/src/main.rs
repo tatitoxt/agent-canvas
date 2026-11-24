@@ -695,7 +695,7 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::Delegate { from, name, command, task, cwd, workspace_id, permission, account_id, board_id } => {
+        ClientMsg::Delegate { from, name, command, task, cwd, workspace_id, permission, account_id, board_id, initial_input } => {
             // A delegation IS a spawn + a persisted edge. The edge returns
             // when the child's PTY prints `CANVAS_RESULT: <summary>`.
             let parent_level = state.store.agent_permission(&from).ok().flatten();
@@ -711,6 +711,16 @@ fn handle_client_msg(
                         warn!(error = %e, "failed to persist delegation");
                     }
                     state.pending_results.lock().unwrap().insert(id.clone(), edge_id.clone());
+                    if let Some(text) = initial_input {
+                        let agents = state.agents.clone();
+                        let target = id.clone();
+                        tokio::spawn(async move {
+                            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                            let mut data = text.into_bytes();
+                            data.push(b'\r');
+                            let _ = agents.write(&target, &data);
+                        });
+                    }
                     send_control(ServerMsg::Spawned {
                         agent_id: id.clone(),
                         name,

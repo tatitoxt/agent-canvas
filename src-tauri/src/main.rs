@@ -666,6 +666,7 @@ fn delegate(
     permission: Option<String>,
     account_id: Option<String>,
     board_id: Option<String>,
+    initial_input: Option<String>,
 ) -> Result<String, String> {
     let parent_level = state.store.agent_permission(&from).ok().flatten();
     let requested = canvasd::protocol::normalize_permission(permission.as_deref());
@@ -681,6 +682,18 @@ fn delegate(
         .lock()
         .unwrap()
         .insert(id.clone(), edge_id.clone());
+    if let Some(text) = initial_input {
+        // Type the brief once the CLI has booted (same delay as spawn_agent).
+        let app2 = app.clone();
+        let target = id.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            let mut data = text.into_bytes();
+            data.push(b'\r');
+            let st = app2.state::<CanvasState>();
+            let _ = st.agents.write(&target, &data);
+        });
+    }
     emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board });
     emit_control(
         &app,

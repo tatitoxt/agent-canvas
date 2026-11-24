@@ -148,6 +148,9 @@ pub enum ClientMsg {
         /// delegator's board (delegators that aren't agents, e.g. an
         /// orchestrator node, have no board row to inherit).
         board_id: Option<String>,
+        /// Optional first input typed into the child's PTY after boot
+        /// (e.g. a handoff brief) — the edge's `task` stays the short label.
+        initial_input: Option<String>,
     },
     /// Register a named account for a CLI (e.g. a second Codex sign-in).
     /// The account gets its own config dir under .canvas/accounts/.
