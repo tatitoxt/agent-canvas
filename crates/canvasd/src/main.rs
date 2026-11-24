@@ -179,6 +179,24 @@ async fn share_create(
     Json(serde_json::json!({ "id": id, "url": format!("/share/{id}") })).into_response()
 }
 
+/// GET /api/export — full daemon state dump (boards, layout, delegations,
+/// agents, workspaces) as JSON. The portable answer to "do my canvases
+/// persist" — restore happens by moving .canvas/board.db between machines.
+async fn export_state(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    Json(serde_json::json!({
+        "version": 1,
+        "exported_at": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+        "boards": state.store.boards_snapshot().unwrap_or_default(),
+        "layout": state.store.layout_map().unwrap_or_default(),
+        "agents": state.store.agents_snapshot().unwrap_or_default(),
+        "workspaces": state.store.workspaces_snapshot().unwrap_or_default(),
+        "delegations": state.store.delegations_snapshot().unwrap_or_default(),
+    }))
+}
+
 /// GET /share/{id} — public endpoint (no token): the unguessable id is the
 /// capability. Streams the stored bytes with their mime type.
 async fn share_get(
@@ -1814,6 +1832,7 @@ async fn main() -> Result<()> {
 
     let api = Router::new()
         .route("/health", get(health))
+        .route("/export", get(export_state))
         .route("/github/{*rest}", get(github_proxy))
         .route("/share", axum::routing::post(share_create))
         .layer(axum::middleware::from_fn_with_state(
