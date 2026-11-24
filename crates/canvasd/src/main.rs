@@ -1434,6 +1434,9 @@ async fn main() -> Result<()> {
     let api = Router::new()
         .route("/health", get(health))
         .route("/github/{*rest}", get(github_proxy))
+        // The Vite dev origin (:5174) calls the daemon cross-origin —
+        // localhost-only API, so any localhost origin may read it.
+        .layer(tower_http::cors::CorsLayer::permissive())
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
