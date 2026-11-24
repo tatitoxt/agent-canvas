@@ -452,6 +452,8 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
     Object.keys(approvals).length +
     Object.values(agents).filter((a) => a.status === "waiting" || a.status === "blocked").length +
     Object.values(edges).filter((e) => e.state === "delegated").length;
+  const [dexText, setDexText] = useState("");
+  const dexInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div
@@ -501,31 +503,55 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
         </nav>
       </div>
 
-      {/* ── dead center · Dex (wide, reads as an input) ────── */}
+      {/* ── dead center · Dex (a real input — Enter sends) ── */}
       <div style={{ justifySelf: "center", pointerEvents: "auto" }}>
-        <button
-          title="Ask Dex — talk to the board commander"
-          onClick={() => onSelect("thread")}
+        <div
           className="glass"
+          title="Ask Dex — command the board in plain words"
           style={{
             display: "flex",
             alignItems: "center",
             gap: 10,
             height: 40,
             width: 320,
-            padding: "0 16px",
+            padding: "0 8px 0 16px",
             borderRadius: 999,
-            border: "none",
-            cursor: "pointer",
-            color: "var(--cv-ink-faint)",
-            fontSize: 12.5,
-            fontWeight: 550,
-            letterSpacing: 0.2,
+            cursor: "text",
           }}
+          onClick={() => dexInputRef.current?.focus()}
         >
           <Icon name="bot" size={16} color={active === "thread" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
-          Ask Dex…
-        </button>
+          <input
+            ref={dexInputRef}
+            value={dexText}
+            onChange={(e) => setDexText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && dexText.trim()) {
+                useBoard.getState().threadSend(dexText.trim());
+                setDexText("");
+                onSelect("thread");
+              }
+            }}
+            placeholder="Ask Dex…"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              border: "none",
+              background: "transparent",
+              outline: "none",
+              color: "var(--cv-ink)",
+              fontSize: 12.5,
+              fontWeight: 550,
+            }}
+          />
+          <button
+            title="Open the Dex thread"
+            onClick={(e) => { e.stopPropagation(); onSelect("thread"); }}
+            style={{ ...miniBtn(false), borderRadius: 999 }}
+          >
+            <Icon name="thread" size={13} />
+          </button>
+        </div>
       </div>
 
       {/* ── right of Dex · inbox, small and round ─────────── */}
