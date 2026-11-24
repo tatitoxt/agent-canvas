@@ -478,6 +478,7 @@ export function VaultPanel() {
   const vaultSearch = useBoard((s) => s.vaultSearch);
   const vaultWrite = useBoard((s) => s.vaultWrite);
   const vaultDelete = useBoard((s) => s.vaultDelete);
+  const vaultRename = useBoard((s) => s.vaultRename);
   const notify = useBoard((s) => s.notify);
   const [dir, setDir] = useState(vaultDir || "/home/ubuntu/repos/agent-canvas");
   const [filter, setFilter] = useState("");
@@ -534,6 +535,8 @@ export function VaultPanel() {
   const [newNote, setNewNote] = useState(false);
   const [newName, setNewName] = useState("");
   const [armedDel, setArmedDel] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [renName, setRenName] = useState("");
 
   const openDaily = () => {
     if (!vaultDir) { notify("open a vault first"); return; }
@@ -805,9 +808,34 @@ export function VaultPanel() {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {vaultFile.path.replace(/\.md$/, "").split("/").join(" › ")}
-            </span>
+            {renaming ? (
+              <input
+                autoFocus
+                value={renName}
+                onChange={(e) => setRenName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setRenaming(false);
+                  if (e.key === "Enter") {
+                    const name = renName.trim().replace(/\.md$/i, "").replace(/[\\:*?"<>|]/g, "-");
+                    if (name && `${name}.md` !== vaultFile.path) {
+                      vaultRename(vaultFile.path, `${name}.md`);
+                      notify(`renamed → ${name}.md`);
+                    }
+                    setRenaming(false);
+                  }
+                }}
+                onBlur={() => setRenaming(false)}
+                style={{ fontSize: 11, fontWeight: 500, color: "var(--cv-ink)", background: "rgba(255,255,255,.06)", border: "1px solid rgba(212,169,106,.4)", borderRadius: 5, padding: "1px 6px", outline: "none", minWidth: 140 }}
+              />
+            ) : (
+              <span
+                title="click to rename / move (use folder/name)"
+                onClick={() => { setRenName(vaultFile.path.replace(/\.md$/, "")); setRenaming(true); }}
+                style={{ fontSize: 11, fontWeight: 500, color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text" }}
+              >
+                {vaultFile.path.replace(/\.md$/, "").split("/").join(" › ")}
+              </span>
+            )}
             <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
               <button style={actionBtn} title="Pin this note as a live card on the board" onClick={() => useBoard.getState().mdNodeAdd(vaultFile.path, "vault")}>
                 Add to Board

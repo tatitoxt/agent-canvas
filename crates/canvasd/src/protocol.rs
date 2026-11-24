@@ -81,6 +81,8 @@ pub enum ClientMsg {
     VaultWrite { dir: String, path: String, text: String },
     /// Delete a markdown file from the vault (root-scoped, .md only).
     VaultDelete { dir: String, path: String },
+    /// Rename/move a markdown file inside the vault (root-scoped, .md only).
+    VaultRename { dir: String, path: String, new_path: String },
     /// Full-text search across the vault's markdown files.
     VaultSearch { dir: String, query: String },
     /// Push an agent's worktree branch to origin (its committed work).

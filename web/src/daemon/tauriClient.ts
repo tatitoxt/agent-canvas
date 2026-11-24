@@ -178,6 +178,9 @@ export class TauriCanvasClient {
   vaultDelete(dir: string, path: string) {
     void invoke("vault_delete", { dir, path }).catch(console.error);
   }
+  vaultRename(dir: string, path: string, newPath: string) {
+    void invoke("vault_rename", { dir, path, newPath }).catch(console.error);
+  }
 
   vaultSearch(dir: string, query: string) {
     void invoke("vault_search", { dir, query }).catch(console.error);

@@ -494,6 +494,23 @@ fn vault_delete(app: AppHandle, dir: String, path: String) -> Result<(), String>
 }
 
 #[tauri::command]
+fn vault_rename(app: AppHandle, dir: String, path: String, new_path: String) -> Result<(), String> {
+    let root = PathBuf::from(&dir);
+    let from = root.join(&path);
+    let to = root.join(&new_path);
+    if path.contains("..") || new_path.contains("..") || !path.ends_with(".md") || !new_path.ends_with(".md") || !from.is_file() {
+        return Err("vault rename refused".into());
+    }
+    if let Some(parent) = to.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::rename(&from, &to).map_err(|e| e.to_string())?;
+    let text = std::fs::read_to_string(&to).map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::VaultFile { path: new_path, text });
+    vault_list(app, dir)
+}
+
+#[tauri::command]
 fn vault_write(app: AppHandle, dir: String, path: String, text: String) -> Result<(), String> {
     let file = PathBuf::from(&dir).join(&path);
     if path.contains("..") || !path.ends_with(".md") {
@@ -1598,6 +1615,7 @@ fn main() {
             vault_append,
             vault_write,
             vault_delete,
+            vault_rename,
             create_workspace,
             move_to_board,
             delegate,

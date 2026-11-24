@@ -1119,6 +1119,31 @@ fn handle_client_msg(
                 }
             }
         }
+        ClientMsg::VaultRename { dir, path, new_path } => {
+            let root = PathBuf::from(&dir);
+            let from = root.join(&path);
+            let to = root.join(&new_path);
+            let ok = !path.contains("..") && !new_path.contains("..")
+                && path.ends_with(".md") && new_path.ends_with(".md") && from.is_file();
+            if !ok {
+                send_control(ServerMsg::Error { agent_id: None, message: format!("vault rename refused: {path}") });
+            } else {
+                let result = (|| {
+                    if let Some(parent) = to.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+                    std::fs::rename(&from, &to).map_err(|e| e.to_string())?;
+                    std::fs::read_to_string(&to).map_err(|e| e.to_string())
+                })();
+                match result {
+                    Ok(text) => {
+                        send_control(ServerMsg::VaultFile { path: new_path, text });
+                        let mut entries = vault_list_entries(&root);
+                        entries.truncate(2000);
+                        send_control(ServerMsg::VaultListing { dir, entries });
+                    }
+                    Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault rename failed: {e}") }),
+                }
+            }
+        }
         ClientMsg::VaultRead { dir, path } => {
             // Constrain to the vault root and markdown files only.
             let root = PathBuf::from(&dir);
