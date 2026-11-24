@@ -38,6 +38,7 @@ import { SearchPanel } from "./components/SearchPanel";
 import { Topbar } from "./components/Topbar";
 import { ContextMenu } from "./components/ContextMenu";
 import { PaneMenu } from "./components/PaneMenu";
+import { TermNode } from "./board/TermNode";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
 
@@ -49,6 +50,7 @@ const nodeTypes = {
   shape: ShapeNode,
   md: MdNode,
   panel: PanelNode,
+  term: TermNode,
 };
 const edgeTypes = { delegation: DelegationEdge };
 
@@ -142,6 +144,7 @@ function Board() {
   const moveShape = useBoard((s) => s.moveShape);
   const mdNodes = useBoard((s) => s.mdNodes);
   const panelNodes = useBoard((s) => s.panelNodes);
+  const termNodes = useBoard((s) => s.termNodes);
   const wiringFrom = useBoard((s) => s.wiringFrom);
   const toggleWire = useBoard((s) => s.toggleWire);
   const setWiring = useBoard((s) => s.setWiring);
@@ -497,13 +500,22 @@ function Board() {
         data: { kind: "panel" as const, id },
       }),
     );
+    const termNs: Node<BoardNodeData>[] = Object.entries(termNodes[activeBoard] ?? {}).map(
+      ([id, n]) => ({
+        id,
+        type: "term" as const,
+        position: { x: n.x, y: n.y },
+        style: { width: n.w, height: n.h },
+        data: { kind: "term" as const, id },
+      }),
+    );
     // Demo mock only when the daemon was never connected AND there's no
     // persisted state — a transient disconnect keeps the real board.
     const useMock = !connected && Object.keys(agents).length === 0;
     return useMock
-      ? [...initialNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs]
-      : [...wsNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs];
-  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges, shapes, mdNodes, panelNodes]);
+      ? [...initialNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs]
+      : [...wsNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs];
+  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges, shapes, mdNodes, panelNodes, termNodes]);
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
     // In Connect mode a click on an agent card wires/unwires it to the
@@ -537,6 +549,8 @@ function Board() {
       moveShape(node.id, node.position.x, node.position.y);
     } else if (node.id.startsWith("panel-")) {
       useBoard.getState().movePanelNode(node.id, node.position.x, node.position.y);
+    } else if (node.id.startsWith("term-")) {
+      useBoard.getState().moveTermNode(node.id, node.position.x, node.position.y);
     } else if (agents[node.id] || workspaces[node.id] || node.id.startsWith("web-") || node.id.startsWith("orch-") || node.id.startsWith("md-")) {
       moveNode(node.id, node.position.x, node.position.y);
     }

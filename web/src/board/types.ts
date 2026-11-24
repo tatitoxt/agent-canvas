@@ -82,6 +82,12 @@ export type PanelNodeData = {
   id: string;
 };
 
+export type TermNodeData = {
+  kind: "term";
+  /** Node id `term-<agentId>` — the card resolves its agent from it. */
+  id: string;
+};
+
 export type BoardNodeData =
   | AgentNodeData
   | OrchestratorNodeData
@@ -89,7 +95,8 @@ export type BoardNodeData =
   | WebNodeData
   | ShapeNodeData
   | MdNodeData
-  | PanelNodeData;
+  | PanelNodeData
+  | TermNodeData;
 
 export type DelegationEdgeData = {
   task?: string;

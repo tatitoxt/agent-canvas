@@ -1,11 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 /** Where the floating terminal panel sits — default bottom-right (Deska-style
  * dock position) until the user pops it out by dragging the header. */
 const DEFAULT_POS = { x: -1, y: -1 }; // sentinel: anchored, not popped out
-import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import "@xterm/xterm/css/xterm.css";
+import { TermHost } from "./TermHost";
 import { useBoard } from "../store/board";
 import { CliMark } from "./CliMark";
 import { STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "../board/nodes";
@@ -14,11 +12,8 @@ import type { AgentStatus } from "../board/types";
 type Props = { agentId: string; name: string; index?: number; onClose: () => void };
 
 export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<Terminal | null>(null);
   const [confirmingKill, setConfirmingKill] = useState(false);
   const kill = useBoard((s) => s.kill);
-  const termFont = useBoard((s) => s.termFont);
   const [pos, setPos] = useState(DEFAULT_POS);
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
   // Voice dictation — Web Speech API is free/on-device-ish, unlike
@@ -41,85 +36,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   const meta = cliMeta(cli);
   const statusColor = STATUS_COLOR[status];
 
-  useEffect(() => {
-    const term = new Terminal({
-      fontSize: useBoard.getState().termFont,
-      fontFamily: "ui-monospace, Menlo, monospace",
-      theme: {
-        background: "#121214",
-        foreground: "#eceae6",
-        cursor: "#c9a26b",
-        selectionBackground: "rgba(255,255,255,0.12)",
-      },
-      convertEol: true,
-    });
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.open(hostRef.current!);
-    fit.fit();
 
-    const { attachPty, detachPty, sendInput, ptyBuffer, requestTranscript } = useBoard.getState();
-    // Transcript: replay buffered scrollback so an opened terminal shows
-    // history (daemon replay also feeds this buffer on reconnect).
-    const history = ptyBuffer(agentId);
-    if (history?.length) term.write(history);
-    attachPty(agentId, (bytes) => term.write(bytes));
-    // Exited agent: pull its persisted transcript from the daemon — it
-    // arrives as PTY output through the listener just attached.
-    if (useBoard.getState().agents[agentId]?.status === "exited") {
-      requestTranscript(agentId);
-    }
-    const alive = () => useBoard.getState().agents[agentId]?.status !== "exited";
-    const sub = term.onData((d) => {
-      if (alive()) sendInput(agentId, new TextEncoder().encode(d));
-    });
-
-    // CLIs that query terminal colors (OSC 10/11/12, e.g. Hermes) block
-    // until the emulator answers — xterm.js doesn't by itself, so answer
-    // with our theme colors written back into the PTY.
-    const reply = (text: string) =>
-      sendInput(agentId, new TextEncoder().encode(`\x1b]${text}\x07`));
-    const oscReplies: Record<number, string> = {
-      10: "10;rgb:ecec/eaea/e6e6",
-      11: "11;rgb:1212/1212/1414",
-      12: "12;rgb:c9c9/a2a2/6b6b",
-    };
-    const oscHandlers = Object.entries(oscReplies).map(([ps, answer]) =>
-      term.parser.registerOscHandler(Number(ps), (data) => {
-        if (data === "?") reply(answer);
-        return true;
-      })
-    );
-
-    const ro = new ResizeObserver(() => {
-      fit.fit();
-      // The PTY follows the panel's real size — a maximized terminal gives
-      // the CLI the full viewport, not the 80×24 it spawned with.
-      if (term.cols && term.rows && alive()) {
-        useBoard.getState().resizePty(agentId, term.cols, term.rows);
-      }
-    });
-    ro.observe(hostRef.current!);
-    termRef.current = term;
-
-    return () => {
-      sub.dispose();
-      oscHandlers.forEach((h) => h.dispose());
-      detachPty(agentId);
-      ro.disconnect();
-      recRef.current?.stop?.();
-      term.dispose();
-      termRef.current = null;
-    };
-  }, [agentId]);
-
-  useEffect(() => {
-    const term = termRef.current;
-    if (term && term.options.fontSize !== termFont) {
-      term.options.fontSize = termFont;
-      term.refresh(0, Math.max(0, term.rows - 1));
-    }
-  }, [termFont]);
 
   const toggleDictation = () => {
     if (listening) {
@@ -263,6 +180,22 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
           onPointerDown={(e) => e.stopPropagation()}
         >
           <button
+            title="pop out onto the canvas as a card"
+            onClick={() => {
+              useBoard.getState().openTermNode(agentId);
+              onClose();
+            }}
+            style={{
+              border: "none",
+              background: "transparent",
+              fontSize: 12,
+              cursor: "pointer",
+              color: "var(--cv-ink-dim)",
+            }}
+          >
+            ⇱
+          </button>
+          <button
             title={maxed ? "restore" : "maximize — full terminal"}
             onClick={() => setMaxed((m) => !m)}
             style={{
@@ -370,7 +303,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
           </button>
         </div>
       </div>
-      <div ref={hostRef} className="min-h-0 flex-1" />
+      <TermHost agentId={agentId} />
     </div>
   );
 }

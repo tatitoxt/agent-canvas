@@ -88,6 +88,17 @@ export function ContextMenu({
           open terminal
         </button>
       )}
+      {isAgent && (
+        <button
+          style={{ ...item, color: "var(--cv-ink-dim)" }}
+          onClick={() => {
+            useBoard.getState().openTermNode(nodeId);
+            onClose();
+          }}
+        >
+          ⇱ terminal on canvas
+        </button>
+      )}
       {renaming ? (
         <input
           autoFocus

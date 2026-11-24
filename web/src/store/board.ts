@@ -240,7 +240,7 @@ type BoardState = {
   loops: Record<string, LoopDef>;
   /** agent_id → latest automation guardrail alert (hang / denied policy). */
   attention: Record<string, string>;
-  ptyListeners: Record<string, (bytes: Uint8Array) => void>;
+  ptyListeners: Record<string, Set<(bytes: Uint8Array) => void>>;
   /** Rolling PTY scrollback per agent (~64KB) — transcript shown when a
    * terminal opens, and rebuilt from the daemon's replay on reconnect. */
   ptyBuffers: Record<string, Uint8Array>;
@@ -303,6 +303,14 @@ type BoardState = {
   movePanelNode: (id: string, x: number, y: number) => void;
   resizePanelNode: (id: string, w: number, h: number) => void;
   collapsePanelNode: (id: string) => void;
+  /** Live terminals living ON the canvas as cards — `term-<agentId>` per
+   * board. Popped out of the bottom drawer; movable/resizable/closable. */
+  termNodes: Record<string, Record<string, { x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number }>>;
+  openTermNode: (agentId: string, pos?: { x: number; y: number }) => void;
+  closeTermNode: (id: string) => void;
+  moveTermNode: (id: string, x: number, y: number) => void;
+  resizeTermNode: (id: string, w: number, h: number) => void;
+  collapseTermNode: (id: string) => void;
   studioDocNow: () => void;
   closeStudioDoc: () => void;
   artifactDelete: (artifactId: string) => void;
@@ -325,7 +333,7 @@ type BoardState = {
   moveNode: (agentId: string, x: number, y: number) => void;
   attachPty: (agentId: string, cb: (bytes: Uint8Array) => void) => void;
   ptyBuffer: (agentId: string) => Uint8Array | undefined;
-  detachPty: (agentId: string) => void;
+  detachPty: (agentId: string, cb?: (bytes: Uint8Array) => void) => void;
   sendInput: (agentId: string, bytes: Uint8Array) => void;
   resizePty: (agentId: string, cols: number, rows: number) => void;
   /** Ask the daemon to replay an exited agent's saved transcript. */
@@ -853,7 +861,7 @@ export const useBoard = create<BoardState>((set, get) => ({
         const capped =
           merged.length > 65_536 ? merged.subarray(merged.length - 65_536) : merged;
         set({ ptyBuffers: { ...get().ptyBuffers, [agentId]: capped } });
-        get().ptyListeners[agentId]?.(bytes);
+        get().ptyListeners[agentId]?.forEach((cb) => cb(bytes));
       },
       onClose: () => {
         client = null;
@@ -1007,6 +1015,54 @@ export const useBoard = create<BoardState>((set, get) => ({
     const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: m } };
     localStorage.setItem("cv-panelnodes", JSON.stringify(next));
     set({ panelNodes: next });
+  },
+  termNodes: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-termnodes") ?? "{}"); } catch { return {}; }
+  })(),
+  openTermNode: (agentId, pos) => {
+    const board = get().activeBoard;
+    const id = `term-${agentId}`;
+    const existing = get().termNodes[board]?.[id];
+    if (existing) { get().requestFocus(id); return; }
+    const m = { ...(get().termNodes[board] ?? {}), [id]: { x: pos?.x ?? 420 + Math.random() * 140, y: pos?.y ?? 160 + Math.random() * 90, w: 560, h: 320 } };
+    const next = { ...get().termNodes, [board]: m };
+    localStorage.setItem("cv-termnodes", JSON.stringify(next));
+    set({ termNodes: next });
+  },
+  closeTermNode: (id) => {
+    const board = get().activeBoard;
+    const m = { ...(get().termNodes[board] ?? {}) };
+    delete m[id];
+    const next = { ...get().termNodes, [board]: m };
+    localStorage.setItem("cv-termnodes", JSON.stringify(next));
+    set({ termNodes: next });
+  },
+  moveTermNode: (id, x, y) => {
+    const board = get().activeBoard;
+    const n = get().termNodes[board]?.[id];
+    if (!n) return;
+    const next = { ...get().termNodes, [board]: { ...get().termNodes[board], [id]: { ...n, x, y } } };
+    localStorage.setItem("cv-termnodes", JSON.stringify(next));
+    set({ termNodes: next });
+  },
+  resizeTermNode: (id, w, h) => {
+    const board = get().activeBoard;
+    const n = get().termNodes[board]?.[id];
+    if (!n) return;
+    const next = { ...get().termNodes, [board]: { ...get().termNodes[board], [id]: { ...n, w, h } } };
+    localStorage.setItem("cv-termnodes", JSON.stringify(next));
+    set({ termNodes: next });
+  },
+  collapseTermNode: (id) => {
+    const board = get().activeBoard;
+    const n = get().termNodes[board]?.[id];
+    if (!n) return;
+    const m = n.collapsed
+      ? { ...n, collapsed: false, h: n.expandH ?? n.h }
+      : { ...n, collapsed: true, expandH: n.h, h: 34 };
+    const next = { ...get().termNodes, [board]: { ...get().termNodes[board], [id]: m } };
+    localStorage.setItem("cv-termnodes", JSON.stringify(next));
+    set({ termNodes: next });
   },
   mdContents: {},
   vaultAssets: {},
@@ -1978,12 +2034,19 @@ export const useBoard = create<BoardState>((set, get) => ({
   ptyBuffer: (agentId) => get().ptyBuffers[agentId],
 
   attachPty: (agentId, cb) =>
-    set((s) => ({ ptyListeners: { ...s.ptyListeners, [agentId]: cb } })),
-
-  detachPty: (agentId) =>
     set((s) => {
+      const set_ = new Set(s.ptyListeners[agentId]);
+      set_.add(cb);
+      return { ptyListeners: { ...s.ptyListeners, [agentId]: set_ } };
+    }),
+
+  detachPty: (agentId, cb) =>
+    set((s) => {
+      const set_ = new Set(s.ptyListeners[agentId]);
+      if (cb) set_.delete(cb);
+      else set_.clear();
       const { [agentId]: _drop, ...rest } = s.ptyListeners;
-      return { ptyListeners: rest };
+      return { ptyListeners: set_.size ? { ...rest, [agentId]: set_ } : rest };
     }),
 
   sendInput: (agentId, bytes) => client?.ptyInput(agentId, bytes),
