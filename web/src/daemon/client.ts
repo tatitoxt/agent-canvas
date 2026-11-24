@@ -202,6 +202,10 @@ export class CanvasClient {
     this.send({ cmd: "vault_read", dir, path });
   }
 
+  vaultAppend(dir: string, path: string, text: string) {
+    this.send({ cmd: "vault_append", dir, path, text });
+  }
+
   gitPush(agentId: string) {
     this.send({ cmd: "git_push", agent_id: agentId });
   }

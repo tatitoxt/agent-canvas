@@ -390,6 +390,23 @@ fn vault_read(app: AppHandle, dir: String, path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn vault_append(app: AppHandle, dir: String, path: String, text: String) -> Result<(), String> {
+    let file = PathBuf::from(&dir).join(&path);
+    if path.contains("..") || !path.ends_with(".md") {
+        return Err("vault append refused".into());
+    }
+    if let Some(parent) = file.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&file).map_err(|e| e.to_string())?;
+    writeln!(f, "{text}").map_err(|e| e.to_string())?;
+    let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::VaultFile { path, text });
+    Ok(())
+}
+
+#[tauri::command]
 fn git_push(app: AppHandle, state: State<'_, CanvasState>, agent_id: String) -> Result<(), String> {
     let wt = state
         .store
@@ -1413,6 +1430,7 @@ fn main() {
             studio_doc,
             vault_list,
             vault_read,
+            vault_append,
             create_workspace,
             move_to_board,
             delegate,

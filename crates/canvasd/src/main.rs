@@ -995,6 +995,25 @@ fn handle_client_msg(
                 _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault read failed: {path}") }),
             }
         }
+        ClientMsg::VaultAppend { dir, path, text } => {
+            let root = PathBuf::from(&dir);
+            let file = root.join(&path);
+            if path.contains("..") || !path.ends_with(".md") {
+                send_control(ServerMsg::Error { agent_id: None, message: format!("vault append refused: {path}") });
+            } else {
+                let result = (|| {
+                    if let Some(parent) = file.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+                    use std::io::Write;
+                    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&file).map_err(|e| e.to_string())?;
+                    writeln!(f, "{text}").map_err(|e| e.to_string())?;
+                    std::fs::read_to_string(&file).map_err(|e| e.to_string())
+                })();
+                match result {
+                    Ok(text) => send_control(ServerMsg::VaultFile { path, text }),
+                    Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault append failed: {e}") }),
+                }
+            }
+        }
         ClientMsg::GitPush { agent_id } => {
             let wt = state
                 .store

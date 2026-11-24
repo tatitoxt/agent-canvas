@@ -52,6 +52,7 @@ const PATHS: Record<string, string[]> = {
   windows: ["M3 5h9v9H3z", "M15 5h6v5h-6z", "M15 12h6v7h-6z", "M3 16h9v3H3z"],
   orchestrator: ["M9 3h6v5H9z", "M3 16h6v5H3z", "M15 16h6v5h-6z", "M12 8v3", "M12 11H6v3", "M12 11h6v3"],
   ticket: ["M3 9V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v3a2 2 0 0 0 0 6v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a2 2 0 0 0 0-6Z", "M13 5v2", "M13 11v2", "M13 17v2"],
+  obsidian: ["M12 2l8 6-8 14L4 8z", "M4 8h16", "M12 2L8 8l4 14 4-14z"],
   collapse: ["M4 4h16v16H4z", "M9.5 4v16", "M15 9l-2.5 3 2.5 3"],
   expand: ["M9 18l6-6-6-6"],
 };

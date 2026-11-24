@@ -244,6 +244,7 @@ type BoardState = {
   notify: (text: string) => void;
   vaultList: (dir: string) => void;
   vaultRead: (path: string) => void;
+  vaultAppend: (path: string, text: string) => void;
   closeVaultFile: () => void;
   webNodeAdd: (url: string) => void;
   webNodeRemove: (id: string) => void;
@@ -788,6 +789,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     client?.vaultList(dir);
   },
   vaultRead: (path) => client?.vaultRead(get().vaultDir, path),
+  vaultAppend: (path, text) => client?.vaultAppend(get().vaultDir, path, text),
   closeVaultFile: () => set({ vaultFile: null }),
   studioDocNow: () => client?.studioDoc(),
   closeStudioDoc: () => set({ studioDoc: null }),
@@ -1378,6 +1380,19 @@ export const useBoard = create<BoardState>((set, get) => ({
         reply(`opened ${hit}`);
         return;
       }
+    }
+    const ob = low.match(/^obsidian\s+(.+)$/);
+    if (ob) {
+      const text = t.replace(/^obsidian\s+/i, "").trim();
+      const dir = get().vaultDir;
+      if (!dir) {
+        reply("no vault connected — open Explorer/Obsidian and pick your vault dir first");
+        return;
+      }
+      const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+      get().vaultAppend("canvas-dex.md", `- ${stamp} — ${text}`);
+      reply("logged to Obsidian → canvas-dex.md");
+      return;
     }
     const nm = low.match(/^(?:note|todo|task)\s*[:=-]?\s*(.+)$/);
     if (nm && !/^(?:new\s)/.test(low)) {

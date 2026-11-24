@@ -66,6 +66,10 @@ pub enum ClientMsg {
     VaultList { dir: String },
     /// Read one file from the vault.
     VaultRead { dir: String, path: String },
+    /// Append markdown text to a vault file — Dex's "leave it in Obsidian"
+    /// path. Creates the file (and parent dirs) when missing; the path is
+    /// constrained to the vault root and must end in .md.
+    VaultAppend { dir: String, path: String, text: String },
     /// Push an agent's worktree branch to origin (its committed work).
     GitPush { agent_id: String },
     /// Register an artifact (an agent's deliverable — a report, plan,

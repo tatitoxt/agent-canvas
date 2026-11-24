@@ -349,7 +349,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
             </button>
           </div>
           {toolRow("git", "Source Control", `worktrees, push an agent's branch${gitAgents.length ? ` — ${gitAgents.length} live` : ""}`, () => setMenu((m) => (m === "git" ? null : "git")))}
-          {toolRow("inbox", "Inbox", "approvals, waiting agents, delegations", () => onSelect("inbox"), "inbox")}
+          {toolRow("obsidian", "Obsidian", "your vault — browse markdown; 'obsidian <note>' in Dex writes to it", () => onSelect("vault"), "vault")}
           {toolRow("pr", "Pull requests", "live list from the repo's GitHub", () => onSelect("prs"), "prs")}
           {toolRow("issue", "Issues", "live list from the repo's GitHub", () => onSelect("issues"), "issues")}
           {toolRow("explorer", "Explorer", "vault files", () => onSelect("vault"), "vault")}
@@ -480,6 +480,13 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
           style={btn(active === "notes")}
         >
           <Icon name="ticket" />
+        </button>
+        <button
+          title="Obsidian — your vault, live markdown; tell Dex 'obsidian <note>' to write there"
+          onClick={() => onSelect("vault")}
+          style={btn(active === "vault")}
+        >
+          <Icon name="obsidian" />
         </button>
         {repoUrl && (
           <>

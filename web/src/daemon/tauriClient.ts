@@ -159,6 +159,10 @@ export class TauriCanvasClient {
     void invoke("vault_read", { dir, path }).catch(console.error);
   }
 
+  vaultAppend(dir: string, path: string, text: string) {
+    void invoke("vault_append", { dir, path, text }).catch(console.error);
+  }
+
   gitPush(agentId: string) {
     void invoke("git_push", { agentId }).catch(console.error);
   }
