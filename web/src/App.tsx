@@ -209,6 +209,33 @@ function Board() {
   useEffect(() => {
     if (viewCmdN > 0) fitView({ padding: 0.18, maxZoom: 1.1, duration: 250 });
   }, [viewCmdN, fitView]);
+  const tidyCmdN = useBoard((s) => s.tidyCmdN);
+  useEffect(() => {
+    if (tidyCmdN === 0) return;
+    const b = useBoard.getState();
+    const nodes = b.panelNodes[b.activeBoard] ?? {};
+    const ids = Object.keys(nodes);
+    if (!ids.length) return;
+    // Stack every open panel card in a column docked to the right edge of
+    // the current viewport; wraps to a second column when it overflows.
+    const top = window.innerHeight * 0.08;
+    const bottom = window.innerHeight - 40;
+    const gap = 16;
+    let x = window.innerWidth - 24;
+    let y = top;
+    for (const id of ids) {
+      const n = nodes[id];
+      const w = n.w ?? 320;
+      const h = n.h ?? 420;
+      if (y > top && y + h > bottom) {
+        x -= Math.max(...ids.map((i) => nodes[i].w ?? 320)) + gap;
+        y = top;
+      }
+      const p = screenToFlowPosition({ x: x - w, y });
+      b.movePanelNode(id, p.x, p.y);
+      y += h + gap;
+    }
+  }, [tidyCmdN, screenToFlowPosition]);
   const zoomN = useBoard((s) => s.zoomN);
   useEffect(() => {
     if (zoomN.n > 0) zoomTo(getZoom() * (zoomN.dir > 0 ? 1.3 : 0.77), { duration: 160 });

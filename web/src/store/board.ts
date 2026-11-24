@@ -232,6 +232,8 @@ type BoardState = {
   moveHistory: Array<{ id: string; prev?: { x: number; y: number } }>;
   /** Bump counter telling the canvas to run fitView (local "fit" request). */
   viewCmdN: number;
+  /** Bump counter telling the canvas to tidy open panel cards into a column. */
+  tidyCmdN: number;
   /** Saved automations (Deska-style guardrailed task runs). */
   automations: Record<string, AutomationDef>;
   /** Autopilot loops — an instruction re-sent to consoles on a trigger. */
@@ -330,6 +332,7 @@ type BoardState = {
   bumpFont: (delta: number) => void;
   undoMove: () => boolean;
   requestView: () => void;
+  requestTidy: () => void;
   clearDone: () => number;
   /** Local short-request router (Deska-style): runs instant commands
    * client-side — no agent spawn, no token spend. Returns feedback text. */
@@ -465,6 +468,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   termFont: 13,
   moveHistory: [],
   viewCmdN: 0,
+  tidyCmdN: 0,
   automations: {},
   loops: {},
   attention: {},
@@ -1137,6 +1141,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   },
 
   requestView: () => set((s) => ({ viewCmdN: s.viewCmdN + 1 })),
+  requestTidy: () => set((s) => ({ tidyCmdN: s.tidyCmdN + 1 })),
 
   clearDone: () => {
     const { agents } = get();

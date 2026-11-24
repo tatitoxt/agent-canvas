@@ -405,6 +405,14 @@ export function Topbar({
         >
           <Icon name="map" size={15} color="var(--cv-ink-dim)" />
         </button>
+        <button
+          className="glass-pill"
+          style={{ ...iconBtn(false), background: "transparent", border: "none" }}
+          title="Tidy — stack open panels in a column"
+          onClick={() => useBoard.getState().requestTidy()}
+        >
+          <Icon name="panels" size={15} color="var(--cv-ink-dim)" />
+        </button>
         <ToolsMenu active={nav} onSelect={onNav} actions={tools} />
         <button
           className="glass-pill"
