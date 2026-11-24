@@ -576,6 +576,17 @@ export const useBoard = create<BoardState>((set, get) => ({
           case "board_renamed":
             set({ boards: { ...get().boards, [msg.board_id]: msg.name } });
             break;
+          case "board_deleted": {
+            const boards = { ...get().boards };
+            delete boards[msg.board_id];
+            const patch: Partial<BoardState> = { boards };
+            if (get().activeBoard === msg.board_id) patch.activeBoard = "main";
+            set(patch);
+            break;
+          }
+          case "diff_detail":
+            set({ diffTexts: { ...get().diffTexts, [msg.agent_id]: msg.diff } });
+            break;
           case "board_moved": {
             const a = get().agents[msg.node_id];
             const w = get().workspaces[msg.node_id];
