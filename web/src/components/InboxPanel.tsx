@@ -219,7 +219,13 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
           <>
             <div style={groupLabel}>delegations in flight</div>
             {inFlight.map((e) => (
-              <button key={e.id} style={rowStyle} className="inbox-row" onClick={() => onOpenAgent(e.to)}>
+              <button
+                key={e.id}
+                style={rowStyle}
+                className="inbox-row"
+                title="Open this delegation's full record"
+                onClick={() => useBoard.getState().setEdgeDetail(e.id)}
+              >
                 <span style={{ fontSize: 12, fontWeight: 600 }}>{e.task}</span>
                 <span style={{ fontSize: 11, color: "var(--cv-ink-dim)" }}>delegated</span>
               </button>
@@ -238,7 +244,13 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
               </button>
             </div>
             {done.map((e) => (
-              <button key={e.id} style={rowStyle} className="inbox-row" onClick={() => onOpenAgent(e.to)}>
+              <button
+                key={e.id}
+                style={rowStyle}
+                className="inbox-row"
+                title="Open this delegation's full record"
+                onClick={() => useBoard.getState().setEdgeDetail(e.id)}
+              >
                 <span style={{ fontSize: 12, fontWeight: 600 }}>{e.task}</span>
                 <span style={{ fontSize: 11, color: "var(--cv-done)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {e.result ?? "returned"}
