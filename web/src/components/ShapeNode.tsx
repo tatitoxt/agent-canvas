@@ -43,7 +43,21 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
   const s = data.shape;
   const updateShape = useBoard((st) => st.updateShape);
   const deleteShape = useBoard((st) => st.deleteShape);
+  const vaultDir = useBoard((st) => st.vaultDir);
+  const vaultAppend = useBoard((st) => st.vaultAppend);
+  const notify = useBoard((st) => st.notify);
   const isSticky = s.kind === "sticky";
+
+  const saveToVault = () => {
+    if (!vaultDir) {
+      notify("open a vault first — Library → Obsidian");
+      return;
+    }
+    const title = (s.title ?? "pinned").trim() || "pinned";
+    const safe = title.replace(/[\\/:*?"<>|]/g, "-").slice(0, 60) || "note";
+    vaultAppend(`Canvas/${safe}.md`, `## ${title}\n\n${s.text ?? ""}\n`);
+    notify(`saved to vault → Canvas/${safe}.md`);
+  };
 
   if (s.kind === "pin") {
     return (
@@ -75,7 +89,19 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
           }}
         >
           <span style={{ width: 6, height: 6, borderRadius: 2, background: s.color, flexShrink: 0 }} />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title ?? "pinned"}</span>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{s.title ?? "pinned"}</span>
+          <button
+            className="nodrag"
+            onClick={saveToVault}
+            title={vaultDir ? "append this note to your Obsidian vault (Canvas/<title>.md)" : "open a vault first — Library → Obsidian"}
+            style={{
+              background: "none", border: "none", cursor: "pointer", padding: 0,
+              color: vaultDir ? "#a98af0" : "var(--cv-ink-faint)", flexShrink: 0,
+              display: "flex", alignItems: "center",
+            }}
+          >
+            <img src="/obsidian.svg" alt="" width={11} height={11} style={{ opacity: vaultDir ? 1 : 0.5 }} />
+          </button>
         </div>
         <textarea
           className="nodrag"
