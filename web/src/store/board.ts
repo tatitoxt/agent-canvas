@@ -269,6 +269,10 @@ type BoardState = {
   handoff: (agentId: string, cli?: string) => void;
   approveInput: (agentId: string) => void;
   denyInput: (agentId: string) => void;
+  /** Approve the held input AND lift the agent to "auto" so later
+   * commands stop asking (Deska "always allow"). */
+  approveAlways: (agentId: string) => void;
+  setPermission: (agentId: string, permission: string) => void;
   /** Dismiss one automation alert row (or every alert with id "*"). */
   dismissAlert: (agentId: string) => void;
   /** Clear returned delegation rows from the inbox. */
@@ -568,6 +572,13 @@ export const useBoard = create<BoardState>((set, get) => ({
           case "needs_approval":
             set({ approvals: { ...get().approvals, [msg.agent_id]: msg.line } });
             break;
+          case "permission_changed": {
+            const a = get().agents;
+            if (a[msg.agent_id]) {
+              set({ agents: { ...a, [msg.agent_id]: { ...a[msg.agent_id], permission: msg.permission } } });
+            }
+            break;
+          }
           case "delegation": {
             const pending = get().pendingPositions[msg.from];
             if (pending) {
@@ -922,6 +933,18 @@ export const useBoard = create<BoardState>((set, get) => ({
     delete next[agentId];
     set({ approvals: next });
   },
+
+  approveAlways: (agentId) => {
+    client?.approveInput(agentId);
+    client?.setPermission(agentId, "auto");
+    const next = { ...get().approvals };
+    delete next[agentId];
+    const agents = { ...get().agents };
+    if (agents[agentId]) agents[agentId] = { ...agents[agentId], permission: "auto" };
+    set({ approvals: next, agents });
+  },
+
+  setPermission: (agentId, permission) => client?.setPermission(agentId, permission),
 
   dismissAlert: (agentId) => {
     const next = { ...get().attention };

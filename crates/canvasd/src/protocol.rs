@@ -45,6 +45,9 @@ pub enum ClientMsg {
     MoveToBoard { node_id: String, board_id: String },
     /// Rename an agent or workspace node.
     RenameNode { node_id: String, name: String },
+    /// Change a live agent's permission level ("always allow" bumps
+    /// supervised → auto so future commands stop asking).
+    SetPermission { agent_id: String, permission: String },
     /// Rename a board.
     RenameBoard { board_id: String, name: String },
     /// Delete a board — refused while it still holds nodes.
@@ -256,6 +259,7 @@ pub enum ServerMsg {
     BoardMoved { node_id: String, board_id: String },
     /// A node was renamed.
     NodeRenamed { node_id: String, name: String },
+    PermissionChanged { agent_id: String, permission: String },
     /// A board was renamed.
     BoardRenamed { board_id: String, name: String },
     /// A board was deleted (only emitted for empty boards).

@@ -438,6 +438,15 @@ impl Store {
         Ok(())
     }
 
+    pub fn set_agent_permission(&self, id: &str, level: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE agents SET permission = ?2 WHERE id = ?1",
+            (id, level),
+        )?;
+        Ok(())
+    }
+
     /// An agent's permission level — used to clamp a delegation child's
     /// level to at most its parent's.
     pub fn agent_permission(&self, id: &str) -> Result<Option<String>> {

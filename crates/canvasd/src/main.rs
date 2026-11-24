@@ -624,6 +624,17 @@ fn handle_client_msg(
                 }),
             }
         }
+        ClientMsg::SetPermission { agent_id, permission } => {
+            let level = protocol::normalize_permission(Some(&permission));
+            state.agents.set_permission(&agent_id, level);
+            if let Err(e) = state.store.set_agent_permission(&agent_id, level) {
+                warn!(%e, "persist permission");
+            }
+            send_control(ServerMsg::PermissionChanged {
+                agent_id,
+                permission: level.to_string(),
+            });
+        }
         ClientMsg::RenameBoard { board_id, name } => {
             match state.store.board_renamed(&board_id, &name) {
                 Ok(true) => send_control(ServerMsg::BoardRenamed { board_id, name }),

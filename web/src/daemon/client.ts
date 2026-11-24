@@ -47,6 +47,7 @@ export type ServerMsg =
   | { type: "board_created"; board_id: string; name: string }
   | { type: "board_moved"; node_id: string; board_id: string }
   | { type: "node_renamed"; node_id: string; name: string }
+  | { type: "permission_changed"; agent_id: string; permission: string }
   | { type: "board_renamed"; board_id: string; name: string }
   | { type: "board_deleted"; board_id: string }
   | { type: "workspace_deleted"; workspace_id: string }
@@ -352,6 +353,11 @@ export class CanvasClient {
   /** Supervised-input gate: drop the held payload — agent never sees it. */
   denyInput(agentId: string) {
     this.send({ cmd: "deny_input", agent_id: agentId });
+  }
+
+  /** "Always allow" — move the agent up the permission ladder in place. */
+  setPermission(agentId: string, permission: string) {
+    this.send({ cmd: "set_permission", agent_id: agentId, permission });
   }
 
   delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string, accountId?: string, boardId?: string) {

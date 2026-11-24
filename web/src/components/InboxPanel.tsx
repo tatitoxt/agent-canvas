@@ -125,7 +125,12 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
             <div style={{ ...groupLabel, color: "var(--cv-waiting)" }}>approve commands</div>
             {held.map((h) => (
               <div key={h.id} style={{ ...rowStyle, cursor: "default" }}>
-                <span style={{ fontSize: 12, fontWeight: 600 }}>{h.name}</span>
+                <span style={{ fontSize: 12, fontWeight: 600 }}>
+                  {h.name}
+                  <span style={{ fontSize: 9.5, fontWeight: 500, color: "var(--cv-ink-faint)", marginLeft: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                    {agents[h.id]?.permission ?? "supervised"}
+                  </span>
+                </span>
                 <span
                   style={{
                     fontSize: 11,
@@ -153,6 +158,14 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                     onClick={() => useBoard.getState().denyInput(h.id)}
                   >
                     deny
+                  </button>
+                  <button
+                    className="glass-pill"
+                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 11px", color: "var(--cv-waiting)", cursor: "pointer", border: "none" }}
+                    title="Allow this one and stop asking — agent moves to auto"
+                    onClick={() => useBoard.getState().approveAlways(h.id)}
+                  >
+                    always
                   </button>
                 </span>
               </div>

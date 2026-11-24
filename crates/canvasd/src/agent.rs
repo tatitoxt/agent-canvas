@@ -454,6 +454,13 @@ impl AgentManager {
         self.agents.lock().unwrap().keys().cloned().collect()
     }
 
+    /// Change a live agent's permission level in place.
+    pub fn set_permission(&self, id: &str, level: &str) {
+        if let Some(a) = self.agents.lock().unwrap().get_mut(id) {
+            a.permission = level.to_string();
+        }
+    }
+
     /// Agent's worktree path — for the diff ticker (`git status`).
     /// Permission level for a live agent — `None` if it already exited.
     pub fn permission(&self, id: &str) -> Option<String> {

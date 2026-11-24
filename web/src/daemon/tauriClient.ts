@@ -77,6 +77,10 @@ export class TauriCanvasClient {
     void invoke("deny_input", { agentId }).catch(console.error);
   }
 
+  setPermission(agentId: string, permission: string) {
+    void invoke("set_permission", { agentId, permission }).catch(console.error);
+  }
+
   createAutomation(a: {
     name: string;
     prompt: string;

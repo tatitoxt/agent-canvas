@@ -943,6 +943,29 @@ fn deny_input(state: State<'_, CanvasState>, agent_id: String) -> Result<(), Str
 }
 
 #[tauri::command]
+fn set_permission(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    agent_id: String,
+    permission: String,
+) -> Result<(), String> {
+    let level = canvasd::protocol::normalize_permission(Some(&permission));
+    state.agents.set_permission(&agent_id, level);
+    state
+        .store
+        .set_agent_permission(&agent_id, level)
+        .map_err(|e| e.to_string())?;
+    emit_control(
+        &app,
+        &ServerMsg::PermissionChanged {
+            agent_id,
+            permission: level.to_string(),
+        },
+    );
+    Ok(())
+}
+
+#[tauri::command]
 fn pty_resize(
     state: State<'_, CanvasState>,
     agent_id: String,
@@ -1437,6 +1460,7 @@ fn main() {
             pty_input,
             approve_input,
             deny_input,
+            set_permission,
             pty_resize,
             confirm_destructive,
             move_node,
