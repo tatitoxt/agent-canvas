@@ -9,6 +9,7 @@ const ITEMS = [
   { key: "memory", glyph: "▤", label: "Memory" },
   { key: "notes", glyph: "☷", label: "Notes" },
   { key: "artifacts", glyph: "▩", label: "Artifacts" },
+  { key: "vault", glyph: "✎", label: "Vault" },
   { key: "settings", glyph: "◌", label: "Settings" },
 ] as const;
 

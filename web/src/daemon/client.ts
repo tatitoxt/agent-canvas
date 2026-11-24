@@ -68,6 +68,8 @@ export type ServerMsg =
   | { type: "artifact_created"; artifact: SnapshotArtifact }
   | { type: "artifact_deleted"; artifact_id: string }
   | { type: "git_pushed"; agent_id: string; output: string }
+  | { type: "vault_listing"; dir: string; entries: string[] }
+  | { type: "vault_file"; path: string; text: string }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
   | { type: "result"; edge_id: string; summary: string; files?: number }
   | {
@@ -165,6 +167,14 @@ export class CanvasClient {
 
   spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string, accountId?: string) {
     this.send({ cmd: "spawn_agent", name, command, cwd, workspace_id: workspaceId ?? null, permission: permission ?? null, board_id: boardId ?? null, account_id: accountId ?? null });
+  }
+
+  vaultList(dir: string) {
+    this.send({ cmd: "vault_list", dir });
+  }
+
+  vaultRead(dir: string, path: string) {
+    this.send({ cmd: "vault_read", dir, path });
   }
 
   gitPush(agentId: string) {

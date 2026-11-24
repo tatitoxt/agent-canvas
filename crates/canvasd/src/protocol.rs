@@ -56,6 +56,10 @@ pub enum ClientMsg {
     },
     /// Delete a kanban note.
     NoteDelete { note_id: String },
+    /// List markdown files under a vault directory (Obsidian-style vault).
+    VaultList { dir: String },
+    /// Read one file from the vault.
+    VaultRead { dir: String, path: String },
     /// Push an agent's worktree branch to origin (its committed work).
     GitPush { agent_id: String },
     /// Register an artifact (an agent's deliverable — a report, plan,
@@ -260,6 +264,10 @@ pub enum ServerMsg {
     ArtifactCreated { artifact: SnapshotArtifact },
     /// git push finished for an agent's worktree.
     GitPushed { agent_id: String, output: String },
+    /// Vault file listing (VaultList answer): "sub/path.md" entries.
+    VaultListing { dir: String, entries: Vec<String> },
+    /// Vault file contents (VaultRead answer).
+    VaultFile { path: String, text: String },
     /// An artifact was removed.
     ArtifactDeleted { artifact_id: String },
 }

@@ -27,6 +27,7 @@ import { AccountsPanel } from "./components/AccountsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { NotesPanel } from "./components/NotesPanel";
 import { ArtifactsPanel } from "./components/ArtifactsPanel";
+import { VaultPanel } from "./components/VaultPanel";
 import { DigestPanel } from "./components/DigestPanel";
 import { NoticePill } from "./components/NoticePill";
 import { HistoryPanel } from "./components/HistoryPanel";
@@ -348,6 +349,7 @@ function Board() {
       {nav === "memory" && <MemoryPanel />}
       {nav === "notes" && <NotesPanel />}
       {nav === "artifacts" && <ArtifactsPanel />}
+      {nav === "vault" && <VaultPanel />}
       <DigestPanel />
       <NoticePill />
       {nav === "history" && (

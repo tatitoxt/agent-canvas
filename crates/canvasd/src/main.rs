@@ -789,6 +789,44 @@ fn handle_client_msg(
                 Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
             }
         }
+        ClientMsg::VaultList { dir } => {
+            let root = PathBuf::from(&dir);
+            let mut entries = Vec::new();
+            let mut stack = vec![root.clone()];
+            while let Some(d) = stack.pop() {
+                if let Ok(rd) = std::fs::read_dir(&d) {
+                    for e in rd.flatten() {
+                        let p = e.path();
+                        let name = e.file_name().to_string_lossy().to_string();
+                        if name.starts_with('.')
+                            || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build")
+                        {
+                            continue;
+                        }
+                        if p.is_dir() && stack.len() + entries.len() < 5000 {
+                            stack.push(p);
+                        } else if name.ends_with(".md") {
+                            if let Ok(rel) = p.strip_prefix(&root) {
+                                entries.push(rel.to_string_lossy().to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            entries.sort();
+            entries.truncate(2000);
+            send_control(ServerMsg::VaultListing { dir, entries });
+        }
+        ClientMsg::VaultRead { dir, path } => {
+            // Constrain to the vault root and markdown files only.
+            let root = PathBuf::from(&dir);
+            let file = root.join(&path);
+            let ok = !path.contains("..") && path.ends_with(".md") && file.is_file();
+            match ok.then(|| std::fs::read_to_string(&file)) {
+                Some(Ok(text)) => send_control(ServerMsg::VaultFile { path, text }),
+                _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault read failed: {path}") }),
+            }
+        }
         ClientMsg::GitPush { agent_id } => {
             let wt = state
                 .store

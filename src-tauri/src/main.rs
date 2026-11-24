@@ -281,6 +281,48 @@ fn delete_board(
 }
 
 #[tauri::command]
+fn vault_list(app: AppHandle, dir: String) -> Result<(), String> {
+    let root = PathBuf::from(&dir);
+    let mut entries = Vec::new();
+    let mut stack = vec![root.clone()];
+    while let Some(d) = stack.pop() {
+        if let Ok(rd) = std::fs::read_dir(&d) {
+            for e in rd.flatten() {
+                let p = e.path();
+                let name = e.file_name().to_string_lossy().to_string();
+                if name.starts_with('.')
+                    || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build")
+                {
+                    continue;
+                }
+                if p.is_dir() && stack.len() + entries.len() < 5000 {
+                    stack.push(p);
+                } else if name.ends_with(".md") {
+                    if let Ok(rel) = p.strip_prefix(&root) {
+                        entries.push(rel.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+    entries.sort();
+    entries.truncate(2000);
+    emit_control(&app, &ServerMsg::VaultListing { dir, entries });
+    Ok(())
+}
+
+#[tauri::command]
+fn vault_read(app: AppHandle, dir: String, path: String) -> Result<(), String> {
+    let file = PathBuf::from(&dir).join(&path);
+    if path.contains("..") || !path.ends_with(".md") || !file.is_file() {
+        return Err("not a markdown file in the vault".into());
+    }
+    let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
+    emit_control(&app, &ServerMsg::VaultFile { path, text });
+    Ok(())
+}
+
+#[tauri::command]
 fn git_push(app: AppHandle, state: State<'_, CanvasState>, agent_id: String) -> Result<(), String> {
     let wt = state
         .store
@@ -1090,6 +1132,8 @@ fn main() {
             artifact_create,
             artifact_delete,
             git_push,
+            vault_list,
+            vault_read,
             create_workspace,
             move_to_board,
             delegate,

@@ -62,6 +62,10 @@ type BoardState = {
   digest: string | null;
   /** Transient toast — latest info/error line shown bottom-right. */
   notice: string | null;
+  /** Obsidian-style vault browser state. */
+  vaultDir: string;
+  vaultEntries: string[];
+  vaultFile: { path: string; text: string } | null;
   /** Artifacts by id — deliverables agents produced. */
   artifacts: Record<string, import("../daemon/client").SnapshotArtifact>;
   /** Kanban notes by id (all boards; filtered by activeBoard in UI). */
@@ -110,6 +114,9 @@ type BoardState = {
   artifactCreate: (kind: string, title: string, path?: string, text?: string) => void;
   gitPush: (agentId: string) => void;
   notify: (text: string) => void;
+  vaultList: (dir: string) => void;
+  vaultRead: (path: string) => void;
+  closeVaultFile: () => void;
   artifactDelete: (artifactId: string) => void;
   createWorkspace: (name: string, repo: string) => void;
   delegate: (from: string, name: string, command: string, task: string, permission?: string, position?: { x: number; y: number }) => void;
@@ -165,6 +172,9 @@ export const useBoard = create<BoardState>((set, get) => ({
   memories: {},
   digest: null,
   notice: null,
+  vaultDir: "",
+  vaultEntries: [],
+  vaultFile: null,
   notes: {},
   artifacts: {},
   positions: {},
@@ -424,6 +434,12 @@ export const useBoard = create<BoardState>((set, get) => ({
             });
             break;
           }
+          case "vault_listing":
+            set({ vaultEntries: msg.entries });
+            break;
+          case "vault_file":
+            set({ vaultFile: { path: msg.path, text: msg.text } });
+            break;
           case "git_pushed": {
             set({ notice: `pushed — ${msg.output || "done"}` });
             break;
@@ -528,6 +544,12 @@ export const useBoard = create<BoardState>((set, get) => ({
   noteDelete: (noteId) => client?.noteDelete(noteId),
   gitPush: (agentId) => client?.gitPush(agentId),
   notify: (text) => set({ notice: text }),
+  vaultList: (dir) => {
+    set({ vaultDir: dir });
+    client?.vaultList(dir);
+  },
+  vaultRead: (path) => client?.vaultRead(get().vaultDir, path),
+  closeVaultFile: () => set({ vaultFile: null }),
   artifactCreate: (kind, title, path, text) =>
     client?.artifactCreate(get().activeBoard ?? undefined, kind, title, path, text),
   artifactDelete: (artifactId) => client?.artifactDelete(artifactId),
