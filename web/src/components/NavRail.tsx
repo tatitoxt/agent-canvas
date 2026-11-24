@@ -399,8 +399,91 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
 
       <div style={{ flex: 1 }} />
 
-      <ExtrasBubble side="left" onSelect={onSelect} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <OrchestratorsBubble />
+        <ExtrasBubble side="left" onSelect={onSelect} />
+      </div>
     </div>
+  );
+}
+
+/** Orchestrators on this board — own bubble next to Extras; the list
+ * focuses a commander, the last row spawns a new one. */
+function OrchestratorsBubble() {
+  const orchestrators = useBoard((s) => s.orchestrators);
+  const activeBoard = useBoard((s) => s.activeBoard);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const list = Object.entries(orchestrators).filter(([, o]) => o.board === activeBoard);
+
+  return (
+    <nav ref={ref} className="glass" style={{ ...bubble, position: "relative" }}>
+      <button
+        title="Orchestrators — commanders on this board; click one to focus it, or spawn a new one"
+        onClick={() => setOpen((o) => !o)}
+        style={btn(open)}
+      >
+        <Icon name="orchestrator" />
+        {list.length > 0 && (
+          <span style={badge("var(--cv-accent-dim)")}>{list.length}</span>
+        )}
+      </button>
+      {open && (
+        <div
+          className="cv-menu"
+          style={{
+            position: "absolute",
+            left: 46,
+            bottom: 0,
+            width: 208,
+            padding: 6,
+            zIndex: 40,
+          }}
+        >
+          <div style={sectionLabel}>Orchestrators</div>
+          {list.length === 0 && (
+            <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
+              none on this board
+            </div>
+          )}
+          {list.map(([id, o]) => (
+            <button
+              key={id}
+              style={menuRow}
+              title={`${o.name} — ${o.wired.length} wired; click to focus`}
+              onClick={() => { useBoard.getState().requestFocus(id); setOpen(false); }}
+              onMouseEnter={(e) => hoverRow(e, true)}
+              onMouseLeave={(e) => hoverRow(e, false)}
+            >
+              <Icon name="orchestrator" size={13} color="var(--cv-accent)" />
+              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {o.name}
+              </span>
+              <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>{o.wired.length} wired</span>
+            </button>
+          ))}
+          <button
+            style={menuRow}
+            title="Spawn a new orchestrator on this board"
+            onClick={() => { useBoard.getState().spawnOrchestrator(); setOpen(false); }}
+            onMouseEnter={(e) => hoverRow(e, true)}
+            onMouseLeave={(e) => hoverRow(e, false)}
+          >
+            <Icon name="plus" size={13} color="var(--cv-accent)" />
+            <span style={{ flex: 1 }}>New orchestrator</span>
+          </button>
+        </div>
+      )}
+    </nav>
   );
 }
 
