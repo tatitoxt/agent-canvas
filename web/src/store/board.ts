@@ -1115,6 +1115,44 @@ export const useBoard = create<BoardState>((set, get) => ({
       reply("fitted the whole board");
       return;
     }
+    if (/^(?:status|how are we|report|board state)/.test(low)) {
+      const as = Object.values(get().agents).filter((a) => (a.board_id ?? "main") === get().activeBoard);
+      if (!as.length) { reply("no agents on this board — 'spawn <cli>' to start"); return; }
+      const by = new Map<string, number>();
+      for (const a of as) by.set(a.status, (by.get(a.status) ?? 0) + 1);
+      reply(`${as.length} agent${as.length === 1 ? "" : "s"}: ` +
+        [...by].map(([k, v]) => `${v} ${k}`).join(", "));
+      return;
+    }
+    const fm = low.match(/^(?:focus|find|go to|show)\s+(?:agent|terminal)?\s*(.+)$/);
+    if (fm) {
+      const q = fm[1].trim();
+      const hit = Object.values(get().agents).find((a) =>
+        a.name.toLowerCase().includes(q) || (a.command ?? "").toLowerCase().includes(q));
+      if (hit) {
+        get().requestFocus(hit.id);
+        reply(`focusing ${hit.name}`);
+      } else {
+        reply(`no agent matches "${q}"`);
+      }
+      return;
+    }
+    if (/^gather/.test(low)) {
+      get().gatherLoose();
+      reply("gathered the loose windows into a group");
+      return;
+    }
+    if (/^hide (?:chrome|panels|menus|ui)/.test(low)) {
+      get().toggleChrome();
+      reply("chrome hidden — the eye button brings it back");
+      return;
+    }
+    const st = low.match(/^(?:spawn|deploy)\s+([\w-]+)\s+(?:to|with task|task)\s+(.+)$/);
+    if (st) {
+      get().spawn(st[1], st[1], undefined, undefined, undefined, st[2]);
+      reply(`spawned ${st[1]} with task: "${st[2].slice(0, 60)}"`);
+      return;
+    }
     if (/summari|digest|recap/.test(low)) {
       get().studioDocNow();
       reply("built the board dossier");
