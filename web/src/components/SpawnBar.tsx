@@ -1,29 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { useBoard } from "../store/board";
+import { Icon } from "./icons";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--cv-glass-hi)",
   border: "1px solid var(--cv-glass-edge)",
-  borderRadius: 999,
+  borderRadius: 10,
   height: 30,
-  padding: "0 12px",
+  padding: "0 10px",
   fontSize: 11.5,
   lineHeight: 1,
   color: "var(--cv-ink)",
   outline: "none",
+  width: "100%",
 };
 
-const buttonStyle: React.CSSProperties = {
-  height: 30,
-  padding: "0 12px",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: 11.5,
-  lineHeight: 1,
-  fontWeight: 600,
-  color: "var(--cv-ink)",
-  cursor: "pointer",
+const sectionLabel: React.CSSProperties = {
+  fontSize: 8.5,
+  fontWeight: 700,
+  letterSpacing: 1,
+  textTransform: "uppercase",
+  color: "var(--cv-ink-faint)",
+  padding: "6px 4px 2px",
 };
 
 /** Official agent CLIs offered by the picker — Deska-style agent chooser.
@@ -49,9 +47,9 @@ const AGENT_CHOICES = [
   { cmd: "custom", label: "custom command…" },
 ];
 
-/** Slim composer — just "what do you want to run". Everything else
- * (orchestrator, team, shapes, workspaces, pause/resume, web pins)
- * lives in the Tools menu top-right, Symvibe-style. */
+/** One "+" bubble bottom-center → opens an Apple-style popover that asks
+ * what to spawn: CLI grid, workspace, permission, account. The canvas
+ * stays clean until you ask for an agent. */
 export function SpawnBar() {
   const connected = useBoard((s) => s.connected);
   const connect = useBoard((s) => s.connect);
@@ -59,23 +57,34 @@ export function SpawnBar() {
   const workspaces = useBoard((s) => s.workspaces);
   const accounts = useBoard((s) => s.accounts);
   const spawnFocusN = useBoard((s) => s.spawnFocusN);
+  const [open, setOpen] = useState(false);
   const [choice, setChoice] = useState("claude");
   const [command, setCommand] = useState("");
   const [wsId, setWsId] = useState("");
   const [permission, setPermission] = useState("supervised");
   const [acctId, setAcctId] = useState("");
-  // Named sign-ins of the chosen CLI — "default" = the machine login.
   const acctOptions = Object.values(accounts).filter((a) => a.cli === choice);
-  const cliRef = useRef<HTMLSelectElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
 
-  // "New task" in the Spaces rail focuses this picker.
+  // "New task" in the rail opens the chooser.
   useEffect(() => {
-    if (spawnFocusN > 0) cliRef.current?.focus();
+    if (spawnFocusN > 0) setOpen(true);
   }, [spawnFocusN]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const canSpawn = connected && (choice !== "custom" || command.trim().length > 0);
 
   return (
     <div
-      className="glass-pill"
+      ref={wrap}
       style={{
         position: "absolute",
         left: "50%",
@@ -83,105 +92,150 @@ export function SpawnBar() {
         transform: "translateX(-50%)",
         zIndex: 15,
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
-        gap: 7,
-        height: 46,
-        padding: "8px 10px 8px 12px",
       }}
     >
-      {!connected ? (
-        <>
-          <span style={{ fontSize: 11.5, color: "var(--cv-ink-dim)" }}>
-            daemon offline
-          </span>
-          <button className="glass-pill" style={buttonStyle} onClick={() => connect("")}>
-            connect
-          </button>
-        </>
-      ) : (
-        <>
-          <select
-            ref={cliRef}
-            style={{ ...inputStyle, cursor: "pointer" }}
-            value={choice}
-            onChange={(e) => setChoice(e.target.value)}
-            title="agent CLI"
-          >
-            {AGENT_CHOICES.map((c) => (
-              <option key={c.cmd} value={c.cmd}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-          {choice === "custom" && (
-            <input
-              style={{ ...inputStyle, width: 140 }}
-              placeholder="command"
-              value={command}
-              onChange={(e) => setCommand(e.target.value)}
-              autoFocus
-            />
+      {open && (
+        <div
+          className="cv-menu cv-menu-scroll"
+          style={{
+            width: 300,
+            maxHeight: "62vh",
+            overflowY: "auto",
+            padding: 10,
+            marginBottom: 10,
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+          }}
+        >
+          {!connected ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 4 }}>
+              <span style={{ flex: 1, fontSize: 11.5, color: "var(--cv-ink-dim)" }}>
+                daemon offline
+              </span>
+              <button
+                className="glass-pill"
+                style={{ ...inputStyle, width: "auto", cursor: "pointer" }}
+                onClick={() => connect("")}
+              >
+                connect
+              </button>
+            </div>
+          ) : (
+            <>
+              <div style={sectionLabel}>Spawn an agent</div>
+              <select
+                style={{ ...inputStyle, cursor: "pointer" }}
+                value={choice}
+                onChange={(e) => setChoice(e.target.value)}
+                title="agent CLI"
+                autoFocus
+              >
+                {AGENT_CHOICES.map((c) => (
+                  <option key={c.cmd} value={c.cmd}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              {choice === "custom" && (
+                <input
+                  style={inputStyle}
+                  placeholder="command"
+                  value={command}
+                  onChange={(e) => setCommand(e.target.value)}
+                  autoFocus
+                />
+              )}
+              <select
+                style={{ ...inputStyle, cursor: "pointer", color: wsId ? "var(--cv-ink)" : "var(--cv-ink-dim)" }}
+                value={wsId}
+                onChange={(e) => setWsId(e.target.value)}
+                title="workspace"
+              >
+                <option value="">no workspace</option>
+                {Object.values(workspaces).map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                style={{ ...inputStyle, cursor: "pointer", color: permission === "supervised" ? "var(--cv-ink-dim)" : "var(--cv-accent)" }}
+                value={permission}
+                onChange={(e) => setPermission(e.target.value)}
+                title="permission level — what the agent may do without asking"
+              >
+                <option value="supervised">supervised</option>
+                <option value="auto_accept">auto-accept edits</option>
+                <option value="auto">auto</option>
+                <option value="full">full access</option>
+              </select>
+              {acctOptions.length > 0 && (
+                <select
+                  style={{ ...inputStyle, cursor: "pointer", color: acctId ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}
+                  value={acctId}
+                  onChange={(e) => setAcctId(e.target.value)}
+                  title="which sign-in this agent uses — two accounts of the same CLI can run side by side"
+                >
+                  <option value="">default account</option>
+                  {acctOptions.map((a) => (
+                    <option key={a.account_id} value={a.account_id}>
+                      @{a.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                style={{
+                  height: 32,
+                  borderRadius: 10,
+                  border: "none",
+                  marginTop: 2,
+                  background: "var(--cv-accent)",
+                  color: "#14110d",
+                  fontWeight: 700,
+                  fontSize: 11.5,
+                  cursor: "pointer",
+                  boxShadow: "0 0 14px rgba(245,165,36,0.35)",
+                  opacity: canSpawn ? 1 : 0.45,
+                }}
+                disabled={!canSpawn}
+                onClick={() => {
+                  const cmd = choice === "custom" ? command.trim() : choice;
+                  spawn(cmd, cmd, wsId || undefined, permission, acctId || undefined);
+                  setOpen(false);
+                }}
+              >
+                + spawn
+              </button>
+            </>
           )}
-          <select
-            style={{ ...inputStyle, color: wsId ? "var(--cv-ink)" : "var(--cv-ink-dim)", cursor: "pointer" }}
-            value={wsId}
-            onChange={(e) => setWsId(e.target.value)}
-          >
-            <option value="">no workspace</option>
-            {Object.values(workspaces).map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-          <select
-            style={{ ...inputStyle, cursor: "pointer", color: permission === "supervised" ? "var(--cv-ink-dim)" : "var(--cv-accent)" }}
-            value={permission}
-            onChange={(e) => setPermission(e.target.value)}
-            title="permission level — what the agent may do without asking"
-          >
-            <option value="supervised">supervised</option>
-            <option value="auto_accept">auto-accept edits</option>
-            <option value="auto">auto</option>
-            <option value="full">full access</option>
-          </select>
-          {acctOptions.length > 0 && (
-            <select
-              style={{ ...inputStyle, cursor: "pointer", color: acctId ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}
-              value={acctId}
-              onChange={(e) => setAcctId(e.target.value)}
-              title="which sign-in this agent uses — two accounts of the same CLI can run side by side"
-            >
-              <option value="">default account</option>
-              {acctOptions.map((a) => (
-                <option key={a.account_id} value={a.account_id}>
-                  @{a.label}
-                </option>
-              ))}
-            </select>
-          )}
-          <button
-            style={{
-              ...buttonStyle,
-              borderRadius: 999,
-              border: "none",
-              padding: "0 16px",
-              background: "var(--cv-accent)",
-              color: "#14110d",
-              fontWeight: 700,
-              boxShadow: "0 0 14px rgba(245,165,36,0.35)",
-              opacity: (choice !== "custom" || command.trim()) ? 1 : 0.45,
-            }}
-            disabled={choice === "custom" && !command.trim()}
-            onClick={() => {
-              const cmd = choice === "custom" ? command.trim() : choice;
-              spawn(cmd, cmd, wsId || undefined, permission, acctId || undefined);
-            }}
-          >
-            + agent
-          </button>
-        </>
+        </div>
       )}
+      <button
+        className="glass-pill"
+        onClick={() => setOpen((o) => !o)}
+        title={open ? "close" : "Spawn — pick an agent to run on the canvas"}
+        style={{
+          width: 40,
+          height: 40,
+          display: "grid",
+          placeItems: "center",
+          borderRadius: 999,
+          cursor: "pointer",
+          color: open ? "var(--cv-base)" : "var(--cv-accent)",
+          background: open ? "var(--cv-accent)" : undefined,
+          boxShadow: open ? "0 0 18px rgba(245,165,36,0.45)" : undefined,
+          fontSize: 20,
+          fontWeight: 600,
+          transform: open ? "rotate(45deg)" : "none",
+          transition: "transform 140ms ease, background 140ms ease",
+        }}
+      >
+        <Icon name="plus" size={18} color={open ? "#14110d" : "var(--cv-accent)"} />
+      </button>
     </div>
   );
 }

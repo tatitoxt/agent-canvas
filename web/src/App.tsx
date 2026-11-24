@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toPng } from "html-to-image";
 import {
-  Controls,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
@@ -20,6 +19,7 @@ import { DelegationEdge } from "./board/edges";
 import { initialEdges, initialNodes } from "./board/mockData";
 import { DelegateDialog } from "./components/DelegateDialog";
 import { NavRail } from "./components/NavRail";
+import { Icon } from "./components/icons";
 import { SpawnBar } from "./components/SpawnBar";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { InboxPanel } from "./components/InboxPanel";
@@ -74,7 +74,7 @@ function Board() {
   const wiringFrom = useBoard((s) => s.wiringFrom);
   const toggleWire = useBoard((s) => s.toggleWire);
   const setWiring = useBoard((s) => s.setWiring);
-  const { screenToFlowPosition, fitView, getNodes } = useReactFlow();
+  const { screenToFlowPosition, fitView, getNodes, getZoom, zoomTo } = useReactFlow();
 
   // Full-canvas PNG export: render every node fitted into a fixed-size
   // bitmap — the "screenshot button" on the board.
@@ -139,6 +139,11 @@ function Board() {
   useEffect(() => {
     if (viewCmdN > 0) fitView({ padding: 0.18, maxZoom: 1.1, duration: 250 });
   }, [viewCmdN, fitView]);
+  const zoomN = useBoard((s) => s.zoomN);
+  useEffect(() => {
+    if (zoomN.n > 0) zoomTo(getZoom() * (zoomN.dir > 0 ? 1.3 : 0.77), { duration: 160 });
+  }, [zoomN, getZoom, zoomTo]);
+  const chromeHidden = useBoard((s) => s.chromeHidden);
   const navRequest = useBoard((s) => s.navRequest);
   useEffect(() => {
     if (navRequest) setNav(navRequest.key);
@@ -147,6 +152,11 @@ function Board() {
   const openTerm = (t: { id: string; name: string }) =>
     setOpenTerms((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]));
   const closeTerm = (id: string) => setOpenTerms((ts) => ts.filter((x) => x.id !== id));
+  const termRequest = useBoard((s) => s.termRequest);
+  useEffect(() => {
+    if (termRequest) openTerm({ id: termRequest.id, name: termRequest.name });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [termRequest]);
   const [delegateFrom, setDelegateFrom] = useState<{ from: string; at: { x: number; y: number } } | null>(null);
   const [nav, setNav] = useState("canvas");
   const [palette, setPalette] = useState(false);
@@ -391,23 +401,47 @@ function Board() {
 
   return (
     <div className="relative h-full w-full">
-      <NavRail
-        active={nav}
-        onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
-      />
-      <Topbar
-        nav={nav}
-        onNav={(k) => setNav((n) => (n === k ? "canvas" : k))}
-        tools={{
-          onDigest: () => useBoard.getState().digestNow(),
-          onShot: () => void shotCanvas(),
-          onStudio: () => useBoard.getState().studioDocNow(),
-          onDraw: () => setPencil((m) => !m),
-          onRegion: () => setShotMode((m) => !m),
-          drawOn: pencil,
-          regionOn: shotMode,
-        }}
-      />
+      {!chromeHidden && (
+        <>
+          <NavRail
+            active={nav}
+            onSelect={(k) => setNav((n) => (n === k ? "canvas" : k))}
+          />
+          <Topbar
+            nav={nav}
+            onNav={(k) => setNav((n) => (n === k ? "canvas" : k))}
+            tools={{
+              onDigest: () => useBoard.getState().digestNow(),
+              onShot: () => void shotCanvas(),
+              onStudio: () => useBoard.getState().studioDocNow(),
+              onDraw: () => setPencil((m) => !m),
+              onRegion: () => setShotMode((m) => !m),
+              drawOn: pencil,
+              regionOn: shotMode,
+            }}
+          />
+        </>
+      )}
+      {chromeHidden && (
+        <button
+          className="glass-pill"
+          onClick={() => useBoard.getState().toggleChrome()}
+          title="Show panels and menus"
+          style={{
+            position: "absolute",
+            left: 14,
+            top: 14,
+            zIndex: 20,
+            width: 36,
+            height: 36,
+            display: "grid",
+            placeItems: "center",
+            cursor: "pointer",
+          }}
+        >
+          <Icon name="eye" size={16} color="var(--cv-ink-dim)" />
+        </button>
+      )}
       {pencil && (
         <div
           style={{ position: "absolute", inset: 0, zIndex: 29, cursor: "crosshair" }}
@@ -476,7 +510,7 @@ function Board() {
           )}
         </div>
       )}
-      <SpawnBar />
+      {!chromeHidden && <SpawnBar />}
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -500,11 +534,11 @@ function Board() {
         panOnDrag={[1, 2]}
         proOptions={{ hideAttribution: true }}
       >
-        <Controls position="bottom-left" showInteractive={false} />
         <MiniMap
           position="bottom-right"
           pannable
           zoomable
+          style={{ width: 148, height: 96, marginRight: 84 }}
           className="!bg-[var(--cv-base)]"
           maskColor="rgba(14,14,16,0.7)"
           nodeColor={(n) => {

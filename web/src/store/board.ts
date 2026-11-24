@@ -176,6 +176,16 @@ type BoardState = {
   /** Deska's "Gather loose windows into groups" — pulls every unwired,
    * unparented agent card into a tight grid and reframes the view. */
   gatherLoose: () => void;
+  /** Hide panels and menus — every chrome element (rails, topbar, spawn
+   * bubble) collapses to a single restore button. */
+  chromeHidden: boolean;
+  toggleChrome: () => void;
+  /** Bump counter → zoom the canvas in (1) or out (-1). */
+  zoomN: { dir: number; n: number };
+  requestZoom: (dir: number) => void;
+  /** Ask the board to open a terminal panel for an agent (Panels menu). */
+  termRequest: { id: string; name: string; n: number } | null;
+  requestTerm: (id: string, name: string) => void;
   createAutomation: (a: {
     name: string;
     prompt: string;
@@ -1015,6 +1025,13 @@ export const useBoard = create<BoardState>((set, get) => ({
     get().notify(`gathered ${loose.length} loose window${loose.length === 1 ? "" : "s"}`);
     get().requestView();
   },
+  chromeHidden: false,
+  toggleChrome: () => set((s) => ({ chromeHidden: !s.chromeHidden })),
+  zoomN: { dir: 0, n: 0 },
+  requestZoom: (dir) => set((s) => ({ zoomN: { dir, n: s.zoomN.n + 1 } })),
+  termRequest: null,
+  requestTerm: (id, name) =>
+    set((s) => ({ termRequest: { id, name, n: (s.termRequest?.n ?? 0) + 1 } })),
 
   /** Symvibe's THREAD — the built-in board commander. Deterministic
    * intent parsing; falls back to quickRequest for local commands. */

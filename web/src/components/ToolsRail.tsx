@@ -128,23 +128,19 @@ export function ToolsMenu({
         onClick={() => setOpen((o) => !o)}
         title="Tools — panels, board ops, capture"
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 7,
-          padding: "6px 13px",
-          fontSize: 11.5,
-          fontWeight: 650,
+          display: "grid",
+          placeItems: "center",
+          width: 34,
+          height: 34,
           color: open ? "var(--cv-accent)" : "var(--cv-ink)",
           cursor: "pointer",
         }}
       >
-        <Icon name="tools" size={13} color={open ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
-        Tools
-        <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>▾</span>
+        <Icon name="tools" size={15} color={open ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
       </button>
       {open && (
         <div
-          className="glass-panel"
+          className="cv-menu cv-menu-scroll"
           style={{
             position: "absolute",
             top: "calc(100% + 8px)",
