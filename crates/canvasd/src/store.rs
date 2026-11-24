@@ -456,6 +456,15 @@ impl Store {
         Ok(rows.next().transpose()?)
     }
 
+    /// Forget an agent entirely — removes its row so it stops showing up
+    /// in snapshots. Used by "clear done"; kill() only marks it exited.
+    pub fn remove_agent(&self, id: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM agents WHERE id = ?1", (id,))?;
+        conn.execute("DELETE FROM layout WHERE node_id = ?1", (id,))?;
+        Ok(())
+    }
+
     pub fn agent_status(&self, id: &str, status: &str) -> Result<()> {
         self.conn.lock().unwrap().execute(
             "UPDATE agents SET status = ?2, exited_at = CASE WHEN ?2 = 'exited' THEN datetime('now') ELSE exited_at END WHERE id = ?1",

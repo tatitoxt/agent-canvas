@@ -345,7 +345,7 @@ export class CanvasClient {
   }
 
   /** The only way to kill: explicit destructive confirmation. */
-  confirmDestructive(agentId: string, action: "kill") {
+  confirmDestructive(agentId: string, action: "kill" | "forget") {
     this.send({ cmd: "confirm_destructive", agent_id: agentId, action });
   }
 

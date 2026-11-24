@@ -900,6 +900,21 @@ fn handle_client_msg(
                         message: e.to_string(),
                     }),
                 },
+                "forget" => {
+                    // Remove an (exited) agent from the db so the next
+                    // snapshot stops resurrecting it — "clear done".
+                    let _ = state.agents.kill(&agent_id); // no-op if already gone
+                    match state.store.remove_agent(&agent_id) {
+                        Ok(()) => send_control(ServerMsg::Status {
+                            agent_id,
+                            status: AgentStatus::Exited,
+                        }),
+                        Err(e) => send_control(ServerMsg::Error {
+                            agent_id: Some(agent_id),
+                            message: e.to_string(),
+                        }),
+                    }
+                }
                 other => send_control(ServerMsg::Error {
                     agent_id: Some(agent_id),
                     message: format!("unknown destructive action: {other}"),

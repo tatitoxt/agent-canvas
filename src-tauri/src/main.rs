@@ -1292,6 +1292,15 @@ fn confirm_destructive(
             );
             Ok(())
         }
+        "forget" => {
+            let _ = state.agents.kill(&agent_id); // no-op if already gone
+            state.store.remove_agent(&agent_id).map_err(|e| e.to_string())?;
+            emit_control(
+                &app,
+                &ServerMsg::Status { agent_id, status: AgentStatus::Exited },
+            );
+            Ok(())
+        }
         other => Err(format!("unknown destructive action: {other}")),
     }
 }
