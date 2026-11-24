@@ -572,8 +572,10 @@ function Board() {
 
   const onNodeContextMenu: NodeMouseHandler = (ev, node) => {
     ev.preventDefault();
-    if (!agents[node.id] && !workspaces[node.id]) return;
-    setMenu({ x: ev.clientX, y: ev.clientY, id: node.id });
+    // A popped-out terminal card exposes its owner's menu.
+    const id = node.id.startsWith("term-") ? node.id.slice(5) : node.id;
+    if (!agents[id] && !workspaces[id]) return;
+    setMenu({ x: ev.clientX, y: ev.clientY, id });
   };
 
   const onNodeDragStop: OnNodeDrag = (_, node) => {
