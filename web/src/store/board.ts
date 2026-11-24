@@ -164,6 +164,15 @@ type BoardState = {
   }) => void;
   runAutomation: (automationId: string) => void;
   deleteAutomation: (automationId: string) => void;
+  /** Symvibe-style orchestrator cards: a board node wired to consoles with
+   * cables; its composer broadcasts the command to every wired PTY. */
+  orchestrators: Record<string, { name: string; board: string; wired: string[] }>;
+  /** Orchestrator id currently in Connect mode (pick agents to wire). */
+  wiringFrom: string | null;
+  spawnOrchestrator: () => void;
+  setWiring: (orchId: string | null) => void;
+  toggleWire: (orchId: string, agentId: string) => void;
+  commandAgents: (orchId: string, text: string) => void;
 };
 
 let client: DaemonTransport | null = null;
@@ -686,6 +695,53 @@ export const useBoard = create<BoardState>((set, get) => ({
   createAutomation: (a) => client?.createAutomation(a),
   runAutomation: (automationId) => client?.runAutomation(automationId),
   deleteAutomation: (automationId) => client?.deleteAutomation(automationId),
+
+  orchestrators: (() => {
+    try {
+      return JSON.parse(localStorage.getItem("canvas:orchestrators") ?? "{}");
+    } catch {
+      return {};
+    }
+  })(),
+  wiringFrom: null,
+
+  spawnOrchestrator: () => {
+    const id = `orch-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+    const orchestrators = {
+      ...get().orchestrators,
+      [id]: { name: "Orchestrator", board: get().activeBoard, wired: [] as string[] },
+    };
+    try {
+      localStorage.setItem("canvas:orchestrators", JSON.stringify(orchestrators));
+    } catch { /* private mode — wiring lives in memory only */ }
+    set({ orchestrators });
+    get().moveNode(id, 420, 80);
+  },
+
+  setWiring: (orchId) => set({ wiringFrom: orchId }),
+
+  toggleWire: (orchId, agentId) => {
+    const all = get().orchestrators;
+    const cur = all[orchId];
+    if (!cur) return;
+    const wired = cur.wired.includes(agentId)
+      ? cur.wired.filter((x) => x !== agentId)
+      : [...cur.wired, agentId];
+    const orchestrators = { ...all, [orchId]: { ...cur, wired } };
+    try {
+      localStorage.setItem("canvas:orchestrators", JSON.stringify(orchestrators));
+    } catch { /* see spawnOrchestrator */ }
+    set({ orchestrators });
+  },
+
+  // The composer writes the command straight into each wired console's
+  // PTY — like speaking to each terminal at once (Symvibe's "Command N").
+  commandAgents: (orchId, text) => {
+    const cur = get().orchestrators[orchId];
+    if (!cur || !text.trim()) return;
+    const payload = new TextEncoder().encode(`${text.trim()}\r`);
+    for (const aid of cur.wired) get().sendInput(aid, payload);
+  },
 
   quickRequest: (text) => {
     const t = text.trim().toLowerCase();

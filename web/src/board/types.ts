@@ -26,6 +26,8 @@ export type AgentNodeData = {
 
 export type OrchestratorNodeData = {
   kind: "orchestrator";
+  /** Node id — the card looks itself up in the store for wiring/roster. */
+  id?: string;
   name: string;
   delegations: number;
 };

@@ -1,5 +1,5 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useBoard } from "../store/board";
 import type {
   AgentNodeData,
@@ -420,42 +420,150 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   );
 }
 
+/**
+ * The orchestrator card (Symvibe's "Dex"): wire consoles to it with
+ * Connect — each pick draws an orange cable — then the composer sends one
+ * command into every wired PTY at once.
+ */
+const EMPTY_WIRED: string[] = [];
+
 export function OrchestratorNode({
   data,
+  id,
 }: NodeProps<Node<OrchestratorNodeData>>) {
+  const orchId = data.id ?? id;
+  const agents = useBoard((s) => s.agents);
+  const wired = useBoard((s) => s.orchestrators[orchId]?.wired ?? EMPTY_WIRED);
+  const wiring = useBoard((s) => s.wiringFrom === orchId);
+  const setWiring = useBoard((s) => s.setWiring);
+  const commandAgents = useBoard((s) => s.commandAgents);
+  const [cmd, setCmd] = useState("");
+
+  const send = () => {
+    if (!cmd.trim() || !wired.length) return;
+    commandAgents(orchId, cmd);
+    setCmd("");
+  };
+
   return (
     <div
       className="glass"
       style={{
-        width: 220,
+        width: 268,
         padding: "14px 16px",
-        borderColor: "var(--cv-accent-dim)",
+        borderColor: wiring ? "var(--cv-accent)" : "var(--cv-accent-dim)",
+        boxShadow: wiring
+          ? "0 0 0 1px var(--cv-accent), 0 0 18px rgba(201,162,107,0.18)"
+          : undefined,
       }}
     >
       <Handle type="target" position={Position.Left} />
-      <div
-        style={{
-          fontSize: 9.5,
-          letterSpacing: 1.6,
-          textTransform: "uppercase",
-          color: "var(--cv-accent)",
-          fontWeight: 600,
-        }}
-      >
-        orchestrator
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div
+          style={{
+            fontSize: 9.5,
+            letterSpacing: 1.6,
+            textTransform: "uppercase",
+            color: "var(--cv-accent)",
+            fontWeight: 600,
+          }}
+        >
+          orchestrator
+        </div>
+        <button
+          className="nodrag"
+          onClick={() => setWiring(wiring ? null : orchId)}
+          title="Pick agent consoles on the canvas to wire them here"
+          style={{
+            background: wiring ? "rgba(201,162,107,0.16)" : "none",
+            border: "1px solid var(--cv-accent-dim)",
+            borderRadius: 11,
+            color: wiring ? "var(--cv-accent)" : "var(--cv-ink-dim)",
+            fontSize: 10,
+            padding: "2px 9px",
+            cursor: "pointer",
+          }}
+        >
+          {wiring ? "done" : "⚡ connect"}
+        </button>
       </div>
       <div style={{ fontSize: 16, fontWeight: 650, marginTop: 4 }}>
         {data.name}
       </div>
-      <div
-        style={{
-          fontSize: 11,
-          color: "var(--cv-ink-dim)",
-          marginTop: 6,
-        }}
-      >
-        {data.delegations} delegation{data.delegations === 1 ? "" : "s"} in
-        flight
+      <div style={{ fontSize: 11, color: "var(--cv-ink-dim)", marginTop: 5 }}>
+        {wiring
+          ? "click agent cards to wire them — click Connect when done"
+          : wired.length
+            ? `${wired.length} wired`
+            : "No agents wired — Connect and pick consoles"}
+      </div>
+      {wired.length > 0 && (
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+          {wired.map((aid) => {
+            const a = agents[aid];
+            if (!a) return null;
+            const cli = (a.command ?? "bash").split(/\s+/)[0].toLowerCase();
+            const meta = CLI_META[cli];
+            return (
+              <div key={aid} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 10.5 }}>
+                <span style={{ color: meta?.color ?? "var(--cv-ink-dim)", width: 12, textAlign: "center" }}>
+                  {meta?.mark ?? "›_"}
+                </span>
+                <span style={{ color: "var(--cv-ink)", fontWeight: 600 }}>{a.name}</span>
+                <span style={{ color: "var(--cv-ink-dim)" }}>· {meta?.label ?? cli}</span>
+                <span
+                  style={{
+                    marginLeft: "auto",
+                    fontSize: 9.5,
+                    color: a.status === "exited" ? "var(--cv-idle)" : "var(--cv-working)",
+                  }}
+                >
+                  {a.status === "exited" ? "done" : "running"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="nodrag" style={{ display: "flex", gap: 6, marginTop: 10 }}>
+        <input
+          value={cmd}
+          onChange={(e) => setCmd(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && send()}
+          placeholder={
+            wired.length
+              ? `Command ${wired.length} agent${wired.length === 1 ? "" : "s"} · @ to direct…`
+              : "Wire consoles first…"
+          }
+          disabled={!wired.length}
+          style={{
+            flex: 1,
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 7,
+            color: "var(--cv-ink)",
+            fontSize: 11,
+            padding: "5px 8px",
+            outline: "none",
+          }}
+        />
+        <button
+          onClick={send}
+          disabled={!wired.length || !cmd.trim()}
+          title="Send the command to every wired console"
+          style={{
+            background: "rgba(201,162,107,0.14)",
+            border: "1px solid var(--cv-accent-dim)",
+            borderRadius: 7,
+            color: "var(--cv-accent)",
+            fontSize: 11,
+            padding: "5px 10px",
+            cursor: "pointer",
+            opacity: wired.length && cmd.trim() ? 1 : 0.45,
+          }}
+        >
+          ▸
+        </button>
       </div>
       <Handle type="source" position={Position.Right} />
     </div>

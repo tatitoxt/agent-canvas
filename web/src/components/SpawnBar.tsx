@@ -52,6 +52,7 @@ export function SpawnBar() {
   const workspaces = useBoard((s) => s.workspaces);
   const accounts = useBoard((s) => s.accounts);
   const createWorkspace = useBoard((s) => s.createWorkspace);
+  const spawnOrchestrator = useBoard((s) => s.spawnOrchestrator);
   const [choice, setChoice] = useState("claude");
   const [command, setCommand] = useState("");
   const [name, setName] = useState("");
@@ -248,6 +249,14 @@ export function SpawnBar() {
             title="Pin a live web page (e.g. a localhost dev server) to the canvas"
           >
             ◍+
+          </button>
+          <button
+            className="glass-pill"
+            style={{ ...buttonStyle, color: "var(--cv-accent)" }}
+            onClick={spawnOrchestrator}
+            title="New orchestrator — wire consoles to it and command them all from its composer"
+          >
+            ◉ orch
           </button>
         </>
       )}

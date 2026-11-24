@@ -62,6 +62,10 @@ function Board() {
   const approvals = useBoard((s) => s.approvals);
   const attention = useBoard((s) => s.attention);
   const webNodes = useBoard((s) => s.webNodes);
+  const orchestrators = useBoard((s) => s.orchestrators);
+  const wiringFrom = useBoard((s) => s.wiringFrom);
+  const toggleWire = useBoard((s) => s.toggleWire);
+  const setWiring = useBoard((s) => s.setWiring);
   const { screenToFlowPosition, fitView, getNodes } = useReactFlow();
 
   // Full-canvas PNG export: render every node fitted into a fixed-size
@@ -275,10 +279,30 @@ function Board() {
         data: { kind: "web" as const, url },
       }),
     );
-    return connected ? [...wsNodes, ...webNs, ...live] : [...initialNodes, ...webNs, ...live];
-  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes]);
+    // Orchestrator cards live in the store (client-side, per board).
+    const orchNs: Node<BoardNodeData>[] = Object.entries(orchestrators)
+      .filter(([, o]) => o.board === activeBoard)
+      .map(([id, o]) => ({
+        id,
+        type: "orchestrator" as const,
+        position: positions[id] ?? { x: 420, y: 80 },
+        data: {
+          kind: "orchestrator" as const,
+          id,
+          name: o.name,
+          delegations: o.wired.length,
+        },
+      }));
+    return connected ? [...wsNodes, ...webNs, ...live, ...orchNs] : [...initialNodes, ...webNs, ...live, ...orchNs];
+  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators]);
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
+    // In Connect mode a click on an agent card wires/unwires it to the
+    // orchestrator instead of opening the terminal.
+    if (wiringFrom && agents[node.id]) {
+      toggleWire(wiringFrom, node.id);
+      return;
+    }
     const a = agents[node.id];
     if (a) openTerm({ id: a.id, name: a.name });
   };
@@ -295,7 +319,7 @@ function Board() {
   };
 
   const onNodeDragStop: OnNodeDrag = (_, node) => {
-    if (agents[node.id] || workspaces[node.id] || node.id.startsWith("web-")) {
+    if (agents[node.id] || workspaces[node.id] || node.id.startsWith("web-") || node.id.startsWith("orch-")) {
       moveNode(node.id, node.position.x, node.position.y);
     }
   };
@@ -313,7 +337,7 @@ function Board() {
   const edges = useMemo(() => {
     if (!connected) return initialEdges;
     // An edge is visible when its delegating node is on this board.
-    return Object.values(liveEdges)
+    const delegEdges = Object.values(liveEdges)
       .filter((e) => (agents[e.from]?.board_id ?? "main") === activeBoard)
       .map((e) => ({
       id: e.id,
@@ -322,7 +346,23 @@ function Board() {
       type: "delegation" as const,
       data: { state: e.state, task: e.task, result: e.result, files: e.files },
     }));
-  }, [connected, liveEdges, agents, activeBoard]);
+    // Orchestrator wiring: an orange bezier from each wired console into
+    // the card — same cable look as a delegation in flight.
+    const wireEdges = Object.entries(orchestrators)
+      .filter(([, o]) => o.board === activeBoard)
+      .flatMap(([oid, o]) =>
+        o.wired
+          .filter((aid) => agents[aid])
+          .map((aid) => ({
+            id: `wire-${oid}-${aid}`,
+            source: aid,
+            target: oid,
+            type: "delegation" as const,
+            data: { state: "delegated" as const },
+          })),
+      );
+    return [...delegEdges, ...wireEdges];
+  }, [connected, liveEdges, agents, activeBoard, orchestrators]);
 
   return (
     <div className="relative h-full w-full">
@@ -508,7 +548,10 @@ function Board() {
         onConnectEnd={onConnectEnd}
         onEdgeClick={(_, edge) => setEdgeDetail(edge.id)}
         onNodeContextMenu={onNodeContextMenu}
-        onPaneClick={() => setEdgeDetail(null)}
+        onPaneClick={() => {
+          setEdgeDetail(null);
+          setWiring(null);
+        }}
         fitView
         fitViewOptions={{ padding: 0.18, maxZoom: 1.1 }}
         minZoom={0.15}
