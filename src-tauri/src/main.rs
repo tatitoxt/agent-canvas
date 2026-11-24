@@ -557,7 +557,20 @@ fn vault_delete(app: AppHandle, dir: String, path: String) -> Result<(), String>
     if path.contains("..") || !path.ends_with(".md") || !file.is_file() {
         return Err("vault delete refused".into());
     }
-    std::fs::remove_file(&file).map_err(|e| e.to_string())?;
+    // Obsidian-style trash: move to <vault>/.trash/, recoverable always.
+    let trash = PathBuf::from(&dir).join(".trash");
+    let base = file.file_name().ok_or("bad name")?;
+    let mut dest = trash.join(base);
+    if dest.exists() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| e.to_string())?
+            .as_secs();
+        let stem = file.file_stem().ok_or("bad name")?.to_string_lossy();
+        dest = trash.join(format!("{stem}.{stamp}.md"));
+    }
+    std::fs::create_dir_all(&trash).map_err(|e| e.to_string())?;
+    std::fs::rename(&file, &dest).map_err(|e| e.to_string())?;
     vault_list(app, dir)
 }
 

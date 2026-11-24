@@ -1132,7 +1132,20 @@ fn handle_client_msg(
             if path.contains("..") || !path.ends_with(".md") || !file.is_file() {
                 send_control(ServerMsg::Error { agent_id: None, message: format!("vault delete refused: {path}") });
             } else {
-                match std::fs::remove_file(&file) {
+                // Obsidian-style trash: move to <vault>/.trash/ instead of
+                // unlinking, so a delete is always recoverable.
+                let trash = root.join(".trash");
+                let base = file.file_name().unwrap_or_default();
+                let mut dest = trash.join(base);
+                if dest.exists() {
+                    let stamp = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    let stem = file.file_stem().unwrap_or_default().to_string_lossy();
+                    dest = trash.join(format!("{stem}.{stamp}.md"));
+                }
+                match std::fs::create_dir_all(&trash).and_then(|_| std::fs::rename(&file, &dest)) {
                     Ok(()) => {
                         let mut entries = vault_list_entries(&root);
                         entries.truncate(2000);
