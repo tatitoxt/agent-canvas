@@ -275,6 +275,30 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
           >
             ⤢
           </button>
+          <button
+            title="copy terminal output to clipboard"
+            onClick={() => {
+              const buf = useBoard.getState().ptyBuffers[agentId];
+              if (!buf) return;
+              const text = new TextDecoder()
+                .decode(buf)
+                // strip ANSI escapes + OSC + stray control chars
+                .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "")
+                .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")
+                .replace(/\x1b[@-_]/g, "")
+                .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
+              navigator.clipboard.writeText(text);
+            }}
+            style={{
+              border: "none",
+              background: "transparent",
+              fontSize: 11,
+              cursor: "pointer",
+              color: "var(--cv-ink-dim)",
+            }}
+          >
+            ⧉
+          </button>
           {([
             ["esc", "\x1b"],
             ["↵", "\r"],
