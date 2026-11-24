@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useBoard } from "../store/board";
+import { useReactFlow } from "@xyflow/react";
 import { downloadPdf } from "../lib/pdf";
 import { Icon } from "./icons";
 
@@ -30,6 +31,7 @@ export function ArtifactsPanel() {
   const threadSend = useBoard((s) => s.threadSend);
   const requestNav = useBoard((s) => s.requestNav);
   const pinCard = useBoard((s) => s.pinCard);
+  const { screenToFlowPosition } = useReactFlow();
   const [creating, setCreating] = useState(false);
   const [kind, setKind] = useState("note");
   const [title, setTitle] = useState("");
@@ -277,7 +279,9 @@ export function ArtifactsPanel() {
                       .slice(0, 6)
                       .join("\n")
                       .slice(0, 260),
+                    undefined,
                     "artifacts",
+                    screenToFlowPosition({ x: window.innerWidth * 0.6, y: window.innerHeight * 0.55 }),
                   )
                 }
               >

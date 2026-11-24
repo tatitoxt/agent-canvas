@@ -351,7 +351,7 @@ type BoardState = {
   shapes: Record<string, Record<string, import("../board/types").ShapeDef>>;
   addShape: (kind: import("../board/types").ShapeKind) => void;
   /** Pin arbitrary content onto the canvas as a card (Deska's "Open in canvas"). */
-  pinCard: (title: string, body: string, color?: string, anchor?: string) => void;
+  pinCard: (title: string, body: string, color?: string, anchor?: string, pos?: { x: number; y: number }) => void;
   /** nodeId -> panel key the card was pinned from (dashed anchor cable). */
   anchors: Record<string, Record<string, string>>;
   moveShape: (id: string, x: number, y: number) => void;
@@ -1020,14 +1020,14 @@ export const useBoard = create<BoardState>((set, get) => ({
     set({ shapes: next });
   },
 
-  pinCard: (title, body, color, anchor) => {
+  pinCard: (title, body, color, anchor, pos) => {
     const { activeBoard, shapes } = get();
     const id = `card-${Math.random().toString(36).slice(2, 10)}`;
     const def = {
       id,
       kind: "sticky" as const,
-      x: 320 + Math.random() * 240,
-      y: 220 + Math.random() * 160,
+      x: pos?.x ?? 320 + Math.random() * 240,
+      y: pos?.y ?? 220 + Math.random() * 160,
       w: 240,
       h: 160,
       color: color ?? "#e8e6e3",
