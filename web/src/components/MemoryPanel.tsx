@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useBoard } from "../store/board";
+import { PinBtn } from "./PinBtn";
 
 /** Per-scope memory: the board repo and every workspace keep their own
  * `.canvas/memory.md`, injected into agents as CANVAS_MEMORY so they
@@ -54,6 +55,8 @@ export function MemoryPanel() {
         }}
       >
         Memory
+        <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <PinBtn anchor="memory" title={`Memory — ${scope}`} body={draft || (memories[scope] ?? "")} />
         <button
           className="glass-pill"
           style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: dirty ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}

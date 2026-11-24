@@ -1,5 +1,6 @@
 import { useBoard } from "../store/board";
 import type { LiveEdge } from "../store/board";
+import { PinBtn } from "./PinBtn";
 
 /** Chronological log of every delegation — the graph replayed as a
  * timeline: who asked whom, for what, and what came back. */
@@ -35,8 +36,15 @@ export function HistoryPanel({ onOpenEdge }: { onOpenEdge: (edgeId: string) => v
         overflow: "hidden",
       }}
     >
-      <div style={{ padding: "14px 16px 8px", fontSize: 12, fontWeight: 700 }}>
+      <div style={{ padding: "14px 16px 8px", fontSize: 12, fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         Delegation history
+        <PinBtn
+          anchor="history"
+          title="Delegation history"
+          body={rows
+            .map((e) => `[${e.state}] ${nameOf(e.from)} → ${nameOf(e.to)}: ${e.task}${e.result ? ` — ${e.result}` : ""}`)
+            .join("\n")}
+        />
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 10px" }}>
         {rows.length === 0 && (
