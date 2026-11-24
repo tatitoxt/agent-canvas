@@ -48,6 +48,9 @@ import type { AutomationDef, LoopDef } from "../daemon/client";
 
 type DaemonTransport = CanvasClient | TauriCanvasClient;
 
+const ANSI_RX =
+  /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[()][0-9A-B]|\x1b[=>N_O]/g;
+
 type BoardState = {
   connected: boolean;
   agents: Record<string, LiveAgent>;
@@ -1089,9 +1092,11 @@ export const useBoard = create<BoardState>((set, get) => ({
       // so "@Terminal 4 …" addresses the 4th agent, not a name match.
       const tm = rest.match(/^terminal\s+(\d+)\s+(.*)$/is);
       let target: (typeof boardAgents)[number] | undefined;
+      let label = "";
       let labelLen = 0;
       if (tm) {
         target = boardAgents[parseInt(tm[1], 10) - 1];
+        label = `Terminal ${tm[1]}`;
         labelLen = rest.indexOf(tm[2]);
       } else {
         const hit = [...boardAgents]
@@ -1099,19 +1104,54 @@ export const useBoard = create<BoardState>((set, get) => ({
           .find((a) => rest.toLowerCase().startsWith(a.name.toLowerCase() + " "));
         if (hit) {
           target = hit;
+          label = hit.name;
           labelLen = hit.name.length;
         }
       }
       if (!target) {
         reply(`no agent matches "${rest.split(/\s+/)[0]}…" on this board`);
       } else if (target.status === "exited") {
-        reply(`${target.name} already exited`);
+        reply(`${label || target.name} already exited`);
       } else {
         const msg = rest.slice(labelLen).trim();
-        if (!msg) reply(`@${target.name} needs a message`);
+        if (!msg) reply(`@${label || target.name} needs a message`);
         else {
-          get().sendInput(target.id, new TextEncoder().encode(msg + "\n"));
-          reply(`→ ${target.name}: ${msg.slice(0, 60)}`);
+          const id = target.id;
+          const name = label || target.name;
+          get().sendInput(id, new TextEncoder().encode(msg + "\n"));
+          reply(`→ ${name}: ${msg.slice(0, 60)}`);
+          // Round-trip: poll the PTY ring for the agent's answer and post
+          // the first real line back into the thread. `activity` only
+          // carries the last visible line per tick (usually the prompt),
+          // so read the raw buffer instead — and find the sent text rather
+          // than an offset, since the ring caps at 64 KiB.
+          const poll = (tries: number) => {
+            const buf = get().ptyBuffers[id];
+            if (buf) {
+              const text = new TextDecoder()
+                .decode(buf.subarray(Math.max(0, buf.length - 8192)))
+                .replace(ANSI_RX, "")
+                .replace(/\r/g, "\n");
+              const after = text.slice(text.lastIndexOf(msg));
+              const out = after
+                .split("\n")
+                .map((l) => l.trim())
+                .find(
+                  (l) =>
+                    l &&
+                    !l.endsWith("$") &&
+                    !l.endsWith("%") &&
+                    !l.endsWith("#") &&
+                    !l.includes(msg),
+                );
+              if (out && text.lastIndexOf(msg) >= 0) {
+                reply(`← ${name}: ${out.slice(0, 160)}`);
+                return;
+              }
+            }
+            if (tries > 0) setTimeout(() => poll(tries - 1), 1500);
+          };
+          setTimeout(() => poll(4), 1500);
         }
       }
       return;
