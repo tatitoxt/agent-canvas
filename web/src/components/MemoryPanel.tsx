@@ -68,6 +68,7 @@ export function MemoryPanel() {
         >
           save
         </button>
+        </span>
       </div>
       <select
         value={scope}
