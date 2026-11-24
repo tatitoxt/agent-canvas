@@ -2,6 +2,7 @@ import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { useMemo, useState } from "react";
 import { CliMark } from "../components/CliMark";
 import { useBoard } from "../store/board";
+import { screenLines } from "./ptyScreen";
 import type {
   AgentNodeData,
   AgentStatus,
@@ -67,90 +68,16 @@ function cliMeta(cli: string) {
 const ANSI_RE = /\u001b\[[0-9;?><=!$]*[a-zA-Z@]|\u001b\][^\u0007]*(?:\u0007|\u001b\\)|\u001b[()][0-9A-B]|\u001b[=>#]?[0-9]*.?/g;
 const decoder = new TextDecoder();
 
-/** ANSI SGR → colored spans: keeps each CLI's real colors (Claude coral,
- * Codex green, OpenCode violet) inside the node preview. */
-type AnsiSpan = { text: string; color?: string; bold?: boolean };
-const BASIC = [
-  "#9aa0a6", "#ff6b64", "#3ddc84", "#f5b942",
-  "#5aa2f7", "#c678dd", "#4fd6d6", "#f4f2ee",
-];
-const BRIGHT = [
-  "#b5b9be", "#ff8a82", "#5ff0a0", "#ffd166",
-  "#7cb9ff", "#d89af0", "#6fe6e6", "#ffffff",
-];
-const SGR_RE = /\u001b\[([0-9;]*)m/g;
-const PALETTE_256: string[] = (() => {
-  const base = ["#4a4640","#ff6b64","#3ddc84","#f5b942","#5aa2f7","#c678dd","#4fd6d6","#f4f2ee",
-                "#9aa0a6","#ff8a82","#5ff0a0","#ffd166","#7cb9ff","#d89af0","#6fe6e6","#ffffff"];
-  const cube: string[] = [];
-  const lv = [0, 95, 135, 175, 215, 255];
-  for (const r of lv) for (const g of lv) for (const b of lv) cube.push(`rgb(${r},${g},${b})`);
-  const grays: string[] = [];
-  for (let i = 0; i < 24; i++) { const v = 8 + i * 10; grays.push(`rgb(${v},${v},${v})`); }
-  return [...base, ...cube, ...grays];
-})();
-
-function parseAnsiLine(raw: string): AnsiSpan[] {
-  const clean = raw.replace(ANSI_RE, "");
-  const spans: AnsiSpan[] = [];
-  let color: string | undefined;
-  let bold = false;
-  let last = 0;
-  const push = (end: number) => {
-    const t = clean.slice(last, end).replace(/[^\x20-\x7e\u00a0-\uffff\u{1f300}-\u{1faff}]/gu, "");
-    if (t) spans.push({ text: t, color, bold });
-  };
-  for (const m of clean.matchAll(SGR_RE)) {
-    push(m.index!);
-    last = m.index! + m[0].length;
-    const codes = m[1].split(";");
-    for (let i = 0; i < codes.length; i++) {
-      const n = parseInt(codes[i] || "0", 10);
-      if (n === 0) { color = undefined; bold = false; }
-      else if (n === 1) bold = true;
-      else if (n === 22) bold = false;
-      else if (n === 39) color = undefined;
-      else if (n >= 30 && n <= 37) color = BASIC[n - 30];
-      else if (n >= 90 && n <= 97) color = BRIGHT[n - 90];
-      else if (n === 38) {
-        // 38;5;idx (256-color) or 38;2;r;g;b (truecolor) — consume params.
-        const mode = parseInt(codes[i + 1] || "0", 10);
-        if (mode === 5) {
-          const idx = parseInt(codes[i + 2] || "0", 10);
-          color = PALETTE_256[idx] ?? color;
-          i += 2;
-        } else if (mode === 2) {
-          const r = codes[i + 2], g = codes[i + 3], b = codes[i + 4];
-          color = `rgb(${r},${g},${b})`;
-          i += 4;
-        }
-      }
-    }
-  }
-  push(clean.length);
-  return spans;
-}
-
-
-/** Live tail of the agent's real PTY rendered inside the node — the
- * actual Claude Code / Codex / Gemini interface, like Deska's panels. */
 const MODEL_RE =
   /(opus[\s\d.]*|sonnet[\s\d.]*|haiku[\s\d.]*|gpt-[\w.-]+|gemini-[\w.-]+|o\d[a-z0-9.-]*|kimi-[\w.-]+|qwen[\w.-]*|deepseek[\w.-]*|minimax[\w.-]*|mistral[\w.-]*|codex[\w.-]*mini[\w.-]*)/i;
 
 function MiniTerm({ agentId }: { agentId: string }) {
   const buf = useBoard((s) => s.ptyBuffers[agentId]);
   const lines = useMemo(() => {
-    if (!buf || buf.length === 0) return [] as { spans: AnsiSpan[]; text: string }[];
-    const tail = buf.slice(Math.max(0, buf.length - 4000));
-    const text = decoder.decode(tail).replace(/\r/g, "");
-    const parsed = text
-      .split("\n")
-      .map(parseAnsiLine)
-      .map((spans) => ({ spans, text: spans.map((p) => p.text).join("") }))
-      .filter((l) => l.text.trim().length > 0)
-      .slice(-14);
-    return parsed;
-  }, [buf]);
+    // Real screen model — cursor addressing and TUI repaints resolve to the
+    // screen the CLI actually shows (banner, boxes, status bar, input line).
+    return screenLines(agentId, buf).slice(-14);
+  }, [agentId, buf]);
   if (lines.length === 0) return null;
   return (
     <div
@@ -181,7 +108,7 @@ function MiniTerm({ agentId }: { agentId: string }) {
             opacity: 0.55 + (0.45 * (i + 1)) / lines.length,
           }}
         >
-          {l.spans.map((sp, j) => (
+          {l.map((sp, j) => (
             <span key={j} style={{ color: sp.color, fontWeight: sp.bold ? 600 : undefined }}>
               {sp.text}
             </span>
@@ -381,6 +308,9 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       {/* Full-width section separator — Deska splits header from body
           edge to edge, not inside the padding. */}
       <div style={{ height: 1, background: "var(--cv-glass-edge)" }} />
+      {data.status === "working" && (
+        <div className="card-scanline" style={{ ["--cv-ring" as string]: statusColor }} />
+      )}
       {!collapsed && (
       <div style={{ padding: "9px 12px 10px" }}>
       {/* Meta row — files / account / permission. */}

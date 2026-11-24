@@ -56,6 +56,23 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
     }
     const sub = term.onData((d) => sendInput(agentId, new TextEncoder().encode(d)));
 
+    // CLIs that query terminal colors (OSC 10/11/12, e.g. Hermes) block
+    // until the emulator answers — xterm.js doesn't by itself, so answer
+    // with our theme colors written back into the PTY.
+    const reply = (text: string) =>
+      sendInput(agentId, new TextEncoder().encode(`\x1b]${text}\x07`));
+    const oscReplies: Record<number, string> = {
+      10: "10;rgb:ecec/eaea/e6e6",
+      11: "11;rgb:1212/1212/1414",
+      12: "12;rgb:c9c9/a2a2/6b6b",
+    };
+    const oscHandlers = Object.entries(oscReplies).map(([ps, answer]) =>
+      term.parser.registerOscHandler(Number(ps), (data) => {
+        if (data === "?") reply(answer);
+        return true;
+      })
+    );
+
     const ro = new ResizeObserver(() => {
       fit.fit();
       // The PTY follows the panel's real size — a maximized terminal gives
@@ -69,6 +86,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
 
     return () => {
       sub.dispose();
+      oscHandlers.forEach((h) => h.dispose());
       detachPty(agentId);
       ro.disconnect();
       recRef.current?.stop?.();
