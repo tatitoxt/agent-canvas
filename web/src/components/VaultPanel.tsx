@@ -102,13 +102,50 @@ function mdInline(text: string, onLink?: (name: string) => void): React.ReactNod
  * bullet/numbered lists, tasks, blockquotes, fenced code. */
 function ReadingView({ text, onLink, onToggleTask }: { text: string; onLink?: (name: string) => void; onToggleTask?: (line: number, done: boolean) => void }) {
   const lines = text.split("\n");
-  // Obsidian hides YAML frontmatter (--- ... ---) at the top of the note.
+  // YAML frontmatter (--- ... ---): Obsidian renders it as a "Properties"
+  // table at the top of the note instead of raw YAML.
   let start = 0;
+  const props: [string, string][] = [];
   if (lines[0]?.trim() === "---") {
     const end = lines.findIndex((l, i) => i > 0 && l.trim() === "---");
-    if (end > 0) start = end + 1;
+    if (end > 0) {
+      start = end + 1;
+      for (let i = 1; i < end; i++) {
+        const kv = lines[i].match(/^([A-Za-z_][\w .-]*):\s*(.*)/);
+        if (kv) props.push([kv[1], kv[2].trim()]);
+        else if (/^\s*-\s+/.test(lines[i]) && props.length) {
+          const [k, v] = props[props.length - 1];
+          props[props.length - 1] = [k, v ? `${v}, ${lines[i].trim().replace(/^-\s*/, "")}` : lines[i].trim().replace(/^-\s*/, "")];
+        }
+      }
+    }
   }
   const els: React.ReactNode[] = [];
+  if (props.length) {
+    els.push(
+      <div
+        key="fm"
+        style={{
+          margin: "4px 0 12px", maxWidth: 640, borderRadius: 8,
+          border: "1px solid rgba(255,255,255,0.08)",
+          background: "rgba(255,255,255,0.02)", overflow: "hidden",
+        }}
+      >
+        {props.map(([k, v], i) => (
+          <div
+            key={i}
+            style={{
+              display: "flex", gap: 10, padding: "4px 12px", fontSize: 10.5,
+              borderBottom: i === props.length - 1 ? "none" : "1px solid rgba(255,255,255,0.05)",
+            }}
+          >
+            <span style={{ minWidth: 90, color: "var(--cv-ink-faint)", fontWeight: 600 }}>{k}</span>
+            <span style={{ color: "var(--cv-ink-dim)", wordBreak: "break-word" }}>{v || "—"}</span>
+          </div>
+        ))}
+      </div>,
+    );
+  }
   let inCode = false, codeBuf: string[] = [];
   for (let i = start; i < lines.length; i++) {
     const l = lines[i];
