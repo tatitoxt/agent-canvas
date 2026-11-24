@@ -9,3 +9,6 @@ web/dist/
 .canvas-worktrees/
 tsconfig.tsbuildinfo
 web/tsconfig.tsbuildinfo
+
+# local board state
+.canvas/
