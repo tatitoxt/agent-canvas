@@ -18,6 +18,7 @@ const railColRight: React.CSSProperties = {
   ...railCol,
   left: undefined,
   right: 0,
+  alignItems: "flex-end",
 };
 
 const bubble: React.CSSProperties = {
