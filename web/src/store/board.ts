@@ -1788,7 +1788,10 @@ export const useBoard = create<BoardState>((set, get) => ({
   edgeDetail: null,
   setEdgeDetail: (id) => set({ edgeDetail: id }),
   panelSummaries: true,
-  togglePanelSummaries: () => set((s) => ({ panelSummaries: !s.panelSummaries })),
+  togglePanelSummaries: () => {
+    set((s) => ({ panelSummaries: !s.panelSummaries }));
+    get().notify(get().panelSummaries ? "card summaries on" : "card summaries off");
+  },
   spawnOpen: false,
   setSpawnOpen: (v) => set({ spawnOpen: v }),
   focusSpawn: () => set({ spawnOpen: true }),
