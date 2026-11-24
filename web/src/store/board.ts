@@ -306,6 +306,10 @@ type BoardState = {
   /** Live terminals living ON the canvas as cards — `term-<agentId>` per
    * board. Popped out of the bottom drawer; movable/resizable/closable. */
   termNodes: Record<string, Record<string, { x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number }>>;
+  /** Set before spawning when the new agent should pop out as a term card
+   * at this flow position (right-click "New terminal"). Consumed once. */
+  pendingTermPos: { x: number; y: number } | null;
+  setPendingTermPos: (p: { x: number; y: number } | null) => void;
   openTermNode: (agentId: string, pos?: { x: number; y: number }) => void;
   closeTermNode: (id: string) => void;
   moveTermNode: (id: string, x: number, y: number) => void;
@@ -495,7 +499,7 @@ export const useBoard = create<BoardState>((set, get) => ({
       onControl: (msg: ServerMsg) => {
         const { agents, edges } = get();
         switch (msg.type) {
-          case "spawned":
+          case "spawned": {
             set({
               agents: {
                 ...agents,
@@ -511,7 +515,15 @@ export const useBoard = create<BoardState>((set, get) => ({
                 },
               },
             });
+            // A spawn that was asked for a canvas terminal card (right-click
+            // "New terminal") pops out at the remembered spot.
+            const pend = get().pendingTermPos;
+            if (pend) {
+              set({ pendingTermPos: null });
+              get().openTermNode(msg.agent_id, pend);
+            }
             break;
+          }
           case "workspace_created":
             set({
               workspaces: {
@@ -1035,6 +1047,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   termNodes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-termnodes") ?? "{}"); } catch { return {}; }
   })(),
+  pendingTermPos: null,
+  setPendingTermPos: (p) => set({ pendingTermPos: p }),
   openTermNode: (agentId, pos) => {
     const board = get().activeBoard;
     const id = `term-${agentId}`;

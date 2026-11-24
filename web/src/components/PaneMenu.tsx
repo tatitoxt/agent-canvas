@@ -41,6 +41,33 @@ export function PaneMenu({ x, y, onClose }: { x: number; y: number; onClose: () 
         borderRadius: 12,
       }}
     >
+      <button
+        onClick={() => {
+          const p = screenToFlowPosition({ x, y });
+          const b = useBoard.getState();
+          b.setPendingTermPos({ x: p.x, y: p.y });
+          b.spawn("terminal", "bash");
+          onClose();
+        }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          width: "100%",
+          textAlign: "left",
+          border: "none",
+          background: "transparent",
+          color: "var(--cv-accent)",
+          fontSize: 12,
+          fontWeight: 600,
+          padding: "6px 10px",
+          borderRadius: 8,
+          cursor: "pointer",
+        }}
+      >
+        <span style={{ color: "#7cb9ff", fontSize: 11 }}>›_</span>
+        New terminal
+      </button>
       <div style={{ fontSize: 9.5, color: "var(--cv-ink-faint)", padding: "4px 10px 6px", letterSpacing: 0.6, textTransform: "uppercase" }}>
         Add to board
       </div>
