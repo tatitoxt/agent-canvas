@@ -1157,11 +1157,22 @@ fn handle_client_msg(
                         .ok()
                         .flatten()
                         .map(|p| {
-                            // Rows persist the worktree relative to the
-                            // repo; resolve it there, not against the
-                            // daemon's own cwd.
+                            // Rows persist the worktree relative to the repo
+                            // the agent spawned in: its workspace's repo,
+                            // else the daemon's own root.
                             let p = std::path::PathBuf::from(p);
-                            if p.is_absolute() { p } else { state.repo_root.join(p) }
+                            if p.is_absolute() {
+                                p
+                            } else {
+                                state
+                                    .store
+                                    .agent_repo(&agent_id)
+                                    .ok()
+                                    .flatten()
+                                    .map(std::path::PathBuf::from)
+                                    .unwrap_or_else(|| state.repo_root.clone())
+                                    .join(p)
+                            }
                         })
                 });
             match wt {

@@ -385,6 +385,17 @@ impl Store {
         Ok(rows.next().transpose()?)
     }
 
+    /// Repo the agent's worktree lives in — its workspace's repo; None when
+    /// it spawned straight on the daemon's own repo root.
+    pub fn agent_repo(&self, id: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut st = conn.prepare(
+            "SELECT w.repo FROM agents a JOIN workspaces w ON a.workspace_id = w.id WHERE a.id = ?1",
+        )?;
+        let mut rows = st.query_map([id], |r| r.get::<_, String>(0))?;
+        Ok(rows.next().transpose()?)
+    }
+
     /// Board an agent lives on — a delegation child inherits its parent's.
     pub fn agent_board(&self, id: &str) -> Result<Option<String>> {
         let conn = self.conn.lock().unwrap();
