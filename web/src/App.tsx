@@ -321,6 +321,9 @@ function Board() {
         if (e.key === "f") {
           e.preventDefault();
           fitView({ padding: 0.2, duration: 300 });
+        } else if (e.key === "?") {
+          e.preventDefault();
+          setPalette(true);
         } else if (e.key === "1") {
           e.preventDefault();
           zoomTo(1, { duration: 300 });
