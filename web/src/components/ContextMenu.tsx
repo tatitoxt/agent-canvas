@@ -157,6 +157,25 @@ export function ContextMenu({
           git push ▸
         </button>
       )}
+      {isAgent && (
+        <button
+          style={{ ...item, color: "var(--cv-ink-dim)" }}
+          onClick={() => {
+            const p = useBoard.getState().positions[nodeId];
+            const name = useBoard.getState().agents[nodeId]?.name ?? "agent";
+            useBoard.getState().pinCard(
+              `${name} — note`,
+              "",
+              undefined,
+              `agent:${nodeId}`,
+              p ? { x: p.x + 380, y: p.y } : undefined,
+            );
+            onClose();
+          }}
+        >
+          ◈ pin a note
+        </button>
+      )}
       {isAgent ? (
         <button
           style={{
