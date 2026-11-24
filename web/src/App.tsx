@@ -74,7 +74,7 @@ function Board() {
   const wiringFrom = useBoard((s) => s.wiringFrom);
   const toggleWire = useBoard((s) => s.toggleWire);
   const setWiring = useBoard((s) => s.setWiring);
-  const { screenToFlowPosition, fitView, getNodes, getZoom, zoomTo } = useReactFlow();
+  const { screenToFlowPosition, fitView, getNodes, getZoom, zoomTo, setNodes } = useReactFlow();
 
   // Full-canvas PNG export: render every node fitted into a fixed-size
   // bitmap — the "screenshot button" on the board.
@@ -174,6 +174,7 @@ function Board() {
   const [search, setSearch] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [mmSize, setMmSize] = useState({ w: 148, h: 96 });
+  const [sel, setSel] = useState<Array<{ id: string; x: number; y: number; w: number; h: number }>>([]);
   // Region shot: marquee-select part of the canvas → PNG of just that area.
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [shotMode, setShotMode] = useState(false);
@@ -548,6 +549,17 @@ function Board() {
         maxZoom={2}
         selectionOnDrag
         panOnDrag={[1, 2]}
+        onSelectionChange={({ nodes }) =>
+          setSel(
+            nodes.map((n) => ({
+              id: n.id,
+              x: n.position.x,
+              y: n.position.y,
+              w: n.measured?.width ?? 460,
+              h: n.measured?.height ?? 220,
+            })),
+          )
+        }
         proOptions={{ hideAttribution: true }}
       >
         {/* resize grip at the minimap's top-left corner — drag to resize */}
@@ -633,6 +645,39 @@ function Board() {
       <NoticePill />
       {nav === "history" && (
         <HistoryPanel onOpenEdge={(id) => { setEdgeDetail(id); setNav("canvas"); }} />
+      )}
+      {sel.length >= 2 && !chromeHidden && (
+        <button
+          className="glass"
+          style={{
+            position: "absolute",
+            left: "50%",
+            transform: "translateX(-50%)",
+            bottom: 64,
+            zIndex: 21,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "8px 16px",
+            borderRadius: 999,
+            border: "none",
+            cursor: "pointer",
+            color: "var(--cv-ink)",
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+          onClick={() => {
+            const x0 = Math.min(...sel.map((n) => n.x));
+            const y0 = Math.min(...sel.map((n) => n.y));
+            const x1 = Math.max(...sel.map((n) => n.x + n.w));
+            const y1 = Math.max(...sel.map((n) => n.y + n.h));
+            const label = useBoard.getState().frameNodes(x0 - 26, y0 - 46, x1 - x0 + 52, y1 - y0 + 56);
+            useBoard.getState().notify(`${label} created — ${sel.length} windows`);
+            setNodes((ns) => ns.map((n) => ({ ...n, selected: false })));
+          }}
+        >
+          Group {sel.length} windows
+        </button>
       )}
       {menu && (
         <ContextMenu
