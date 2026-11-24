@@ -1024,7 +1024,12 @@ export const useBoard = create<BoardState>((set, get) => ({
     const id = `term-${agentId}`;
     const existing = get().termNodes[board]?.[id];
     if (existing) { get().requestFocus(id); return; }
-    const m = { ...(get().termNodes[board] ?? {}), [id]: { x: pos?.x ?? 420 + Math.random() * 140, y: pos?.y ?? 160 + Math.random() * 90, w: 560, h: 320 } };
+    // Default spot: just right of the agent's own card so the popped-out
+    // terminal lands next to what it belongs to.
+    const ap = get().positions[agentId];
+    const fx = pos?.x ?? (ap ? ap.x + 360 : 420 + Math.random() * 140);
+    const fy = pos?.y ?? (ap ? ap.y : 160 + Math.random() * 90);
+    const m = { ...(get().termNodes[board] ?? {}), [id]: { x: fx, y: fy, w: 560, h: 320 } };
     const next = { ...get().termNodes, [board]: m };
     localStorage.setItem("cv-termnodes", JSON.stringify(next));
     set({ termNodes: next });
