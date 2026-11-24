@@ -416,7 +416,12 @@ function Board() {
   };
 
   // Double-click focuses a node — single click already opens its terminal.
+  // A pinned card's double-click also reopens the panel it was pinned from.
   const onNodeDoubleClick: NodeMouseHandler = (_, node) => {
+    const sh = shapes[activeBoard ?? "main"]?.[node.id];
+    if (sh?.kind === "pin" && sh.anchor) {
+      useBoard.getState().requestNav(sh.anchor);
+    }
     fitView({ nodes: [{ id: node.id }], padding: 0.9, maxZoom: 1.4, duration: 300 });
   };
 
