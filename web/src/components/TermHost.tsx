@@ -188,4 +188,8 @@ export function TermHost({ agentId }: { agentId: string }) {
       </div>
     </div>
   );
+  return <div ref={hostRef} className="min-h-0 flex-1" />;
+  // min-w-0: inside a split flex row the xterm screen's intrinsic width
+  // would otherwise veto shrinking and clip the sibling pane.
+  return <div ref={hostRef} className="min-h-0 min-w-0 flex-1" style={{ minWidth: 0 }} />;
 }

@@ -23,11 +23,22 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   // Fullscreen: the complete terminal view (banner, tools, model, input
   // line) like a standalone TUI window — toggled by the ⤢ button.
   const [maxed, setMaxed] = useState(false);
+  // Deska split: a second agent's terminal beside (right) or below (down)
+  // this one inside the same drawer.
+  const [split, setSplit] = useState<null | "right" | "down">(null);
+  const [splitAgent, setSplitAgent] = useState<string | null>(null);
 
   // Card-style header info: Terminal N · status · CLI mark + label.
   const agent = useBoard((s) => s.agents[agentId]);
   const activeBoard = useBoard((s) => s.activeBoard);
   const agentsMap = useBoard((s) => s.agents);
+  // The pane's agent is only valid while it lives on the board being shown —
+  // after a board switch the picker would lie (display the first option)
+  // while keystrokes still went to the previous board's agent.
+  const splitAgentValid =
+    splitAgent && agentsMap[splitAgent] && (agentsMap[splitAgent].board_id ?? "main") === activeBoard
+      ? splitAgent
+      : null;
   const termNo = Object.keys(agentsMap)
     .filter((id) => (agentsMap[id].board_id ?? "main") === activeBoard)
     .indexOf(agentId) + 1;
@@ -180,6 +191,46 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
           onPointerDown={(e) => e.stopPropagation()}
         >
           <button
+            title="split right — second terminal beside this one"
+            onClick={() => {
+              const next = split === "right" ? null : "right";
+              setSplit(next);
+              if (next && !splitAgent) {
+                const other = Object.keys(agentsMap).find((id) => id !== agentId && (agentsMap[id].board_id ?? "main") === activeBoard);
+                setSplitAgent(other ?? null);
+              }
+            }}
+            style={{
+              border: "none",
+              background: "transparent",
+              fontSize: 11,
+              cursor: "pointer",
+              color: split === "right" ? "var(--cv-accent)" : "var(--cv-ink-dim)",
+            }}
+          >
+            ▸▪
+          </button>
+          <button
+            title="split down — second terminal below this one"
+            onClick={() => {
+              const next = split === "down" ? null : "down";
+              setSplit(next);
+              if (next && !splitAgent) {
+                const other = Object.keys(agentsMap).find((id) => id !== agentId && (agentsMap[id].board_id ?? "main") === activeBoard);
+                setSplitAgent(other ?? null);
+              }
+            }}
+            style={{
+              border: "none",
+              background: "transparent",
+              fontSize: 11,
+              cursor: "pointer",
+              color: split === "down" ? "var(--cv-accent)" : "var(--cv-ink-dim)",
+            }}
+          >
+            ▾▪
+          </button>
+          <button
             title="pop out onto the canvas as a card"
             onClick={() => {
               useBoard.getState().openTermNode(agentId);
@@ -303,7 +354,63 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
           </button>
         </div>
       </div>
-      <TermHost agentId={agentId} />
+      <div
+        className="min-h-0 flex-1"
+        style={{ display: "flex", flexDirection: split === "down" ? "column" : "row" }}
+      >
+        <TermHost agentId={agentId} />
+        {split && (
+          <div
+            className="min-h-0 flex-1"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              borderLeft: split === "right" ? "1px solid var(--cv-glass-edge)" : "none",
+              borderTop: split === "down" ? "1px solid var(--cv-glass-edge)" : "none",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 8px", borderBottom: "1px solid var(--cv-glass-edge)" }}>
+              <select
+                value={splitAgentValid ?? ""}
+                onChange={(e) => setSplitAgent(e.target.value || null)}
+                title="which agent this pane shows"
+                style={{
+                  flex: 1,
+                  fontSize: 10.5,
+                  background: "transparent",
+                  color: "var(--cv-ink)",
+                  border: "none",
+                  outline: "none",
+                  cursor: "pointer",
+                }}
+              >
+                {!splitAgent && <option value="">pick an agent…</option>}
+                {Object.values(agentsMap)
+                  .filter((a) => (a.board_id ?? "main") === activeBoard)
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+              </select>
+              <button
+                title="close split"
+                onClick={() => setSplit(null)}
+                style={{ border: "none", background: "transparent", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11 }}
+              >
+                ✕
+              </button>
+            </div>
+            {splitAgentValid ? (
+              <TermHost agentId={splitAgentValid} />
+            ) : (
+              <div className="flex-1" style={{ display: "grid", placeItems: "center", fontSize: 11, color: "var(--cv-ink-faint)" }}>
+                no second agent on this board yet
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
