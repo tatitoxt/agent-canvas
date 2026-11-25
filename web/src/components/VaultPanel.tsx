@@ -956,7 +956,7 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
 
 /** Editable raw markdown — like Obsidian's Source mode. Tracks local
  *  edits and saves the whole file back to the vault via vault_write. */
-function SourceEditor({ path, text }: { path: string; text: string }) {
+function SourceEditor({ path, text, onDraft }: { path: string; text: string; onDraft?: (v: string) => void }) {
   const vaultWrite = useBoard((st) => st.vaultWrite);
   const notify = useBoard((st) => st.notify);
   const entries = useBoard((st) => st.vaultEntries);
@@ -976,6 +976,7 @@ function SourceEditor({ path, text }: { path: string; text: string }) {
   const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const v = e.target.value;
     setDraft(v);
+    onDraft?.(v);
     const pos = e.target.selectionStart;
     const m = v.slice(0, pos).match(/\[\[[^\]\n]*$/);
     setSuggest(m ? { query: m[0].slice(2), start: pos - m[0].length } : null);
@@ -988,6 +989,7 @@ function SourceEditor({ path, text }: { path: string; text: string }) {
     const pos = ta?.selectionStart ?? draft.length;
     const caret = suggest.start + name.length + 4;
     setDraft(draft.slice(0, suggest.start) + `[[${name}]]` + draft.slice(pos));
+    onDraft?.(draft.slice(0, suggest.start) + `[[${name}]]` + draft.slice(pos));
     setSuggest(null);
     requestAnimationFrame(() => { ta?.focus(); ta?.setSelectionRange(caret, caret); });
   };
@@ -1149,7 +1151,16 @@ export function VaultPanel() {
     const t = setTimeout(() => vaultSearch(q), 250);
     return () => clearTimeout(t);
   }, [filter, vaultDir, vaultSearch]);
-  const [view, setView] = useState<"reading" | "source" | "graph">("reading");
+  const [view, setView] = useState<"reading" | "source" | "split" | "graph">("reading");
+  const [splitDraft, setSplitDraft] = useState<{ path: string; text: string } | null>(null);
+  // A re-read that disagrees with the cached draft means the file changed
+  // outside the editor (or a save roundtrip landed) — the draft is no
+  // longer a safe preview source, drop it instead of showing stale text.
+  const vaultText = useBoard((st) => st.vaultFile?.text);
+  useEffect(() => {
+    setSplitDraft((d) => (d && d.text !== vaultText ? null : d));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vaultText]);
   const [genOpen, setGenOpen] = useState(false);
   const [newNote, setNewNote] = useState(false);
   const [newName, setNewName] = useState("");
@@ -1613,6 +1624,7 @@ export function VaultPanel() {
           <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
             <button style={tabBtn(view === "reading")} onClick={() => setView("reading")}>Reading</button>
             <button style={tabBtn(view === "source")} onClick={() => setView("source")}>Source</button>
+            <button style={tabBtn(view === "split")} onClick={() => setView("split")}>Split</button>
             <button style={tabBtn(view === "graph")} onClick={() => setView("graph")}>Graph</button>
             {view === "graph" && (
               <>
@@ -1684,8 +1696,28 @@ export function VaultPanel() {
               }}
             />
           )}
-          {view === "source" && (
-            <SourceEditor path={vaultFile.path} text={vaultFile.text} />
+          {(view === "source" || view === "split") && (
+            /* ONE editor instance across both tabs — switching Source ↔ Split
+               never unmounts it, so unsaved edits survive the switch.
+               In Split the preview tracks the in-memory draft via onDraft. */
+            <div style={{ flex: 1, display: "flex", minHeight: 0, gap: 8 }}>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+                <SourceEditor path={vaultFile.path} text={vaultFile.text} onDraft={(v) => setSplitDraft({ path: vaultFile.path, text: v })} />
+              </div>
+              {view === "split" && (
+                <div style={{ flex: 1, minWidth: 0, overflowY: "auto", borderLeft: "1px solid var(--cv-glass-edge)", paddingLeft: 8 }}>
+                  <ReadingView
+                    text={splitDraft?.path === vaultFile.path ? splitDraft.text : vaultFile.text}
+                    onLink={openByName}
+                    onTag={(t) => setFilter(t)}
+                    embedLookup={resolveEmbed}
+                    embedFetch={vaultPeek}
+                    embedAsset={(p) => vaultAssets[p]}
+                    embedAssetFetch={vaultAsset}
+                  />
+                </div>
+              )}
+            </div>
           )}
           {view === "graph" && graphScope === "local" && (
             <GraphView
