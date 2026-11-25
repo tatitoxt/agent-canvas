@@ -3,6 +3,7 @@ import { NodeResizer, type NodeProps, type Node } from "@xyflow/react";
 import type { MdNodeData } from "../board/types";
 import { ReadingView, resolveNotePath } from "./VaultPanel";
 import { useBoard } from "../store/board";
+import { Icon } from "./icons";
 
 /** A live Obsidian vault note pinned as an interactive canvas window. */
 const POLL_MS = 4000;
@@ -70,7 +71,7 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
           </>
         )}
         <button className="nodrag" aria-label={`Remove ${basename} from board`} title="Remove from board" onClick={() => mdNodeRemove(id)}
-          style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 13 }}>×</button>
+          style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", display: "flex", padding: 2 }}><Icon name="ph-x" size={12} /></button>
       </div>
       {text == null ? <div style={{ padding: 12, color: "var(--cv-ink-faint)", fontSize: 11 }}>Loading note…</div> : editing ? (
         <textarea

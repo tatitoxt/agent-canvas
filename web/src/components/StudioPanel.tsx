@@ -1,4 +1,5 @@
 import { useBoard } from "../store/board";
+import { Icon } from "./icons";
 
 /** Studios — the repo turned into material: a markdown dossier (tree,
  * README head, agents, notes, artifacts) you can copy or download. */
@@ -38,7 +39,7 @@ export function StudioPanel() {
           <div style={{ display: "flex", gap: 8 }}>
             <button className="glass-pill" style={{ border: "none", cursor: "pointer", fontSize: 11, padding: "5px 12px", color: "var(--cv-accent)" }} onClick={copy}>copy</button>
             <button className="glass-pill" style={{ border: "none", cursor: "pointer", fontSize: 11, padding: "5px 12px", color: "var(--cv-accent)" }} onClick={download}>▤ .md</button>
-            <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 14 }} onClick={close}>×</button>
+            <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", display: "flex", padding: 2 }} onClick={close}><Icon name="ph-x" size={12} /></button>
           </div>
         </div>
         <pre

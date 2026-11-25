@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useBoard } from "../store/board";
+import { Icon } from "./icons";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--cv-glass-hi)",
@@ -73,7 +74,7 @@ export function TeamBuilder({ onClose }: { onClose: () => void }) {
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: "var(--cv-ink)" }}>◨ Team builder</span>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 14 }}>×</button>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", display: "flex", padding: 2 }}><Icon name="ph-x" size={12} /></button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
         {ROLES.map((r) => {
