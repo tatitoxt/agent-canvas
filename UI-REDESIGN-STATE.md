@@ -44,7 +44,7 @@
 5. [x] **Cables evitan cards** — edge routing detecta obstáculos múltiples y busca trayectos ortogonales compactos; unit tests cubren conexiones y rutas despejadas.
 6. [x] Minimap chico abajo-derecha + zoom controls — YA ESTÁ así (mmSize 148×96, marginRight 184). Confirmar visualmente con Fausto qué le pareció "horrible" — quizás eran los colores viejos (ya actualizados a verde working).
 7. [x] **File explorer como ventana del canvas** — E2E crea un workspace, agrega Explorer al canvas, lo mueve, lo redimensiona con persistencia y abre `README.md`.
-8. [~] **Terminales usables** — el drawer y la tarjeta flotante montan xterm sobre la PTY; E2E escribe comandos de shell y verifica la salida, split y resize. Smoke tests ejecutaron `codex --version` por la PTY real y abrieron Codex TUI 0.172.0 en PTY: pantalla interactiva y selector de sesiones respondieron, `Ctrl+C` cerró limpio. Cards y drawer leen un modelo si el CLI lo anuncia en el buffer; pendiente revisar esa señal con un TUI real dentro de Canvas.
+8. [~] **Terminales usables** — el drawer y la tarjeta flotante montan xterm sobre la PTY; E2E escribe comandos de shell y verifica la salida, split y resize. Smoke tests ejecutaron `codex --version` por la PTY real y abrieron Codex TUI 0.172.0 dentro de una tarjeta de Canvas: la pantalla interactiva arrancó, respondió a Escape y `Ctrl+C` cerró la sesión. La detección visible del modelo anunciado por un TUI sigue pendiente de confirmar; evitar abrir el selector de sesiones durante esta prueba porque depende de la configuración local de Codex.
 
 ## Decisiones de diseño ya aplicadas (no revertir)
 - IBM Plex Sans/Mono (tipografía Deska)
@@ -123,7 +123,7 @@ Estado reconciliado con las implementaciones y pruebas posteriores:
 - [x] LIBRARY sin etiqueta vertical ni flyout; expansión horizontal y navegación verificadas en E2E.
 - [x] RESIZE en agent cards, paneles, terminales y workspaces; resize de terminal y workspace persiste y conserva la PTY, validado en E2E. Revisar visualmente alturas internas si aparece un nuevo recorte.
 - [x] GATHER acomoda tarjetas en una grilla y Undo restaura posiciones; E2E lo verifica.
-- [x] Terminal real en la drawer y en la card flotante; E2E envía comandos y confirma salida de shell en ambos casos. Smoke test local de `codex --version` confirma que un CLI real inicia y devuelve salida por la PTY. Pendiente una sesión interactiva para validar el TUI y la detección de modelo.
+- [x] Terminal real en la drawer y en la card flotante; E2E envía comandos y confirma salida de shell en ambos casos. Smoke test local de `codex --version` confirma que un CLI real inicia y devuelve salida por la PTY. Una sesión Codex TUI interactiva también arrancó dentro de una tarjeta de Canvas; la detección visible del modelo desde esa UI queda pendiente.
 - [ ] Chrome SVG implementado; falta la aceptación visual de Fausto sobre los símbolos.
 - [x] Tema Paper implementado y persistido; E2E valida colores y minimapa.
 - [x] Topbar se fusiona en una bubble al hover; E2E valida unión y separación al salir.
@@ -219,8 +219,8 @@ REMAINING LEVERS if still slow:
 - [x] Ajuste del badge publicado en el PR #47 como `bd21dbd`; mantener el PR abierto y sin merge.
 - [x] Auditoría visual en modo demo encontró un loop de React en `onSelectionChange`: el callback recreaba el array de selección aunque nada hubiera cambiado. Ahora el callback es estable y conserva la referencia previa si ids/posiciones/dimensiones son iguales. La captura ya no muestra errores de update depth: `/tmp/canvas-design/roadmap-audit-fixed.png`.
 - [x] Se añadió una regresión E2E que observa explícitamente errores `Maximum update depth exceeded` en demo offline. Suite actual: 26/26 unit tests, 33/33 E2E, typecheck, build y `git diff --check`.
-- [x] Smoke local del TUI de Codex: `codex --no-alt-screen` abrió, mostró pantalla inicial y command center al pulsar Escape, y salió con Ctrl+C sin dejar el PTY abierto. Aún no valida xterm dentro de Canvas ni detección de modelo en esa UI.
-- [x] Búsqueda en terminal usable durante sesiones interactivas: Cmd/Ctrl+F abre el buscador de scrollback y Escape devuelve el foco al PTY; E2E confirma que se puede seguir escribiendo. Sigue pendiente probar un TUI real completo dentro de Canvas y hacer la próxima pasada visual de densidad/alineación.
+- [x] Smoke local del TUI de Codex: `codex --no-alt-screen` abrió dentro de una tarjeta PTY de Canvas; la pantalla interactiva respondió a Escape y Ctrl+C cerró la sesión. La detección visible del modelo desde el TUI aún no quedó confirmada.
+- [x] Búsqueda en terminal usable durante sesiones interactivas: Cmd/Ctrl+F abre el buscador de scrollback y Escape devuelve el foco al PTY; E2E confirma que se puede seguir escribiendo. TUI real arrancado dentro de Canvas; sigue pendiente la próxima pasada visual de densidad/alineación.
 - [x] Dock inferior responsive: los shortcuts New task, Files, Terminal y Code editor expanden sus etiquetas en el bubble compartido al hover/foco, sin ocupar espacio extra en reposo. E2E a 1024px verifica etiqueta visible, expansión y repliegue; captura `/tmp/canvas-design/roadmap-compact-hover.png` revisada.
 - [x] Badge del dock: cuenta las sesiones terminal retenidas en el board activo; el flujo existente de terminal verifica el badge al crear una sesión.
 - [ ] Siguiente lote: seguir auditando densidad y alineación de paneles/chrome contra la referencia Deska; mantener PR #47 abierto y sin merge.
