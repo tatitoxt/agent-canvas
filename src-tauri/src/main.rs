@@ -1618,6 +1618,9 @@ fn snapshot(
         "workspaces": workspaces,
         "layout": layout,
         "repo_url": repo_url,
+        "cli_identities": canvasd::detect::detect_cli_identities(&[
+            "claude", "codex", "gemini", "aider", "goose", "amp", "opencode", "cursor-agent",
+        ]),
         "artifacts": artifacts,
         "notes": state
             .store
