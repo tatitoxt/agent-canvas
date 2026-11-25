@@ -42,6 +42,21 @@ test("vault panel opens and a new note lands on disk", async ({ page }) => {
   await expect.poll(() => existsSync(join(vault, "e2e-check.md")), { timeout: 8_000 }).toBe(true);
 });
 
+test("Add to Board pins the active Obsidian note as a live canvas window", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title*='your real vault']").first().click();
+  await page.locator("button", { hasText: "+ note" }).first().click();
+  const name = `e2e-board-${Date.now()}`;
+  const input = page.locator("input[placeholder='folder/note name']").first();
+  await input.fill(name);
+  await input.press("Enter");
+  const add = page.locator("button", { hasText: "Add to Board" }).first();
+  await expect(add).toBeVisible({ timeout: 8_000 });
+  await add.click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='vault']")).toHaveCount(0, { timeout: 8_000 });
+  await expect(page.locator(".react-flow__node-md").filter({ hasText: name })).toBeVisible({ timeout: 8_000 });
+});
+
 test("panels mount as canvas nodes and close again", async ({ page }) => {
   await boot(page);
   const nodes = page.locator(".react-flow__node");

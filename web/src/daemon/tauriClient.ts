@@ -219,6 +219,9 @@ export class TauriCanvasClient {
   vaultRegister(dir: string) {
     void invoke("vault_register", { dir }).catch(console.error);
   }
+  openObsidian(vaultDir: string, path: string): Promise<void> {
+    return invoke("open_obsidian", { vaultDir, path });
+  }
   async defaultVaultDir(): Promise<string | null> {
     try {
       return await invoke<string | null>("default_vault_dir");

@@ -1091,6 +1091,8 @@ export function VaultPanel() {
   const vaultKnown = useBoard((s) => s.vaultKnown);
   const vaultDiscover = useBoard((s) => s.vaultDiscover);
   const vaultRegister = useBoard((s) => s.vaultRegister);
+  const openObsidian = useBoard((s) => s.openObsidian);
+  const mdNodeAdd = useBoard((s) => s.mdNodeAdd);
   const vaultWrite = useBoard((s) => s.vaultWrite);
   const vaultDelete = useBoard((s) => s.vaultDelete);
   const vaultRename = useBoard((s) => s.vaultRename);
@@ -1099,6 +1101,7 @@ export function VaultPanel() {
   const notify = useBoard((s) => s.notify);
   const [dir, setDir] = useState(vaultDir || "/home/ubuntu/repos/agent-canvas");
   const [filter, setFilter] = useState("");
+  const activeVault = vaultKnown.find((v) => v.path === vaultDir);
 
   const [bookmarks, setBookmarks] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem(BOOKMARKS_KEY) ?? "[]")); } catch { return new Set(); }
@@ -1153,6 +1156,13 @@ export function VaultPanel() {
     return () => clearTimeout(t);
   }, [filter, vaultDir, vaultSearch]);
   const [view, setView] = useState<"reading" | "source" | "split" | "graph">("reading");
+  // Keep the reading pane in sync with edits made in Obsidian itself. Pause
+  // polling while Source/Split is active so an in-progress draft stays local.
+  useEffect(() => {
+    if (!vaultFile || view !== "reading") return;
+    const timer = window.setInterval(() => vaultRead(vaultFile.path), 1800);
+    return () => window.clearInterval(timer);
+  }, [view, vaultFile?.path, vaultRead]);
   const [splitDraft, setSplitDraft] = useState<{ path: string; text: string } | null>(null);
   // A re-read that disagrees with the cached draft means the file changed
   // outside the editor (or a save roundtrip landed) — the draft is no
@@ -1266,7 +1276,20 @@ export function VaultPanel() {
     e.toLowerCase().includes(filter.toLowerCase()),
   );
   const tree = buildTree(filter ? shown : vaultEntries);
-  const vaultName = vaultDir.replace(/\/+$/, "").split("/").pop() ?? "vault";
+  const vaultName = activeVault?.name ?? vaultDir.replace(/\/+$/, "").split("/").pop() ?? "vault";
+  const pinCurrentNote = () => {
+    if (!vaultFile) return;
+    const state = useBoard.getState();
+    const viewport = state.viewportRect;
+    const position = viewport
+      ? { x: viewport.left + (viewport.right - viewport.left) * 0.34, y: viewport.top + (viewport.bottom - viewport.top) * 0.24 }
+      : undefined;
+    mdNodeAdd(vaultFile.path, undefined, position);
+    state.closePanelNode("panel-vault");
+    state.requestNav("canvas");
+    state.requestView();
+    notify("Added the live note window to the board.");
+  };
   const openByName = (name: string) => {
     // [[note#heading]] — Obsidian opens the note and scrolls to the heading.
     const [base, ...rest] = name.split("#");
@@ -1331,6 +1354,20 @@ export function VaultPanel() {
           <img src="/obsidian.svg" alt="" width={13} height={13} /> Vault
         </span>
         <div style={{ position: "relative", display: "flex", gap: 4 }}>
+          {vaultDir && (
+            <button
+              style={actionBtn}
+              title={activeVault ? `Open ${activeVault.name} in the installed Obsidian app` : "Open this vault in Obsidian — register it first if Obsidian has not opened it before"}
+              onClick={() => void openObsidian(vaultFile?.path ?? "")}
+            >
+              <img src="/obsidian.svg" alt="" width={11} height={11} /> app
+            </button>
+          )}
+          {vaultDir && !activeVault && (
+            <button style={actionBtn} title="Add this folder to Obsidian's vault list" onClick={() => vaultRegister(vaultDir)}>
+              register
+            </button>
+          )}
           {vaultDir && (
             <button style={actionBtn} title="open today's daily note (creates Daily/YYYY-MM-DD.md)" onClick={openDaily}>
               today
@@ -1626,11 +1663,7 @@ export function VaultPanel() {
               </span>
             )}
             <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
-              <button style={actionBtn} title="Keep the live Obsidian workspace on the canvas" onClick={() => {
-                const st = useBoard.getState();
-                st.requestFocus("panel-vault");
-                st.requestNav("canvas");
-              }}>
+              <button className="vault-board-action" style={actionBtn} title="Pin this live note as a resizable window on the board" onClick={pinCurrentNote}>
                 Add to Board
               </button>
               <button
@@ -1652,9 +1685,7 @@ export function VaultPanel() {
                 style={actionBtn}
                 title="Open in Obsidian — jumps to this note in the real app"
                 onClick={() => {
-                  const vaultName = vaultDir.replace(/\/+$/, "").split("/").pop() ?? "";
-                  const file = vaultFile.path.replace(/\.md$/, "");
-                  window.open(`obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(file)}`, "_self");
+                  void openObsidian(vaultFile.path);
                 }}
               >
                 <img src="/obsidian.svg" alt="" width={11} height={11} /> Obsidian
@@ -1867,7 +1898,7 @@ export function VaultPanel() {
               } },
               { label: bookmarks.has(ctxMenu.path) ? "Remove bookmark" : "Bookmark", fn: () => toggleBookmark(ctxMenu.path) },
               { label: "Copy wikilink", fn: () => { const n = ctxMenu.path.replace(/\.md$/, "").split("/").pop()!; void navigator.clipboard?.writeText(`[[${n}]]`).catch(() => {}); notify(`[[${n}]] copied`); } },
-              { label: "Open in Obsidian", fn: () => { const v = encodeURIComponent(vaultName); window.open(`obsidian://open?vault=${v}&file=${encodeURIComponent(ctxMenu.path.replace(/\.md$/, ""))}`, "_self"); } },
+              { label: "Open in Obsidian", fn: () => { void openObsidian(ctxMenu.path); } },
               { label: "Register vault in Obsidian", fn: () => { vaultRegister(vaultDir); notify("registered in Obsidian's vault list"); } },
             ].map((it) => (
               <button

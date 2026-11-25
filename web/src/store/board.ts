@@ -481,6 +481,7 @@ type BoardState = {
   vaultGraph: { nodes: string[]; edges: [string, string][] } | null;
   vaultDiscover: () => void;
   vaultRegister: (dir: string) => void;
+  openObsidian: (path: string) => Promise<void>;
   closeVaultFile: () => void;
   webNodeAdd: (url: string) => void;
   webNodeRemove: (id: string) => void;
@@ -1466,6 +1467,19 @@ export const useBoard = create<BoardState>((set, get) => ({
   vaultSearch: (query) => client?.vaultSearch(get().vaultDir, query),
   vaultDiscover: () => client?.vaultDiscover(),
   vaultRegister: (dir) => client?.vaultRegister(dir),
+  openObsidian: async (path) => {
+    const vaultDir = get().vaultDir;
+    if (!client || !vaultDir) {
+      get().notify("Open a vault before launching Obsidian.");
+      return;
+    }
+    try {
+      await client.openObsidian(vaultDir, path);
+      get().notify("Opened the note in Obsidian.");
+    } catch (error) {
+      get().notify(error instanceof Error ? error.message : String(error));
+    }
+  },
   closeVaultFile: () => set({ vaultFile: null }),
   studioDocNow: () => client?.studioDoc(),
   closeStudioDoc: () => set({ studioDoc: null }),

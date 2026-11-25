@@ -280,6 +280,11 @@ export class CanvasClient {
   vaultRegister(dir: string) {
     this.send({ cmd: "vault_register", dir });
   }
+  openObsidian(vaultDir: string, path: string) {
+    const vault = vaultDir.replace(/\/+$/, "").split("/").pop() ?? "";
+    const file = path.replace(/\.md$/, "");
+    window.open(`obsidian://open?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(file)}`, "_blank", "noopener");
+  }
   defaultVaultDir(): Promise<string | null> {
     return Promise.resolve(null);
   }

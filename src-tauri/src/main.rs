@@ -557,7 +557,7 @@ fn repo_read(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: S
 
 #[cfg(test)]
 mod repo_explorer_tests {
-    use super::{expand_home_path, read_repo_file, repo_tree_entries, resolve_registered_repo_dir};
+    use super::{expand_home_path, read_repo_file, repo_tree_entries, resolve_registered_repo_dir, uri_component};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -611,6 +611,11 @@ mod repo_explorer_tests {
         let home = std::env::var("HOME").unwrap();
         assert_eq!(expand_home_path("~/projects/demo"), PathBuf::from(home).join("projects/demo"));
         assert_eq!(expand_home_path("relative/worktree"), PathBuf::from("relative/worktree"));
+    }
+
+    #[test]
+    fn obsidian_uri_components_encode_spaces_unicode_and_query_delimiters() {
+        assert_eq!(uri_component("Team Notes/visión & plan"), "Team%20Notes%2Fvisi%C3%B3n%20%26%20plan");
     }
 
     #[test]
@@ -687,6 +692,54 @@ fn vault_register(app: AppHandle, dir: String) -> Result<(), String> {
     let vaults = canvasd::vault::register(&dir)?;
     emit_control(&app, &ServerMsg::VaultDiscovered { vaults });
     Ok(())
+}
+
+fn uri_component(value: &str) -> String {
+    let mut out = String::new();
+    for byte in value.as_bytes() {
+        if byte.is_ascii_alphanumeric() || b"-_.~".contains(byte) {
+            out.push(*byte as char);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
+#[tauri::command]
+fn open_obsidian(vault_dir: String, path: String) -> Result<(), String> {
+    let root = expand_home_path(&vault_dir);
+    let root = std::fs::canonicalize(&root).map_err(|_| "Obsidian vault folder is unavailable".to_string())?;
+    if !path.trim().is_empty() {
+        let rel = std::path::Path::new(&path);
+        if rel.is_absolute() || rel.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            return Err("note path must stay inside the selected vault".into());
+        }
+        let target = std::fs::canonicalize(root.join(rel)).map_err(|_| format!("note not found in vault: {path}"))?;
+        if !target.starts_with(&root) || !target.is_file() {
+            return Err("note path must stay inside the selected vault".into());
+        }
+    }
+    let vault_name = root.file_name().and_then(|n| n.to_str()).filter(|n| !n.is_empty())
+        .ok_or_else(|| "could not determine the Obsidian vault name".to_string())?;
+    let mut uri = format!("obsidian://open?vault={}", uri_component(vault_name));
+    if !path.trim().is_empty() {
+        let file = path.strip_suffix(".md").unwrap_or(&path);
+        uri.push_str(&format!("&file={}", uri_component(file)));
+    }
+
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open").arg(&uri).spawn();
+    #[cfg(target_os = "windows")]
+    let result = std::process::Command::new("explorer.exe").arg(&uri).spawn();
+    #[cfg(target_os = "linux")]
+    let result = std::process::Command::new("xdg-open").arg(&uri).spawn();
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    let result: std::io::Result<std::process::Child> = Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "opening Obsidian links is unsupported on this platform",
+    ));
+    result.map(|_| ()).map_err(|e| format!("could not open Obsidian: {e}"))
 }
 
 #[tauri::command]
@@ -2234,6 +2287,7 @@ fn main() {
             vault_graph,
             vault_discover,
             vault_register,
+            open_obsidian,
             default_vault_dir,
             create_workspace,
             move_to_board,
