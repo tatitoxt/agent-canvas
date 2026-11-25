@@ -91,7 +91,12 @@ export function PinBtn({ title, body, anchor }: { title: string; body: string; a
   return (
     <button
       title="Add to Board — pin this panel as a card on the canvas"
-      onClick={() => pinCard(title, body, undefined, anchor, screenToFlowPosition(cleanPinSpot(anchor)))}
+      onClick={() => {
+        pinCard(title, body, undefined, anchor, screenToFlowPosition(cleanPinSpot(anchor)));
+        // The floating panel was the transient view — once its content is
+        // pinned to the board it closes, or both linger ("no quedan las dos").
+        if (anchor) useBoard.getState().closePanelNode(`panel-${anchor}`);
+      }}
       style={{
         border: "1px solid color-mix(in srgb, var(--cv-accent) 45%, transparent)",
         borderRadius: 999,
