@@ -72,37 +72,65 @@ fn vault_sandbox_resolve(state: &AppState, dir: &str, path: &str) -> Result<Path
     if rel.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
         return Err("access denied: path escapes the vault".into());
     }
-    let canon_root = std::fs::canonicalize(dir).map_err(|_| format!("access denied: vault root not found: {dir}"))?;
+    let canon_root = canon_through_missing(std::path::Path::new(dir))
+        .ok_or_else(|| format!("access denied: vault root not found: {dir}"))?;
     let allowed = state.allowed_roots.iter().any(|ar| canon_root.starts_with(ar));
     if !allowed {
         return Err("access denied: path is outside allowed directories".into());
     }
     let target = canon_root.join(rel);
-    // Canonicalize the deepest existing ancestor, then re-append the
-    // remaining components — works for files that do not exist yet.
-    let mut probe = target.clone();
+    // Walk the components that exist: any symlink in the chain must
+    // resolve inside the vault. `symlink_metadata` (lstat) sees dangling
+    // links that `exists()` misses — a dangling symlink is never a
+    // legitimate write target, because the write would follow it and
+    // create the file wherever it points.
+    let mut probe = canon_root.clone();
+    for comp in rel.components() {
+        probe.push(comp.as_os_str());
+        if let Ok(meta) = std::fs::symlink_metadata(&probe) {
+            if meta.file_type().is_symlink() {
+                match std::fs::canonicalize(&probe) {
+                    Ok(canon) if canon.starts_with(&canon_root) => {
+                        probe = canon;
+                    }
+                    // Dangling or escaping link — refuse outright.
+                    _ => return Err("access denied: path is outside allowed directories".into()),
+                }
+            }
+        }
+    }
+    if !probe.starts_with(&canon_root) {
+        return Err("access denied: path is outside allowed directories".into());
+    }
+    Ok(probe)
+}
+
+/// Canonicalize a path that may not fully exist yet: canonicalize the
+/// deepest existing ancestor and re-append the missing tail. New vault
+/// folders inside an allowed root therefore initialize fine, while a
+/// missing ancestor outside every root still fails the caller's
+/// allowed-roots check.
+fn canon_through_missing(path: &std::path::Path) -> Option<PathBuf> {
+    let mut probe = path.to_path_buf();
     let mut tail: Vec<std::ffi::OsString> = Vec::new();
     loop {
-        if probe.exists() { break; }
+        if std::fs::symlink_metadata(&probe).is_ok() { break; }
         match (probe.file_name(), probe.parent()) {
             (Some(name), Some(parent)) => {
                 tail.push(name.to_os_string());
                 probe = parent.to_path_buf();
             }
-            _ => break,
+            _ => return None,
         }
     }
-    let canon_base = std::fs::canonicalize(&probe).unwrap_or_else(|_| probe.clone());
-    let mut resolved = canon_base.clone();
+    let mut resolved = std::fs::canonicalize(&probe).ok()?;
     for comp in tail.iter().rev() { resolved.push(comp); }
-    if !canon_base.starts_with(&canon_root) || !resolved.starts_with(&canon_root) {
-        return Err("access denied: path is outside allowed directories".into());
-    }
-    Ok(resolved)
+    Some(resolved)
 }
 
 fn vault_sandbox_dir(state: &AppState, dir: &str) -> Result<PathBuf, String> {
-    let canon_root = std::fs::canonicalize(dir).map_err(|_| format!("access denied: vault root not found: {dir}"))?;
+    let canon_root = canon_through_missing(std::path::Path::new(dir))
+        .ok_or_else(|| format!("access denied: vault root not found: {dir}"))?;
     if state.allowed_roots.iter().any(|ar| canon_root.starts_with(ar)) {
         Ok(canon_root)
     } else {
@@ -1247,6 +1275,12 @@ fn handle_client_msg(
                     // Obsidian-style trash: move to <vault>/.trash/ instead of
                     // unlinking, so a delete is always recoverable.
                     let trash = root.join(".trash");
+                    // A `.trash` symlink would move notes outside the
+                    // vault — refuse the delete rather than follow it.
+                    if std::fs::symlink_metadata(&trash).map(|m| m.file_type().is_symlink()).unwrap_or(false) {
+                        send_control(ServerMsg::Error { agent_id: None, message: "vault delete refused: .trash is a symlink".into() });
+                        return;
+                    }
                     let base = file.file_name().unwrap_or_default();
                     let mut dest = trash.join(base);
                     if dest.exists() {
@@ -1308,6 +1342,13 @@ fn handle_client_msg(
             let to = vault_sandbox_resolve(state, &dir, &new_path);
             match (from, to) {
                 (Ok(from), Ok(to)) if path.ends_with(".md") && new_path.ends_with(".md") && from.is_file() => {
+                    // Never clobber: the resolved destination is canonical,
+                    // so renaming onto an in-vault symlink would overwrite
+                    // the LINKED file's contents, not the link.
+                    if to.exists() {
+                        send_control(ServerMsg::Error { agent_id: None, message: format!("vault rename refused: {new_path} already exists") });
+                        return;
+                    }
                     let result = (|| {
                         if let Some(parent) = to.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
                         std::fs::rename(&from, &to).map_err(|e| e.to_string())?;
@@ -1939,7 +1980,12 @@ async fn main() -> Result<()> {
             // `.canvas/allowed-roots` — Deska's allowedRoots model.
             let mut roots: Vec<PathBuf> = Vec::new();
             if let Ok(c) = std::fs::canonicalize(&repo_root) { roots.push(c); }
-            let list = repo_root.join(".canvas").join("allowed-roots");
+            // Lives in the USER's config dir, not the checkout — a cloned
+            // repo must never be able to grant itself access to the
+            // operator's disk (repo authors control `.canvas/`).
+            let list = std::env::var("HOME")
+                .map(|h| PathBuf::from(h).join(".config").join("canvas").join("allowed-roots"))
+                .unwrap_or_else(|_| repo_root.join(".canvas").join("allowed-roots.local"));
             if let Ok(text) = std::fs::read_to_string(&list) {
                 for line in text.lines() {
                     let line = line.trim();
