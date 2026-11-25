@@ -826,12 +826,26 @@ function Board() {
   }, [screenToFlowPosition]);
 
 
-  const onNodeDragStart: OnNodeDrag = (_, node) => {
-    activeDrags.current.add(node.id);
+  const onNodeDragStart: OnNodeDrag = (_, node, nodes) => {
+    // Multi-select drags move every selected card — track them all, or a
+    // blur rescue (and the sync effect's in-flight trust) covers only the
+    // primary card and the rest snap back mid-drag.
+    for (const n of nodes?.length ? nodes : [node]) activeDrags.current.add(n.id);
   };
 
-  const onNodeDragStop: OnNodeDrag = (event, node) => {
-    activeDrags.current.delete(node.id);
+  const onNodeDragStop: OnNodeDrag = (event, node, nodes) => {
+    const dragged = nodes?.length ? nodes : [node];
+    // A drag the blur rescue already committed must not write back when
+    // React Flow's zombie drag completes on the next mouseup — it would
+    // overwrite the rescued position with wherever the pointer happened
+    // to be.
+    const tracked = activeDrags.current.has(node.id);
+    for (const n of dragged) activeDrags.current.delete(n.id);
+    if (!tracked) {
+      setDragGhost(null);
+      setGuides({ v: [], h: [] });
+      return;
+    }
     // Deska-style: dropping a card on a board tab moves it there.
     setDragGhost(null);
     const pt =
@@ -861,16 +875,20 @@ function Board() {
     }
     const s0 = snapFor(node);
     setGuides({ v: [], h: [] });
-    const x = node.position.x + s0.dx;
-    const y = node.position.y + s0.dy;
-    if (node.id.startsWith("shape-")) {
-      moveShape(node.id, x, y);
-    } else if (node.id.startsWith("panel-")) {
-      useBoard.getState().movePanelNode(node.id, x, y);
-    } else if (node.id.startsWith("term-")) {
-      useBoard.getState().moveTermNode(node.id, x, y);
-    } else if (agents[node.id] || workspaces[node.id] || node.id.startsWith("web-") || node.id.startsWith("orch-") || node.id.startsWith("md-")) {
-      moveNode(node.id, x, y);
+    // Every card in a multi-select drag lands with the same snap delta —
+    // writing back only the primary used to lose the others' positions.
+    for (const n of dragged) {
+      const x = n.position.x + s0.dx;
+      const y = n.position.y + s0.dy;
+      if (n.id.startsWith("shape-")) {
+        moveShape(n.id, x, y);
+      } else if (n.id.startsWith("panel-")) {
+        useBoard.getState().movePanelNode(n.id, x, y);
+      } else if (n.id.startsWith("term-")) {
+        useBoard.getState().moveTermNode(n.id, x, y);
+      } else if (agents[n.id] || workspaces[n.id] || n.id.startsWith("web-") || n.id.startsWith("orch-") || n.id.startsWith("md-")) {
+        moveNode(n.id, x, y);
+      }
     }
   };
 
