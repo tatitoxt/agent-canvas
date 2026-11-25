@@ -330,10 +330,7 @@ body,
     from var(--cv-ring-angle),
     transparent 0deg,
     var(--cv-ring) 40deg,
-    transparent 95deg,
-    transparent 180deg,
-    var(--cv-ring) 220deg,
-    transparent 275deg
+    transparent 95deg
   );
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;

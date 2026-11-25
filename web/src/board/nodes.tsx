@@ -1,7 +1,6 @@
-import { Handle, Position, useReactFlow, type NodeProps, type Node } from "@xyflow/react";
+import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { useEffect, useMemo, useState } from "react";
 import { CliMark } from "../components/CliMark";
-import { agentPinSpot } from "../components/PinBtn";
 import { Icon } from "../components/icons";
 import { useBoard } from "../store/board";
 import { screenLines } from "./ptyScreen";
@@ -136,7 +135,6 @@ export function StatusBars({ color }: { color: string }) {
 export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const meta = cliMeta(data.cli);
   const summaries = useBoard((s) => s.panelSummaries);
-  const { screenToFlowPosition } = useReactFlow();
   const [collapsed, setCollapsed] = useState(false);
   const statusColor = STATUS_COLOR[data.status];
   // "builder-1" reads as Terminal 1 · builder — the terminal number is the
@@ -205,7 +203,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   }
   return (
     <div
-      className={`glass agent-card ${live ? "card-ring" : ""} ${data.status === "waiting" ? "node-waiting" : ""}`}
+      className={`glass agent-card ${live && !selected ? "card-ring" : ""} ${data.status === "waiting" ? "node-waiting" : ""}`}
       style={{
         position: "relative",
         width: 460,
@@ -216,9 +214,9 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         ["--cv-ring" as never]: live ? `color-mix(in srgb, ${statusColor} 90%, white 10%)` : undefined,
         outline: selected ? "2px solid var(--cv-accent)" : undefined,
         outlineOffset: selected ? 2 : undefined,
+        border: selected ? "1.5px solid var(--cv-accent)" : border,
         // Deska's card is near-opaque glass — the dot canvas barely bleeds.
         background: "color-mix(in srgb, var(--cv-base) 64%, transparent)",
-        border,
         boxShadow: glow ?? "0 18px 44px rgba(0,0,0,0.5), inset 0 1px 0 var(--cv-glass-shine)",
         cursor: "pointer",
       }}
@@ -329,25 +327,6 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             opacity: selected ? 1 : undefined,
           }}
         >
-          <span
-            role="button"
-            title="pin a note to this agent — dashed connector to the card"
-            style={{ cursor: "pointer", lineHeight: 1, fontSize: 11 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!data.id) return;
-              const spot = agentPinSpot(data.id);
-              useBoard.getState().pinCard(
-                `${data.name} — note`,
-                "",
-                undefined,
-                `agent:${data.id}`,
-                spot ? screenToFlowPosition(spot) : undefined,
-              );
-            }}
-          >
-            ◈
-          </span>
           <span
             role="button"
             title="collapse"
