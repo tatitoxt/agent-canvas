@@ -62,3 +62,16 @@ Fausto respondió la pregunta de la library con este screenshot — ES la respue
 12. Fausto enviará foto(s) de Deska como referencia adicional — revisar su Desktop o pedírsela a la vuelta.
 
 ## Pendiente de ronda 1 sin tocar: library docked (#3), edge routing (#5), file explorer flotante (#7), terminales reales verificar (#8), crowding del header.
+
+## DATA CLAVE DEL RELAY MADRE (verificado en main por ella)
+- **Maximize ▢ SÍ funciona en main** (card llena viewport y restaura) — si en el branch no hace nada es REGRESIÓN DEL REDISEÑO, revisar.
+- **Gather en main ordena en grid** (no apila) — idem: si apila es regresión del branch.
+- Selección en main = ámbar #e8b25a — usarlo para el outline de selección por clic.
+- PR #33 (fallback chain daemon) mergeado; main verde para rebasear.
+- Madre e hijo NO tocan el worktree — quedan en lógica/daemon/tests sobre main.
+- "Swiss": probablemente Fausto leyó mal un label de la UI — verificar qué elemento dice algo parecido (¿"switch"? ¿un nombre de preset?).
+
+## IMÁGENES DE REFERENCIA ENVIADAS POR FAUSTO/MADRE
+- `/tmp/canvas-design/madre-ref.png` — screenshot 2026-11-24 19:46 (copiado del Desktop, nombre original tiene U+202F). ANALIZAR AL RETOMAR — probablemente referencia Deska.
+- `/Users/fausto/Desktop/Screenshot 2026-11-24 at 10.14.47 PM.png` — Deska real completo (ya analizado, ver sección REFERENCIA DESKA REAL).
+- Desktop tiene más screenshots del 21/11 — revisar por si son referencias viejas de Deska/Symvibe.
