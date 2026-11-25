@@ -45,6 +45,19 @@ test("pop out creates a canvas term card; put back returns it to the drawer", as
   await page.waitForTimeout(900);
   const termCard = page.locator(".react-flow__node-term").first();
   await expect(termCard).toBeVisible({ timeout: 5_000 });
+  const original = await termCard.boundingBox();
+  await termCard.getByRole("button", { name: "Maximize terminal card" }).press("Enter");
+  await expect(termCard.getByRole("button", { name: "Restore terminal card size" })).toBeVisible();
+  await expect.poll(async () => {
+    const rect = await termCard.boundingBox();
+    return rect!.width * rect!.height;
+  }).toBeGreaterThan(original!.width * original!.height * 2);
+  await termCard.getByRole("button", { name: "Restore terminal card size" }).press("Enter");
+  await expect(termCard.getByRole("button", { name: "Maximize terminal card" })).toBeVisible();
+  await expect.poll(async () => {
+    const rect = await termCard.boundingBox();
+    return Math.abs(rect!.width - original!.width) + Math.abs(rect!.height - original!.height);
+  }).toBeLessThan(6);
   // put back — the card closes and the terminal lives in the drawer again
   await termCard.locator("button[title*='Put back']").first().click();
   await page.waitForTimeout(700);

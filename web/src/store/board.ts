@@ -510,7 +510,7 @@ type BoardState = {
   maximizePanelNode: (id: string, viewRect?: { x: number; y: number; w: number; h: number }) => void;
   /** Live terminals living ON the canvas as cards — `term-<agentId>` per
    * board. Popped out of the bottom drawer; movable/resizable/closable. */
-  termNodes: Record<string, Record<string, { x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number; locked?: boolean }>>;
+  termNodes: Record<string, Record<string, { x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number; locked?: boolean; maximized?: boolean; prevRect?: { x: number; y: number; w: number; h: number } }>>;
   /** Clone a panel card beside it (Deska Split Right/Down). */
   splitPanelCard: (id: string, dir: "right" | "down") => void;
   /** Deska card ops: z-order and position lock for canvas cards. */
@@ -541,6 +541,7 @@ type BoardState = {
   moveCardToBoard: (id: string, boardId: string) => void;
   resizeTermNode: (id: string, w: number, h: number) => void;
   collapseTermNode: (id: string) => void;
+  maximizeTermNode: (id: string, viewRect?: { x: number; y: number; w: number; h: number }) => void;
   studioDocNow: () => void;
   closeStudioDoc: () => void;
   artifactDelete: (artifactId: string) => void;
@@ -1672,6 +1673,23 @@ export const useBoard = create<BoardState>((set, get) => ({
     const m = n.collapsed
       ? { ...n, collapsed: false, h: n.expandH ?? n.h }
       : { ...n, collapsed: true, expandH: n.h, h: 34 };
+    const next = { ...get().termNodes, [board]: { ...get().termNodes[board], [id]: m } };
+    localStorage.setItem("cv-termnodes", JSON.stringify(next));
+    set({ termNodes: next });
+  },
+  maximizeTermNode: (id, viewRect) => {
+    const board = get().activeBoard;
+    const n = get().termNodes[board]?.[id];
+    if (!n) return;
+    const m = n.maximized
+      ? { ...n, maximized: false, ...(n.prevRect ?? {}) }
+      : {
+          ...n,
+          maximized: true,
+          collapsed: false,
+          prevRect: { x: n.x, y: n.y, w: n.w, h: n.collapsed ? n.expandH ?? n.h : n.h },
+          ...(viewRect ?? {}),
+        };
     const next = { ...get().termNodes, [board]: { ...get().termNodes[board], [id]: m } };
     localStorage.setItem("cv-termnodes", JSON.stringify(next));
     set({ termNodes: next });

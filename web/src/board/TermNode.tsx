@@ -1,9 +1,10 @@
 import { memo, useContext } from "react";
-import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
+import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { useBoard } from "../store/board";
 import { TermHost } from "../components/TermHost";
 import { PanelActionsCtx } from "../components/panelCtx";
 import { CliMark } from "../components/CliMark";
+import { Icon } from "../components/icons";
 import { STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "./nodes";
 import type { AgentStatus } from "./types";
 
@@ -13,6 +14,7 @@ const ANSI = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[\[\]()#;?]*[0-9;]*[ -\/]*[@
 /** A live terminal popped out of the bottom drawer onto the canvas —
  * a real card: movable, resizable, collapsible, closable (Deska window). */
 export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
+  const rf = useReactFlow();
   const n = useBoard((s) => s.termNodes[s.activeBoard]?.[id]);
   const agentId = id.slice(5); // term-<agentId>
   const agent = useBoard((s) => s.agents[agentId]);
@@ -170,6 +172,36 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
           }}
         >
           ⧉
+        </button>
+        <button
+          className="nodrag"
+          title={n.maximized ? "Restore terminal card size" : "Maximize terminal card"}
+          aria-label={n.maximized ? "Restore terminal card size" : "Maximize terminal card"}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (n.maximized) {
+              useBoard.getState().maximizeTermNode(id);
+            } else {
+              const tl = rf.screenToFlowPosition({ x: 12, y: 64 });
+              const br = rf.screenToFlowPosition({ x: window.innerWidth - 12, y: window.innerHeight - 12 });
+              useBoard.getState().maximizeTermNode(id, { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y });
+            }
+          }}
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: 6,
+            border: "none",
+            background: "transparent",
+            color: "var(--cv-ink-faint)",
+            cursor: "pointer",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          <Icon name={n.maximized ? "ph-restore" : "ph-max"} size={12} color="var(--cv-ink)" />
         </button>
         <button
           className="nodrag"

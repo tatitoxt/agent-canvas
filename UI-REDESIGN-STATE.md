@@ -157,4 +157,6 @@ REMAINING LEVERS if still slow:
 - [x] E2E completa tras Library: 29/29; typecheck, build y 23 unit tests pasan.
 - [x] Panel maximize/restore: E2E detectó que el store restauraba el rectángulo pero React Flow retenía la geometría maximizada; el cache de nodos ahora solo reutiliza nodos con posición y dimensiones sincronizadas. Prueba verifica maximize por teclado y restore al tamaño original.
 - [x] E2E integral tras sincronización de geometría: 29/29; typecheck, build y 23 unit tests pasan.
+- [x] Terminales flotantes: el header ahora ofrece maximizar/restaurar con persistencia del rectángulo anterior; la PTY permanece montada. E2E lo activa por teclado y verifica el tamaño al volver.
+- [x] E2E completa tras maximize/restore de terminales: 29/29; typecheck, build y 23 unit tests pasan.
 - [ ] Próximo orden sugerido: auditar los demás controles/estados del chrome contra la captura de referencia y corregir discrepancias visibles/funcionales. Mantener lotes pequeños y verificables en PR #47, sin merge.
