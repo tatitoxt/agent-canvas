@@ -26,6 +26,8 @@ use tracing::{info, warn};
 
 type AgentId = String;
 
+type ShareMap = Arc<std::sync::Mutex<std::collections::HashMap<String, (String, String, Vec<u8>)>>>;
+
 #[derive(Clone)]
 struct AppState {
     token: String,
@@ -42,7 +44,7 @@ struct AppState {
     pending_inputs: Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
     /// Published artifacts: share id → (title, mime, bytes). Served at
     /// /share/{id} without auth — the 128-bit id is the capability.
-    shares: Arc<std::sync::Mutex<std::collections::HashMap<String, (String, String, Vec<u8>)>>>,
+    shares: ShareMap,
 }
 
 /// Write PTY input honoring the supervised-input gate: `supervised`
