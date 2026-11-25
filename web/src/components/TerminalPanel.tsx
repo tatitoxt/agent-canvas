@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 /** Where the floating terminal panel sits — default bottom-right (Deska-style
  * dock position) until the user pops it out by dragging the header. */
 const DEFAULT_POS = { x: -1, y: -1 }; // sentinel: anchored, not popped out
+const DEFAULT_SIZE = { width: 576, height: 320 };
+const TERMINAL_SIZE_KEY = "cv-terminal-drawer-size";
 import { TermHost } from "./TermHost";
 import { useBoard } from "../store/board";
 import { CliMark } from "./CliMark";
@@ -16,6 +18,19 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   const kill = useBoard((s) => s.kill);
   const [pos, setPos] = useState(DEFAULT_POS);
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+  const [size, setSize] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(TERMINAL_SIZE_KEY) ?? "null");
+      if (Number.isFinite(saved?.width) && Number.isFinite(saved?.height)) {
+        return {
+          width: Math.max(380, Math.min(1200, saved.width)),
+          height: Math.max(240, Math.min(900, saved.height)),
+        };
+      }
+    } catch { /* use the default size */ }
+    return DEFAULT_SIZE;
+  });
+  const resizeRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
   // Voice dictation — Web Speech API is free/on-device-ish, unlike
   // Deska's metered voice minutes. Dictates text into the PTY.
   const [listening, setListening] = useState(false);
@@ -99,6 +114,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
       : { position: "absolute", bottom: 16 + index * 28, right: 16 + index * 28, zIndex: 20 };
 
   const onHeaderDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest("button, input, select")) return;
     const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
     dragRef.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
     const move = (ev: PointerEvent) => {
@@ -118,18 +134,47 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
     window.addEventListener("pointerup", up);
   };
 
+  const onResizeDown = (e: React.PointerEvent) => {
+    if (maxed) return;
+    e.preventDefault();
+    e.stopPropagation();
+    resizeRef.current = { x: e.clientX, y: e.clientY, width: size.width, height: size.height };
+    let nextSize = { width: size.width, height: size.height };
+    const move = (ev: PointerEvent) => {
+      const start = resizeRef.current;
+      if (!start) return;
+      nextSize = {
+        width: Math.max(380, Math.min(window.innerWidth * 0.92, start.width + ev.clientX - start.x)),
+        height: Math.max(240, Math.min(window.innerHeight * 0.88, start.height + ev.clientY - start.y)),
+      };
+      setSize(nextSize);
+    };
+    const up = () => {
+      resizeRef.current = null;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      try { localStorage.setItem(TERMINAL_SIZE_KEY, JSON.stringify(nextSize)); } catch { /* noop */ }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
   return (
     <div
-      className="glass group"
+      className="terminal-drawer group"
       style={{
         ...panelStyle,
         display: "flex",
         flexDirection: "column",
-        height: maxed ? undefined : 300,
-        width: maxed ? undefined : "36rem",
+        height: maxed ? undefined : size.height,
+        width: maxed ? undefined : size.width,
+        maxWidth: "92vw",
+        maxHeight: "88vh",
         overflow: "hidden",
-        background: "color-mix(in srgb, var(--cv-base) 94%, #0d0e10)",
-        border: "1px solid var(--cv-glass-edge)",
+        background: "#0d0e10",
+        border: "1px solid rgba(255,255,255,.12)",
+        borderRadius: 12,
+        boxShadow: "0 18px 48px rgba(0,0,0,.42)",
       }}
     >
       <div
@@ -455,6 +500,27 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
           </div>
         )}
       </div>
+      {!maxed && (
+        <div
+          data-testid="terminal-resize-handle"
+          role="separator"
+          aria-label="Resize terminal"
+          onPointerDown={onResizeDown}
+          title="drag to resize terminal"
+          style={{
+            position: "absolute",
+            right: 1,
+            bottom: 1,
+            width: 18,
+            height: 18,
+            cursor: "nwse-resize",
+            touchAction: "none",
+            zIndex: 2,
+            background: "linear-gradient(135deg, transparent 45%, var(--cv-ink-faint) 47%, var(--cv-ink-faint) 51%, transparent 53%, transparent 65%, var(--cv-ink-faint) 67%, var(--cv-ink-faint) 71%, transparent 73%)",
+            opacity: 0.65,
+          }}
+        />
+      )}
     </div>
   );
 }

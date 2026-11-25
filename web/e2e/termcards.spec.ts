@@ -96,3 +96,28 @@ test("popped-out terminal keeps accepting shell input", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page.locator(".react-flow__node-term .xterm-rows")).toContainText("canvas-terminal-e2e-ok", { timeout: 8_000 });
 });
+
+test("terminal drawer resizes and keeps its PTY interactive", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const handle = page.getByTestId("terminal-resize-handle");
+  await expect(handle).toBeVisible();
+  const panel = handle.locator("xpath=..");
+  const before = await panel.boundingBox();
+  const grip = await handle.boundingBox();
+  expect(before).not.toBeNull();
+  expect(grip).not.toBeNull();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + grip!.width / 2 + 90, grip!.y + grip!.height / 2 + 60);
+  await page.mouse.up();
+  await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBeGreaterThan(before!.width + 50);
+  await expect.poll(async () => (await panel.boundingBox())?.height ?? 0).toBeGreaterThan(before!.height + 30);
+
+  const terminal = page.locator(".xterm").first();
+  await terminal.click();
+  await page.keyboard.type("printf 'resized-terminal-e2e-ok\\n'");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".xterm-rows")).toContainText("resized-terminal-e2e-ok", { timeout: 8_000 });
+});
