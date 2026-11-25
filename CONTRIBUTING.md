@@ -13,6 +13,9 @@ clients of its WebSocket protocol (JSON control frames + binary PTY frames).
 The daemon prints a session `CANVASD_TOKEN` at startup; the web client needs
 it as `?token=<token>`.
 
+Deep dives: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (how the pieces
+fit) and [docs/PROTOCOL.md](docs/PROTOCOL.md) (the wire protocol).
+
 ## Prerequisites
 
 - Rust (stable) + cargo
