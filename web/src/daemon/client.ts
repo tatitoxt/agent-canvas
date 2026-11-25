@@ -236,6 +236,10 @@ export class CanvasClient {
     this.send({ cmd: "vault_write", dir, path, text });
   }
 
+  vaultWriteAsset(dir: string, path: string, data: string) {
+    this.send({ cmd: "vault_write_asset", dir, path, data });
+  }
+
   vaultDelete(dir: string, path: string) {
     this.send({ cmd: "vault_delete", dir, path });
   }

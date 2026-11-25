@@ -666,6 +666,68 @@ fn vault_write(app: AppHandle, dir: String, path: String, text: String) -> Resul
 }
 
 #[tauri::command]
+fn vault_write_asset(app: AppHandle, dir: String, path: String, data: String) -> Result<(), String> {
+    if dir.is_empty() || path.contains("..") || path.is_empty() || path.ends_with('/') {
+        return Err("vault write-asset refused".into());
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&data)
+        .map_err(|e| e.to_string())?;
+    if bytes.len() > 8 * 1024 * 1024 {
+        return Err("vault asset too large".into());
+    }
+    // create_new per candidate — atomic name reservation, and a dangling
+    // symlink counts as taken so it is never written through.
+    let root = PathBuf::from(&dir);
+    let target = root.join(&path);
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let stem = target.file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let ext = target
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()))
+        .unwrap_or_default();
+    let parent = target.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    let mut file = None;
+    for cand in std::iter::once(target.clone()).chain((2..100).map(|i| parent.join(format!("{stem}-{i}{ext}")))) {
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&cand) {
+            Ok(f) => {
+                drop(f);
+                file = Some(cand);
+                break;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    let file = file.ok_or_else(|| format!("no free name for {path}"))?;
+    // Write to a sibling tmp file then rename over the empty reservation — a
+    // failed write never leaves a truncated file at the final name.
+    let tmp = parent.join(format!(
+        ".{}.tmp-{}",
+        file.file_name().unwrap_or_default().to_string_lossy(),
+        std::process::id(),
+    ));
+    // create_new on the tmp too — a vault file that happens to share the
+    // tmp name must never be truncated, and cleanup only touches our own.
+    let outcome = match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
+        Ok(mut f) => {
+            let r = std::io::Write::write_all(&mut f, &bytes);
+            drop(f);
+            r.and_then(|()| std::fs::rename(&tmp, &file))
+                .inspect_err(|_| { let _ = std::fs::remove_file(&tmp); })
+        }
+        Err(e) => Err(e), // preexisting tmp — never touch it
+    };
+    if let Err(e) = outcome {
+        let _ = std::fs::remove_file(&file); // our empty reservation
+        return Err(e.to_string());
+    }
+    vault_list(app, dir)
+}
+
+#[tauri::command]
 fn git_push(app: AppHandle, state: State<'_, CanvasState>, agent_id: String) -> Result<(), String> {
     let wt = state
         .store
@@ -1766,6 +1828,7 @@ fn main() {
             vault_asset,
             vault_append,
             vault_write,
+            vault_write_asset,
             vault_delete,
             vault_rename,
             vault_graph,
