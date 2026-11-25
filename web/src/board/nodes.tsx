@@ -249,11 +249,11 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             fontSize: 11,
             fontWeight: 700,
             fontFamily: "var(--cv-font-mono)",
-            color: meta.color,
+            color: "var(--cv-ink)",
             lineHeight: 1,
           }}
         >
-          {meta.mark === "›_" ? "›_" : <CliMark cli={data.cli} color={meta.color} size={12} />}
+          ›_
         </span>
         <div
           style={{
@@ -324,7 +324,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             alignItems: "center",
             gap: 7,
             flex: "none",
-            color: "var(--cv-ink-faint)",
+            color: "var(--cv-ink)",
             fontSize: 12,
             opacity: selected ? 1 : undefined,
           }}
