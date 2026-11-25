@@ -43,7 +43,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
     extent: "parent",
     data: {
       kind: "agent",
-      name: "tests-1",
+      name: "tests-2",
       cli: "codex",
       status: "waiting",
       task: "Allow deleting the fixtures directory? (yes/no)",
@@ -57,7 +57,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
     extent: "parent",
     data: {
       kind: "agent",
-      name: "review-1",
+      name: "review-3",
       cli: "claude-code",
       status: "working",
       task: "Review builder-1 diff",
@@ -71,7 +71,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
     extent: "parent",
     data: {
       kind: "agent",
-      name: "docs-1",
+      name: "docs-4",
       cli: "gemini-cli",
       status: "done",
       task: "Update API reference",
@@ -92,7 +92,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
     extent: "parent",
     data: {
       kind: "agent",
-      name: "solo-1",
+      name: "solo-5",
       cli: "aider",
       status: "idle",
       task: "Waiting at prompt",
