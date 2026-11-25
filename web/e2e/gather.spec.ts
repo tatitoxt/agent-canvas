@@ -47,8 +47,23 @@ test("gather grids into view and undo restores positions + drops the frame", asy
       expect(overlapX && overlapY, `cards ${i} and ${j} must not overlap`).toBe(false);
     }
   }
-  expect(Math.max(...rects.map((r) => r.x + r.w)) - Math.min(...rects.map((r) => r.x))).toBeLessThan(1440);
-  expect(Math.max(...rects.map((r) => r.y + r.h)) - Math.min(...rects.map((r) => r.y))).toBeLessThan(900);
+  const visible = await page.evaluate(() => {
+    const flow = document.querySelector(".react-flow")!;
+    const viewport = document.querySelector(".react-flow__viewport")!;
+    const matrix = new DOMMatrix(getComputedStyle(viewport).transform);
+    const bounds = flow.getBoundingClientRect();
+    return { width: bounds.width, height: bounds.height, scaleX: matrix.a, scaleY: matrix.d, x: matrix.e, y: matrix.f };
+  });
+  for (const r of rects) {
+    const left = visible.x + r.x * visible.scaleX;
+    const top = visible.y + r.y * visible.scaleY;
+    const right = left + r.w * visible.scaleX;
+    const bottom = top + r.h * visible.scaleY;
+    expect(left, "gathered cards stay inside the visible canvas left edge").toBeGreaterThanOrEqual(-2);
+    expect(top, "gathered cards stay inside the visible canvas top edge").toBeGreaterThanOrEqual(-2);
+    expect(right, "gathered cards stay inside the visible canvas right edge").toBeLessThanOrEqual(visible.width + 2);
+    expect(bottom, "gathered cards stay inside the visible canvas bottom edge").toBeLessThanOrEqual(visible.height + 2);
+  }
   // undo via the topbar button
   const undoBtn = page.locator("button[title*='Undo grouping']").first();
   await expect(undoBtn).toBeVisible({ timeout: 4_000 });
