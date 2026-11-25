@@ -33,7 +33,7 @@ test("agent card task reads as a distinct, legible row", async ({ page }) => {
   await expect(task).toBeVisible({ timeout: 10_000 });
   await expect(task.getByText("Task", { exact: true })).toBeVisible();
   await expect(task).toContainText("Scaffold checkout API");
-  await expect(task.locator("span").last()).toHaveCSS("font-size", "12.5px");
+  await expect(task.locator("span").last()).toHaveCSS("font-size", "14px");
 });
 
 test("agent cards resize when nested inside a workspace", async ({ page }) => {

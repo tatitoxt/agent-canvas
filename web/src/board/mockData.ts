@@ -10,7 +10,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
     id: "ws-1",
     type: "workspace",
     position: { x: 0, y: 0 },
-    style: { width: 1260, height: 560 },
+    style: { width: 1260, height: 640 },
     data: { kind: "workspace", name: "cartfull", repo: "~/repos/cartfull" },
   },
   {
@@ -66,7 +66,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
   {
     id: "a3",
     type: "agent",
-    position: { x: 460, y: 460 },
+    position: { x: 460, y: 520 },
     parentId: "ws-1",
     extent: "parent",
     data: {

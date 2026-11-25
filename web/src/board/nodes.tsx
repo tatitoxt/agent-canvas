@@ -280,7 +280,7 @@ export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, flex: 1, minWidth: 0 }}>
             <div
               data-testid="agent-card-title"
-              style={{ fontSize: 14, fontWeight: 650, letterSpacing: -0.12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, color: "var(--cv-ink)" }}
+              style={{ fontSize: 15, fontWeight: 650, letterSpacing: -0.12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, color: "var(--cv-ink)" }}
               title={data.name}
             >
               {termTitle}
@@ -339,7 +339,7 @@ export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>
         <div data-testid="agent-card-meta" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, paddingLeft: 33 }}>
           <span
             data-testid="agent-card-status"
-            style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 650, color: statusColor, whiteSpace: "nowrap" }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 650, color: statusColor, whiteSpace: "nowrap" }}
           >
             <StatusBars color={statusColor} />
             {STATUS_LABEL[data.status]}
@@ -432,14 +432,14 @@ export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>
             borderTop: "1px solid rgba(255,255,255,0.06)",
           }}
         >
-          <span style={{ flex: "none", fontSize: 10.5, fontWeight: 700, color: "var(--cv-accent)" }}>Task</span>
+          <span style={{ flex: "none", fontSize: 11.5, fontWeight: 700, color: "var(--cv-accent)" }}>Task</span>
           <span
             title={data.task}
             style={{
               minWidth: 0,
-              fontSize: 12.5,
+              fontSize: 14,
               lineHeight: 1.45,
-              color: "var(--cv-ink-dim)",
+              color: "var(--cv-ink)",
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",

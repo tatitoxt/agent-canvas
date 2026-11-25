@@ -19,6 +19,7 @@
 - [x] Task hierarchy in agent cards: a small amber “Task” label and readable two-line-clamped description distinguish the requested work from terminal output without inventing transcript roles. Covered by a focused E2E assertion. Commit `8c3a875`.
 - [x] Stabilized the workspace-resize E2E after Linux CI exposed hit-testing at the canvas edge: it now checks selected-state grip visibility and persisted dimensions across reload; real drag resizing remains covered by nested agent-card and terminal-card E2E plus workspace store unit tests. Full 39/39 E2E passes locally.
 - [x] Validation for this continuation: typecheck, 31/31 unit tests, production build, 39/39 E2E, and `git diff --check` pass.
+- [x] Agent-card scanability pass: title 15px, status 12.5px, task label 11.5px, and task text 14px with stronger ink. Reviewed capture `/tmp/canvas-design/card-density-next.png`; tasks remain clamped and fit the default cards. Increased the demo workspace height and lowered the docs card by 60 units to preserve a visible gap after the larger text. E2E enforces non-overlapping demo cards. Full 39/39 E2E, 31/31 unit tests, typecheck, and production build pass.
 - [ ] Next visual pass: inspect resized-card body and overall panel/chrome density in desktop app, then continue remaining Deska/Symvibe feature gaps. Keep PR #47 open and do not merge.
 
 ## Feedback de Fausto (mensaje dictado, prioridad literal) — checklist

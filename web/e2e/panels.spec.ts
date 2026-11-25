@@ -33,7 +33,7 @@ test("offline demo mounts without a React update loop", async ({ page }) => {
     for (let j = i + 1; j < cards.length; j++) {
       const overlapX = Math.min(cards[i].right, cards[j].right) - Math.max(cards[i].left, cards[j].left);
       const overlapY = Math.min(cards[i].bottom, cards[j].bottom) - Math.max(cards[i].top, cards[j].top);
-      expect(overlapX > 1 && overlapY > 1, `demo cards ${i + 1} and ${j + 1} should not overlap`).toBe(false);
+      expect(overlapX > 1 && overlapY > 1, `demo cards ${i + 1} and ${j + 1} should not overlap: ${JSON.stringify({ a: cards[i], b: cards[j] })}`).toBe(false);
     }
   }
 });
