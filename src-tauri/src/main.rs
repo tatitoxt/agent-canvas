@@ -1651,6 +1651,109 @@ fn snapshot(
     }))
 }
 
+/// One bookmark-bar entry for the web launcher's bookmarks section.
+#[derive(serde::Serialize)]
+struct ChromeBookmark {
+    name: String,
+    url: String,
+    /// Name of the bookmark_bar folder it sits in (None = loose on the bar).
+    folder: Option<String>,
+}
+
+fn collect_bookmarks(node: &serde_json::Value, folder: Option<&str>, out: &mut Vec<ChromeBookmark>) {
+    if out.len() >= 40 {
+        return;
+    }
+    match node.get("type").and_then(|t| t.as_str()) {
+        Some("url") => {
+            if let (Some(name), Some(url)) = (
+                node.get("name").and_then(|v| v.as_str()),
+                node.get("url").and_then(|v| v.as_str()),
+            ) {
+                out.push(ChromeBookmark {
+                    name: name.to_string(),
+                    url: url.to_string(),
+                    folder: folder.map(String::from),
+                });
+            }
+        }
+        Some("folder") => {
+            let name = node
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("bookmarks")
+                .to_string();
+            if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                for c in children {
+                    collect_bookmarks(c, Some(&name), out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Local Chrome bookmark bar — the web launcher renders these as chips.
+/// Desktop-only: the daemon client hides the section entirely.
+#[tauri::command]
+fn chrome_bookmarks() -> Vec<ChromeBookmark> {
+    let Some(home) = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
+    else {
+        return Vec::new();
+    };
+    let roots = [
+        home.join(".config/google-chrome"),
+        home.join(".config/chromium"),
+        home.join("Library/Application Support/Google/Chrome"),
+        home.join("AppData/Local/Google/Chrome/User Data"),
+    ];
+    // Every profile holds its own Bookmarks file — users browsing from a
+    // secondary profile would otherwise see nothing (or the wrong bar).
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for root in roots.iter().filter(|r| r.is_dir()) {
+        let mut profiles: Vec<PathBuf> = std::fs::read_dir(root)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .map(|e| e.path())
+                    .filter(|p| {
+                        p.file_name()
+                            .and_then(|n| n.to_str())
+                            .map(|n| n == "Default" || n.starts_with("Profile "))
+                            .unwrap_or(false)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        profiles.sort();
+        paths.extend(profiles.into_iter().map(|p| p.join("Bookmarks")));
+    }
+    let mut out = Vec::new();
+    for path in paths {
+        if out.len() >= 40 {
+            break;
+        }
+        let Some(json) = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        else {
+            continue;
+        };
+        if let Some(children) = json
+            .get("roots")
+            .and_then(|r| r.get("bookmark_bar"))
+            .and_then(|b| b.get("children"))
+            .and_then(|c| c.as_array())
+        {
+            for c in children {
+                collect_bookmarks(c, None, &mut out);
+            }
+        }
+    }
+    out
+}
+
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -1926,6 +2029,7 @@ fn main() {
             transcript,
             diff_detail,
             snapshot,
+            chrome_bookmarks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running canvas");
