@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useBoard } from "../store/board";
+import { useBoard, PERMISSION_LEVELS } from "../store/board";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--cv-glass-hi)",
@@ -87,10 +87,9 @@ export function DelegateDialog({
         onChange={(e) => setPermission(e.target.value)}
         title="child permission level"
       >
-        <option value="supervised">supervised</option>
-        <option value="auto_accept">auto-accept edits</option>
-        <option value="auto">auto</option>
-        <option value="full">full access</option>
+        {PERMISSION_LEVELS.map((p) => (
+          <option key={p.id} value={p.id}>{p.label} — {p.hint}</option>
+        ))}
       </select>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button

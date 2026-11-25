@@ -8,7 +8,8 @@ const PRESETS = [
 ];
 
 import { panelRoot } from "./panelChrome";
-import { useBoard } from "../store/board";
+import { useBoard, PERMISSION_LEVELS, type Guardrails } from "../store/board";
+import { PinBtn } from "./PinBtn";
 
 const input: React.CSSProperties = {
   width: "100%",
@@ -33,7 +34,27 @@ const label: React.CSSProperties = {
 };
 
 const AGENT_COMMANDS = ["claude", "codex", "gemini", "aider", "bash"];
-const PERMISSIONS = ["supervised", "auto_accept", "auto", "full"];
+
+const GUARDRAIL_ROWS: Array<{ key: keyof Guardrails; label: string; options: Array<[string, string]> }> = [
+  { key: "waitForAnswer", label: "Wait for my answer", options: [["15m", "15m"], ["1h", "1h"], ["4h", "4h"], ["forever", "forever"]] },
+  { key: "onNoAnswer", label: "If I do not answer", options: [["safest", "choose safest"], ["stop", "stop"], ["proceed", "proceed anyway"]] },
+  { key: "onNotAllowed", label: "If a command is not allowed", options: [["ask", "ask me"], ["deny", "deny"]] },
+  { key: "unresponsiveAfter", label: "If it stops responding", options: [["15m", "after 15m"], ["30m", "after 30m"], ["1h", "after 1h"]] },
+  { key: "unresponsiveAction", label: "…then", options: [["takeover", "the next agent takes over"], ["stop", "stop"]] },
+  { key: "onRunCollision", label: "If run-time collides", options: [["queue", "queue for later"], ["skip", "skip"]] },
+  { key: "onComputerOff", label: "If the computer was off", options: [["run-once", "run once on return"], ["skip", "skip"]] },
+];
+
+const select: React.CSSProperties = {
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 7,
+  padding: "3px 6px",
+  fontSize: 10.5,
+  color: "var(--cv-ink)",
+  outline: "none",
+  fontFamily: "inherit",
+};
 
 /** Deska-style automations: saved tasks that run an agent with guardrails —
  * an idle hang limit and a policy for gated commands (hold vs auto-deny). */
@@ -53,6 +74,11 @@ export function AutomationsPanel() {
   const [everyMins, setEveryMins] = useState("");
   const [workspaceId, setWorkspaceId] = useState("");
   const [creating, setCreating] = useState(false);
+  const [guardOpen, setGuardOpen] = useState(false);
+  const guardrails = useBoard((s) => s.guardrails);
+  const guardrailOverrides = useBoard((s) => s.guardrailOverrides);
+  const setGuardrails = useBoard((s) => s.setGuardrails);
+  const setGuardrailOverride = useBoard((s) => s.setGuardrailOverride);
 
   const wsList = Object.values(workspaces);
   const list = Object.values(automations);
@@ -95,6 +121,15 @@ export function AutomationsPanel() {
         <span style={{ flex: 1 }} />
         <button
           className="glass-pill"
+          title="automation guardrails — global policy for automated runs"
+          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 9px", cursor: "pointer", border: "none", color: guardOpen ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}
+          onClick={() => setGuardOpen((g) => !g)}
+        >
+          ⚙
+        </button>
+        <PinBtn anchor="automations" title="Automations" body={list.map((a) => a.name).join("\n")} />
+        <button
+          className="glass-pill"
           style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}
           onClick={() => setCreating((c) => !c)}
         >
@@ -102,6 +137,27 @@ export function AutomationsPanel() {
         </button>
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
+        {guardOpen && (
+          <div style={{ padding: "2px 12px 10px", borderBottom: "1px solid rgba(255,255,255,0.07)", marginBottom: 6 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "var(--cv-ink-faint)", paddingBottom: 6 }}>
+              guardrails — applies unless a run overrides
+            </div>
+            {GUARDRAIL_ROWS.map((r) => (
+              <div key={r.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "3px 0" }}>
+                <span style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", flex: 1 }}>{r.label}</span>
+                <select
+                  style={select}
+                  value={guardrails[r.key]}
+                  onChange={(e) => setGuardrails({ [r.key]: e.target.value } as Partial<Guardrails>)}
+                >
+                  {r.options.map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
         {creating && (
           <div style={{ padding: "4px 8px 10px" }}>
             <input style={input} placeholder="name — e.g. nightly audit" value={name} onChange={(e) => setName(e.target.value)} />
@@ -125,8 +181,8 @@ export function AutomationsPanel() {
               </select>
             )}
             <select style={input} value={permission} onChange={(e) => setPermission(e.target.value)}>
-              {PERMISSIONS.map((p) => (
-                <option key={p} value={p}>{p}</option>
+              {PERMISSION_LEVELS.map((p) => (
+                <option key={p.id} value={p.id}>{p.label} — {p.hint}</option>
               ))}
             </select>
             <input
@@ -204,6 +260,14 @@ export function AutomationsPanel() {
               {a.last_run_at ? ` · ran ${a.last_run_at.slice(0, 16)}` : " · never ran"}
             </div>
             <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+              <button
+                className="glass-pill"
+                title={guardrailOverrides[a.id] ? "this run uses its own settings, not the global guardrails" : "follows the global guardrails — click to let this run keep its own settings"}
+                style={{ fontSize: 10, fontWeight: 600, padding: "2px 10px", cursor: "pointer", border: "none", color: guardrailOverrides[a.id] ? "var(--cv-accent)" : "var(--cv-ink-faint)" }}
+                onClick={() => setGuardrailOverride(a.id, !guardrailOverrides[a.id])}
+              >
+                {guardrailOverrides[a.id] ? "override: on" : "override"}
+              </button>
               <button
                 className="glass-pill"
                 style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 12px", cursor: "pointer", border: "none", color: "var(--cv-done)" }}

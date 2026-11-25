@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useBoard } from "../store/board";
+import { useBoard, PERMISSION_LEVELS } from "../store/board";
 import { CliMark } from "./CliMark";
 import { cliMeta } from "../board/nodes";
 
@@ -177,24 +177,25 @@ export function SpawnBar() {
                 />
               )}
               <div style={{ display: "flex", alignItems: "center", gap: 4 }} title="permission level — what the agent may do without asking">
-                {(["supervised", "auto", "full"] as const).map((p) => (
+                {PERMISSION_LEVELS.map((l) => (
                   <button
-                    key={p}
-                    onClick={() => setPermission(p)}
+                    key={l.id}
+                    onClick={() => setPermission(l.id)}
+                    title={`${l.label} — ${l.hint}`}
                     style={{
                       flex: 1,
                       height: 22,
                       borderRadius: 7,
-                      border: `1px solid ${permission === p ? "var(--cv-accent)" : "var(--cv-glass-edge)"}`,
-                      background: permission === p ? "color-mix(in srgb, var(--cv-accent) 16%, transparent)" : "transparent",
-                      color: permission === p ? "var(--cv-accent)" : "var(--cv-ink-dim)",
+                      border: `1px solid ${permission === l.id ? "var(--cv-accent)" : "var(--cv-glass-edge)"}`,
+                      background: permission === l.id ? "color-mix(in srgb, var(--cv-accent) 16%, transparent)" : "transparent",
+                      color: permission === l.id ? "var(--cv-accent)" : "var(--cv-ink-dim)",
                       fontSize: 9.5,
                       fontWeight: 650,
                       cursor: "pointer",
                       fontFamily: "inherit",
                     }}
                   >
-                    {p}
+                    {l.id === "auto_accept" ? "edits" : l.id}
                   </button>
                 ))}
               </div>
