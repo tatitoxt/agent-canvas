@@ -102,14 +102,32 @@ function WikiLink({ name, shown, onLink }: { name: string; shown: string; onLink
   );
 }
 
-function mdInline(text: string, onLink?: (name: string) => void, onTag?: (tag: string) => void): React.ReactNode[] {
+function mdInline(text: string, onLink?: (name: string) => void, onTag?: (tag: string) => void, fns?: Map<string, number>, scope = ""): React.ReactNode[] {
   const out: React.ReactNode[] = [];
-  const re = /(\[\[[^\]|]+(?:\|[^\]]*)?\]\]|\[[^\]]+\]\([^)]*\)|\*\*[^*]+\*\*|\*[^*\n]+\*|==[^=]+==|~~[^~]+~~|`[^`]+`|(?<![\p{L}\p{N}])#[\p{L}_][\p{L}\p{N}_/-]*)/gu;
+  const re = /(\[\^[^\]]+\]|\[\[[^\]|]+(?:\|[^\]]*)?\]\]|\[[^\]]+\]\([^)]*\)|\*\*[^*]+\*\*|\*[^*\n]+\*|==[^=]+==|~~[^~]+~~|`[^`]+`|(?<![\p{L}\p{N}])#[\p{L}_][\p{L}\p{N}_/-]*)/gu;
   let last = 0, k = 0;
   for (const m of text.matchAll(re)) {
     if (m.index! > last) out.push(text.slice(last, m.index));
     const t = m[0];
-    if (t.startsWith("[[")) {
+    if (t.startsWith("[^")) {
+      const id = t.slice(2, -1);
+      const n = fns?.get(id);
+      if (n === undefined) {
+        out.push(t);
+      } else {
+        out.push(
+          <sup key={k++} id={`${scope}vfn-ref-${id}`}>
+            <a
+              onClick={() => document.getElementById(`${scope}vfn-def-${id}`)?.scrollIntoView({ block: "center" })}
+              title="footnote"
+              style={{ color: "var(--cv-accent)", cursor: "pointer", textDecoration: "none" }}
+            >
+              {n}
+            </a>
+          </sup>,
+        );
+      }
+    } else if (t.startsWith("[[")) {
       const inner = t.slice(2, -2);
       const name = inner.split("|")[0].trim();
       const shown = inner.includes("|") ? inner.split("|")[1] : name;
@@ -167,6 +185,9 @@ function mdInline(text: string, onLink?: (name: string) => void, onTag?: (tag: s
   if (last < text.length) out.push(text.slice(last));
   return out;
 }
+
+/** Per-instance footnote id scope — embeds render their own defs. */
+ReadingView.scopeN = 0;
 
 /** Reading view styled on real Obsidian: amber headings, amber link underlines,
  * bullet/numbered lists, tasks, blockquotes, fenced code. */
@@ -235,6 +256,42 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
       }
     }
   }
+  // Footnotes: [^id] refs get a superscript number (ordered by first
+  // reference, like Obsidian) that jumps to the [^id]: def section below.
+  const fnDefs = new Map<string, string>();
+  {
+    let code = false;
+    for (const l of lines) {
+      if (/^\s*```/.test(l)) { code = !code; continue; }
+      if (code) continue;
+      const m = l.match(/^\[\^([^\]]+)\]:\s*(.*)$/);
+      if (m) fnDefs.set(m[1], m[2]);
+    }
+  }
+  const fnOrder: string[] = [];
+  const fnReferenced = new Set<string>();
+  if (fnDefs.size) {
+    // Number by first visible reference: body lines in reading order first,
+    // then refs inside def bodies (a footnote citing another gets a backref
+    // but shouldn't jump ahead of body citations in numbering).
+    for (const defBody of [false, true]) {
+      // Reset per pass: an unclosed fence must not bleed into the next scan.
+      let code = false;
+      for (const l of lines) {
+        if (/^\s*```/.test(l)) { code = !code; continue; }
+        if (code) continue;
+        const isDef = /^\[\^[^\]]+\]:/.test(l);
+        if (isDef !== defBody) continue;
+        const body = l.replace(/^\[\^[^\]]+\]:\s*/, "");
+        for (const m of body.matchAll(/\[\^([^\]]+)\]/g)) {
+          if (fnDefs.has(m[1]) && !fnOrder.includes(m[1])) { fnOrder.push(m[1]); fnReferenced.add(m[1]); }
+        }
+      }
+    }
+    for (const id of fnDefs.keys()) if (!fnOrder.includes(id)) fnOrder.push(id);
+  }
+  const fns = new Map(fnOrder.map((id, i) => [id, i + 1]));
+  const fnScope = useRef(`fn${++ReadingView.scopeN}-`).current;
   const els: React.ReactNode[] = [];
   if (props.length) {
     els.push(
@@ -278,13 +335,14 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
       continue;
     }
     if (inCode) { codeBuf.push(l); continue; }
+    if (/^\[\^[^\]]+\]:/.test(l)) continue;
     // Obsidian transclusion: ![[Note]] embeds the note's content inline.
     // Rendered one level deep — a nested embed falls back to a plain link
     // so cycles can never recurse.
     const emb = l.match(/^\s*!\[\[([^\]|#]+?)(?:#([^\]|]*))?(?:\|[^\]]*)?\]\]\s*$/);
     if (emb && embedLookup) {
       if (depth >= 1) {
-        els.push(<div key={i} style={{ margin: "4px 0" }}>{mdInline(`[[${emb[1].trim()}]]`, onLink, onTag)}</div>);
+        els.push(<div key={i} style={{ margin: "4px 0" }}>{mdInline(`[[${emb[1].trim()}]]`, onLink, onTag, fns, fnScope)}</div>);
       } else {
         els.push(
           <NoteEmbed key={i} name={emb[1].trim()} section={emb[2]?.trim()} lookup={embedLookup} fetchPath={embedFetch} onLink={onLink} onTag={onTag} assetSrc={embedAsset} assetFetch={embedAssetFetch} />,
@@ -309,7 +367,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
           >
             {isFolded ? "▸" : "▾"}
           </span>
-          {mdInline(h[2], onLink, onTag)}
+          {mdInline(h[2], onLink, onTag, fns, fnScope)}
         </div>,
       );
       continue;
@@ -325,7 +383,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
           >
             {task[2] === " " ? "☐" : "☑"}
           </span>
-          <span style={{ opacity: task[2] === " " ? 1 : 0.55, textDecoration: task[2] === " " ? "none" : "line-through" }}>{mdInline(task[3], onLink, onTag)}</span>
+          <span style={{ opacity: task[2] === " " ? 1 : 0.55, textDecoration: task[2] === " " ? "none" : "line-through" }}>{mdInline(task[3], onLink, onTag, fns, fnScope)}</span>
         </div>,
       );
       continue;
@@ -335,7 +393,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
       els.push(
         <div key={i} style={{ paddingLeft: 14 + bullet[1].length * 6, margin: "3px 0" }}>
           <span style={{ color: "var(--cv-accent)", marginRight: 7 }}>•</span>
-          {mdInline(bullet[2], onLink, onTag)}
+          {mdInline(bullet[2], onLink, onTag, fns, fnScope)}
         </div>,
       );
       continue;
@@ -345,7 +403,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
       els.push(
         <div key={i} style={{ paddingLeft: 14 + num[1].length * 6, margin: "3px 0" }}>
           <span style={{ color: "var(--cv-accent)", marginRight: 7, fontSize: "0.95em" }}>{num[2]}.</span>
-          {mdInline(num[3], onLink, onTag)}
+          {mdInline(num[3], onLink, onTag, fns, fnScope)}
         </div>,
       );
       continue;
@@ -382,7 +440,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
                     key={j}
                     style={{ padding: cell, textAlign: "left", color: "var(--cv-accent)", borderBottom: "1px solid rgba(255,255,255,0.14)", fontWeight: 700, whiteSpace: "nowrap" }}
                   >
-                    {mdInline(c, onLink, onTag)}
+                    {mdInline(c, onLink, onTag, fns, fnScope)}
                   </th>
                 ))}
               </tr>
@@ -392,7 +450,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
                 <tr key={j} style={{ background: j % 2 ? "rgba(255,255,255,0.02)" : "transparent" }}>
                   {r.map((c, k) => (
                     <td key={k} style={{ padding: cell, borderBottom: "1px solid rgba(255,255,255,0.06)", color: "var(--cv-ink)" }}>
-                      {mdInline(c, onLink, onTag)}
+                      {mdInline(c, onLink, onTag, fns, fnScope)}
                     </td>
                   ))}
                 </tr>
@@ -435,7 +493,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
           >
             <div style={{ color, fontWeight: 700, fontSize: 11.5, marginBottom: quote.length > 1 ? 2 : 0 }}>{title}</div>
             {quote.slice(1).filter((q) => q.trim()).map((q, j) => (
-              <div key={j} style={{ margin: "2px 0" }}>{mdInline(q, onLink, onTag)}</div>
+              <div key={j} style={{ margin: "2px 0" }}>{mdInline(q, onLink, onTag, fns, fnScope)}</div>
             ))}
           </div>,
         );
@@ -443,7 +501,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
         quote.forEach((q, j) => {
           els.push(
             <div key={`${i}-${j}`} style={{ margin: "6px 0", paddingLeft: 12, borderLeft: "2px solid var(--cv-accent)", color: "var(--cv-ink-dim)", fontStyle: "italic" }}>
-              {mdInline(q, onLink, onTag)}
+              {mdInline(q, onLink, onTag, fns, fnScope)}
             </div>,
           );
         });
@@ -455,7 +513,29 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
       continue;
     }
     if (l.trim() === "") { els.push(<div key={i} style={{ height: 7 }} />); continue; }
-    els.push(<div key={i} style={{ margin: "3px 0" }}>{mdInline(l, onLink, onTag)}</div>);
+    els.push(<div key={i} style={{ margin: "3px 0" }}>{mdInline(l, onLink, onTag, fns, fnScope)}</div>);
+  }
+  if (fns.size) {
+    els.push(
+      <div key="fns" style={{ margin: "18px 0 4px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 8 }}>
+        {[...fnDefs.entries()].map(([id, def]) => (
+          <div key={id} id={`${fnScope}vfn-def-${id}`} style={{ margin: "4px 0", fontSize: 11.5, color: "var(--cv-ink-dim)", display: "flex", gap: 7 }}>
+            {fnReferenced.has(id) ? (
+              <a
+                onClick={() => document.getElementById(`${fnScope}vfn-ref-${id}`)?.scrollIntoView({ block: "center" })}
+                title="back to reference"
+                style={{ color: "var(--cv-accent)", cursor: "pointer", textDecoration: "none", fontWeight: 700, flexShrink: 0 }}
+              >
+                {fns.get(id) ?? 0}.
+              </a>
+            ) : (
+              <span style={{ color: "var(--cv-accent)", fontWeight: 700, flexShrink: 0 }}>{fns.get(id) ?? 0}.</span>
+            )}
+            <span>{mdInline(def, onLink, onTag, fns, fnScope)}</span>
+          </div>
+        ))}
+      </div>,
+    );
   }
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "10px 18px", fontSize: 12.5, lineHeight: 1.7, color: "var(--cv-ink)", fontFamily: "inherit" }}>
