@@ -17,6 +17,25 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
     <div
       className="glass"
       data-panel={n.panel}
+      onClickCapture={(e) => {
+        // Panel content sits inside `nodrag`, so React Flow never selects
+        // the card when the click lands in a dead area (empty states,
+        // padding, labels). Force-select unless the target is a real
+        // interactive control.
+        const t = e.target as HTMLElement;
+        if (t.closest('button, a, input, select, textarea, [contenteditable="true"], [role="button"], [role="link"], [role="textbox"], [role="menuitem"], [role="tab"], [role="checkbox"]')) return;
+        rf.setNodes((ns) =>
+          ns.map((x) =>
+            x.id === id
+              ? { ...x, selected: true }
+              : e.shiftKey
+                ? x
+                : x.selected
+                  ? { ...x, selected: false }
+                  : x,
+          ),
+        );
+      }}
       style={{
         width: "100%",
         height: "100%",
