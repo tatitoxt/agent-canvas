@@ -620,10 +620,16 @@ function Board() {
         if (p.dragging) {
           return { ...base, selected: p.selected, dragging: true, position: p.position };
         }
-        // Unchanged base + no drag in flight → the previous object already
-        // carries the right selection flags and position: keep its identity
-        // so React Flow skips re-rendering this card entirely.
-        if (cached?.sig === sig) return p;
+        // Reuse the previous node only while its geometry still matches the
+        // store-derived node. A maximize/restore can update the store before
+        // React Flow has flushed its measured position and size; blindly
+        // reusing that stale object leaves restored cards at viewport size.
+        const geometryMatches =
+          p.position.x === base.position.x &&
+          p.position.y === base.position.y &&
+          p.style?.width === base.style?.width &&
+          p.style?.height === base.style?.height;
+        if (cached?.sig === sig && geometryMatches) return p;
         return { ...base, selected: p.selected, dragging: p.dragging };
       });
       const alive = new Set(baseNodes.map((n) => n.id));

@@ -134,6 +134,26 @@ test("panel chrome minimizes, restores, and closes with accessible controls", as
   await expand.focus();
   await page.keyboard.press("Enter");
   await expect(panel.locator(".nodrag.nowheel")).toBeVisible();
+  const original = await panel.boundingBox();
+  const maximize = panel.getByRole("button", { name: "Maximize panel" });
+  await maximize.focus();
+  await page.keyboard.press("Enter");
+  await expect(panel.getByRole("button", { name: "Restore panel size" })).toBeVisible();
+  await expect.poll(async () => {
+    const rect = await panel.boundingBox();
+    return rect!.width * rect!.height;
+  }).toBeGreaterThan(original!.width * original!.height * 2);
+  const restore = panel.getByRole("button", { name: "Restore panel size" });
+  await restore.focus();
+  await page.keyboard.press("Enter");
+  await expect(panel.getByRole("button", { name: "Maximize panel" })).toBeVisible();
+  await expect.poll(async () => {
+    const rect = await panel.boundingBox();
+    return Math.abs(rect!.width - original!.width) + Math.abs(rect!.height - original!.height);
+  }).toBeLessThan(6);
+  const restored = await panel.boundingBox();
+  expect(Math.abs(restored!.width - original!.width)).toBeLessThan(3);
+  expect(Math.abs(restored!.height - original!.height)).toBeLessThan(3);
   await panel.getByRole("button", { name: "Close panel" }).click();
   await expect(panel).toBeHidden();
 });
