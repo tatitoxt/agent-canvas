@@ -155,7 +155,7 @@ function Board() {
   const wiringFrom = useBoard((s) => s.wiringFrom);
   const toggleWire = useBoard((s) => s.toggleWire);
   const setWiring = useBoard((s) => s.setWiring);
-  const { screenToFlowPosition, fitView, getNodes, getZoom, zoomTo, setNodes } = useReactFlow();
+  const { screenToFlowPosition, fitView, getNodes, getZoom, zoomTo, setNodes, setCenter } = useReactFlow();
 
   // Full-canvas PNG export: render every node fitted into a fixed-size
   // bitmap — the "screenshot button" on the board.
@@ -968,6 +968,10 @@ function Board() {
             }
             return "#33333a";
           }}
+          onClick={(_e, pos) => setCenter(pos.x, pos.y, { zoom: getZoom(), duration: 250 })}
+          onNodeClick={(_e, node) =>
+            setCenter(node.position.x + (node.measured?.width ?? 0) / 2, node.position.y + (node.measured?.height ?? 0) / 2, { zoom: Math.max(getZoom(), 0.9), duration: 250 })
+          }
         />
         <ViewportTracker />
         <AnchorCables nav={nav} />
