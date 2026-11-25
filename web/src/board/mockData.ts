@@ -10,13 +10,13 @@ export const initialNodes: Node<BoardNodeData>[] = [
     id: "ws-1",
     type: "workspace",
     position: { x: 0, y: 0 },
-    style: { width: 1260, height: 640 },
+    style: { width: 1190, height: 700 },
     data: { kind: "workspace", name: "cartfull", repo: "~/repos/cartfull" },
   },
   {
     id: "orch",
     type: "orchestrator",
-    position: { x: 36, y: 240 },
+    position: { x: 30, y: 260 },
     parentId: "ws-1",
     extent: "parent",
     data: { kind: "orchestrator", name: "Atlas", delegations: 3 },
@@ -24,7 +24,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
   {
     id: "a1",
     type: "agent",
-    position: { x: 250, y: 60 },
+    position: { x: 180, y: 60 },
     parentId: "ws-1",
     extent: "parent",
     data: {
@@ -38,7 +38,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
   {
     id: "a2",
     type: "agent",
-    position: { x: 430, y: 260 },
+    position: { x: 390, y: 280 },
     parentId: "ws-1",
     extent: "parent",
     data: {
@@ -52,7 +52,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
   {
     id: "a5",
     type: "agent",
-    position: { x: 770, y: 40 },
+    position: { x: 700, y: 45 },
     parentId: "ws-1",
     extent: "parent",
     data: {
@@ -66,7 +66,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
   {
     id: "a3",
     type: "agent",
-    position: { x: 460, y: 520 },
+    position: { x: 430, y: 500 },
     parentId: "ws-1",
     extent: "parent",
     data: {
@@ -80,16 +80,17 @@ export const initialNodes: Node<BoardNodeData>[] = [
   {
     id: "ws-2",
     type: "workspace",
-    position: { x: 1380, y: 60 },
-    style: { width: 400, height: 300 },
+    position: { x: 1230, y: 60 },
+    style: { width: 430, height: 340 },
     data: { kind: "workspace", name: "notes-app", repo: "~/repos/notes" },
   },
   {
     id: "b1",
     type: "agent",
-    position: { x: 48, y: 80 },
+    position: { x: 20, y: 72 },
     parentId: "ws-2",
     extent: "parent",
+    style: { width: 390 },
     data: {
       kind: "agent",
       name: "solo-5",

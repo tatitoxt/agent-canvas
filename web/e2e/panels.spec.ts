@@ -36,6 +36,14 @@ test("offline demo mounts without a React update loop", async ({ page }) => {
       expect(overlapX > 1 && overlapY > 1, `demo cards ${i + 1} and ${j + 1} should not overlap: ${JSON.stringify({ a: cards[i], b: cards[j] })}`).toBe(false);
     }
   }
+  const soloFrame = await page.locator('.react-flow__node[data-id="ws-2"]').boundingBox();
+  const soloCard = await page.locator('.react-flow__node[data-id="b1"]').boundingBox();
+  expect(soloFrame).not.toBeNull();
+  expect(soloCard).not.toBeNull();
+  expect(soloCard!.x).toBeGreaterThanOrEqual(soloFrame!.x);
+  expect(soloCard!.y).toBeGreaterThanOrEqual(soloFrame!.y);
+  expect(soloCard!.x + soloCard!.width).toBeLessThanOrEqual(soloFrame!.x + soloFrame!.width + 1);
+  expect(soloCard!.y + soloCard!.height).toBeLessThanOrEqual(soloFrame!.y + soloFrame!.height + 1);
 });
 
 test("topbar keeps connection status compact and accessible in demo mode", async ({ page }) => {
