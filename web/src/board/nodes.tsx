@@ -74,11 +74,22 @@ const MODEL_RE =
 
 function MiniTerm({ agentId }: { agentId: string }) {
   const buf = useBoard((s) => s.ptyBuffers[agentId]);
+  const [screenRevision, setScreenRevision] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    // xterm parses PTY bytes asynchronously. Trigger a second render after its
+    // screen model has consumed them so the canvas preview doesn't lag behind
+    // the interactive terminal.
+    screenLines(agentId, buf, () => {
+      if (alive) setScreenRevision((revision) => revision + 1);
+    });
+    return () => { alive = false; };
+  }, [agentId, buf]);
   const lines = useMemo(() => {
     // Real screen model — cursor addressing and TUI repaints resolve to the
     // screen the CLI actually shows (banner, boxes, status bar, input line).
-    return screenLines(agentId, buf).slice(-14);
-  }, [agentId, buf]);
+    return screenLines(agentId, undefined).slice(-14);
+  }, [agentId, screenRevision]);
   if (lines.length === 0) return null;
   return (
     <div

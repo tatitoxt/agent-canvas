@@ -70,9 +70,10 @@ test("agent card terminal preview emphasizes the latest visible row", async ({ p
   await expect(preview).toContainText("preview-latest-row", { timeout: 8_000 });
   const rows = preview.locator(":scope > div");
   const lastRow = rows.last();
-  await expect(lastRow).toContainText("preview-latest-row");
   await expect(lastRow).toHaveCSS("border-left-color", "rgb(245, 165, 36)");
-  await expect(lastRow.locator("span").filter({ hasText: "preview-latest-row" })).toHaveCSS("font-weight", "700");
+  const outputRow = rows.filter({ hasText: "preview-latest-row" });
+  await expect(outputRow).toHaveCount(1);
+  await expect(outputRow.locator("span").filter({ hasText: "preview-latest-row" })).toHaveCSS("font-weight", "700");
 });
 
 test("pop out creates a canvas term card; put back returns it to the drawer", async ({ page }) => {

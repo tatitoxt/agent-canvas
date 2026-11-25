@@ -6,7 +6,7 @@ import { Terminal } from "@xterm/headless/lib-headless/xterm-headless.mjs";
 /** Per-agent headless terminal: a real screen model so card previews show
  * the TUI's actual screen (cursor addressing, repaints, alt-screen) rather
  * than a raw byte tail. Fed from the same ptyBuffers the panels use. */
-const SCREENS = new Map<string, { term: Terminal; fed: number }>();
+const SCREENS = new Map<string, { term: Terminal; fed: number; pendingWrites: number; flushCallbacks: Array<() => void> }>();
 const MAX_SCREENS = 48;
 const COLS = 96;
 const ROWS = 40;
@@ -22,6 +22,8 @@ function screen(agentId: string) {
     s = {
       term: new Terminal({ cols: COLS, rows: ROWS, scrollback: 400, allowProposedApi: true }),
       fed: 0,
+      pendingWrites: 0,
+      flushCallbacks: [],
     };
     SCREENS.set(agentId, s);
   }
@@ -51,11 +53,22 @@ export type CellSpan = { text: string; color?: string; bold?: boolean };
 
 /** Feed the agent's latest bytes and return the visible screen as styled
  * spans — one entry per terminal row, trimmed of empty tail rows. */
-export function screenLines(agentId: string, buf: Uint8Array | undefined): CellSpan[][] {
+export function screenLines(agentId: string, buf: Uint8Array | undefined, onWrite?: () => void): CellSpan[][] {
   const s = screen(agentId);
   if (buf && buf.length > s.fed) {
-    s.term.write(buf.slice(s.fed));
+    if (onWrite) s.flushCallbacks.push(onWrite);
+    s.pendingWrites += 1;
+    s.term.write(buf.slice(s.fed), () => {
+      s.pendingWrites -= 1;
+      if (s.pendingWrites === 0) {
+        const callbacks = s.flushCallbacks.splice(0);
+        callbacks.forEach((callback) => callback());
+      }
+    });
     s.fed = buf.length;
+  } else if (onWrite) {
+    if (s.pendingWrites > 0) s.flushCallbacks.push(onWrite);
+    else onWrite();
   }
   const b = s.term.buffer.active;
   const out: CellSpan[][] = [];
