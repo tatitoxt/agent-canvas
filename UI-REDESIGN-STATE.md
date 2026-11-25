@@ -27,7 +27,8 @@
 - [x] Board settings import now validates the Agent Canvas envelope, version, and every key/value before writing anything; invalid files produce a visible error instead of being silently ignored. Export URL cleanup is deferred until the download click has been processed. E2E covers valid theme restore and invalid input with no partial storage writes.
 - [x] Card summaries preference now persists. E2E verifies the task/mini-terminal summaries disappear from the cards, remain hidden after reload, and Settings displays the saved state.
 - [x] Settings clear control now says “clear exited agents,” matching the daemon’s `forget` semantics and avoiding implication that live `done` sessions are removed. Empty result is covered in E2E.
-- [x] Latest PR head `0d6c798` passed local 40/40 E2E; previous CI run passed web, canvasd, E2E and Tauri Ubuntu. Tauri macOS and Devin Review were still running at last poll.
+- [x] Fixed reconnect usage accounting for PTY scrollback: the snapshot reports the full transcript byte count, while reconnect replays only the latest 64 KiB. The client now excludes only bytes that can actually be replayed, so new output after reconnect is charged immediately. Unit coverage handles short, truncated, missing, and invalid lengths.
+- [x] This PTY accounting change passes 37/37 unit tests, 46/46 E2E, typecheck, production build, and `git diff --check`. The previous head `2172c1f` had web, canvasd, E2E, and Tauri Ubuntu CI green; this change still needs its own CI run.
 - [ ] Next visual pass: inspect resized-card body and overall panel/chrome density in desktop app, then continue remaining Deska/Symvibe feature gaps. Keep PR #47 open and do not merge.
 
 ## Feedback de Fausto (mensaje dictado, prioridad literal) — checklist

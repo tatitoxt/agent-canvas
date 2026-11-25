@@ -3,6 +3,7 @@ import { CanvasClient, type ServerMsg } from "../daemon/client";
 import { isTauri, TauriCanvasClient } from "../daemon/tauriClient";
 import type { AgentStatus } from "../board/types";
 import { PANEL_META } from "../components/panelMeta";
+import { replayedPtyBytes } from "../board/ptyAccounting";
 
 export type LiveAgent = {
   id: string;
@@ -1219,7 +1220,7 @@ export const useBoard = create<BoardState>((set, get) => ({
               // Scrollback replayed on (re)connect isn't new output —
               // meterOutput skips up to each agent's transcript size.
               ptySkip: Object.fromEntries(
-                msg.agents.map((a) => [a.agent_id, a.output_bytes ?? 0]),
+                msg.agents.map((a) => [a.agent_id, replayedPtyBytes(a.output_bytes)]),
               ),
               positions,
               edges,
