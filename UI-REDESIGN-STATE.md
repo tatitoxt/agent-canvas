@@ -89,26 +89,26 @@ Hecho ya:
 - [x] Símbolo pin/note ◈ eliminado del chrome de agent cards
 - [x] Chrome unicode → SVG icons (x/minus/zoom para maximize) en paneles y cards
 
-Pendiente ronda 3:
-- [ ] LIBRARY: el label "Library" está vertical (writingMode) y tiene que ser horizontal; el expand tiene que abrir HORIZONTALMENTE; sigue estando el flyout — eliminar
-- [ ] RESIZE: no se puede resizear NADA — todo tiene que ser resizeable (agent cards no tienen NodeResizer! panels sí pero quizás roto)
-- [ ] GATHER: no anda — solo crea grupos/regions pero no junta las cards. Texto "Gather / No loose windows" aparece mal posicionado cerca del minimap (bottom)
-- [ ] Terminales en card = "imitación" (preview MiniTerm) vs terminal real popped-out — él quiere la terminal REAL usable en la card. Además cards de terminales spawneadas como bash no muestran logo CLI (dice "Terminal" en vez de Codex) — posiblemente esperable en bash puro, verificar con agente codex real
-- [ ] La cruz × y el menos — ya cambiados a SVG, CONFIRMAR con él si le gustan
-- [ ] "el color mal, la versión light, tóquenlo lo máximo" — INCLARO, preguntarle qué quiso decir (¿theme light roto?)
-- [ ] Topbar: fusión en una sola bubble on hover (sigue pendiente de ronda 2)
-- [ ] Fausto manda otra foto de Deska — revisar Desktop al retomar
-- [ ] En su captura se veía panel Juice/Inbox/Automations muy plain — pendiente "cards más facheras estilo Deska"
+Estado reconciliado con las implementaciones y pruebas posteriores:
+- [x] LIBRARY sin etiqueta vertical ni flyout; expansión horizontal y navegación verificadas en E2E.
+- [x] RESIZE en agent cards, paneles, terminales y workspaces; resize de terminal y workspace persiste y conserva la PTY, validado en E2E. Revisar visualmente alturas internas si aparece un nuevo recorte.
+- [x] GATHER acomoda tarjetas en una grilla y Undo restaura posiciones; E2E lo verifica.
+- [x] Terminal real en la drawer y en la card flotante; E2E envía comandos y confirma salida de shell en ambos casos. Pendiente la pasada manual con un CLI de IA real para confirmar detección de marca/modelo.
+- [ ] Chrome SVG implementado; falta la aceptación visual de Fausto sobre los símbolos.
+- [x] Tema Paper implementado y persistido; E2E valida colores y minimapa.
+- [x] Topbar se fusiona en una bubble al hover; E2E valida unión y separación al salir.
+- [x] La captura de referencia ya fue compartida en esta conversación y se conservó para la auditoría visual.
+- [ ] Seguir puliendo densidad y alineación visual de paneles/chrome; próxima pasada pendiente.
 
 ## Ronda 4 (2026-11-24 ~22:45) — library surgery + resize v1
 - [x] Library sin flyout (git menu eliminado, 65 líneas borradas), sin label vertical, expanded persiste en localStorage
 - [x] Resize v1: NodeResizer en agent cards cuando selected, ancho persiste en cv-agentsizes. LIMITACIÓN conocida: el resize visual se aplica al soltar (no live durante drag), y height se guarda pero no se aplica al layout — pendiente hacer la card flex-column con el área de terminal flex-1. La forma correcta final: width/height en el nodo RF nativo (nodes array en App.tsx) para feedback live.
 - [x] Gather verificado en E2E con cuatro paneles de tamaños distintos: grilla sin solapamientos dentro del viewport; Undo restaura todas las posiciones y borra el frame. No se encontró regresión en el branch.
-- [ ] Topbar bubble-fusion on hover — pendiente
+- [x] Topbar bubble-fusion on hover — implementada en ronda 5 y cubierta por E2E.
 - [ ] deska.dev web crawl — las notas 10/12 del vault ya cubren casi todo; fetch pendiente solo si hace falta algo específico
 
 ## Ronda 5 (2026-11-24 ~23:00)
-- [x] Resize v2 LIVE: nodes llevan style width/height en construcción (App.tsx), memo rebuild con agentSizes en deps, onResize stream durante drag. Falta: height layout interno flex (minHeight aplicado).
+- [x] Resize v2 LIVE: nodes llevan style width/height en construcción (App.tsx), memo rebuild con agentSizes en deps y `onResize` actualiza durante drag. La cobertura E2E comprueba resize y persistencia de las superficies principales.
 - [x] Gather fix verificado — era mismatch 360 vs 460 de card size
 - [x] Topbar fusion: cluster derecho se fusiona en una bubble glass on hover (.cv-fuse en index.css)
 - [x] MissionStrip eliminado del centro + botón Mission Map muerto eliminado (data vive en topbar live count + Inbox)
@@ -188,7 +188,7 @@ REMAINING LEVERS if still slow:
 - [x] Ajuste del badge publicado en el PR #47 como `bd21dbd`; mantener el PR abierto y sin merge.
 - [x] Auditoría visual en modo demo encontró un loop de React en `onSelectionChange`: el callback recreaba el array de selección aunque nada hubiera cambiado. Ahora el callback es estable y conserva la referencia previa si ids/posiciones/dimensiones son iguales. La captura ya no muestra errores de update depth: `/tmp/canvas-design/roadmap-audit-fixed.png`.
 - [x] Se añadió una regresión E2E que observa explícitamente errores `Maximum update depth exceeded` en demo offline. Suite actual: 26/26 unit tests, 33/33 E2E, typecheck, build y `git diff --check`.
-- [ ] Repetir visual audit después de los próximos cambios y completar una sesión manual con un CLI de IA real en el PTY.
+- [ ] Hacer la próxima pasada visual de densidad/alineación y, en una sesión manual aparte, probar un CLI de IA real en el PTY. La captura actual ya se auditó tras el cambio de etiquetas.
 - [ ] Siguiente lote: seguir auditando densidad y alineación de paneles/chrome contra la referencia Deska; mantener PR #47 abierto y sin merge.
 - [x] Etiquetas de delegación: el ruteador busca tramos despejados y evita también las tarjetas de origen/destino. Las posiciones de nodos anidados se convierten a coordenadas absolutas antes de comprobar colisiones; la etiqueta usa el punto calculado incluso cuando el cable conserva el Bézier directo. Captura revisada en `/tmp/canvas-design/delegation-parent-offset.png` sin errores de consola.
 - [x] Validación tras corregir las etiquetas: typecheck, 28/28 unit tests, 33/33 E2E, build de producción y `git diff --check` pasan. Las pruebas E2E incluyen shell/PTy y terminal flotante interactiva.
