@@ -62,6 +62,10 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
 
 
 
+  // Unmounting the drawer (close, pop-out, double-click expand) must stop
+  // dictation — otherwise speech keeps landing in the PTY with no stop control.
+  useEffect(() => () => { recRef.current?.stop?.(); }, []);
+
   const toggleDictation = () => {
     if (listening) {
       recRef.current?.stop?.();
