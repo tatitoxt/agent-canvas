@@ -279,6 +279,7 @@ type BoardState = {
   vaultSearch: (query: string) => void;
   vaultAppend: (path: string, text: string) => void;
   vaultWrite: (path: string, text: string) => void;
+  vaultWriteAsset: (path: string, data: string, dir?: string) => void;
   vaultDelete: (path: string) => void;
   vaultRename: (path: string, newPath: string) => void;
   vaultGraphReq: () => void;
@@ -1114,6 +1115,11 @@ export const useBoard = create<BoardState>((set, get) => ({
   vaultAsset: (path) => client?.vaultAsset(get().vaultDir, path),
   vaultAppend: (path, text) => client?.vaultAppend(get().vaultDir, path, text),
   vaultWrite: (path, text) => client?.vaultWrite(get().vaultDir, path, text),
+  vaultWriteAsset: (path, data, dir) => {
+    const d = dir ?? get().vaultDir;
+    if (!d) return; // no vault open — never let the daemon write into its cwd
+    client?.vaultWriteAsset(d, path, data);
+  },
   vaultDelete: (path) => client?.vaultDelete(get().vaultDir, path),
   vaultRename: (path, newPath) => client?.vaultRename(get().vaultDir, path, newPath),
   vaultGraphReq: () => client?.vaultGraph(get().vaultDir),

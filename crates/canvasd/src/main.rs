@@ -525,7 +525,9 @@ async fn ws_handler(
         return (StatusCode::UNAUTHORIZED, "invalid session token").into_response();
     }
     ws.max_message_size(8 * 1024 * 1024)
-        .max_frame_size(2 * 1024 * 1024)
+        // Keep frame == message cap: some browsers (Firefox) send ws payloads
+        // as a single frame, so a smaller frame cap rejects valid uploads.
+        .max_frame_size(8 * 1024 * 1024)
         .on_upgrade(move |socket| handle_socket(socket, state))
 }
 
@@ -1485,6 +1487,84 @@ fn handle_client_msg(
                 match result {
                     Ok(()) => send_control(ServerMsg::VaultFile { path, text }),
                     Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault write failed: {e}") }),
+                }
+            }
+        }
+        ClientMsg::VaultWriteAsset { dir, path, data } => {
+            let root = PathBuf::from(&dir);
+            if dir.is_empty() {
+                send_control(ServerMsg::Error { agent_id: None, message: "vault write-asset refused: no vault dir".to_string() });
+            } else if path.contains("..") || path.is_empty() || path.ends_with('/') {
+                send_control(ServerMsg::Error { agent_id: None, message: format!("vault write-asset refused: {path}") });
+            } else {
+                match base64::engine::general_purpose::STANDARD.decode(&data) {
+                    Ok(bytes) if bytes.len() <= 8 * 1024 * 1024 => {
+                        // Never clobber: foo.png → foo-2.png. symlink_metadata
+                        // (not exists()) so a dangling symlink also counts as
+                        // taken — writing through it would escape the vault.
+                        let result = (|| -> Result<(), String> {
+                            // Never clobber: foo.png → foo-2.png. Open with
+                            // create_new (O_EXCL) per candidate — atomic, so
+                            // concurrent drops can't race a check-then-write
+                            // into an overwrite, and a dangling symlink fails
+                            // EEXIST instead of being written through.
+                            let file = root.join(&path);
+                            if let Some(parent) = file.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+                            let stem = file.file_stem().unwrap_or_default().to_string_lossy().to_string();
+                            let ext = file.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+                            let parent = file.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+                            let mut wrote = false;
+                            for cand in std::iter::once(file.clone()).chain(
+                                (2..100).map(|i| parent.join(format!("{stem}-{i}{ext}")))
+                            ) {
+                                match std::fs::OpenOptions::new().write(true).create_new(true).open(&cand) {
+                                    Ok(f) => {
+                                        // Reserve the name atomically, write the
+                                        // bytes to a sibling tmp file, then rename
+                                        // over the reservation — a failed write
+                                        // never leaves a truncated final file.
+                                        drop(f);
+                                        let tmp = cand.parent().unwrap_or(&root).join(format!(
+                                            ".{}.tmp-{}",
+                                            cand.file_name().unwrap_or_default().to_string_lossy(),
+                                            std::process::id(),
+                                        ));
+                                        // create_new on the tmp too — a vault file that
+                                        // happens to share the tmp name must never be
+                                        // truncated; cleanup only removes files we made.
+                                        let outcome = match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
+                                            Ok(mut f) => {
+                                                let r = std::io::Write::write_all(&mut f, &bytes);
+                                                drop(f);
+                                                r.and_then(|()| std::fs::rename(&tmp, &cand))
+                                                    .inspect_err(|_| { let _ = std::fs::remove_file(&tmp); })
+                                            }
+                                            Err(e) => Err(e), // preexisting tmp — never touch it
+                                        };
+                                        if let Err(e) = outcome {
+                                            let _ = std::fs::remove_file(&cand); // our empty reservation
+                                            return Err(e.to_string());
+                                        }
+                                        wrote = true;
+                                        break;
+                                    }
+                                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                                    Err(e) => return Err(e.to_string()),
+                                }
+                            }
+                            if !wrote { return Err(format!("no free name for {path}")); }
+                            Ok(())
+                        })();
+                        match result {
+                            Ok(()) => {
+                                let mut entries = vault_list_entries(&root);
+                                entries.truncate(2000);
+                                send_control(ServerMsg::VaultListing { dir, entries });
+                            }
+                            Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault write-asset failed: {e}") }),
+                        }
+                    }
+                    _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault write-asset refused: {path}") }),
                 }
             }
         }

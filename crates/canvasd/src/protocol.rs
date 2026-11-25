@@ -84,6 +84,10 @@ pub enum ClientMsg {
     /// the app. Same constraints as vault_append (root-scoped, .md only,
     /// creates parent dirs).
     VaultWrite { dir: String, path: String, text: String },
+    /// Write a binary file into the vault (base64 body) — OS drag & drop
+    /// of attachments (images, pdfs, anything). Root-scoped, no `..`,
+    /// 8 MiB decoded cap, name deduped with `-N` on collision.
+    VaultWriteAsset { dir: String, path: String, data: String },
     /// Delete a markdown file from the vault (root-scoped, .md only).
     VaultDelete { dir: String, path: String },
     /// Rename/move a markdown file inside the vault (root-scoped, .md only).

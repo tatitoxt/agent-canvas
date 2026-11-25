@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
+import { isTauri } from "../daemon/tauriClient";
 import { downloadPdf } from "../lib/pdf";
 import { buildDoc, buildAskDoc } from "../lib/boardDocs";
 import { Icon } from "./icons";
@@ -1166,6 +1167,7 @@ export function VaultPanel() {
   const [newName, setNewName] = useState("");
   const [armedDel, setArmedDel] = useState<string | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ path: string; x: number; y: number } | null>(null);
+  const [dropOn, setDropOn] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renName, setRenName] = useState("");
   const [graphScope, setGraphScope] = useState<"local" | "vault">("local");
@@ -1417,7 +1419,44 @@ export function VaultPanel() {
           style={{ margin: "0 4px 8px", background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 12px", fontSize: 11, color: "var(--cv-ink)", outline: "none" }}
         />
       )}
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      <div
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes("Files")) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+            setDropOn(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOn(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDropOn(false);
+          const files = Array.from(e.dataTransfer.files ?? []);
+          if (!files.length) return;
+          const vaultWriteAsset = useBoard.getState().vaultWriteAsset;
+          // Capture the destination now — reading it inside the FileReader
+          // callback would follow a vault switch mid-read.
+          const dropDir = useBoard.getState().vaultDir;
+          for (const f of files) {
+            // ws mode caps a message at 8 MiB → 5 MiB file ≈ 6.7 MiB base64.
+            // The desktop shell has no socket: it takes the full 8 MiB.
+            const cap = isTauri() ? 8 : 5;
+            if (f.size > cap * 1024 * 1024) {
+              notify(`skipped ${f.name} — over the ${cap} MB vault limit`);
+              continue;
+            }
+            const rd = new FileReader();
+            rd.onload = () => {
+              const b64 = String(rd.result ?? "").split(",")[1] ?? "";
+              if (b64) vaultWriteAsset(f.name, b64, dropDir);
+            };
+            rd.readAsDataURL(f);
+          }
+        }}
+        style={{ flex: 1, overflowY: "auto", outline: dropOn ? "1.5px dashed var(--cv-accent)" : "none", outlineOffset: -4, borderRadius: 8 }}
+      >
         {bookmarks.size > 0 && !filter && (
           <>
             <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "2px 10px 4px" }}>
