@@ -207,11 +207,6 @@ export function UsagePanel() {
                 {a.status}
                 {a.permission ? ` · ${a.permission}` : ""}
                 {a.account_label ? ` · ${a.account_label}` : ""}
-                {(() => {
-                  const cli = (a.command ?? "").split(/\s+/)[0].toLowerCase();
-                  const id = cliIdentities[cli];
-                  return id?.model ? ` · ${id.model}` : "";
-                })()}
               </div>
             </span>
             <span style={{ textAlign: "right", fontSize: 10, color: "var(--cv-ink)" }}>
@@ -231,7 +226,7 @@ export function UsagePanel() {
             {Object.entries(cliIdentities).map(([cli, id]) => (
               <div key={cli} style={{ fontSize: 10, color: "var(--cv-ink-dim)", paddingBottom: 4 }} title={id.source ? `detected from ${id.source}` : undefined}>
                 <span style={{ color: "var(--cv-ink)", fontWeight: 600 }}>{cli}</span>
-                {" — "}{id.account ?? "account unknown"}{" · "}{id.model ?? "model unknown"}{" · quota unknown"}
+                {" — "}{id.account ?? "account unknown"}{" · default model: "}{id.model ?? "unknown"}{" · quota unknown"}
               </div>
             ))}
           </div>
