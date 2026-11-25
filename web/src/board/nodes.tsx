@@ -1171,8 +1171,8 @@ export function WebNode({
             style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", padding: 3, borderRadius: 6, display: "flex" }}
             title="open in browser"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M7 17 17 7" /><path d="M7 7h10v10" />
+            <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor">
+              <path d="M216,48V96a8,8,0,0,1-16,0V67.31l-50.34,50.35a8,8,0,0,1-11.32-11.32L188.69,56H160a8,8,0,0,1,0-16h48A8,8,0,0,1,216,48ZM106.34,138.34,56,188.69V160a8,8,0,0,0-16,0v48a8,8,0,0,0,8,8H96a8,8,0,0,0,0-16H67.31l50.35-50.34a8,8,0,0,0-11.32-11.32Z" />
             </svg>
           </button>
           <button
@@ -1180,8 +1180,8 @@ export function WebNode({
             style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", padding: 3, borderRadius: 6, display: "flex" }}
             title="close"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 6 6 18" /><path d="M6 6l12 12" />
+            <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor">
+              <path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z" />
             </svg>
           </button>
         </span>
