@@ -80,10 +80,21 @@ fn persist_allowed_root(state: &AppState, canon_root: &std::path::Path) {
         if roots.iter().any(|ar| canon_root.starts_with(ar)) { return; }
         roots.push(canon_root.to_path_buf());
     }
-    let list = allowed_roots_list_path(&state.repo_root);
+    // Persistence requires the operator's HOME — the fallback path lives
+    // inside the checkout, and a repo-controlled symlink there would
+    // redirect the write into an unrelated user file. No HOME → the
+    // grant stays in-memory for this boot only.
+    let home = match std::env::var("HOME") {
+        Ok(h) if !h.is_empty() => h,
+        _ => return,
+    };
+    // A newline in the path would smuggle extra grant lines into the
+    // config on the next boot — pathological, but cheap to refuse.
+    let line = canon_root.to_string_lossy().to_string();
+    if line.contains('\n') || line.contains('\r') { return; }
+    let list = PathBuf::from(home).join(".config").join("canvas").join("allowed-roots");
     if let Some(parent) = list.parent() { let _ = std::fs::create_dir_all(parent); }
     let prev = std::fs::read_to_string(&list).unwrap_or_default();
-    let line = canon_root.to_string_lossy().to_string();
     let already = prev.lines().any(|l| l.trim() == line);
     if !already {
         let mut text = prev;
