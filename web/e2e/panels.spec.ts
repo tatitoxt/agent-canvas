@@ -98,7 +98,17 @@ test("bottom Files opens Obsidian and Code Editor opens the repo explorer", asyn
 
 test("double-click empty canvas opens the spawn chooser (spawn-at-click)", async ({ page }) => {
   await boot(page);
-  await page.locator(".react-flow__pane").first().dblclick({ position: { x: 400, y: 300 } });
+  const pane = page.locator(".react-flow__pane").first();
+  const bounds = await pane.boundingBox();
+  const nodeBoxes = await Promise.all((await page.locator(".react-flow__node").all()).map((n) => n.boundingBox()));
+  const candidates = [
+    [0.78, 0.78], [0.78, 0.58], [0.62, 0.78], [0.38, 0.78], [0.78, 0.35],
+    [0.58, 0.58], [0.38, 0.58], [0.62, 0.35], [0.38, 0.35], [0.5, 0.78],
+  ];
+  const point = candidates.map(([rx, ry]) => ({ x: bounds!.x + bounds!.width * rx, y: bounds!.y + bounds!.height * ry }))
+    .find((p) => !nodeBoxes.some((b) => b && p.x >= b.x && p.x <= b.x + b.width && p.y >= b.y && p.y <= b.y + b.height));
+  expect(point, "find an unobstructed point on the canvas").toBeTruthy();
+  await page.mouse.dblclick(point!.x, point!.y);
   await expect(page.locator("text=Spawn an agent")).toBeVisible({ timeout: 8_000 });
 });
 

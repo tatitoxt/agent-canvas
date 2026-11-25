@@ -23,13 +23,13 @@ test("workspace resize survives canvas rerenders and reloads", async ({ page }) 
   await page.getByPlaceholder("repo path (~/repos/my-app)").fill(workspaceRepo);
   await page.getByPlaceholder("repo path (~/repos/my-app)").press("Enter");
 
-  const workspace = page.locator(".react-flow__node-workspace").first();
+  const workspace = page.locator(".react-flow__node-workspace").filter({ hasText: "Resizable workspace" }).first();
   await expect(workspace).toBeVisible({ timeout: 8_000 });
   const before = await workspace.boundingBox();
-  // Workspace frames render behind their child nodes. Click the exposed
-  // bottom-right frame corner instead of a fixed point inside its contents.
-  await page.mouse.click(before!.x + before!.width - 2, before!.y + before!.height - 2);
-  const handle = page.locator(".react-flow__node-workspace .react-flow__resize-control.handle").last();
+  // Select a clear patch of the workspace background, away from child cards
+  // and the resize grip, then drag the bottom-right grip specifically.
+  await page.mouse.click(before!.x + before!.width - 90, before!.y + before!.height - 90);
+  const handle = workspace.locator(".react-flow__resize-control.handle.bottom.right");
   await expect(handle).toBeVisible();
   const grip = await handle.boundingBox();
   await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
@@ -46,6 +46,6 @@ test("workspace resize survives canvas rerenders and reloads", async ({ page }) 
   await expect(page.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
   await expect.poll(async () => page.evaluate(() => localStorage.getItem("cv-workspacesizes")))
     .toBe(JSON.stringify(savedSize));
-  const resizedNode = page.locator(".react-flow__node-workspace").first();
+  const resizedNode = page.locator(".react-flow__node-workspace").filter({ hasText: "Resizable workspace" }).first();
   await expect(resizedNode).toHaveAttribute("style", /width:\s*\d{4}px/);
 });

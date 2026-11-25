@@ -18,8 +18,7 @@ async function spawnTerm(page: import("@playwright/test").Page) {
 }
 
 async function openDrawer(page: import("@playwright/test").Page) {
-  const node = page.locator(".react-flow__node").first();
-  const openTerminal = node.locator("[title='Open terminal']");
+  const openTerminal = page.locator(".react-flow__node").filter({ has: page.locator("[title='Open terminal']") }).first().locator("[title='Open terminal']");
   await expect(openTerminal).toBeVisible({ timeout: 5_000 });
   await openTerminal.click();
   await page.waitForTimeout(900);
@@ -46,17 +45,15 @@ test("shift+click multi-select selects two nodes", async ({ page }) => {
   await spawnTerm(page);
   await spawnTerm(page);
   await page.waitForTimeout(1500);
-  const nodes = page.locator(".react-flow__node");
+  const nodes = page.locator(".react-flow__node").filter({ has: page.locator("[title='Open terminal']") });
   expect(await nodes.count()).toBeGreaterThanOrEqual(2);
-  const b0 = await nodes.nth(0).boundingBox();
-  const b1 = await nodes.nth(1).boundingBox();
   // Slow CI runners: nodes settle late and selection state lags the click.
   // Re-measure right before clicking and let the assertion retry.
   await page.keyboard.down("Shift");
   const c0 = await nodes.nth(0).boundingBox();
-  await page.mouse.click(c0!.x + 20, c0!.y + 12);
+  await page.mouse.click(c0!.x + Math.min(72, c0!.width - 20), c0!.y + 20);
   const c1 = await nodes.nth(1).boundingBox();
-  await page.mouse.click(c1!.x + 20, c1!.y + 12);
+  await page.mouse.click(c1!.x + Math.min(72, c1!.width - 20), c1!.y + 20);
   await page.keyboard.up("Shift");
   await expect(page.locator(".react-flow__node.selected")).toHaveCount(2, { timeout: 6_000 });
 });
