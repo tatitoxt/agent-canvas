@@ -12,6 +12,20 @@ async function boot(page: import("@playwright/test").Page) {
   return { port, token, vault };
 }
 
+test("offline demo does not loop while React Flow reports selection", async ({ page }) => {
+  const updateDepthErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("Maximum update depth exceeded")) {
+      updateDepthErrors.push(message.text());
+    }
+  });
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(1200);
+  expect(updateDepthErrors, "selection updates must settle without a React render loop").toEqual([]);
+});
+
 test("app boots connected against a live daemon", async ({ page }) => {
   await boot(page);
   // Connected boards render the rail chrome and the bottom dock.

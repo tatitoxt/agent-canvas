@@ -327,6 +327,25 @@ function Board() {
   const [sel, setSel] = useState<Array<{ id: string; x: number; y: number; w: number; h: number }>>([]);
   const selRef = useRef(sel);
   selRef.current = sel;
+  // React Flow can publish selection after internal node updates. Preserve the
+  // selection array when its values did not change, or each callback rerenders
+  // Board and re-triggers React Flow's selection effect indefinitely.
+  const onSelectionChange = useCallback(({ nodes }: { nodes: Node<BoardNodeData>[] }) => {
+    const next = nodes.map((n) => ({
+      id: n.id,
+      x: n.position.x,
+      y: n.position.y,
+      w: n.measured?.width ?? 460,
+      h: n.measured?.height ?? 220,
+    }));
+    setSel((previous) =>
+      previous.length === next.length && previous.every((item, i) => {
+        const candidate = next[i];
+        return item.id === candidate.id && item.x === candidate.x && item.y === candidate.y &&
+          item.w === candidate.w && item.h === candidate.h;
+      }) ? previous : next,
+    );
+  }, []);
   /** Deska "drop to place" ghost — dashed rect at the drop position
    * while a card is being dragged. */
   const [dragGhost, setDragGhost] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -1116,17 +1135,7 @@ function Board() {
             else if (n.type === "panel") st.closePanelNode(n.id);
           }
         }}
-        onSelectionChange={({ nodes }) =>
-          setSel(
-            nodes.map((n) => ({
-              id: n.id,
-              x: n.position.x,
-              y: n.position.y,
-              w: n.measured?.width ?? 460,
-              h: n.measured?.height ?? 220,
-            })),
-          )
-        }
+        onSelectionChange={onSelectionChange}
         proOptions={{ hideAttribution: true }}
       >
         {/* resize grip at the minimap's top-left corner — drag to resize */}

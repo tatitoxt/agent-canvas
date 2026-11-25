@@ -185,5 +185,8 @@ REMAINING LEVERS if still slow:
 - [x] Validación tras alinear Panels: 26/26 unit tests, typecheck, build, 32/32 E2E y `git diff --check`.
 - [x] Badge de Inbox/notificaciones: aprobaciones ahora se cuentan solo para agentes del board activo, igual que waiting y blocked; cambiar de Space no arrastra approvals de otros boards. Validación: typecheck, 26/26 unit tests y 32/32 E2E.
 - [x] Build de producción y `git diff --check` pasan tras el ajuste del badge.
-- [ ] Publicar este ajuste al PR #47; mantener el PR abierto y sin merge.
+- [x] Ajuste del badge publicado en el PR #47 como `bd21dbd`; mantener el PR abierto y sin merge.
+- [x] Auditoría visual en modo demo encontró un loop de React en `onSelectionChange`: el callback recreaba el array de selección aunque nada hubiera cambiado. Ahora el callback es estable y conserva la referencia previa si ids/posiciones/dimensiones son iguales. La captura ya no muestra errores de update depth: `/tmp/canvas-design/roadmap-audit-fixed.png`.
+- [x] Se añadió una regresión E2E que observa explícitamente errores `Maximum update depth exceeded` en demo offline. Suite actual: 26/26 unit tests, 33/33 E2E, typecheck, build y `git diff --check`.
+- [ ] Repetir visual audit después de los próximos cambios y completar una sesión manual con un CLI de IA real en el PTY.
 - [ ] Siguiente lote: seguir auditando densidad y alineación de paneles/chrome contra la referencia Deska; mantener PR #47 abierto y sin merge.
