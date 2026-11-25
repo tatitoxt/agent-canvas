@@ -180,8 +180,10 @@ pub enum ClientMsg {
         initial_input: Option<String>,
     },
     /// Register a named account for a CLI (e.g. a second Codex sign-in).
-    /// The account gets its own config dir under .canvas/accounts/.
-    CreateAccount { cli: String, label: String },
+    /// The account gets its own config dir under .canvas/accounts/; `env`
+    /// optionally overrides which env var points at it (for CLIs without
+    /// a built-in config-dir key).
+    CreateAccount { cli: String, label: String, env: Option<String> },
     /// Remove a named account — agents that used it fall back to default.
     DeleteAccount { account_id: String },
     /// Define an automation: a saved task that runs an agent with a prompt
@@ -332,7 +334,7 @@ pub enum ServerMsg {
         repo_url: Option<String>,
     },
     /// A named account was registered.
-    AccountCreated { account_id: String, cli: String, label: String },
+    AccountCreated { account_id: String, cli: String, label: String, env: Option<String> },
     /// A named account was removed.
     AccountDeleted { account_id: String },
     /// Memory file contents (MemoryRead answer).
@@ -456,6 +458,7 @@ pub struct SnapshotAccount {
     pub account_id: String,
     pub cli: String,
     pub label: String,
+    pub env: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

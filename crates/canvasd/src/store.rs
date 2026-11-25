@@ -10,6 +10,10 @@ use std::sync::Mutex;
 /// workspace_id, permission).
 /// (id, name, command, worktree, status, workspace_id, permission, board_id)
 pub type AgentRow = (String, String, String, String, String, Option<String>, String, Option<String>, Option<String>);
+/// Row of the accounts table: (id|cli, cli|label, label|config_dir, env) —
+/// the snapshot form carries (id, cli, label, env), the spawn form
+/// (cli, label, config_dir, env).
+pub type AccountRow = (String, String, String, Option<String>);
 /// Row of the delegations table: (id, from, to, task, result, state,
 /// files_changed, created_at, resolved_at).
 pub type DelegationRow = (
@@ -254,6 +258,20 @@ impl Store {
                  );
                  PRAGMA user_version = 11;",
             )?;
+        }
+        // v11 → v12: accounts may name their own auth env var — a CLI
+        // without a built-in config-dir key can still isolate sign-ins.
+        // Column-checked: a crash between ALTER and version bump must not
+        // brick the next open with a duplicate-column error.
+        if version < 12 {
+            let has_env = conn
+                .prepare("PRAGMA table_info(accounts)")?
+                .query_map([], |r| r.get::<_, String>(1))?
+                .any(|c| matches!(c, Ok(n) if n == "env"));
+            if !has_env {
+                conn.execute_batch("ALTER TABLE accounts ADD COLUMN env TEXT")?;
+            }
+            conn.execute_batch("PRAGMA user_version = 12;")?;
         }
         Ok(Self { conn: Mutex::new(conn) })
     }
@@ -539,10 +557,10 @@ impl Store {
         Ok(n > 0)
     }
 
-    pub fn account_created(&self, id: &str, cli: &str, label: &str, config_dir: &str) -> Result<()> {
+    pub fn account_created(&self, id: &str, cli: &str, label: &str, config_dir: &str, env: Option<&str>) -> Result<()> {
         self.conn.lock().unwrap().execute(
-            "INSERT INTO accounts (id, cli, label, config_dir) VALUES (?1, ?2, ?3, ?4)",
-            (id, cli, label, config_dir),
+            "INSERT INTO accounts (id, cli, label, config_dir, env) VALUES (?1, ?2, ?3, ?4, ?5)",
+            (id, cli, label, config_dir, env),
         )?;
         Ok(())
     }
@@ -651,21 +669,21 @@ impl Store {
         Ok(pos)
     }
 
-    pub fn accounts_snapshot(&self) -> Result<Vec<(String, String, String)>> {
+    pub fn accounts_snapshot(&self) -> Result<Vec<AccountRow>> {
         let conn = self.conn.lock().unwrap();
-        let mut st = conn.prepare("SELECT id, cli, label FROM accounts ORDER BY created_at")?;
+        let mut st = conn.prepare("SELECT id, cli, label, env FROM accounts ORDER BY created_at")?;
         let rows = st
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
     }
 
-    /// (cli, label, config_dir) for a spawn that uses this account.
-    pub fn account_record(&self, id: &str) -> Result<Option<(String, String, String)>> {
+    /// (cli, label, config_dir, env override) for a spawn that uses this account.
+    pub fn account_record(&self, id: &str) -> Result<Option<AccountRow>> {
         let conn = self.conn.lock().unwrap();
-        let mut st = conn.prepare("SELECT cli, label, config_dir FROM accounts WHERE id = ?1")?;
+        let mut st = conn.prepare("SELECT cli, label, config_dir, env FROM accounts WHERE id = ?1")?;
         Ok(st
-            .query_row((id,), |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .query_row((id,), |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
             .optional()?)
     }
 

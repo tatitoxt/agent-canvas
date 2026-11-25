@@ -137,6 +137,105 @@ function watchReply(
   setTimeout(() => poll(4), 1500);
 }
 
+/* --- per-account usage metering -----------------------------------------
+ * Local-first ledger: live PTY bytes attributed to the agent's account
+ * bucket ("cli|label", "default" when unsigned), kept in localStorage
+ * with a bucket per ISO week. Session bytes are in-memory only. */
+
+/** Usage bucket key for an agent. Named accounts are namespaced so a
+ * label literally called "default" can't merge with the unsigned
+ * machine sign-in. */
+export function acctKey(cli: string | undefined, label: string | null | undefined): string {
+  return `${cli || "?"}|${label ? `acct:${label}` : "default"}`;
+}
+
+/** Display form of a usage key: "claude — @pro", "codex — default". */
+export function acctLabel(key: string): string {
+  const [cli, label] = key.split("|");
+  return `${cli} — ${label.startsWith("acct:") ? `@${label.slice(5)}` : "default sign-in"}`;
+}
+
+/** Usage key for a live agent: bound agents roll up under their account's
+ * `<cli>|acct:<label>` bucket (so account caps apply); unsigned agents
+ * bucket by the CLI binary their command invokes — first token, basename. */
+export function agentAcctKey(
+  a: { command?: string; account_label?: string | null },
+  accounts: { cli: string; label: string }[],
+): string {
+  const bin = cliBin(a.command);
+  if (a.account_label) {
+    // The label alone is ambiguous across CLIs ("pro" on claude and codex)
+    // — prefer the account whose cli is the binary this command runs.
+    const acct =
+      accounts.find((x) => x.label === a.account_label && x.cli === bin) ??
+      accounts.find((x) => x.label === a.account_label);
+    if (acct) return acctKey(acct.cli, a.account_label);
+  }
+  return acctKey(bin, a.account_label);
+}
+
+/** First token of a command line as a basename, honoring a leading quote —
+ * `"/opt/my tools/claude" --flag` → `claude`, `claude --flag` → `claude`. */
+function cliBin(command?: string): string {
+  const c = (command ?? "").trim();
+  const m = c.match(/^["']([^"']+)["']/) ?? c.match(/^\S+/);
+  return (m?.[1] ?? m?.[0] ?? "?").split("/").pop() || "?";
+}
+
+/** Monday (YYYY-MM-DD, local time) of the ISO week containing `d`. */
+function isoWeek(d = new Date()): string {
+  const x = new Date(d);
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())}`;
+}
+
+/** Weekly-cap thresholds (%) that fire a one-time toast per key per week. */
+export const WEEK_MILESTONES = [15, 30, 50, 75];
+/** Cap used when the user hasn't set one: 256 MB of weekly output. */
+export const DEFAULT_WEEK_CAP_KB = 256 * 1024;
+
+export type AcctLedger = {
+  week: string;
+  bytes: Record<string, number>;
+  /** key → bitmask of milestones already toasted this week. */
+  fired: Record<string, number>;
+  /** key → weekly cap in KB (unset → DEFAULT_WEEK_CAP_KB). */
+  caps: Record<string, number>;
+};
+
+const ACCT_LEDGER_KEY = "cv-acct-usage-v1";
+
+function loadLedger(): AcctLedger {
+  const blank: AcctLedger = { week: isoWeek(), bytes: {}, fired: {}, caps: {} };
+  try {
+    const raw = localStorage.getItem(ACCT_LEDGER_KEY);
+    if (!raw) return blank;
+    const l = { ...blank, ...(JSON.parse(raw) as AcctLedger) };
+    l.caps ??= {};
+    if (l.week !== isoWeek()) {
+      l.week = isoWeek();
+      l.bytes = {};
+      l.fired = {};
+    }
+    return l;
+  } catch {
+    return blank;
+  }
+}
+
+let ledgerFlushAt = 0;
+function saveLedger(l: AcctLedger, force = false) {
+  const now = Date.now();
+  if (!force && now - ledgerFlushAt < 1500) return;
+  ledgerFlushAt = now;
+  try {
+    localStorage.setItem(ACCT_LEDGER_KEY, JSON.stringify(l));
+  } catch {
+    /* storage full or private mode — metering stays in-memory */
+  }
+}
+
 /** Resolve "terminal N" (card index) or a name/command substring to an
  * agent on a given board. Returns the agent plus its display label. */
 function resolveAgent(
@@ -155,6 +254,11 @@ function resolveAgent(
   );
   return a ? { agent: a, label: a.name } : undefined;
 }
+
+/** spawn name → account the user picked — `Spawned` carries no account
+ * fields, so the agent card + usage bucket get the label optimistically
+ * until the next snapshot makes it authoritative. */
+const pendingAccts = new Map<string, string>();
 
 type ThreadLine = { role: "you" | "thread"; text: string; agentId?: string };
 const THREAD_KEY = "cv-thread-log";
@@ -258,6 +362,18 @@ type BoardState = {
   repoUrl: string | null;
   /** Registered named CLI accounts (id → account). */
   accounts: Record<string, { account_id: string; cli: string; label: string }>;
+  /** PTY bytes produced per usage key since this client connected — the
+   * UsagePanel's "session" column. */
+  sessionUse: Record<string, number>;
+  /** agentId → transcript bytes still to skip metering after (re)connect. */
+  ptySkip: Record<string, number>;
+  /** Weekly usage ledger persisted in localStorage (see AcctLedger). */
+  acctLedger: AcctLedger;
+  /** Meter PTY output into the session + weekly buckets for the
+   * agent's account; fires a toast at each weekly-cap threshold. */
+  meterOutput: (agentId: string, n: number) => void;
+  /** Set a usage key's weekly cap in KB (null resets to the default). */
+  setAcctCap: (key: string, kb: number | null) => void;
   /** node_id ("main" or a workspace id) → memory.md text. */
   memories: Record<string, string>;
   /** Last "lose nothing" digest markdown, when requested. */
@@ -324,7 +440,7 @@ type BoardState = {
   diffTexts: Record<string, string>;
   requestDiff: (agentId: string) => void;
   spawn: (name: string, command: string, workspaceId?: string, permission?: string, accountId?: string, initialInput?: string) => void;
-  createAccount: (cli: string, label: string) => void;
+  createAccount: (cli: string, label: string, env?: string) => void;
   deleteAccount: (accountId: string) => void;
   memoryRead: (nodeId: string) => void;
   memoryWrite: (nodeId: string, text: string) => void;
@@ -580,6 +696,9 @@ export const useBoard = create<BoardState>((set, get) => ({
   ptyListeners: {},
   ptyBuffers: {},
   ptySize: {},
+  sessionUse: {},
+  ptySkip: {},
+  acctLedger: loadLedger(),
 
   connect: (token: string) => {
     const t = token || TOKEN;
@@ -604,6 +723,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                   workspace_id: msg.workspace_id ?? null,
                   board_id: msg.board_id ?? "main",
                   seenAt: Date.now(),
+                  account_label: pendingAccts.get(msg.name) ?? null,
                 },
               },
             });
@@ -965,6 +1085,11 @@ export const useBoard = create<BoardState>((set, get) => ({
             if (tnTouched) localStorage.setItem("cv-termnodes", JSON.stringify(termNodes));
             set({
               agents,
+              // Scrollback replayed on (re)connect isn't new output —
+              // meterOutput skips up to each agent's transcript size.
+              ptySkip: Object.fromEntries(
+                msg.agents.map((a) => [a.agent_id, a.output_bytes ?? 0]),
+              ),
               positions,
               edges,
               workspaces,
@@ -1050,7 +1175,7 @@ export const useBoard = create<BoardState>((set, get) => ({
           }
           case "account_created": {
             set((s) => ({
-              accounts: { ...s.accounts, [msg.account_id]: { account_id: msg.account_id, cli: msg.cli, label: msg.label } },
+              accounts: { ...s.accounts, [msg.account_id]: { account_id: msg.account_id, cli: msg.cli, label: msg.label, env: msg.env ?? null } },
             }));
             break;
           }
@@ -1079,6 +1204,7 @@ export const useBoard = create<BoardState>((set, get) => ({
           merged.length > 65_536 ? merged.subarray(merged.length - 65_536) : merged;
         set({ ptyBuffers: { ...get().ptyBuffers, [agentId]: capped } });
         get().ptyListeners[agentId]?.forEach((cb) => cb(bytes));
+        get().meterOutput(agentId, bytes.length);
       },
       onClose: () => {
         client = null;
@@ -1159,11 +1285,64 @@ export const useBoard = create<BoardState>((set, get) => ({
       get().notify("daemon offline — can't spawn; reconnect and try again");
       return;
     }
+    const acct = accountId ? get().accounts[accountId] : null;
+    if (acct) pendingAccts.set(name, acct.label);
+    else pendingAccts.delete(name);
     client.spawnAgent(name, command, ".", workspaceId, permission, get().activeBoard, accountId, initialInput);
   },
 
-  createAccount: (cli, label) => client?.createAccount(cli, label),
+  createAccount: (cli, label, env) => client?.createAccount(cli, label, env),
   deleteAccount: (accountId) => client?.deleteAccount(accountId),
+
+  meterOutput: (agentId, n) => {
+    const a = get().agents[agentId];
+    // Exited agents only emit transcript replays — not new work.
+    if (!a || a.status === "exited" || n <= 0) return;
+    // (Re)connect replays each running agent's scrollback through onPty
+    // before live bytes — skip up to its transcript size so history
+    // doesn't double-count toward usage.
+    const skip = get().ptySkip[agentId] ?? 0;
+    if (skip > 0) {
+      const rest = Math.max(0, n - skip);
+      set({ ptySkip: { ...get().ptySkip, [agentId]: Math.max(0, skip - n) } });
+      if (rest === 0) return;
+      n = rest;
+    }
+    const key = agentAcctKey(a, Object.values(get().accounts));
+    const ledger = get().acctLedger;
+    // Roll the bucket when the ISO week changed under a running session.
+    const l = ledger.week === isoWeek() ? ledger : { ...ledger, week: isoWeek(), bytes: {}, fired: {} };
+    const weekBytes = (l.bytes[key] ?? 0) + n;
+    const next: AcctLedger = {
+      ...l,
+      bytes: { ...l.bytes, [key]: weekBytes },
+    };
+    const capKb = l.caps[key] ?? DEFAULT_WEEK_CAP_KB;
+    const pct = (weekBytes / 1024 / capKb) * 100;
+    // Fire the highest unmet milestone and mark everything below it too —
+    // a burst that jumps 15%→60% toasts "50%" once, not four times.
+    let mask = l.fired[key] ?? 0;
+    for (let i = WEEK_MILESTONES.length - 1; i >= 0; i--) {
+      if (pct >= WEEK_MILESTONES[i] && !(mask & (1 << i))) {
+        mask |= (2 << i) - 1; // this milestone and every one below it
+        next.fired = { ...l.fired, [key]: mask };
+        get().notify(`${acctLabel(key)} hit ${WEEK_MILESTONES[i]}% of the week`);
+        break;
+      }
+    }
+    saveLedger(next);
+    set({
+      acctLedger: next,
+      sessionUse: { ...get().sessionUse, [key]: (get().sessionUse[key] ?? 0) + n },
+    });
+  },
+  setAcctCap: (key, kb) => {
+    const l = { ...get().acctLedger, caps: { ...get().acctLedger.caps } };
+    if (kb == null || !(kb > 0)) delete l.caps[key];
+    else l.caps[key] = Math.round(kb);
+    saveLedger(l, true);
+    set({ acctLedger: l });
+  },
   memoryRead: (nodeId) => client?.memoryRead(nodeId),
   digestNow: () => client?.digest(),
   closeDigest: () => set({ digest: null }),
