@@ -68,8 +68,8 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
           minHeight={140}
           handleClassName="cv-node-resize-handle"
           lineClassName="cv-node-resize-line"
-          onResize={(_, p) => updateShape(id, { w: Math.round(p.width), h: Math.round(p.height) }, false)}
-          onResizeEnd={(_, p) => updateShape(id, { w: Math.round(p.width), h: Math.round(p.height) })}
+          onResize={(_, p) => updateShape(id, { x: p.x, y: p.y, w: Math.round(p.width), h: Math.round(p.height) }, false)}
+          onResizeEnd={(_, p) => updateShape(id, { x: p.x, y: p.y, w: Math.round(p.width), h: Math.round(p.height) })}
         />
         <div
           style={{

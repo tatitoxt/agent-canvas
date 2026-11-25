@@ -486,6 +486,40 @@ fn repo_tree_entries(root: &PathBuf) -> Vec<String> {
     entries
 }
 
+fn atomic_replace_repo_file(path: &std::path::Path, text: &str) -> Result<(), String> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+    let parent = path.parent().ok_or_else(|| "write failed: missing parent directory".to_string())?;
+    let name = path.file_name().ok_or_else(|| "write failed: missing file name".to_string())?.to_string_lossy();
+    let permissions = std::fs::metadata(path).map_err(|e| format!("write failed: {e}"))?.permissions();
+    for _ in 0..8 {
+        let temp = parent.join(format!(".{name}.canvas-save-{}-{}", std::process::id(), NEXT_TEMP.fetch_add(1, Ordering::Relaxed)));
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)] {
+            use std::os::unix::fs::OpenOptionsExt;
+            use std::os::unix::fs::PermissionsExt;
+            options.mode(permissions.mode());
+        }
+        match options.open(&temp) {
+            Ok(mut file) => {
+                let result = (|| {
+                    file.write_all(text.as_bytes()).map_err(|e| format!("write failed: {e}"))?;
+                    file.sync_all().map_err(|e| format!("write failed: {e}"))?;
+                    std::fs::set_permissions(&temp, permissions).map_err(|e| format!("write failed: {e}"))?;
+                    std::fs::rename(&temp, path).map_err(|e| format!("write failed: {e}"))
+                })();
+                if result.is_err() { let _ = std::fs::remove_file(&temp); }
+                return result;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("write failed: {error}")),
+        }
+    }
+    Err("write failed: could not allocate temporary file".into())
+}
+
 /// Extract link targets from markdown text: `[[name|alias]]` → `name`,
 /// `](path.md)` → `path`. No regex dep — manual scanning.
 fn vault_links(text: &str) -> Vec<String> {
@@ -1806,8 +1840,10 @@ fn handle_client_msg(
                             } else if bytes[..bytes.len().min(8192)].contains(&0) {
                                 send_control(ServerMsg::Error { agent_id: None, message: format!("binary file — not viewable: {path}") });
                             } else {
-                                let text = String::from_utf8_lossy(&bytes).to_string();
-                                send_control(ServerMsg::RepoFile { dir, path, text });
+                                match String::from_utf8(bytes) {
+                                    Ok(text) => send_control(ServerMsg::RepoFile { dir, path, text }),
+                                    Err(_) => send_control(ServerMsg::Error { agent_id: None, message: format!("file is not UTF-8 text: {path}") }),
+                                }
                             }
                         }
                         _ => send_control(ServerMsg::Error { agent_id: None, message: format!("read failed: {path}") }),
@@ -1827,7 +1863,7 @@ fn handle_client_msg(
                 if !file.is_file() { return Err(format!("write refused: file does not exist: {path}")); }
                 let current = std::fs::read_to_string(&file).map_err(|_| format!("file is not UTF-8 text: {path}"))?;
                 if current != base_text { return Err(format!("file changed on disk; reload before saving: {path}")); }
-                std::fs::write(&file, &text).map_err(|e| format!("write failed: {e}"))
+                atomic_replace_repo_file(&file, &text)
             })();
             match result {
                 Ok(()) => send_control(ServerMsg::RepoFile { dir, path, text }),

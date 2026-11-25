@@ -437,6 +437,7 @@ type BoardState = {
   vaultEntries: string[];
   repoEntries: string[];
   repoFile: { path: string; text: string } | null;
+  repoFiles: Record<string, { dir: string; path: string; text: string }>;
   repoRequestDir: string;
   repoRequestPath: string;
   vaultFile: { path: string; text: string } | null;
@@ -754,6 +755,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   vaultEntries: [],
   repoEntries: [],
   repoFile: null,
+  repoFiles: {},
   vaultFile: null,
   vaultHits: [],
   vaultKnown: [],
@@ -1276,6 +1278,7 @@ export const useBoard = create<BoardState>((set, get) => ({
             if (msg.dir === get().repoRequestDir) set({ repoEntries: msg.entries });
             break;
           case "repo_file":
+            set((s) => ({ repoFiles: { ...s.repoFiles, [`${msg.dir}\u0000${msg.path}`]: { dir: msg.dir, path: msg.path, text: msg.text } } }));
             if (msg.dir === get().repoRequestDir && msg.path === get().repoRequestPath) {
               set({ repoFile: { path: msg.path, text: msg.text } });
             }

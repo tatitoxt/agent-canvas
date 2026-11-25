@@ -59,7 +59,18 @@ test("Add Explorer to canvas mounts a live repository file browser", async ({ pa
   await editor.fill("# Edited in Canvas\n\nSaved to the repository.\n");
   await explorerNode.getByRole("button", { name: "Save" }).click();
   await expect(explorerNode.getByLabel("Contents of README.md")).toContainText("Saved to the repository.");
-  expect(readFileSync(resolve(repo, "README.md"), "utf8")).toContain("Saved to the repository.");
+  await expect.poll(() => readFileSync(resolve(repo, "README.md"), "utf8"), { timeout: 5_000 }).toContain("Saved to the repository.");
+
+  // A dirty draft must never be retargeted to a newly selected file.
+  await explorerNode.getByRole("button", { name: "Edit README.md" }).click();
+  await editor.fill("# An unsaved draft that belongs only to README\n");
+  await filter.fill("");
+  const other = explorerNode.getByRole("button", { name: "OTHER.md" });
+  await other.click();
+  await expect(explorerNode.getByRole("textbox", { name: "Edit contents of README.md" })).toBeVisible();
+  await expect(explorerNode.getByText("Save or cancel this draft before opening another file.")).toBeVisible();
+  expect(readFileSync(resolve(repo, "OTHER.md"), "utf8")).toBe("# another file with different contents\n");
+  await explorerNode.getByRole("button", { name: "Cancel" }).click();
 
   await explorerNode.getByRole("button", { name: "Edit README.md" }).click();
   await editor.fill("# A stale local draft\n");

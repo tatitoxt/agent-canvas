@@ -18,7 +18,9 @@ async function spawnTerm(page: import("@playwright/test").Page) {
 }
 
 async function openDrawer(page: import("@playwright/test").Page) {
-  const openTerminal = page.locator(".react-flow__node").filter({ has: page.locator("[title='Open terminal']") }).first().locator("[title='Open terminal']");
+  // The daemon is shared for the full Playwright run, so earlier cases leave
+  // sessions alive. Open the newest session created by this test.
+  const openTerminal = page.locator(".react-flow__node").filter({ has: page.locator("[title='Open terminal']") }).last().locator("[title='Open terminal']");
   await expect(openTerminal).toBeVisible({ timeout: 5_000 });
   await openTerminal.click();
   await page.waitForTimeout(900);
@@ -84,6 +86,8 @@ test("agent card sends inline steering to the live PTY and preserves Shift+Enter
   const input = card.getByTestId("agent-steering-input");
   await expect(input).toBeEnabled();
   await input.fill("printf 'inline-steering-ok\\n'");
+  // In a raw PTY, submit is carriage return (0x0d); LF is Ctrl+J.
+  await expect(input).toHaveValue("printf 'inline-steering-ok\\n'");
   await input.press("Enter");
   await expect(input).toHaveValue("");
   await expect(card.getByRole("button", { name: "Send instruction to Terminal 1" })).toContainText("Sent");
@@ -94,6 +98,21 @@ test("agent card sends inline steering to the live PTY and preserves Shift+Enter
   await input.type("-newline-ok\\n'");
   await input.press("Enter");
   await expect(card.getByTestId("agent-terminal-preview")).toContainText("shift-newline-ok", { timeout: 8_000 });
+});
+
+test("inline steering does not submit while an IME candidate is composing", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  const card = page.locator(".agent-card").first();
+  const input = card.getByTestId("agent-steering-input");
+  await input.fill("composition-safe");
+  await input.evaluate((element) => {
+    const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    Object.defineProperty(event, "isComposing", { value: true });
+    element.dispatchEvent(event);
+  });
+  await expect(input).toHaveValue("composition-safe");
+  await expect(card.getByRole("button", { name: "Send instruction to Terminal 1" })).not.toContainText("Sent");
 });
 
 test("pop out creates a canvas term card; put back returns it to the drawer", async ({ page }) => {

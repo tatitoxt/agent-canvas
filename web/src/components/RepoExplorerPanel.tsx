@@ -6,7 +6,7 @@ import { panelRoot } from "./panelChrome";
 export function RepoExplorerPanel() {
   const workspaces = useBoard((s) => s.workspaces);
   const entries = useBoard((s) => s.repoEntries);
-  const file = useBoard((s) => s.repoFile);
+  const cachedFiles = useBoard((s) => s.repoFiles);
   const repoTree = useBoard((s) => s.repoTree);
   const repoRead = useBoard((s) => s.repoRead);
   const repoWrite = useBoard((s) => s.repoWrite);
@@ -19,16 +19,18 @@ export function RepoExplorerPanel() {
     if (explorerDir) setDir(explorerDir);
   }, [explorerDir]);
   const [sel, setSel] = useState<string | null>(null);
+  const file = sel ? cachedFiles[`${dir}\u0000${sel}`] ?? null : null;
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [baseText, setBaseText] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [saveRequest, setSaveRequest] = useState<{ dir: string; path: string; text: string } | null>(null);
 
   useEffect(() => {
     if (!file) return;
-    if (saving && file.path === sel && file.text === draft) {
+    if (saving && saveRequest?.dir === dir && file.path === saveRequest.path && file.text === saveRequest.text) {
       setSaving(false);
       setEditing(false);
       setSaveError("");
@@ -36,7 +38,7 @@ export function RepoExplorerPanel() {
     } else if (!editing || file.path !== sel) {
       setBaseText(file.text);
     }
-  }, [file, saving, editing, sel, draft]);
+  }, [file, saving, editing, sel, draft, saveRequest, dir]);
 
   useEffect(() => {
     if (notice?.startsWith("error —") && saving) {
@@ -54,8 +56,22 @@ export function RepoExplorerPanel() {
   };
   const save = () => {
     if (!file || !editing || saving) return;
+    const serializedDraft = baseText.includes("\r\n") ? draft.replace(/\r?\n/g, "\r\n") : draft.replace(/\r\n/g, "\n");
+    const request = { dir, path: file.path, text: serializedDraft };
+    setSaveRequest(request);
     setSaving(true);
-    repoWrite(dir, file.path, draft, baseText);
+    repoWrite(dir, file.path, serializedDraft, baseText);
+  };
+  const selectFile = (path: string) => {
+    if (saving) return;
+    if (editing && draft !== baseText) {
+      setSaveError("Save or cancel this draft before opening another file.");
+      return;
+    }
+    setEditing(false);
+    setSaveError("");
+    setSel(path);
+    repoRead(dir, path);
   };
 
   useEffect(() => {
@@ -121,7 +137,7 @@ export function RepoExplorerPanel() {
           {visibleEntries.map((p) => (
             <button
               key={p}
-              onClick={() => { setSel(p); repoRead(dir, p); }}
+              onClick={() => selectFile(p)}
               style={{
                 display: "block",
                 width: "100%",

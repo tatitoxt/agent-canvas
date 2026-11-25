@@ -480,7 +480,9 @@ export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>
             e.preventDefault();
             const message = steeringText.trim();
             if (!message || !canSteer) return;
-            useBoard.getState().sendInput(data.id!, new TextEncoder().encode(`${message}\n`));
+            // Raw PTYs submit on CR. LF is Ctrl+J in raw mode and may only
+            // insert a newline into interactive CLIs such as Codex.
+            useBoard.getState().sendInput(data.id!, new TextEncoder().encode(`${message}\r`));
             setSteeringText("");
             setSteeringState("sent");
             window.clearTimeout(steeringTimer.current);
@@ -508,7 +510,8 @@ export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>
             onPointerDown={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
               e.stopPropagation();
-              if (e.key === "Enter" && !e.shiftKey) {
+              const native = e.nativeEvent as KeyboardEvent;
+              if (e.key === "Enter" && !e.shiftKey && !native.isComposing && native.keyCode !== 229) {
                 e.preventDefault();
                 e.currentTarget.form?.requestSubmit();
               }

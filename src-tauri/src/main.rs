@@ -487,7 +487,42 @@ fn read_repo_file(root: &PathBuf, path: &str) -> Result<String, String> {
     if bytes.len() > 256 * 1024 || bytes[..bytes.len().min(8192)].contains(&0) {
         return Err(format!("binary or oversized file — not viewable: {path}"));
     }
-    Ok(String::from_utf8_lossy(&bytes).to_string())
+    String::from_utf8(bytes).map_err(|_| format!("file is not UTF-8 text: {path}"))
+}
+
+fn atomic_replace_file(path: &std::path::Path, text: &str) -> Result<(), String> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+    let parent = path.parent().ok_or_else(|| "write failed: missing parent directory".to_string())?;
+    let name = path.file_name().ok_or_else(|| "write failed: missing file name".to_string())?.to_string_lossy();
+    let permissions = std::fs::metadata(path).map_err(|e| format!("write failed: {e}"))?.permissions();
+    let mut last_error = None;
+    for _ in 0..8 {
+        let temp = parent.join(format!(".{name}.canvas-save-{}-{}", std::process::id(), NEXT_TEMP.fetch_add(1, Ordering::Relaxed)));
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)] {
+            use std::os::unix::fs::OpenOptionsExt;
+            use std::os::unix::fs::PermissionsExt;
+            options.mode(permissions.mode());
+        }
+        match options.open(&temp) {
+            Ok(mut file) => {
+                let result = (|| {
+                    file.write_all(text.as_bytes()).map_err(|e| format!("write failed: {e}"))?;
+                    file.sync_all().map_err(|e| format!("write failed: {e}"))?;
+                    std::fs::set_permissions(&temp, permissions).map_err(|e| format!("write failed: {e}"))?;
+                    std::fs::rename(&temp, path).map_err(|e| format!("write failed: {e}"))
+                })();
+                if result.is_err() { let _ = std::fs::remove_file(&temp); }
+                return result;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => last_error = Some(error),
+            Err(error) => return Err(format!("write failed: {error}")),
+        }
+    }
+    Err(format!("write failed: {}", last_error.map(|e| e.to_string()).unwrap_or_else(|| "could not allocate temporary file".into())))
 }
 
 fn write_repo_file(root: &PathBuf, path: &str, text: &str, base_text: &str) -> Result<(), String> {
@@ -502,7 +537,7 @@ fn write_repo_file(root: &PathBuf, path: &str, text: &str, base_text: &str) -> R
     if !canonical.starts_with(&canonical_root) || !canonical.is_file() {
         return Err("access denied: path is outside the repository".into());
     }
-    std::fs::write(canonical, text).map_err(|e| format!("write failed: {e}"))
+    atomic_replace_file(&canonical, text)
 }
 
 fn expand_home_path(path: &str) -> PathBuf {
@@ -641,6 +676,17 @@ mod repo_explorer_tests {
         assert_eq!(read_repo_file(&root, "README.md").unwrap(), "after");
         assert!(write_repo_file(&root, "README.md", "clobber", "before").unwrap_err().contains("changed on disk"));
         assert!(write_repo_file(&root, "../outside", "x", "").unwrap_err().contains("access denied"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn refuses_invalid_utf8_without_changing_original_bytes() {
+        let root = temp_root();
+        let original = [0x66, 0x80, 0x6f];
+        std::fs::write(root.join("README.md"), original).unwrap();
+        assert!(read_repo_file(&root, "README.md").unwrap_err().contains("UTF-8"));
+        assert!(write_repo_file(&root, "README.md", "replacement", "foo").is_err());
+        assert_eq!(std::fs::read(root.join("README.md")).unwrap(), original);
         std::fs::remove_dir_all(root).unwrap();
     }
 
