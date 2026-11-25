@@ -9,7 +9,6 @@ const PRESETS = [
 
 import { panelRoot } from "./panelChrome";
 import { useBoard, PERMISSION_LEVELS, type Guardrails } from "../store/board";
-import { PinBtn } from "./PinBtn";
 
 const input: React.CSSProperties = {
   width: "100%",
@@ -59,6 +58,7 @@ const select: React.CSSProperties = {
 /** Deska-style automations: saved tasks that run an agent with guardrails —
  * an idle hang limit and a policy for gated commands (hold vs auto-deny). */
 export function AutomationsPanel() {
+  const onBoard = useBoard((s) => !!s.panelNodes[s.activeBoard]?.["panel-automations"]);
   const automations = useBoard((s) => s.automations);
   const workspaces = useBoard((s) => s.workspaces);
   const createAutomation = useBoard((s) => s.createAutomation);
@@ -127,7 +127,18 @@ export function AutomationsPanel() {
         >
           ⚙
         </button>
-        <PinBtn anchor="automations" title="Automations" body={list.map((a) => a.name).join("\n")} />
+        <button
+          className="glass-pill"
+          title="Show this live Automations window on the canvas"
+          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 8px", cursor: "pointer", border: "none", color: "var(--cv-ink-dim)" }}
+          onClick={() => {
+            if (!onBoard) useBoard.getState().openPanelNode("automations");
+            useBoard.getState().requestFocus("panel-automations");
+            useBoard.getState().requestNav("canvas");
+          }}
+        >
+          {onBoard ? "Open on canvas" : "+ Add to canvas"}
+        </button>
         <button
           className="glass-pill"
           style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}

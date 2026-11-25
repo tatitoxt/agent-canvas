@@ -1,12 +1,12 @@
 import { panelRoot } from "./panelChrome";
 import { useBoard, acctKey, agentAcctKey, acctLabel, DEFAULT_WEEK_CAP_KB } from "../store/board";
+import { CliMark } from "./CliMark";
+import { cliMeta } from "../board/nodes";
 
 const fmtBytes = (n: number) =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : n >= 1_000 ? `${(n / 1_000).toFixed(1)} KB` : `${n} B`;
 
-/** Juice — usage grouped per account: "<CLI> — <account>" rows with a
- * session column (bytes since this client connected) and a week column
- * (persisted ledger). Below, the per-agent rows of the active board. */
+/** Mission Map — active terminals, their CLI/account and usage at a glance. */
 export function UsagePanel() {
   const agents = useBoard((s) => s.agents);
   const accounts = useBoard((s) => s.accounts);
@@ -53,10 +53,10 @@ export function UsagePanel() {
       style={{ ...panelRoot, padding: "12px 10px" }}
     >
       <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 8px", color: "var(--cv-ink)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        Juice
+        Mission Map
       </div>
       <div style={{ fontSize: 10, color: "var(--cv-ink-dim)", padding: "0 12px 10px" }}>
-        {boardAgents.length} agent{boardAgents.length === 1 ? "" : "s"} · {live} live ·{" "}
+        {boardAgents.length} terminals · {live} active ·{" "}
         {fmtBytes(totalBytes)} output · {totalFiles} file{totalFiles === 1 ? "" : "s"} changed
       </div>
       <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
@@ -201,10 +201,14 @@ export function UsagePanel() {
                 }}
               >
                 Terminal {boardAgents.indexOf(a) + 1}
-                {a.command ? ` · ${a.command}` : ""}
+                {a.name ? ` · ${a.name}` : ""}
               </div>
               <div style={{ fontSize: 9.5, color: "var(--cv-ink-dim)" }}>
-                {a.status}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: cliMeta((a.command ?? "bash").split(/\s+/)[0]).color }}>
+                  <CliMark cli={(a.command ?? "bash").split(/\s+/)[0]} color={cliMeta((a.command ?? "bash").split(/\s+/)[0]).color} size={10} />
+                  {cliMeta((a.command ?? "bash").split(/\s+/)[0]).label}
+                </span>
+                {" · "}{a.status}
                 {a.permission ? ` · ${a.permission}` : ""}
                 {a.account_label ? ` · ${a.account_label}` : ""}
               </div>

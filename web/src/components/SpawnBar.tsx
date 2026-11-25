@@ -241,6 +241,28 @@ export function SpawnBar() {
                 disabled={!canSpawn}
                 onClick={() => {
                   const cmd = choice === "custom" ? command.trim() : choice;
+                  const origin = useBoard.getState().pendingSpawnPos;
+                  const cols = Math.ceil(Math.sqrt(count));
+                  const cardW = 460;
+                  const gap = 28;
+                  if (origin && count > 1) {
+                    useBoard.getState().setPendingSpawnPos(null);
+                    for (let i = 0; i < count; i++) {
+                      const p = { x: origin.x + (i % cols) * (cardW + gap), y: origin.y + Math.floor(i / cols) * 290 };
+                      useBoard.getState().setPendingSpawnPos(p);
+                      spawn(
+                        `${cmd}-p${i + 1}`,
+                        cmd,
+                        undefined,
+                        permission,
+                        undefined,
+                        `You are worker ${i + 1} of ${count} on a parallel task — each worker has its own worktree, work independently.`,
+                      );
+                    }
+                    setCount(1);
+                    setOpen(false);
+                    return;
+                  }
                   for (let i = 0; i < count; i++) {
                     spawn(
                       count > 1 ? `${cmd}-p${i + 1}` : cmd,

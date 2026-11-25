@@ -1,4 +1,4 @@
-import { Handle, Position, NodeResizer, type NodeProps, type Node } from "@xyflow/react";
+import { Handle, Position, NodeResizer, useReactFlow, type NodeProps, type Node } from "@xyflow/react";
 import { useEffect, useMemo, useState } from "react";
 import { CliMark } from "../components/CliMark";
 import { Icon } from "../components/icons";
@@ -227,6 +227,8 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         isVisible={selected}
         minWidth={320}
         minHeight={120}
+        handleClassName="cv-node-resize-handle"
+        lineClassName="cv-node-resize-line"
         onResize={(_, p) => {
           if (data.id) useBoard.getState().resizeAgentCard(data.id, Math.round(p.width), Math.round(p.height), false);
         }}
@@ -340,6 +342,14 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             opacity: selected ? 1 : undefined,
           }}
         >
+          <span
+            role="button"
+            title="Open terminal"
+            style={{ cursor: "pointer", lineHeight: 1, display: "inline-flex" }}
+            onClick={(e) => { e.stopPropagation(); if (data.id) useBoard.getState().requestTerm(data.id, data.name); }}
+          >
+            <Icon name="terminal" size={13} color="var(--cv-ink)" />
+          </span>
           <span
             role="button"
             title="collapse"
@@ -925,6 +935,7 @@ export function WorkspaceNode({
   data,
   selected,
 }: NodeProps<Node<WorkspaceNodeData>>) {
+  const rf = useReactFlow();
   return (
     <div
       style={{
@@ -936,6 +947,17 @@ export function WorkspaceNode({
         position: "relative",
       }}
     >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={520}
+        minHeight={320}
+        handleClassName="cv-node-resize-handle"
+        lineClassName="cv-node-resize-line"
+        onResizeEnd={(_, p) => {
+          const node = rf.getNode(data.id);
+          if (node) rf.setNodes((nodes) => nodes.map((n) => n.id === data.id ? { ...n, style: { ...n.style, width: Math.round(p.width), height: Math.round(p.height) } } : n));
+        }}
+      />
       <div
         className="glass-pill"
         style={{

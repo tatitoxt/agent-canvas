@@ -304,6 +304,13 @@ function Board() {
       return k;
     });
   };
+  const addPanelToBoard = (key: string) => {
+    if (!PANEL_DEFS[key]) return;
+    const def = PANEL_DEFS[key];
+    const p = screenToFlowPosition({ x: Math.max(24, window.innerWidth * 0.38), y: Math.max(72, window.innerHeight * 0.22) });
+    useBoard.getState().openPanelNode(key, p, { w: def.w, h: def.h });
+    setNav("canvas");
+  };
   const [palette, setPalette] = useState(false);
   const edgeDetail = useBoard((s) => s.edgeDetail);
   const setEdgeDetail = useBoard((s) => s.setEdgeDetail);
@@ -312,7 +319,10 @@ function Board() {
   const [cardMenu, setCardMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
   const [shapeMenu, setShapeMenu] = useState<{ x: number; y: number; id: string } | null>(null);
-  const [mmSize, setMmSize] = useState({ w: 148, h: 96 });
+  const [mmSize, setMmSize] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("cv-minimap-size") ?? "null") ?? { w: 148, h: 96 }; }
+    catch { return { w: 148, h: 96 }; }
+  });
   const [sel, setSel] = useState<Array<{ id: string; x: number; y: number; w: number; h: number }>>([]);
   const selRef = useRef(sel);
   selRef.current = sel;
@@ -373,6 +383,9 @@ function Board() {
       } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "p") {
         e.preventDefault();
         setPencil((m) => !m);
+      } else if (e.key === "Escape" && pencil) {
+        setDrawing(null);
+        setPencil(false);
       } else if ((e.metaKey || e.ctrlKey) && e.key === "`") {
         // Pop the selected agent's terminal out as a canvas card, or put an
         // existing card back into the drawer — one keystroke both ways.
@@ -442,7 +455,7 @@ function Board() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [pencil]);
 
   const baseNodes = useMemo<Node<BoardNodeData>[]>(() => {
     const wsNodes: Node<BoardNodeData>[] = Object.values(workspaces)
@@ -453,6 +466,7 @@ function Board() {
       deletable: false,
       position: positions[w.id] ?? { x: 60, y: 60 },
       style: { width: 900, height: 540 },
+      className: "cv-workspace-node",
       data: { kind: "workspace" as const, name: w.name, repo: w.repo },
     }));
     // Nodes taking part in an in-flight delegation glow orange — the
@@ -624,21 +638,20 @@ function Board() {
   );
 
   const onNodeClick: NodeMouseHandler = (e, node) => {
-    // Shift+click is multi-select — don't open terminals or rewire.
+    // Shift+click is multi-select — don't rewire.
     if (e.shiftKey) return;
     // In Connect mode a click on an agent card wires/unwires it to the
-    // orchestrator instead of opening the terminal.
+    // orchestrator. Otherwise React Flow keeps the click as pure selection.
     if (wiringFrom && agents[node.id]) {
       toggleWire(wiringFrom, node.id);
-      return;
     }
-    const a = agents[node.id];
-    if (a) openTerm({ id: a.id, name: a.name });
   };
 
-  // Double-click focuses a node — single click already opens its terminal.
+  // Double-click opens an agent's terminal; single click remains selection.
   // A pinned card's double-click also reopens the panel it was pinned from.
   const onNodeDoubleClick: NodeMouseHandler = (_, node) => {
+    const a = agents[node.id];
+    if (a) openTerm({ id: a.id, name: a.name });
     const sh = shapes[activeBoard ?? "main"]?.[node.id];
     if (sh?.kind === "pin" && sh.anchor) {
       useBoard.getState().requestNav(sh.anchor);
@@ -894,6 +907,7 @@ function Board() {
               onStudio: () => useBoard.getState().studioDocNow(),
               onDraw: () => setPencil((m) => !m),
               onRegion: () => setShotMode((m) => !m),
+              onAddToBoard: addPanelToBoard,
               drawOn: pencil,
               regionOn: shotMode,
             }}
@@ -923,7 +937,7 @@ function Board() {
       )}
       {pencil && (
         <div
-          style={{ position: "absolute", inset: 0, zIndex: 29, cursor: "crosshair" }}
+          style={{ position: "absolute", inset: 0, zIndex: 29, cursor: "crosshair", pointerEvents: drawing ? "auto" : "none" }}
           onMouseDown={(e) => setDrawing([{ x: e.clientX, y: e.clientY }])}
           onMouseMove={(e) => { if (drawing) setDrawing([...drawing, { x: e.clientX, y: e.clientY }]); }}
           onMouseUp={() => { if (drawing && drawing.length > 1) setStrokes((st) => [...st, drawing]); setDrawing(null); }}
@@ -943,10 +957,18 @@ function Board() {
           </svg>
           <button
             className="glass-pill"
-            style={{ position: "absolute", right: 20, top: 52, fontSize: 10.5, padding: "5px 12px", cursor: "pointer", border: "none", color: "var(--cv-ink-dim)" }}
+            style={{ position: "absolute", right: 20, top: 52, zIndex: 1, fontSize: 10.5, padding: "5px 12px", cursor: "pointer", border: "none", color: "var(--cv-ink-dim)", pointerEvents: "auto" }}
             onClick={(e) => { e.stopPropagation(); setStrokes([]); }}
           >
             clear strokes
+          </button>
+          <button
+            className="glass-pill"
+            title="Turn off pencil (Esc)"
+            style={{ position: "absolute", right: 20, top: 84, zIndex: 1, fontSize: 10.5, padding: "5px 12px", cursor: "pointer", border: "none", color: "var(--cv-accent)", pointerEvents: "auto" }}
+            onClick={(e) => { e.stopPropagation(); setDrawing(null); setPencil(false); }}
+          >
+            done drawing
           </button>
         </div>
       )}
@@ -1075,10 +1097,12 @@ function Board() {
             const sw = mmSize.w;
             const sh = mmSize.h;
             const move = (ev: PointerEvent) => {
-              setMmSize({
+              const next = {
                 w: Math.min(320, Math.max(96, sw + (sx - ev.clientX))),
                 h: Math.min(220, Math.max(64, sh + (sy - ev.clientY))),
-              });
+              };
+              setMmSize(next);
+              localStorage.setItem("cv-minimap-size", JSON.stringify(next));
             };
             const up = () => {
               window.removeEventListener("pointermove", move);
@@ -1280,7 +1304,8 @@ function Board() {
         <CommandPalette
           onClose={() => setPalette(false)}
           onNav={(k) => {
-            setNav(k);
+            if (PANEL_DEFS[k]) navToggle(k);
+            else setNav(k);
             setPalette(false);
           }}
           onOpenAgent={(id, name) => {

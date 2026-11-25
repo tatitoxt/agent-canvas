@@ -319,8 +319,8 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
       { icon: "github", label: "Pull requests", hint: "live list from the repo's GitHub", onClick: () => onSelect("prs"), key: "prs", fact: ghCounts.prs != null ? `${ghCounts.prs} open` : undefined },
       { icon: "issue", label: "Issues", hint: "live list from the repo's GitHub", onClick: () => onSelect("issues"), key: "issues", fact: ghCounts.issues != null ? `${ghCounts.issues} open` : undefined },
     ] as const : []),
-    { icon: "ticket", label: "Dex Tickets", hint: "notes and tasks on the board", onClick: () => onSelect("notes"), key: "notes", fact: noteCount ? `${noteCount}` : undefined },
-    { icon: "zap", label: "Delegations", hint: "delegation tickets — status, result, open the edge", onClick: () => onSelect("tickets"), key: "tickets" },
+    { icon: "ticket", label: "Dex Tickets", hint: "delegations, status, results and changed files", onClick: () => onSelect("tickets"), key: "tickets" },
+    { icon: "notes", label: "Notes", hint: "notes and tasks on the board", onClick: () => onSelect("notes"), key: "notes", fact: noteCount ? `${noteCount}` : undefined },
     { icon: "artifacts", label: "Artifacts", hint: "shots, docs and files the agents produced", onClick: () => onSelect("artifacts"), key: "artifacts", fact: artifactCount ? `${artifactCount}` : undefined },
     { icon: "loops", label: "Loops", hint: "recurring instructions per agent", onClick: () => onSelect("loops"), key: "loops", fact: loopCount ? `${loopCount} active` : undefined },
   ];
@@ -603,9 +603,9 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
             <Icon name="terminal" size={16} />
           </button>
           <button
-            title="Board Notes — kanban tasks"
-            onClick={() => onSelect("notes")}
-            style={{ ...btn(active === "notes"), borderRadius: 999 }}
+            title="Code Editor — open the workspace file tree and code viewer"
+            onClick={() => onSelect("explorer")}
+            style={{ ...btn(active === "explorer"), borderRadius: 999 }}
           >
             <Icon name="code" size={16} />
           </button>

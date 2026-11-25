@@ -525,10 +525,10 @@ export function Topbar({
         <button
           className="glass-pill"
           style={{ ...iconBtn(nav === "usage"), background: "transparent", border: "none" }}
-          title="Juice — per-agent usage on this board"
+          title="Mission Map — agents, terminals, models and accounts"
           onClick={() => onNav("usage")}
         >
-          <Icon name="juice" size={15} color={nav === "usage" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <Icon name="orchestrator" size={15} color={nav === "usage" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
         </button>
         <button
           className="glass-pill"

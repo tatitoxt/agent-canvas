@@ -1626,7 +1626,11 @@ export function VaultPanel() {
               </span>
             )}
             <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
-              <button style={actionBtn} title="Pin this note as a live card on the board" onClick={() => useBoard.getState().mdNodeAdd(vaultFile.path, "vault")}>
+              <button style={actionBtn} title="Keep the live Obsidian workspace on the canvas" onClick={() => {
+                const st = useBoard.getState();
+                st.requestFocus("panel-vault");
+                st.requestNav("canvas");
+              }}>
                 Add to Board
               </button>
               <button

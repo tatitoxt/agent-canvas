@@ -71,7 +71,8 @@ export function CommandPalette({
       ["inbox", "open inbox"],
       ["prs", "open pull requests"],
       ["issues", "open issues"],
-      ["notes", "open dex tickets"],
+      ["tickets", "open dex tickets"],
+      ["notes", "open notes"],
       ["artifacts", "open artifacts"],
       ["loops", "open loops"],
       ["automations", "open automations"],
@@ -145,7 +146,7 @@ export function CommandPalette({
         group: "tasks",
         label: `task — ${n.text.slice(0, 48)}`,
         hint: n.col,
-        run: () => onNav("notes"),
+      run: () => onNav("tickets"),
       });
     }
     for (const entry of vaultEntries) {

@@ -5,18 +5,24 @@ import { WebLauncher } from "./WebLauncher";
 import { useBoard } from "../store/board";
 
 const PANEL_ITEMS = [
+  { key: "inbox", icon: "inbox", label: "Inbox", hint: "tasks and agent requests" },
+  { key: "sc", icon: "git", label: "Source Control", hint: "branches, changed files and push" },
+  { key: "prs", icon: "github", label: "Pull requests", hint: "review and merge requests" },
+  { key: "explorer", icon: "explorer", label: "Explorer", hint: "browse repository files and preview code" },
+  { key: "vault", icon: "vault", label: "Obsidian", hint: "browse and edit your live vault" },
+  { key: "tickets", icon: "ticket", label: "Dex Tickets", hint: "delegations and task outcomes" },
+  { key: "artifacts", icon: "artifacts", label: "Artifacts", hint: "saved notes and agent work" },
   { key: "thread", icon: "thread", label: "Thread", hint: "command the board in words" },
   { key: "automations", icon: "automations", label: "Automations" },
   { key: "loops", icon: "loops", label: "Loops", hint: "re-send instructions on a cadence" },
   { key: "presets", icon: "presets", label: "Presets", hint: "saved board layouts" },
   { key: "memory", icon: "memory", label: "Memory" },
-  { key: "notes", icon: "notes", label: "Notes" },
-  { key: "artifacts", icon: "artifacts", label: "Artifacts" },
-  { key: "vault", icon: "vault", label: "Vault" },
+  { key: "notes", icon: "notes", label: "Board Notes" },
   { key: "skills", icon: "skills", label: "Skills" },
   { key: "accounts", icon: "accounts", label: "Accounts" },
-  { key: "usage", icon: "juice", label: "Juice", hint: "per-agent output & files" },
+  { key: "usage", icon: "mission-map", label: "Mission Map", hint: "agents, terminals, models and accounts" },
   { key: "settings", icon: "settings", label: "Settings" },
+  { key: "issues", icon: "issue", label: "Issues", hint: "issues from the connected repo" },
 ] as const;
 
 const rowBtn: React.CSSProperties = {
@@ -63,12 +69,12 @@ export interface ToolsMenuActions {
   onDraw: () => void;
   onRegion: () => void;
   onMission?: () => void;
+  onAddToBoard?: (key: string) => void;
   drawOn: boolean;
   regionOn: boolean;
 }
 
-/** Symvibe's "Tools" button — one dropdown top-right that holds every
- * panel, board op and capture action, instead of a crowded side rail. */
+/** Tools launcher for board actions and the complete set of canvas panels. */
 export function ToolsMenu({
   active,
   onSelect,
@@ -198,9 +204,17 @@ export function ToolsMenu({
           {item("digest", "Session digest", () => { actions.onDigest(); setOpen(false); }, "lose nothing")}
           {item("studio", "Studio doc", () => { actions.onStudio(); setOpen(false); }, "repo → dossier")}
           <div style={sectionLabel}>Panels</div>
-          {PANEL_ITEMS.map((it) =>
-            item(it.icon, it.label, () => { onSelect(it.key); setOpen(false); }, "hint" in it ? it.hint : undefined, active === it.key),
-          )}
+          {PANEL_ITEMS.map((it) => (
+            <div key={it.key} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <div style={{ flex: 1 }}>{item(it.icon, it.label, () => { onSelect(it.key); setOpen(false); }, "hint" in it ? it.hint : undefined, active === it.key)}</div>
+              <button
+                title={`Add ${it.label} to canvas`}
+                aria-label={`Add ${it.label} to canvas`}
+                onClick={() => { actions.onAddToBoard?.(it.key); setOpen(false); }}
+                style={{ border: "none", background: "transparent", color: "var(--cv-ink-faint)", borderRadius: 7, cursor: "pointer", padding: "5px 7px", fontSize: 12 }}
+              >+</button>
+            </div>
+          ))}
         </div>
       )}
       {teamOpen && (

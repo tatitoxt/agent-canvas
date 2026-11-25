@@ -2175,11 +2175,11 @@ export const useBoard = create<BoardState>((set, get) => ({
       presets: "presets", preset: "presets",
       thread: "thread",
       accounts: "accounts", account: "accounts",
-      juice: "usage", usage: "usage",
+      juice: "usage", usage: "usage", "mission map": "usage", mission: "usage",
       memory: "memory",
       "pull requests": "prs", prs: "prs", pr: "prs",
       issues: "issues", issue: "issues",
-      "dex tickets": "notes", tickets: "notes", ticket: "notes", notes: "notes",
+      "dex tickets": "tickets", "dev tickets": "tickets", tickets: "tickets", ticket: "tickets", notes: "notes",
       artifacts: "artifacts", artifact: "artifacts",
       obsidian: "vault", vault: "vault", files: "vault",
       settings: "settings", setting: "settings",
@@ -2209,14 +2209,9 @@ export const useBoard = create<BoardState>((set, get) => ({
   setSpawnOpen: (v) => set(v ? { spawnOpen: v } : { spawnOpen: v, pendingSpawnPos: null }),
   focusSpawn: () => set({ spawnOpen: true }),
   gatherLoose: () => {
-    const { agents, edges, positions, activeBoard, shapes, panelNodes, termNodes } = get();
-    const wired = new Set(Object.values(edges).flatMap((e) => [e.from, e.to]));
-    // A card is "loose" when its center isn't already inside a group frame.
-    const rects = Object.values(shapes[activeBoard] ?? {}).filter(
-      (s) => s.kind === "rect" && s.w != null && s.h != null,
-    );
-    const inside = (x: number, y: number) =>
-      rects.some((r) => x >= r.x && x <= r.x + r.w! && y >= r.y && y <= r.y + r.h!);
+    const { agents, positions, activeBoard, panelNodes, termNodes, mdNodes, webNodes } = get();
+    // Gather is an explicit arrange command: include every live agent and
+    // every floating tool/terminal card, even when wired or in a workspace.
     const loose: Array<{ id: string; x: number; y: number; w: number; h: number; move: (id: string, x: number, y: number) => void }> = [];
     for (const a of Object.values(agents)) {
       const p = positions[a.id];
@@ -2226,26 +2221,25 @@ export const useBoard = create<BoardState>((set, get) => ({
       const sz = get().agentSizes?.[a.id];
       const aw = sz?.w ?? 460;
       const ah = sz?.h ?? 260;
-      if (
-        (a.board_id ?? "main") === activeBoard &&
-        a.status !== "exited" &&
-        !a.workspace_id &&
-        !wired.has(a.id) &&
-        !(p && inside(p.x + aw / 2, p.y + ah / 2))
-      ) {
+      if ((a.board_id ?? "main") === activeBoard && a.status !== "exited") {
         loose.push({ id: a.id, x: p?.x ?? 0, y: p?.y ?? 0, w: aw, h: ah, move: (id, x, y) => get().moveNode(id, x, y) });
       }
     }
     for (const [id, n] of Object.entries(panelNodes[activeBoard] ?? {})) {
-      if (!inside(n.x + (n.w ?? 320) / 2, n.y + (n.h ?? 420) / 2))
-        loose.push({ id, x: n.x, y: n.y, w: n.w ?? 320, h: n.h ?? 420, move: (i, x, y) => get().movePanelNode(i, x, y) });
+      loose.push({ id, x: n.x, y: n.y, w: n.w ?? 320, h: n.h ?? 420, move: (i, x, y) => get().movePanelNode(i, x, y) });
     }
     for (const [id, n] of Object.entries(termNodes[activeBoard] ?? {})) {
-      if (!inside(n.x + (n.w ?? 560) / 2, n.y + (n.h ?? 320) / 2))
-        loose.push({ id, x: n.x, y: n.y, w: n.w ?? 560, h: n.h ?? 320, move: (i, x, y) => get().moveTermNode(i, x, y) });
+      loose.push({ id, x: n.x, y: n.y, w: n.w ?? 560, h: n.h ?? 320, move: (i, x, y) => get().moveTermNode(i, x, y) });
+    }
+    for (const [id] of Object.entries(mdNodes[activeBoard] ?? {})) {
+      const p = positions[id] ?? { x: 0, y: 0 };
+      loose.push({ id, ...p, w: 340, h: 260, move: (i, x, y) => get().moveNode(i, x, y) });
+    }
+    for (const [id] of Object.entries(webNodes[activeBoard] ?? {})) {
+      const p = positions[id] ?? { x: 0, y: 0 };
+      loose.push({ id, ...p, w: 520, h: 360, move: (i, x, y) => get().moveNode(i, x, y) });
     }
     if (!loose.length) {
-      get().notify("gather — no loose windows");
       return;
     }
     // Anchor the grid at the loosest cluster's top-left, cells sized to the
@@ -2259,10 +2253,7 @@ export const useBoard = create<BoardState>((set, get) => ({
       l.move(l.id, x0 + (i % cols) * cw, y0 + Math.floor(i / cols) * ch),
     );
     const rows = Math.ceil(loose.length / cols);
-    const n = get().frameNodes(
-      x0 - 26, y0 - 46, cols * cw + 12, rows * ch + 56,
-    );
-    get().notify(`gathered ${loose.length} loose window${loose.length === 1 ? "" : "s"} into ${n}`);
+    get().frameNodes(x0 - 26, y0 - 46, (cols - 1) * cw + Math.max(...loose.map((l) => l.w)) + 52, (rows - 1) * ch + Math.max(...loose.map((l) => l.h)) + 76);
     get().requestView();
   },
   /** Drop a translucent "Group N" rect behind a region of the board —

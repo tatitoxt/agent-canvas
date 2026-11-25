@@ -52,6 +52,8 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
         isVisible={selected}
         minWidth={def.minW ?? 240}
         minHeight={def.minH ?? 180}
+        handleClassName="cv-node-resize-handle"
+        lineClassName="cv-node-resize-line"
         onResizeEnd={(_, p) =>
           useBoard.getState().resizePanelNode(id, Math.round(p.width), Math.round(p.height))
         }
@@ -92,7 +94,7 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
             placeItems: "center",
           }}
         >
-          <Icon name="ph-min" size={12} color="var(--cv-ink)" />
+          <Icon name={n.collapsed ? "ph-max" : "ph-min"} size={12} color="var(--cv-ink)" />
         </button>
         <button
           className="nodrag"
@@ -121,7 +123,7 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
             placeItems: "center",
           }}
         >
-          <Icon name="ph-max" size={12} color="var(--cv-ink)" />
+          <Icon name={n.maximized ? "ph-restore" : "ph-max"} size={12} color="var(--cv-ink)" />
         </button>
         <button
           className="nodrag"

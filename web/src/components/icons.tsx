@@ -1,6 +1,7 @@
 /** Minimal line icons (lucide-style, 24×24 stroke) for rails/topbar. */
 const PATHS: Record<string, string[]> = {
   canvas: ["M3 3h7v7H3z", "M14 3h7v7h-7z", "M3 14h7v7H3z", "M14 14h7v7h-7z"],
+  "mission-map": ["M3 18a9 9 0 0 1 18 0", "M7 18a5 5 0 0 1 10 0", "M12 18l4-7", "M12 21h.01"],
   thread: ["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"],
   inbox: ["M22 12h-6l-2 3h-4l-2-3H2", "M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"],
   automations: ["M13 2 3 14h9l-1 8 10-12h-9l1-8z"],
