@@ -218,7 +218,7 @@ fn spawn_agent(
             let _ = st.agents.write(&target, &data);
         });
     }
-    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board });
+    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None });
     Ok(id)
 }
 
@@ -1003,7 +1003,7 @@ fn delegate(
             let _ = st.agents.write(&target, &data);
         });
     }
-    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board });
+    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None });
     emit_control(
         &app,
         &ServerMsg::Delegation { edge_id, from, to: id.clone(), task },
@@ -1249,6 +1249,7 @@ fn run_automation_row(
         permission,
         workspace_id,
         board_id: run_board,
+        fallback_from: None,
     });
     // Inject the saved prompt — the kernel PTY buffer holds it until the
     // CLI reads stdin, gated like operator input.

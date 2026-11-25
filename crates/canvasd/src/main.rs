@@ -518,7 +518,7 @@ fn spawn_agent(
                 {
                     let next = fb.remaining[0].clone();
                     let cmd = substitute_cli(&fb.command, &next);
-                    let nm = format!("{} (fallback: {})", fb.name, next);
+                    let nm = fb.name.clone();
                     let st3 = state_fb.clone();
                     let fb_cmd = cmd.clone();
                     let fb_nm = nm.clone();
@@ -539,6 +539,7 @@ fn spawn_agent(
                             permission: fb.permission.clone(),
                             workspace_id: fb.workspace_id.clone(),
                             board_id: new_board.or(fb.board_id.clone()),
+                            fallback_from: Some(command_cli(&fb.command).to_string()),
                         }));
                     }
                 }
@@ -1070,7 +1071,7 @@ fn handle_client_msg(
                             let _ = agents.write(&target, &data);
                         });
                     }
-                    send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id, board_id: board });
+                    send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None });
                 }
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: None,
@@ -1111,6 +1112,7 @@ fn handle_client_msg(
                         permission: level.to_string(),
                         workspace_id: workspace_id.clone(),
                         board_id: board,
+                        fallback_from: None,
                     });
                     send_control(ServerMsg::Delegation {
                         edge_id,
@@ -2123,6 +2125,7 @@ fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
                 permission,
                 workspace_id,
                 board_id: run_board,
+                fallback_from: None,
             }));
             // Inject the saved prompt into the fresh PTY — gated, so a
             // supervised run still gets a gate.
