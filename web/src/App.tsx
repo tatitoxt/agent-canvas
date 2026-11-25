@@ -3,6 +3,7 @@ import { toPng } from "html-to-image";
 import {
   MiniMap,
   ReactFlow,
+  ViewportPortal,
   ReactFlowProvider,
   getNodesBounds,
   getViewportForBounds,
@@ -658,6 +659,106 @@ function Board() {
     setMenu({ x: ev.clientX, y: ev.clientY, id });
   };
 
+  // Snap + alignment guides: a dragging card snaps when its edges/center
+  // come within 8px of another visible card's edges/center, with thin
+  // guide lines at the matched positions.
+  const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
+  const SNAP = 8;
+  const snapFor = (node: { id: string; position: { x: number; y: number }; measured?: { width?: number; height?: number } }) => {
+    const w = node.measured?.width ?? 240;
+    const h = node.measured?.height ?? 120;
+    const selfX = [node.position.x, node.position.x + w / 2, node.position.x + w];
+    const selfY = [node.position.y, node.position.y + h / 2, node.position.y + h];
+    let dx = 0, dy = 0, bestX = SNAP + 1, bestY = SNAP + 1;
+    const v: number[] = [], hh: number[] = [];
+    for (const o of getNodes()) {
+      if (o.id === node.id) continue;
+      const ow = o.measured?.width ?? 240;
+      const oh = o.measured?.height ?? 120;
+      for (const tx of [o.position.x, o.position.x + ow / 2, o.position.x + ow]) {
+        for (const sx of selfX) {
+          const d = Math.abs(tx - sx);
+          if (d <= SNAP && d < bestX) { bestX = d; dx = tx - sx; }
+        }
+      }
+      for (const ty of [o.position.y, o.position.y + oh / 2, o.position.y + oh]) {
+        for (const sy of selfY) {
+          const d = Math.abs(ty - sy);
+          if (d <= SNAP && d < bestY) { bestY = d; dy = ty - sy; }
+        }
+      }
+    }
+    if (bestX <= SNAP) {
+      for (const o of getNodes()) {
+        if (o.id === node.id) continue;
+        const ow = o.measured?.width ?? 240;
+        for (const tx of [o.position.x, o.position.x + ow / 2, o.position.x + ow]) {
+          for (const sx of selfX) if (Math.abs(tx - (sx + dx)) < 0.5 && !v.includes(tx)) v.push(tx);
+        }
+      }
+    }
+    if (bestY <= SNAP) {
+      for (const o of getNodes()) {
+        if (o.id === node.id) continue;
+        const oh = o.measured?.height ?? 120;
+        for (const ty of [o.position.y, o.position.y + oh / 2, o.position.y + oh]) {
+          for (const sy of selfY) if (Math.abs(ty - (sy + dy)) < 0.5 && !hh.includes(ty)) hh.push(ty);
+        }
+      }
+    }
+    return { dx: bestX <= SNAP ? dx : 0, dy: bestY <= SNAP ? dy : 0, v, h: hh };
+  };
+  const onNodeDrag: OnNodeDrag = (_, node) => {
+    const s = snapFor(node);
+    setGuides({ v: s.dx ? s.v : [], h: s.dy ? s.h : [] });
+  };
+
+  // OS drag & drop — a file dropped on the canvas becomes a markdown card:
+  // .md keeps its text, images embed as data URLs, anything else is a
+  // name + size stub. Written into the vault and pinned at the drop point.
+  const onCanvasDrop = useCallback(async (e: React.DragEvent) => {
+    if (!e.dataTransfer?.files?.length) return;
+    e.preventDefault();
+    const dir = useBoard.getState().vaultDir;
+    if (!dir) {
+      useBoard.getState().notify("drop needs a mounted vault — open the Obsidian panel first");
+      return;
+    }
+    const pt = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    const fmtSize = (b: number) =>
+      b < 1024 ? `${b} B` : b < 1024 * 1024 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`;
+    const read = (f: File, as: "text" | "data") =>
+      new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result as string);
+        r.onerror = () => rej(r.error);
+        if (as === "text") r.readAsText(f); else r.readAsDataURL(f);
+      });
+    const files = Array.from(e.dataTransfer.files);
+    for (const [fi, f] of files.entries()) {
+      const safe = f.name.replace(/[\\:*?"<>|\[\]]/g, "-").replace(/\.md$/i, "");
+      let body: string;
+      try {
+        if (f.name.toLowerCase().endsWith(".md") || f.type === "text/markdown") {
+          body = await read(f, "text");
+        } else if (f.type.startsWith("image/") && f.size <= 3 * 1024 * 1024) {
+          body = `# ${f.name}\n\n![${safe}](${await read(f, "data")})\n`;
+        } else {
+          body = `# ${f.name}\n\nDropped file — ${fmtSize(f.size)}${f.type ? `, ${f.type}` : ""}.\n`;
+        }
+      } catch {
+        body = `# ${f.name}\n\nDropped file — contents could not be read.\n`;
+      }
+      let path = `${safe}.md`;
+      const existing = new Set(useBoard.getState().vaultEntries.map((e) => e.toLowerCase()));
+      for (let n = 2; existing.has(path.toLowerCase()); n++) path = `${safe}-${n}.md`;
+      useBoard.getState().vaultWrite(path, body);
+      // vaultWrite is fire-and-forget — give the daemon a beat before the
+      // card pins and reads the note back.
+      setTimeout(() => useBoard.getState().mdNodeAdd(path, undefined, { x: pt.x + fi * 28, y: pt.y + fi * 28 }), 400);
+    }
+  }, [screenToFlowPosition]);
+
   const onNodeDragStop: OnNodeDrag = (event, node) => {
     // Deska-style: dropping a card on a board tab moves it there.
     const pt =
@@ -685,14 +786,18 @@ function Board() {
         }
       }
     }
+    const s0 = snapFor(node);
+    setGuides({ v: [], h: [] });
+    const x = node.position.x + s0.dx;
+    const y = node.position.y + s0.dy;
     if (node.id.startsWith("shape-")) {
-      moveShape(node.id, node.position.x, node.position.y);
+      moveShape(node.id, x, y);
     } else if (node.id.startsWith("panel-")) {
-      useBoard.getState().movePanelNode(node.id, node.position.x, node.position.y);
+      useBoard.getState().movePanelNode(node.id, x, y);
     } else if (node.id.startsWith("term-")) {
-      useBoard.getState().moveTermNode(node.id, node.position.x, node.position.y);
+      useBoard.getState().moveTermNode(node.id, x, y);
     } else if (agents[node.id] || workspaces[node.id] || node.id.startsWith("web-") || node.id.startsWith("orch-") || node.id.startsWith("md-")) {
-      moveNode(node.id, node.position.x, node.position.y);
+      moveNode(node.id, x, y);
     }
   };
 
@@ -888,7 +993,10 @@ function Board() {
         onNodesChange={onNodesChange}
         onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
+        onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
+        onDrop={onCanvasDrop}
+        onDragOver={(e) => { if (e.dataTransfer?.types?.includes("Files")) e.preventDefault(); }}
         onConnectEnd={onConnectEnd}
         onEdgeClick={(_, edge) => setEdgeDetail(edge.id)}
         onNodeContextMenu={onNodeContextMenu}
@@ -996,6 +1104,14 @@ function Board() {
         />
         <ViewportTracker />
         <AnchorCables nav={nav} />
+              <ViewportPortal>
+          {guides.v.map((x) => (
+            <div key={`gv${x}`} style={{ position: "absolute", left: x, top: -100000, width: 0, height: 200000, borderLeft: "1px dashed var(--cv-accent)", pointerEvents: "none", opacity: 0.7 }} />
+          ))}
+          {guides.h.map((y) => (
+            <div key={`gh${y}`} style={{ position: "absolute", top: y, left: -100000, height: 0, width: 200000, borderTop: "1px dashed var(--cv-accent)", pointerEvents: "none", opacity: 0.7 }} />
+          ))}
+        </ViewportPortal>
       </ReactFlow>
       {connected === false && null}
       <DigestPanel />
