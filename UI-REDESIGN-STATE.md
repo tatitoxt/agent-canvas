@@ -14,7 +14,7 @@
 5. [x] **Cables evitan cards** — edge routing detecta obstáculos múltiples y busca trayectos ortogonales compactos; unit tests cubren conexiones y rutas despejadas.
 6. [x] Minimap chico abajo-derecha + zoom controls — YA ESTÁ así (mmSize 148×96, marginRight 184). Confirmar visualmente con Fausto qué le pareció "horrible" — quizás eran los colores viejos (ya actualizados a verde working).
 7. [x] **File explorer como ventana del canvas** — E2E crea un workspace, agrega Explorer al canvas, lo mueve, lo redimensiona con persistencia y abre `README.md`.
-8. [~] **Terminales usables** — el drawer y la tarjeta flotante montan xterm sobre la PTY; E2E escribe comandos de shell y verifica la salida, split y resize. Falta una pasada manual con una sesión real de CLI de IA para validar esos TUIs concretos.
+8. [~] **Terminales usables** — el drawer y la tarjeta flotante montan xterm sobre la PTY; E2E escribe comandos de shell y verifica la salida, split y resize. Un smoke test adicional ejecutó `codex --version` por la PTY real. Sigue pendiente abrir una sesión interactiva de Codex TUI para revisar controles y detección de modelo.
 
 ## Decisiones de diseño ya aplicadas (no revertir)
 - IBM Plex Sans/Mono (tipografía Deska)
@@ -93,7 +93,7 @@ Estado reconciliado con las implementaciones y pruebas posteriores:
 - [x] LIBRARY sin etiqueta vertical ni flyout; expansión horizontal y navegación verificadas en E2E.
 - [x] RESIZE en agent cards, paneles, terminales y workspaces; resize de terminal y workspace persiste y conserva la PTY, validado en E2E. Revisar visualmente alturas internas si aparece un nuevo recorte.
 - [x] GATHER acomoda tarjetas en una grilla y Undo restaura posiciones; E2E lo verifica.
-- [x] Terminal real en la drawer y en la card flotante; E2E envía comandos y confirma salida de shell en ambos casos. Pendiente la pasada manual con un CLI de IA real para confirmar detección de marca/modelo.
+- [x] Terminal real en la drawer y en la card flotante; E2E envía comandos y confirma salida de shell en ambos casos. Smoke test local de `codex --version` confirma que un CLI real inicia y devuelve salida por la PTY. Pendiente una sesión interactiva para validar el TUI y la detección de modelo.
 - [ ] Chrome SVG implementado; falta la aceptación visual de Fausto sobre los símbolos.
 - [x] Tema Paper implementado y persistido; E2E valida colores y minimapa.
 - [x] Topbar se fusiona en una bubble al hover; E2E valida unión y separación al salir.
@@ -173,7 +173,7 @@ REMAINING LEVERS if still slow:
 - [x] Tema Paper: sombras cálidas suaves, viñeta reducida y minimapa con máscara clara; el lienzo, controles y tarjetas dejan de heredar sombras y overlay negros del tema dark.
 - [x] Corrección visual del minimapa: sus variables de máscara, borde y trazo ahora se aplican en el estilo del SVG de React Flow; E2E valida el color realmente renderizado y persistencia del tema.
 - [x] E2E cambia a Paper, verifica fondo/sombra/máscara y confirma persistencia tras recargar.
-- [x] Roadmap reconciliado con evidencia actual: Library sin flyout y routing que esquiva tarjetas están completados; PTY interactiva queda validada para shell, pero falta una pasada manual con CLIs de IA reales.
+- [x] Roadmap reconciliado con evidencia actual: Library sin flyout y routing que esquiva tarjetas están completados; PTY probada con shell y `codex --version`; queda revisar una sesión TUI interactiva.
 - [x] Validación tras el tema Paper: 23/23 unit tests, 31/31 E2E, typecheck, build y `git diff --check`.
 - [x] CI de PR #47 tras `753ae07`: Devin Review, canvasd, e2e, Tauri macOS, Tauri Ubuntu y web pasan.
 - [x] Topbar: Panels y Mission Map ahora son controles etiquetados; el resumen live abre Mission Map y se eliminó el acceso duplicado con icono de orchestrator. E2E verifica navegación y panel.
@@ -189,7 +189,7 @@ REMAINING LEVERS if still slow:
 - [x] Ajuste del badge publicado en el PR #47 como `bd21dbd`; mantener el PR abierto y sin merge.
 - [x] Auditoría visual en modo demo encontró un loop de React en `onSelectionChange`: el callback recreaba el array de selección aunque nada hubiera cambiado. Ahora el callback es estable y conserva la referencia previa si ids/posiciones/dimensiones son iguales. La captura ya no muestra errores de update depth: `/tmp/canvas-design/roadmap-audit-fixed.png`.
 - [x] Se añadió una regresión E2E que observa explícitamente errores `Maximum update depth exceeded` en demo offline. Suite actual: 26/26 unit tests, 33/33 E2E, typecheck, build y `git diff --check`.
-- [ ] Hacer la próxima pasada visual de densidad/alineación y, en una sesión manual aparte, probar un CLI de IA real en el PTY. La captura actual ya se auditó tras el cambio de etiquetas.
+- [ ] Hacer la próxima pasada visual de densidad/alineación y, en una sesión manual aparte, probar el TUI interactivo de Codex. La captura actual ya se auditó tras el cambio de etiquetas.
 - [ ] Siguiente lote: seguir auditando densidad y alineación de paneles/chrome contra la referencia Deska; mantener PR #47 abierto y sin merge.
 - [x] Etiquetas de delegación: el ruteador busca tramos despejados y evita también las tarjetas de origen/destino. Las posiciones de nodos anidados se convierten a coordenadas absolutas antes de comprobar colisiones; la etiqueta usa el punto calculado incluso cuando el cable conserva el Bézier directo. Captura revisada en `/tmp/canvas-design/delegation-parent-offset.png` sin errores de consola.
 - [x] Validación tras corregir las etiquetas: typecheck, 28/28 unit tests, 33/33 E2E, build de producción y `git diff --check` pasan. Las pruebas E2E incluyen shell/PTy y terminal flotante interactiva.
