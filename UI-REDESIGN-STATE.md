@@ -31,7 +31,7 @@
 5. [x] **Cables evitan cards** — edge routing detecta obstáculos múltiples y busca trayectos ortogonales compactos; unit tests cubren conexiones y rutas despejadas.
 6. [x] Minimap chico abajo-derecha + zoom controls — YA ESTÁ así (mmSize 148×96, marginRight 184). Confirmar visualmente con Fausto qué le pareció "horrible" — quizás eran los colores viejos (ya actualizados a verde working).
 7. [x] **File explorer como ventana del canvas** — E2E crea un workspace, agrega Explorer al canvas, lo mueve, lo redimensiona con persistencia y abre `README.md`.
-8. [~] **Terminales usables** — el drawer y la tarjeta flotante montan xterm sobre la PTY; E2E escribe comandos de shell y verifica la salida, split y resize. Un smoke test adicional ejecutó `codex --version` por la PTY real. Sigue pendiente abrir una sesión interactiva de Codex TUI para revisar controles y detección de modelo.
+8. [~] **Terminales usables** — el drawer y la tarjeta flotante montan xterm sobre la PTY; E2E escribe comandos de shell y verifica la salida, split y resize. Smoke tests ejecutaron `codex --version` por la PTY real y abrieron Codex TUI 0.172.0 en PTY: pantalla interactiva y selector de sesiones respondieron, `Ctrl+C` cerró limpio. Pendiente probar la sesión TUI dentro de una terminal de Canvas y revisar detección de modelo allí.
 
 ## Decisiones de diseño ya aplicadas (no revertir)
 - IBM Plex Sans/Mono (tipografía Deska)
@@ -206,7 +206,8 @@ REMAINING LEVERS if still slow:
 - [x] Ajuste del badge publicado en el PR #47 como `bd21dbd`; mantener el PR abierto y sin merge.
 - [x] Auditoría visual en modo demo encontró un loop de React en `onSelectionChange`: el callback recreaba el array de selección aunque nada hubiera cambiado. Ahora el callback es estable y conserva la referencia previa si ids/posiciones/dimensiones son iguales. La captura ya no muestra errores de update depth: `/tmp/canvas-design/roadmap-audit-fixed.png`.
 - [x] Se añadió una regresión E2E que observa explícitamente errores `Maximum update depth exceeded` en demo offline. Suite actual: 26/26 unit tests, 33/33 E2E, typecheck, build y `git diff --check`.
-- [ ] Hacer la próxima pasada visual de densidad/alineación y, en una sesión manual aparte, probar el TUI interactivo de Codex. La captura actual ya se auditó tras el cambio de etiquetas.
+- [x] Smoke local del TUI de Codex: `codex --no-alt-screen` abrió, mostró pantalla inicial y command center al pulsar Escape, y salió con Ctrl+C sin dejar el PTY abierto. Aún no valida xterm dentro de Canvas ni detección de modelo en esa UI.
+- [ ] Hacer la próxima pasada visual de densidad/alineación en la app y probar el TUI interactivo en una terminal de Canvas. La captura actual ya se auditó tras el cambio de etiquetas.
 - [ ] Siguiente lote: seguir auditando densidad y alineación de paneles/chrome contra la referencia Deska; mantener PR #47 abierto y sin merge.
 - [x] Etiquetas de delegación: el ruteador busca tramos despejados y evita también las tarjetas de origen/destino. Las posiciones de nodos anidados se convierten a coordenadas absolutas antes de comprobar colisiones; la etiqueta usa el punto calculado incluso cuando el cable conserva el Bézier directo. Captura revisada en `/tmp/canvas-design/delegation-parent-offset.png` sin errores de consola.
 - [x] Validación tras corregir las etiquetas: typecheck, 28/28 unit tests, 33/33 E2E, build de producción y `git diff --check` pasan. Las pruebas E2E incluyen shell/PTy y terminal flotante interactiva.
