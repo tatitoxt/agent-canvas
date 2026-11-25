@@ -55,3 +55,11 @@ Dark-first glass on a 22px dot grid: color-mix surfaces over `#0e0e10`, 20px bac
 - Permission levels are stored, displayed and enforced on spawn/delegation — command-level enforcement (blocking what an agent may run) is roadmap work, as are automations, pop-out panels, and remote/phone access.
 - The Tauri shell shares the canvasd core but has no bundled webview assets pipeline yet; CI builds it on macOS runners.
 - Single-board, single-machine: one daemon serves one board on one repo root plus workspace repos.
+
+## File sandbox (vault operations)
+
+The daemon validates every vault file path in its own process, never trusting the client:
+
+- paths must be relative, inside the vault root — absolute paths and `..` are refused;
+- symlinks that escape the vault are refused (canonicalized resolution);
+- the vault root itself must sit inside an **allowed root**: the board repo always qualifies, and extra roots (e.g. an external notes vault) opt in one per line in `.canvas/allowed-roots` (`~` is expanded). Denied operations return `access denied: path is outside allowed directories`.

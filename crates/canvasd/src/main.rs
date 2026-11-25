@@ -45,10 +45,71 @@ struct AppState {
     /// Published artifacts: share id → (title, mime, bytes). Served at
     /// /share/{id} without auth — the 128-bit id is the capability.
     shares: ShareMap,
+    /// Canonicalized roots file operations may touch — the board repo
+    /// plus anything listed in `.canvas/allowed-roots` (one per line).
+    allowed_roots: Vec<PathBuf>,
 }
 
 /// Published artifacts: share id → (title, mime, bytes).
-type ShareMap = Arc<std::sync::Mutex<std::collections::HashMap<String, (String, String, Vec<u8>)>>>;
+
+
+/// Deska-style sandbox: every vault path is validated in the daemon,
+/// never trusted from the client.
+///
+/// - `path` must be relative — an absolute path would make `root.join`
+///   REPLACE the root, escaping the vault entirely.
+/// - no `..` components — no traversal above the root.
+/// - the canonicalized root must sit inside an allowed root
+///   (`.canvas/allowed-roots`, one per line, plus the board repo itself).
+/// - the target, canonicalized through its deepest existing ancestor,
+///   must stay inside the canonical root — kills symlink escapes, which
+///   the naive `!path.contains("..")` check never saw.
+fn vault_sandbox_resolve(state: &AppState, dir: &str, path: &str) -> Result<PathBuf, String> {
+    let rel = std::path::Path::new(path);
+    if rel.is_absolute() {
+        return Err("access denied: absolute paths are not allowed".into());
+    }
+    if rel.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err("access denied: path escapes the vault".into());
+    }
+    let canon_root = std::fs::canonicalize(dir).map_err(|_| format!("access denied: vault root not found: {dir}"))?;
+    let allowed = state.allowed_roots.iter().any(|ar| canon_root.starts_with(ar));
+    if !allowed {
+        return Err("access denied: path is outside allowed directories".into());
+    }
+    let target = canon_root.join(rel);
+    // Canonicalize the deepest existing ancestor, then re-append the
+    // remaining components — works for files that do not exist yet.
+    let mut probe = target.clone();
+    let mut tail: Vec<std::ffi::OsString> = Vec::new();
+    loop {
+        if probe.exists() { break; }
+        match (probe.file_name(), probe.parent()) {
+            (Some(name), Some(parent)) => {
+                tail.push(name.to_os_string());
+                probe = parent.to_path_buf();
+            }
+            _ => break,
+        }
+    }
+    let canon_base = std::fs::canonicalize(&probe).unwrap_or_else(|_| probe.clone());
+    let mut resolved = canon_base.clone();
+    for comp in tail.iter().rev() { resolved.push(comp); }
+    if !canon_base.starts_with(&canon_root) || !resolved.starts_with(&canon_root) {
+        return Err("access denied: path is outside allowed directories".into());
+    }
+    Ok(resolved)
+}
+
+fn vault_sandbox_dir(state: &AppState, dir: &str) -> Result<PathBuf, String> {
+    let canon_root = std::fs::canonicalize(dir).map_err(|_| format!("access denied: vault root not found: {dir}"))?;
+    if state.allowed_roots.iter().any(|ar| canon_root.starts_with(ar)) {
+        Ok(canon_root)
+    } else {
+        Err("access denied: path is outside allowed directories".into())
+    }
+}
+
 
 /// Write PTY input honoring the supervised-input gate: `supervised`
 /// agents hold destructive-looking input until the operator approves.
@@ -1169,41 +1230,55 @@ fn handle_client_msg(
             }
         }
         ClientMsg::VaultList { dir } => {
-            let mut entries = vault_list_entries(&PathBuf::from(&dir));
-            entries.truncate(2000);
-            send_control(ServerMsg::VaultListing { dir, entries });
+            match vault_sandbox_dir(state, &dir) {
+                Ok(root) => {
+                    let mut entries = vault_list_entries(&root);
+                    entries.truncate(2000);
+                    send_control(ServerMsg::VaultListing { dir, entries });
+                }
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e }),
+            }
         }
         ClientMsg::VaultDelete { dir, path } => {
-            let root = PathBuf::from(&dir);
-            let file = root.join(&path);
-            if path.contains("..") || !path.ends_with(".md") || !file.is_file() {
-                send_control(ServerMsg::Error { agent_id: None, message: format!("vault delete refused: {path}") });
-            } else {
-                // Obsidian-style trash: move to <vault>/.trash/ instead of
-                // unlinking, so a delete is always recoverable.
-                let trash = root.join(".trash");
-                let base = file.file_name().unwrap_or_default();
-                let mut dest = trash.join(base);
-                if dest.exists() {
-                    let stamp = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_secs())
-                        .unwrap_or(0);
-                    let stem = file.file_stem().unwrap_or_default().to_string_lossy();
-                    dest = trash.join(format!("{stem}.{stamp}.md"));
-                }
-                match std::fs::create_dir_all(&trash).and_then(|_| std::fs::rename(&file, &dest)) {
-                    Ok(()) => {
-                        let mut entries = vault_list_entries(&root);
-                        entries.truncate(2000);
-                        send_control(ServerMsg::VaultListing { dir, entries });
+            let file = vault_sandbox_resolve(state, &dir, &path);
+            let root = vault_sandbox_dir(state, &dir);
+            match (file, root) {
+                (Ok(file), Ok(root)) if path.ends_with(".md") && file.is_file() => {
+                    // Obsidian-style trash: move to <vault>/.trash/ instead of
+                    // unlinking, so a delete is always recoverable.
+                    let trash = root.join(".trash");
+                    let base = file.file_name().unwrap_or_default();
+                    let mut dest = trash.join(base);
+                    if dest.exists() {
+                        let stamp = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0);
+                        let stem = file.file_stem().unwrap_or_default().to_string_lossy();
+                        dest = trash.join(format!("{stem}.{stamp}.md"));
                     }
-                    Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault delete failed: {e}") }),
+                    match std::fs::create_dir_all(&trash).and_then(|_| std::fs::rename(&file, &dest)) {
+                        Ok(()) => {
+                            let mut entries = vault_list_entries(&root);
+                            entries.truncate(2000);
+                            send_control(ServerMsg::VaultListing { dir, entries });
+                        }
+                        Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault delete failed: {e}") }),
+                    }
                 }
+                (Err(e), _) => send_control(ServerMsg::Error { agent_id: None, message: e }),
+                (Ok(_), Err(e)) => send_control(ServerMsg::Error { agent_id: None, message: e }),
+                _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault delete refused: {path}") }),
             }
         }
         ClientMsg::VaultGraph { dir } => {
-            let root = PathBuf::from(&dir);
+            let root = match vault_sandbox_dir(state, &dir) {
+                Ok(r) => r,
+                Err(e) => {
+                    send_control(ServerMsg::Error { agent_id: None, message: e });
+                    return;
+                }
+            };
             let nodes = vault_list_entries(&root);
             let resolve = |name: &str| -> Option<String> {
                 let n = name.trim();
@@ -1229,52 +1304,57 @@ fn handle_client_msg(
             send_control(ServerMsg::VaultGraph { dir, nodes, edges });
         }
         ClientMsg::VaultRename { dir, path, new_path } => {
-            let root = PathBuf::from(&dir);
-            let from = root.join(&path);
-            let to = root.join(&new_path);
-            let ok = !path.contains("..") && !new_path.contains("..")
-                && path.ends_with(".md") && new_path.ends_with(".md") && from.is_file();
-            if !ok {
-                send_control(ServerMsg::Error { agent_id: None, message: format!("vault rename refused: {path}") });
-            } else {
-                let result = (|| {
-                    if let Some(parent) = to.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
-                    std::fs::rename(&from, &to).map_err(|e| e.to_string())?;
-                    std::fs::read_to_string(&to).map_err(|e| e.to_string())
-                })();
-                match result {
-                    Ok(text) => {
-                        send_control(ServerMsg::VaultFile { path: new_path, text });
-                        let mut entries = vault_list_entries(&root);
-                        entries.truncate(2000);
-                        send_control(ServerMsg::VaultListing { dir, entries });
+            let from = vault_sandbox_resolve(state, &dir, &path);
+            let to = vault_sandbox_resolve(state, &dir, &new_path);
+            match (from, to) {
+                (Ok(from), Ok(to)) if path.ends_with(".md") && new_path.ends_with(".md") && from.is_file() => {
+                    let result = (|| {
+                        if let Some(parent) = to.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+                        std::fs::rename(&from, &to).map_err(|e| e.to_string())?;
+                        std::fs::read_to_string(&to).map_err(|e| e.to_string())
+                    })();
+                    match result {
+                        Ok(text) => {
+                            send_control(ServerMsg::VaultFile { path: new_path, text });
+                            if let Ok(root) = vault_sandbox_dir(state, &dir) {
+                                let mut entries = vault_list_entries(&root);
+                                entries.truncate(2000);
+                                send_control(ServerMsg::VaultListing { dir, entries });
+                            }
+                        }
+                        Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault rename failed: {e}") }),
                     }
-                    Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault rename failed: {e}") }),
                 }
+                (Err(e), _) | (_, Err(e)) => send_control(ServerMsg::Error { agent_id: None, message: e }),
+                _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault rename refused: {path}") }),
             }
         }
         ClientMsg::VaultRead { dir, path } => {
-            // Constrain to the vault root and markdown files only.
-            let root = PathBuf::from(&dir);
-            let file = root.join(&path);
-            let ok = !path.contains("..") && path.ends_with(".md") && file.is_file();
-            match ok.then(|| std::fs::read_to_string(&file)) {
-                Some(Ok(text)) => send_control(ServerMsg::VaultFile { path, text }),
+            match vault_sandbox_resolve(state, &dir, &path) {
+                Ok(file) if path.ends_with(".md") && file.is_file() => {
+                    match std::fs::read_to_string(&file) {
+                        Ok(text) => send_control(ServerMsg::VaultFile { path, text }),
+                        _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault read failed: {path}") }),
+                    }
+                }
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e }),
                 _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault read failed: {path}") }),
             }
         }
         ClientMsg::VaultPeek { dir, path } => {
-            let root = PathBuf::from(&dir);
-            let file = root.join(&path);
-            let ok = !path.contains("..") && path.ends_with(".md") && file.is_file();
-            match ok.then(|| std::fs::read_to_string(&file)) {
-                Some(Ok(text)) => send_control(ServerMsg::VaultPeeked { path, text }),
+            match vault_sandbox_resolve(state, &dir, &path) {
+                Ok(file) if path.ends_with(".md") && file.is_file() => {
+                    match std::fs::read_to_string(&file) {
+                        Ok(text) => send_control(ServerMsg::VaultPeeked { path, text }),
+                        _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault peek failed: {path}") }),
+                    }
+                }
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e }),
                 _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault peek failed: {path}") }),
             }
         }
         ClientMsg::VaultAsset { dir, path } => {
-            let root = PathBuf::from(&dir);
-            let file = root.join(&path);
+            let file = vault_sandbox_resolve(state, &dir, &path);
             let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
             let mime = match ext.as_str() {
                 "png" => "image/png",
@@ -1285,21 +1365,28 @@ fn handle_client_msg(
                 "ico" => "image/x-icon",
                 _ => "",
             };
-            let ok = !path.contains("..") && !mime.is_empty() && file.is_file();
-            match ok.then(|| std::fs::read(&file)) {
-                Some(Ok(bytes)) if bytes.len() <= 8 * 1024 * 1024 => {
-                    let data = base64::engine::general_purpose::STANDARD.encode(bytes);
-                    send_control(ServerMsg::VaultAssetData { path, mime: mime.to_string(), data });
+            match file {
+                Ok(file) if !mime.is_empty() && file.is_file() => {
+                    match std::fs::read(&file) {
+                        Ok(bytes) if bytes.len() <= 8 * 1024 * 1024 => {
+                            let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+                            send_control(ServerMsg::VaultAssetData { path, mime: mime.to_string(), data });
+                        }
+                        _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault asset failed: {path}") }),
+                    }
                 }
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e }),
                 _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault asset failed: {path}") }),
             }
         }
         ClientMsg::VaultAppend { dir, path, text } => {
-            let root = PathBuf::from(&dir);
-            let file = root.join(&path);
-            if path.contains("..") || !path.ends_with(".md") {
+            let file = vault_sandbox_resolve(state, &dir, &path);
+            if !path.ends_with(".md") {
                 send_control(ServerMsg::Error { agent_id: None, message: format!("vault append refused: {path}") });
+            } else if let Err(e) = file {
+                send_control(ServerMsg::Error { agent_id: None, message: e });
             } else {
+                let file = file.unwrap();
                 let result = (|| {
                     if let Some(parent) = file.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
                     use std::io::Write;
@@ -1314,11 +1401,13 @@ fn handle_client_msg(
             }
         }
         ClientMsg::VaultWrite { dir, path, text } => {
-            let root = PathBuf::from(&dir);
-            let file = root.join(&path);
-            if path.contains("..") || !path.ends_with(".md") {
+            let file = vault_sandbox_resolve(state, &dir, &path);
+            if !path.ends_with(".md") {
                 send_control(ServerMsg::Error { agent_id: None, message: format!("vault write refused: {path}") });
+            } else if let Err(e) = file {
+                send_control(ServerMsg::Error { agent_id: None, message: e });
             } else {
+                let file = file.unwrap();
                 let result = (|| {
                     if let Some(parent) = file.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
                     std::fs::write(&file, &text).map_err(|e| e.to_string())
@@ -1330,7 +1419,13 @@ fn handle_client_msg(
             }
         }
         ClientMsg::VaultSearch { dir, query } => {
-            let root = PathBuf::from(&dir);
+            let root = match vault_sandbox_dir(state, &dir) {
+                Ok(r) => r,
+                Err(e) => {
+                    send_control(ServerMsg::Error { agent_id: None, message: e });
+                    return;
+                }
+            };
             let needle = query.to_lowercase();
             let mut hits = Vec::new();
             let mut scanned = 0usize;
@@ -1838,6 +1933,28 @@ async fn main() -> Result<()> {
         });
     let agents = Arc::new(AgentManager::new());
     agents.set_transcript_dir(repo_root.join(".canvas").join("transcripts"));
+    let allowed_roots: Vec<PathBuf> = {
+            // The board repo is always inside the sandbox; extra roots
+            // (external vaults like ~/vault-demo) opt in one per line in
+            // `.canvas/allowed-roots` — Deska's allowedRoots model.
+            let mut roots: Vec<PathBuf> = Vec::new();
+            if let Ok(c) = std::fs::canonicalize(&repo_root) { roots.push(c); }
+            let list = repo_root.join(".canvas").join("allowed-roots");
+            if let Ok(text) = std::fs::read_to_string(&list) {
+                for line in text.lines() {
+                    let line = line.trim();
+                    if line.is_empty() || line.starts_with('#') { continue; }
+                    let expanded = if let Some(rest) = line.strip_prefix("~/") {
+                        std::env::var("HOME").map(|h| format!("{h}/{rest}")).unwrap_or_else(|_| line.to_string())
+                    } else { line.to_string() };
+                    if let Ok(c) = std::fs::canonicalize(&expanded) {
+                        if !roots.contains(&c) { roots.push(c); }
+                    }
+                }
+            }
+            roots
+    };
+
     let state = Arc::new(AppState {
         token: token.clone(),
         events,
@@ -1848,6 +1965,7 @@ async fn main() -> Result<()> {
         pending_results: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         pending_inputs: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         shares: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+        allowed_roots,
     });
 
     let api = Router::new()
