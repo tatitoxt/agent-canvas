@@ -17,6 +17,7 @@ import { SkillsPanel } from "./SkillsPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { SourceControlPanel } from "./SourceControlPanel";
 import { DevTicketsPanel } from "./DevTicketsPanel";
+import { RepoExplorerPanel } from "./RepoExplorerPanel";
 import { PANEL_META, type PanelMeta } from "./panelMeta";
 
 export interface PanelDef extends PanelMeta {
@@ -58,4 +59,5 @@ export const PANEL_DEFS: Record<string, PanelDef> = {
   history: { ...PANEL_META.history, render: () => <HistoryNode /> },
   sc: { ...PANEL_META.sc, render: () => <SourceControlPanel /> },
   tickets: { ...PANEL_META.tickets, render: () => <DevTicketsPanel /> },
+  explorer: { ...PANEL_META.explorer, render: () => <RepoExplorerPanel /> },
 };

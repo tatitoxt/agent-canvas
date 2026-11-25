@@ -30,4 +30,5 @@ export const PANEL_META: Record<string, PanelMeta> = {
   history: { title: "Tasks", icon: "tasks", w: 360, h: 440 },
   sc: { title: "Source Control", icon: "github", w: 340, h: 440 },
   tickets: { title: "Delegations", icon: "zap", w: 340, h: 440 },
+  explorer: { title: "Repo Explorer", icon: "explorer", w: 480, h: 480, minW: 320, minH: 240 },
 };

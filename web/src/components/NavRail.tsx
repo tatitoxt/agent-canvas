@@ -649,9 +649,9 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
             <Icon name="newtask" size={16} />
           </button>
           <button
-            title="File Explorer — vault files"
-            onClick={() => onSelect("vault")}
-            style={{ ...btn(active === "vault"), borderRadius: 999 }}
+            title="File Explorer — browse workspace repos"
+            onClick={() => onSelect("explorer")}
+            style={{ ...btn(active === "explorer"), borderRadius: 999 }}
           >
             <Icon name="explorer" size={16} />
           </button>

@@ -385,6 +385,8 @@ type BoardState = {
   /** Obsidian-style vault browser state. */
   vaultDir: string;
   vaultEntries: string[];
+  repoEntries: string[];
+  repoFile: { path: string; text: string } | null;
   vaultFile: { path: string; text: string } | null;
   /** Latest vault full-text search hits. */
   vaultHits: { path: string; line: number; text: string }[];
@@ -454,6 +456,8 @@ type BoardState = {
   gitPush: (agentId: string) => void;
   notify: (text: string) => void;
   vaultList: (dir: string) => void;
+  repoTree: (dir: string) => void;
+  repoRead: (dir: string, path: string) => void;
   vaultRead: (path: string) => void;
   vaultPeek: (path: string) => void;
   vaultAsset: (path: string) => void;
@@ -670,6 +674,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   notice: null,
   vaultDir: "",
   vaultEntries: [],
+  repoEntries: [],
+  repoFile: null,
   vaultFile: null,
   vaultHits: [],
   vaultKnown: [],
@@ -1131,6 +1137,12 @@ export const useBoard = create<BoardState>((set, get) => ({
           case "vault_listing":
             set({ vaultEntries: msg.entries });
             break;
+          case "repo_listing":
+            set({ repoEntries: msg.entries });
+            break;
+          case "repo_file":
+            set({ repoFile: { path: msg.path, text: msg.text } });
+            break;
           case "vault_hits":
             set({ vaultHits: msg.hits });
             break;
@@ -1368,6 +1380,13 @@ export const useBoard = create<BoardState>((set, get) => ({
     set({ vaultDir: dir });
     try { localStorage.setItem("cv-vault-dir", dir); } catch { /* noop */ }
     client?.vaultList(dir);
+  },
+  repoTree: (dir) => {
+    set({ repoEntries: [], repoFile: null });
+    client?.repoTree(dir);
+  },
+  repoRead: (dir, path) => {
+    client?.repoRead(dir, path);
   },
   vaultRead: (path) => client?.vaultRead(get().vaultDir, path),
   vaultPeek: (path) => client?.vaultPeek(get().vaultDir, path),
