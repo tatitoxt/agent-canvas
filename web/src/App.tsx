@@ -154,6 +154,7 @@ function Board() {
   const agents = useBoard((s) => s.agents);
   const liveEdges = useBoard((s) => s.edges);
   const workspaces = useBoard((s) => s.workspaces);
+  const workspaceSizes = useBoard((s) => s.workspaceSizes);
   const agentSizes = useBoard((s) => s.agentSizes);
   const positions = useBoard((s) => s.positions);
   const moveNode = useBoard((s) => s.moveNode);
@@ -465,7 +466,7 @@ function Board() {
       type: "workspace" as const,
       deletable: false,
       position: positions[w.id] ?? { x: 60, y: 60 },
-      style: { width: 900, height: 540 },
+      style: { width: workspaceSizes[w.id]?.w ?? 900, height: workspaceSizes[w.id]?.h ?? 540 },
       className: "cv-workspace-node",
       data: { kind: "workspace" as const, name: w.name, repo: w.repo },
     }));
@@ -591,7 +592,7 @@ function Board() {
     return useMock
       ? [...initialNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs]
       : [...wsNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs];
-  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges, shapes, mdNodes, panelNodes, termNodes, cardZ, agentSizes]);
+  }, [agents, positions, connected, workspaces, workspaceSizes, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges, shapes, mdNodes, panelNodes, termNodes, cardZ, agentSizes]);
 
   // Controlled React Flow needs change application for selection and drag to
   // stick. rfNodes is the rendered array: baseNodes is re-derived from the

@@ -409,6 +409,9 @@ type BoardState = {
   /** Per-agent size overrides for cards resized on the canvas. */
   agentSizes: Record<string, { w: number; h?: number }>;
   resizeAgentCard: (id: string, w: number, h?: number, persist?: boolean) => void;
+  /** Workspace frame dimensions are local UI state, keyed by workspace ID. */
+  workspaceSizes: Record<string, { w: number; h: number }>;
+  resizeWorkspace: (id: string, w: number, h: number) => void;
   /** Drop position for a delegation child, keyed by parent agent id —
    * applied when the delegation message names the child. */
   pendingPositions: Record<string, { x: number; y: number }>;
@@ -711,6 +714,14 @@ export const useBoard = create<BoardState>((set, get) => ({
     const next = { ...get().agentSizes, [id]: { w, h } };
     if (persist) localStorage.setItem("cv-agentsizes", JSON.stringify(next));
     set({ agentSizes: next });
+  },
+  workspaceSizes: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-workspacesizes") ?? "{}"); } catch { return {}; }
+  })(),
+  resizeWorkspace: (id, w, h) => {
+    const next = { ...get().workspaceSizes, [id]: { w: Math.max(520, w), h: Math.max(320, h) } };
+    localStorage.setItem("cv-workspacesizes", JSON.stringify(next));
+    set({ workspaceSizes: next });
   },
   pendingPositions: {},
   approvals: {},

@@ -962,8 +962,7 @@ export function WorkspaceNode({
         handleClassName="cv-node-resize-handle"
         lineClassName="cv-node-resize-line"
         onResizeEnd={(_, p) => {
-          const node = rf.getNode(id);
-          if (node) rf.setNodes((nodes) => nodes.map((n) => n.id === id ? { ...n, style: { ...n.style, width: Math.round(p.width), height: Math.round(p.height) } } : n));
+          useBoard.getState().resizeWorkspace(id, Math.round(p.width), Math.round(p.height));
         }}
       />
       <div
