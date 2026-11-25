@@ -226,6 +226,7 @@ export function Topbar({
   return (
     <div
       ref={wrap}
+      className="cv-topbar-fuse"
       style={{
         position: "absolute",
         top: 12,
@@ -237,6 +238,7 @@ export function Topbar({
         display: "flex",
         alignItems: "flex-start",
         gap: 8,
+        padding: 3,
         pointerEvents: "none",
       }}
     >

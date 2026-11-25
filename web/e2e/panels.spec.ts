@@ -27,6 +27,21 @@ test("Tools opens as a dock and collapses to panel icons", async ({ page }) => {
   await expect(dock).toBeHidden();
 });
 
+test("topbar controls fuse into one glass bubble on hover", async ({ page }) => {
+  await boot(page);
+  const showChrome = page.getByTitle("Show panels and menus");
+  if (await showChrome.isVisible().catch(() => false)) await showChrome.click();
+  const bar = page.locator(".cv-topbar-fuse");
+  const leftCluster = bar.locator(":scope > .glass-pill");
+  await expect(bar).toBeVisible();
+  await expect(bar).toHaveCSS("box-shadow", "none");
+  await bar.hover({ position: { x: 250, y: 20 } });
+  await expect.poll(() => bar.evaluate((el) => getComputedStyle(el).boxShadow)).not.toBe("none");
+  await expect(leftCluster).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await page.locator(".react-flow").hover({ position: { x: 500, y: 300 } });
+  await expect.poll(() => bar.evaluate((el) => getComputedStyle(el).boxShadow)).toBe("none");
+});
+
 test("Tools Add shape opens its choices and creates a canvas shape", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();
