@@ -860,18 +860,24 @@ function Board() {
       .map((el) => el.closest("[data-board-tab]")?.getAttribute("data-board-tab"))
       .find(Boolean);
     if (target) {
-      const a = agents[node.id] ?? workspaces[node.id];
-      if (a) {
-        if (target !== (a.board_id ?? "main")) {
-          useBoard.getState().moveToBoard(node.id, target);
-          return;
-        }
-      } else if (/^(term|panel|shape|md|web|orch)-/.test(node.id)) {
-        if (target !== useBoard.getState().activeBoard) {
-          useBoard.getState().moveCardToBoard(node.id, target);
-          return;
+      // A group drop moves every dragged card to the tab — moving only
+      // the grabbed one splits the group across boards.
+      let movedAny = false;
+      for (const n of dragged) {
+        const a = agents[n.id] ?? workspaces[n.id];
+        if (a) {
+          if (target !== (a.board_id ?? "main")) {
+            useBoard.getState().moveToBoard(n.id, target);
+            movedAny = true;
+          }
+        } else if (/^(term|panel|shape|md|web|orch)-/.test(n.id)) {
+          if (target !== useBoard.getState().activeBoard) {
+            useBoard.getState().moveCardToBoard(n.id, target);
+            movedAny = true;
+          }
         }
       }
+      if (movedAny) return;
     }
     const s0 = snapFor(node);
     setGuides({ v: [], h: [] });
