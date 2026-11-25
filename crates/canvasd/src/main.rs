@@ -48,8 +48,50 @@ struct AppState {
     /// /share/{id} without auth — the 128-bit id is the capability.
     shares: ShareMap,
     /// Canonicalized roots file operations may touch — the board repo
-    /// plus anything listed in `.canvas/allowed-roots` (one per line).
-    allowed_roots: Vec<PathBuf>,
+    /// plus anything listed in the user config `allowed-roots` file.
+    /// Mutex because mounting a vault from the UI appends at runtime.
+    allowed_roots: std::sync::Arc<std::sync::Mutex<Vec<PathBuf>>>,
+}
+
+
+/// Where extra sandbox roots are persisted — the USER's config dir,
+/// never the checkout: a cloned repo must never be able to grant
+/// itself access to the operator's disk.
+fn allowed_roots_list_path(repo_root: &std::path::Path) -> PathBuf {
+    std::env::var("HOME")
+        .map(|h| PathBuf::from(h).join(".config").join("canvas").join("allowed-roots"))
+        .unwrap_or_else(|_| repo_root.join(".canvas").join("allowed-roots.local"))
+}
+
+const SANDBOX_HINT: &str = " — open the vault from the Vault panel to grant access, or add its path to ~/.config/canvas/allowed-roots (one per line)";
+
+/// Is `canon_root` inside an allowed root?
+fn root_allowed(state: &AppState, canon_root: &std::path::Path) -> bool {
+    state.allowed_roots.lock().unwrap().iter().any(|ar| canon_root.starts_with(ar))
+}
+
+/// Persist a newly mounted vault root: append to the user config file
+/// (newline-guarded, deduped) and to the in-memory list. The mount
+/// gesture comes over the authenticated control socket from the user's
+/// own UI — file operations themselves never trigger this.
+fn persist_allowed_root(state: &AppState, canon_root: &std::path::Path) {
+    {
+        let mut roots = state.allowed_roots.lock().unwrap();
+        if roots.iter().any(|ar| canon_root.starts_with(ar)) { return; }
+        roots.push(canon_root.to_path_buf());
+    }
+    let list = allowed_roots_list_path(&state.repo_root);
+    if let Some(parent) = list.parent() { let _ = std::fs::create_dir_all(parent); }
+    let prev = std::fs::read_to_string(&list).unwrap_or_default();
+    let line = canon_root.to_string_lossy().to_string();
+    let already = prev.lines().any(|l| l.trim() == line);
+    if !already {
+        let mut text = prev;
+        if !text.is_empty() && !text.ends_with('\n') { text.push('\n'); }
+        text.push_str(&line);
+        text.push('\n');
+        let _ = std::fs::write(&list, text);
+    }
 }
 
 /// Deska-style sandbox: every vault path is validated in the daemon,
@@ -73,9 +115,8 @@ fn vault_sandbox_resolve(state: &AppState, dir: &str, path: &str) -> Result<Path
     }
     let canon_root = canon_through_missing(std::path::Path::new(dir))
         .ok_or_else(|| format!("access denied: vault root not found: {dir}"))?;
-    let allowed = state.allowed_roots.iter().any(|ar| canon_root.starts_with(ar));
-    if !allowed {
-        return Err("access denied: path is outside allowed directories".into());
+    if !root_allowed(state, &canon_root) {
+        return Err(format!("access denied: path is outside allowed directories{SANDBOX_HINT}"));
     }
     // Walk the components that exist: any symlink in the chain must
     // resolve inside the vault. `symlink_metadata` (lstat) sees dangling
@@ -129,10 +170,10 @@ fn canon_through_missing(path: &std::path::Path) -> Option<PathBuf> {
 fn vault_sandbox_dir(state: &AppState, dir: &str) -> Result<PathBuf, String> {
     let canon_root = canon_through_missing(std::path::Path::new(dir))
         .ok_or_else(|| format!("access denied: vault root not found: {dir}"))?;
-    if state.allowed_roots.iter().any(|ar| canon_root.starts_with(ar)) {
+    if root_allowed(state, &canon_root) {
         Ok(canon_root)
     } else {
-        Err("access denied: path is outside allowed directories".into())
+        Err(format!("access denied: path is outside allowed directories{SANDBOX_HINT}"))
     }
 }
 
@@ -1520,6 +1561,14 @@ fn handle_client_msg(
             }
         }
         ClientMsg::VaultList { dir } => {
+            // Listing IS the mount gesture — the user pointed the Vault
+            // panel at this directory, so its canonical root is
+            // auto-whitelisted (persisted) before the sandbox check.
+            if let Some(canon) = canon_through_missing(std::path::Path::new(&dir)) {
+                if !root_allowed(state, &canon) {
+                    persist_allowed_root(state, &canon);
+                }
+            }
             match vault_sandbox_dir(state, &dir) {
                 Ok(root) => {
                     let mut entries = vault_list_entries(&root);
@@ -2320,9 +2369,7 @@ async fn main() -> Result<()> {
             // Lives in the USER's config dir, not the checkout — a cloned
             // repo must never be able to grant itself access to the
             // operator's disk (repo authors control `.canvas/`).
-            let list = std::env::var("HOME")
-                .map(|h| PathBuf::from(h).join(".config").join("canvas").join("allowed-roots"))
-                .unwrap_or_else(|_| repo_root.join(".canvas").join("allowed-roots.local"));
+            let list = allowed_roots_list_path(&repo_root);
             if let Ok(text) = std::fs::read_to_string(&list) {
                 for line in text.lines() {
                     let line = line.trim();
@@ -2349,7 +2396,7 @@ async fn main() -> Result<()> {
         pending_fallbacks: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         pending_inputs: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         shares: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
-        allowed_roots,
+        allowed_roots: std::sync::Arc::new(std::sync::Mutex::new(allowed_roots)),
     });
 
     let api = Router::new()
