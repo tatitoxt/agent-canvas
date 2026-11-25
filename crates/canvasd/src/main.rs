@@ -26,6 +26,7 @@ use tracing::{info, warn};
 
 type AgentId = String;
 
+/// Published artifacts: share id → (title, mime, bytes).
 type ShareMap = Arc<std::sync::Mutex<std::collections::HashMap<String, (String, String, Vec<u8>)>>>;
 
 #[derive(Clone)]
@@ -49,9 +50,6 @@ struct AppState {
     /// plus anything listed in `.canvas/allowed-roots` (one per line).
     allowed_roots: Vec<PathBuf>,
 }
-
-/// Published artifacts: share id → (title, mime, bytes).
-
 
 /// Deska-style sandbox: every vault path is validated in the daemon,
 /// never trusted from the client.
