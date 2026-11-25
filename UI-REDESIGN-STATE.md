@@ -44,3 +44,21 @@ Fausto respondió la pregunta de la library con este screenshot — ES la respue
 - **Cards**: flotan sobre el wallpaper real del desktop (el canvas ES transparente al escritorio). Terminal cards muestran contenido real de shell. Headers minimalistas: título chico centrado/izquierda, chrome casi invisible.
 - **Inbox panel**: muestra "0 agents running", "Needs you", items con status Failed en rojo, botones Details/Dismiss — bandeja de atención.
 - Wallpaper visible => la ambientación con grano/luz que hicimos es la aproximación correcta para Canvas (que no es transparente al desktop).
+
+## FEEDBACK FAUSTO — ronda 2 (dictado 2026-11-24 ~22:30, tras probar la app en vivo)
+**Regla nueva de Fausto: "Siempre preguntame antes que otra cosa" — confirmar interpretaciones con él antes de implementar.**
+
+1. **Outline completo y más fuerte**: nada de hairline solo arriba en color CLI — el outline de estado tiene que recorrer TODO el perímetro de la card y con colores MÁS fuertes/vivos. (La hairline CLI superior probablemente debe eliminarse o subordinarse.)
+2. **Estela animada en running**: cuando está running, el outline lleva una luz/estela corriendo alrededor del borde ("como algo corriendo, una luz corriendo"). Lo mismo para waiting y demás estados (cada uno con su color). Implementación sugerida: border animado vía conic-gradient rotando en una máscara de borde, o SVG rect con stroke-dasharray animado — cuidar performance.
+3. **Selección por clic = outline distinto**: independiente del estado, clickear una card le pone otro tipo de outline diferenciado.
+4. **CERO flyout tipo iOS** — reconfirmado.
+5. **"Swiss"**: hay algo en la UI etiquetado "Swiss" que no se entiende — buscarlo y renombrar/quitar.
+6. **Botones del chrome de panel están muy mal**: el menos (minimizar), "una flecha rara que no tiene que estar" (¿maximize/restore nuevo del PR #25?), un cuadrado que no cambia nada, y la cruz. Rediseñar todos los símbolos — más lindos, estilo Deska. **Todos los botones en BLANCO** (decisión previa de Fausto).
+7. **Cards de automations/artifacts agregadas al board se ven mal** — hacerlas más facheras, más Deska.
+8. **Gather desordena**: junta las cards una encima de la otra — necesita layout ordenado (grid/flow con spacing).
+9. **Library = sidebar extendida estilo bubbles del bottom bar**: íconos con el NOMBRE al lado de cada item, más íconos de los que hay (incluir GitHub, etc.). Inspirarse en los bubbles inferiores.
+10. **Toda card de terminal arranca con el glyph de terminal `>_`** como primer ícono, ANTES del logo del CLI. Cada tipo de cosa tiene su símbolo (artifacts tienen simbolitos, etc.).
+11. **Topbar**: en Deska, hover sobre los items del top nav los fusiona en una sola bubble. El pill de status "canvas · working · needs you · blocked · done · demo" — moverlo a otro lado o eliminarlo directamente.
+12. Fausto enviará foto(s) de Deska como referencia adicional — revisar su Desktop o pedírsela a la vuelta.
+
+## Pendiente de ronda 1 sin tocar: library docked (#3), edge routing (#5), file explorer flotante (#7), terminales reales verificar (#8), crowding del header.
