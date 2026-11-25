@@ -48,6 +48,21 @@ export function TermHost({ agentId }: { agentId: string }) {
   const [findOpen, setFindOpen] = useState(false);
   const [findQ, setFindQ] = useState("");
 
+  // Keep terminal shortcuts scoped to this pane. In particular, Cmd/Ctrl+F
+  // should search scrollback without sending control characters to a TUI.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "f") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setFindOpen(true);
+    };
+    host.addEventListener("keydown", onKeyDown, true);
+    return () => host.removeEventListener("keydown", onKeyDown, true);
+  }, []);
+
   useEffect(() => {
     const term = new Terminal({
       fontSize: useBoard.getState().termFont,
@@ -143,6 +158,8 @@ export function TermHost({ agentId }: { agentId: string }) {
       autoFocus
       value={findQ}
       placeholder="find in buffer"
+      aria-label="Find in terminal buffer"
+      data-testid="terminal-find-input"
       onChange={(e) => {
         setFindQ(e.target.value);
         if (e.target.value) searchRef.current?.findNext(e.target.value, { decorations: DECOR });
@@ -220,6 +237,7 @@ export function TermHost({ agentId }: { agentId: string }) {
       >
         <button
           title="find in terminal buffer"
+          aria-label="Find in terminal buffer"
           onClick={() => setFindOpen((v) => !v)}
           style={{ background: "none", border: "none", color: findOpen ? "var(--cv-accent)" : "var(--cv-ink-dim)", cursor: "pointer", fontSize: 12, padding: "0 2px" }}
         >

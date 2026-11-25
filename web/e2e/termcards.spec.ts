@@ -147,6 +147,30 @@ test("terminal accepts shell input and renders PTY output", async ({ page }) => 
   await expect(page.locator(".xterm-rows")).toContainText("terminal-e2e-ok", { timeout: 8_000 });
 });
 
+test("terminal search shortcut finds scrollback and Escape returns focus to the TUI", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const terminal = page.locator(".terminal-drawer .xterm").first();
+  await terminal.click();
+  await page.keyboard.type("printf 'searchable-terminal-line\\n'");
+  await page.keyboard.press("Enter");
+  const rows = page.locator(".terminal-drawer .xterm-rows");
+  await expect(rows).toContainText("searchable-terminal-line", { timeout: 8_000 });
+
+  await page.keyboard.press("Control+f");
+  const find = page.getByTestId("terminal-find-input");
+  await expect(find).toBeVisible();
+  await find.fill("searchable-terminal-line");
+  await expect(page.locator(".xterm-search一" )).toHaveCount(0); // keep search UI local to xterm
+  await page.keyboard.press("Escape");
+  await expect(find).toHaveCount(0);
+  await expect(terminal.locator("textarea.xterm-helper-textarea")).toBeFocused();
+  await page.keyboard.type("printf 'terminal-focus-restored\\n'");
+  await page.keyboard.press("Enter");
+  await expect(rows).toContainText("terminal-focus-restored", { timeout: 8_000 });
+});
+
 test("popped-out terminal keeps accepting shell input", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
