@@ -2265,10 +2265,13 @@ export const useBoard = create<BoardState>((set, get) => ({
     // Don't bury existing groups: while the grid area intersects a frame,
     // slide the anchor below it (few frames in practice — one pass suffices).
     const rows0 = Math.ceil(loose.length / cols);
+    // Frame rect exactly as drawn: origin (x0-26, y0-46), size (cols*cw+12,
+    // rows*ch+56) — anything looser flags clear space as a collision.
     for (const r of [...rects].sort((a, b) => a.y - b.y)) {
-      const gx1 = x0 - 26, gy1 = y0 - 46, gx2 = x0 + cols * cw + 12, gy2 = y0 + rows0 * ch + 56;
+      const gx1 = x0 - 26, gy1 = y0 - 46;
+      const gx2 = gx1 + cols * cw + 12, gy2 = gy1 + rows0 * ch + 56;
       const overlap = gx1 < r.x + r.w! && gx2 > r.x && gy1 < r.y + r.h! && gy2 > r.y;
-      if (overlap) y0 = r.y + r.h! + 64;
+      if (overlap) y0 = r.y + r.h! + 110;
     }
     loose.forEach((l, i) =>
       l.move(l.id, x0 + (i % cols) * cw, y0 + Math.floor(i / cols) * ch),
@@ -2293,6 +2296,13 @@ export const useBoard = create<BoardState>((set, get) => ({
     }
     // The movers write to the ACTIVE board — jump back to the board the
     // gather happened on so positions land where the cards actually are.
+    // If that board was deleted there is nothing to restore into: drop
+    // the snapshot instead of resurrecting a board the user closed.
+    if (!get().boards[g.board]) {
+      set({ lastGather: null });
+      get().notify("gather undo expired — that board is gone");
+      return;
+    }
     if (get().activeBoard !== g.board) get().setActiveBoard(g.board);
     for (const item of g.items) {
       if (item.kind === "panel") get().movePanelNode(item.id, item.x, item.y);
