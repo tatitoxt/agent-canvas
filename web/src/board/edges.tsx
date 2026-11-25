@@ -20,16 +20,16 @@ const STATE_STYLE = {
 } as const;
 
 type Rect = { x: number; y: number; w: number; h: number };
-type FlowNode = ReturnType<ReturnType<typeof useReactFlow>["getNodes"]>[number];
+type PositionNode = { id: string; parentId?: string; position: Point; internals?: { positionAbsolute?: Point } };
 
-function absolutePosition(node: FlowNode, nodesById: Map<string, FlowNode>, seen = new Set<string>()): Point {
-  const internal = (node as { internals?: { positionAbsolute?: Point } }).internals?.positionAbsolute;
+export function absoluteNodePosition(node: PositionNode, nodesById: Map<string, PositionNode>, seen = new Set<string>()): Point {
+  const internal = node.internals?.positionAbsolute;
   if (internal) return internal;
   if (!node.parentId || seen.has(node.id)) return node.position;
   seen.add(node.id);
   const parent = nodesById.get(node.parentId);
   if (!parent) return node.position;
-  const parentPosition = absolutePosition(parent, nodesById, seen);
+  const parentPosition = absoluteNodePosition(parent, nodesById, seen);
   return { x: parentPosition.x + node.position.x, y: parentPosition.y + node.position.y };
 }
 
@@ -212,7 +212,7 @@ export function DelegationEdge({
   const nodesById = new Map(nodes.map((n) => [n.id, n]));
   const otherNodes = nodes.filter((n) => n.type !== "workspace");
   const nodeRect = (n: (typeof otherNodes)[number]) => {
-    const p = absolutePosition(n, nodesById);
+    const p = absoluteNodePosition(n, nodesById);
     const w = n.measured?.width ?? (n.width as number) ?? 380;
     const h = n.measured?.height ?? (n.height as number) ?? 200;
     return { x: p.x - 8, y: p.y - 8, w: w + 16, h: h + 16 };
@@ -224,7 +224,7 @@ export function DelegationEdge({
   // Labels must avoid endpoints too. Compute parent-relative workspace cards
   // in absolute flow coordinates so chips do not land on their own terminal.
   const labelObstacles = otherNodes.map((n) => {
-    const p = absolutePosition(n, nodesById);
+    const p = absoluteNodePosition(n, nodesById);
     return {
       x: p.x - 8,
       y: p.y - 8,

@@ -1,8 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { detourPath } from "./edges";
+import { absoluteNodePosition, detourPath } from "./edges";
 
 type Point = { x: number; y: number };
 type Rect = { x: number; y: number; w: number; h: number };
+
+describe("absoluteNodePosition", () => {
+  it("accumulates positions through nested workspace parents", () => {
+    const root = { id: "root", position: { x: 120, y: 80 } };
+    const child = { id: "child", parentId: "root", position: { x: 40, y: 25 } };
+    const card = { id: "card", parentId: "child", position: { x: 7, y: 9 } };
+    const nodes = new Map([[root.id, root], [child.id, child], [card.id, card]]);
+    expect(absoluteNodePosition(card, nodes)).toEqual({ x: 167, y: 114 });
+  });
+
+  it("uses React Flow's measured absolute position when available", () => {
+    const parent = { id: "parent", position: { x: 20, y: 30 } };
+    const card = {
+      id: "card", parentId: "parent", position: { x: 7, y: 9 },
+      internals: { positionAbsolute: { x: 95, y: 115 } },
+    };
+    const nodes = new Map([[parent.id, parent], [card.id, card]]);
+    expect(absoluteNodePosition(card, nodes)).toEqual({ x: 95, y: 115 });
+  });
+});
 
 function routePoints(path: string): Point[] {
   return [...path.matchAll(/[ML]\s*(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g)]

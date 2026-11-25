@@ -192,3 +192,5 @@ REMAINING LEVERS if still slow:
 - [ ] Siguiente lote: seguir auditando densidad y alineación de paneles/chrome contra la referencia Deska; mantener PR #47 abierto y sin merge.
 - [x] Etiquetas de delegación: el ruteador busca tramos despejados y evita también las tarjetas de origen/destino. Las posiciones de nodos anidados se convierten a coordenadas absolutas antes de comprobar colisiones; la etiqueta usa el punto calculado incluso cuando el cable conserva el Bézier directo. Captura revisada en `/tmp/canvas-design/delegation-parent-offset.png` sin errores de consola.
 - [x] Validación tras corregir las etiquetas: typecheck, 28/28 unit tests, 33/33 E2E, build de producción y `git diff --check` pasan. Las pruebas E2E incluyen shell/PTy y terminal flotante interactiva.
+- [x] Regresión de coordenadas anidadas: pruebas unitarias cubren la suma de tres niveles de workspace y el uso de `positionAbsolute` calculado por React Flow; la detección de colisiones queda protegida ante ambos casos.
+- [x] Validación tras añadir esa regresión: 30/30 unit tests, 33/33 E2E, typecheck, build de producción y `git diff --check` pasan.
