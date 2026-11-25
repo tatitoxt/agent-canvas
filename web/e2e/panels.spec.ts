@@ -38,6 +38,16 @@ test("offline demo mounts without a React update loop", async ({ page }) => {
   }
 });
 
+test("topbar keeps connection status compact and accessible in demo mode", async ({ page }) => {
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  const status = page.getByTestId("daemon-status");
+  await expect(status).toHaveAttribute("role", "status");
+  await expect(status).toHaveAttribute("aria-label", "Canvas demo mode; daemon offline");
+  await expect(status).toHaveAttribute("title", "demo mode · start canvasd to connect");
+  await expect(page.locator(".cv-topbar-fuse")).not.toContainText("offline");
+});
+
 async function boot(page: import("@playwright/test").Page) {
   const { port, token, vault, repo } = stack();
   await page.addInitScript((v) => localStorage.setItem("cv-vault-dir", v), vault);
