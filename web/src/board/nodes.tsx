@@ -82,21 +82,23 @@ function MiniTerm({ agentId }: { agentId: string }) {
   if (lines.length === 0) return null;
   return (
     <div
+      data-testid="agent-terminal-preview"
       className="nodrag"
       style={{
         marginTop: 10,
-        padding: "9px 11px",
+        padding: "8px 10px",
         borderRadius: 8,
-        background: "rgba(0,0,0,0.34)",
+        background: "color-mix(in srgb, var(--cv-base) 72%, transparent)",
         border: "1px solid var(--cv-glass-edge)",
         fontFamily: "var(--cv-font-mono)",
-        fontSize: 10,
-        lineHeight: 1.55,
+        fontSize: 10.5,
+        lineHeight: 1.65,
         color: "rgba(244,242,238,0.85)",
         overflow: "hidden",
         whiteSpace: "pre",
         textOverflow: "clip",
         cursor: "default",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.025)",
       }}
     >
       {lines.map((l, i) => (
@@ -106,11 +108,14 @@ function MiniTerm({ agentId }: { agentId: string }) {
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
-            opacity: 0.55 + (0.45 * (i + 1)) / lines.length,
+            opacity: 0.68 + (0.32 * (i + 1)) / lines.length,
+            borderLeft: i === lines.length - 1 ? "1px solid var(--cv-accent)" : "1px solid transparent",
+            paddingLeft: 7,
+            marginLeft: -8,
           }}
         >
           {l.map((sp, j) => (
-            <span key={j} style={{ color: sp.color, fontWeight: sp.bold ? 600 : undefined }}>
+            <span key={j} style={{ color: sp.color, fontWeight: sp.bold ? 700 : undefined, textShadow: sp.bold ? "0 0 10px color-mix(in srgb, currentColor 12%, transparent)" : undefined }}>
               {sp.text}
             </span>
           ))}

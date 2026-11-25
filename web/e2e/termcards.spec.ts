@@ -54,6 +54,24 @@ test("agent cards resize from their canvas handles", async ({ page }) => {
   await expect.poll(async () => (await card.boundingBox())?.height ?? 0).toBeGreaterThan(before!.height + 25);
 });
 
+test("agent card terminal preview emphasizes the latest visible row", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const terminal = page.locator(".terminal-drawer .xterm").first();
+  await terminal.click();
+  await page.keyboard.type("printf '\\033[1;32mpreview-latest-row\\033[0m\\n'");
+  await page.keyboard.press("Enter");
+  const card = page.locator(".agent-card").first();
+  const preview = card.getByTestId("agent-terminal-preview");
+  await expect(preview).toContainText("preview-latest-row", { timeout: 8_000 });
+  const rows = preview.locator(":scope > div");
+  const lastRow = rows.last();
+  await expect(lastRow).toContainText("preview-latest-row");
+  await expect(lastRow).toHaveCSS("border-left-color", "rgb(245, 165, 36)");
+  await expect(lastRow.locator("span").filter({ hasText: "preview-latest-row" })).toHaveCSS("font-weight", "700");
+});
+
 test("pop out creates a canvas term card; put back returns it to the drawer", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
