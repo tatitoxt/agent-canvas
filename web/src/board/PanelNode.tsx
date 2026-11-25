@@ -92,7 +92,7 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
             placeItems: "center",
           }}
         >
-          <Icon name={n.collapsed ? "expand" : "minus"} size={12} color="var(--cv-ink)" />
+          <Icon name="ph-min" size={12} color="var(--cv-ink)" />
         </button>
         <button
           className="nodrag"
@@ -121,7 +121,7 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
             placeItems: "center",
           }}
         >
-          <Icon name="zoom" size={11} color="var(--cv-ink)" />
+          <Icon name="ph-max" size={12} color="var(--cv-ink)" />
         </button>
         <button
           className="nodrag"
@@ -143,7 +143,7 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
             placeItems: "center",
           }}
         >
-          <Icon name="x" size={12} color="var(--cv-ink)" />
+          <Icon name="ph-x" size={13} color="var(--cv-ink)" />
         </button>
       </div>
       {!n.collapsed && (
