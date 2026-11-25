@@ -458,6 +458,7 @@ function Board() {
       .map((w) => ({
       id: w.id,
       type: "workspace" as const,
+      deletable: false,
       position: positions[w.id] ?? { x: 60, y: 60 },
       style: { width: 900, height: 540 },
       data: { kind: "workspace" as const, name: w.name, repo: w.repo },
@@ -480,6 +481,7 @@ function Board() {
       return {
         id: a.id,
         type: "agent" as const,
+      deletable: false,
         position,
         ...(ws ? { parentId: ws.id, extent: "parent" as const } : {}),
         data: {
@@ -511,6 +513,7 @@ function Board() {
       ([id, url]) => ({
         id,
         type: "web" as const,
+        deletable: true,
         position: positions[id] ?? { x: 600, y: 120 },
         style: { width: 520, height: 340 },
         data: { kind: "web" as const, url },
@@ -522,6 +525,7 @@ function Board() {
       .map(([id, o]) => ({
         id,
         type: "orchestrator" as const,
+      deletable: false,
         position: positions[id] ?? { x: 420, y: 80 },
         data: {
           kind: "orchestrator" as const,
@@ -535,6 +539,7 @@ function Board() {
     const shapeNs: Node<BoardNodeData>[] = Object.values(shapes[activeBoard] ?? {}).map((s) => ({
       id: s.id,
       type: "shape" as const,
+      deletable: true,
       position: { x: s.x, y: s.y },
       style: { width: s.w, height: s.h },
       data: { kind: "shape" as const, shape: s },
@@ -543,6 +548,7 @@ function Board() {
       ([id, path]) => ({
         id,
         type: "md" as const,
+        deletable: true,
         position: positions[id] ?? { x: 640, y: 160 },
         style: { width: 340, height: 260 },
         data: { kind: "md" as const, id, path },
@@ -552,6 +558,7 @@ function Board() {
       ([id, n]) => ({
         id,
         type: "panel" as const,
+        deletable: true,
         position: { x: n.x, y: n.y },
         style: { width: n.w, height: n.h },
         draggable: !n.locked,
@@ -622,7 +629,9 @@ function Board() {
     [setRfNodes],
   );
 
-  const onNodeClick: NodeMouseHandler = (_, node) => {
+  const onNodeClick: NodeMouseHandler = (e, node) => {
+    // Shift+click is multi-select — don't open terminals or rewire.
+    if (e.shiftKey) return;
     // In Connect mode a click on an agent card wires/unwires it to the
     // orchestrator instead of opening the terminal.
     if (wiringFrom && agents[node.id]) {
@@ -1024,6 +1033,18 @@ function Board() {
         panOnScroll
         zoomOnScroll={false}
         onlyRenderVisibleElements
+        selectionKeyCode={null}
+        multiSelectionKeyCode="Shift"
+        deleteKeyCode={["Backspace", "Delete"]}
+        onNodesDelete={(deleted) => {
+          const st = useBoard.getState();
+          for (const n of deleted) {
+            if (n.type === "shape") st.deleteShape(n.id);
+            else if (n.type === "md") st.mdNodeRemove(n.id);
+            else if (n.type === "web") st.webNodeRemove(n.id);
+            else if (n.type === "panel") st.closePanelNode(n.id);
+          }
+        }}
         onSelectionChange={({ nodes }) =>
           setSel(
             nodes.map((n) => ({
