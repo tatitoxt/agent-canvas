@@ -655,8 +655,19 @@ function Board() {
     }
     // Double-click an agent card expands its terminal IN PLACE — popped out
     // as a full canvas card instead of the bottom-right drawer duplicate.
-    if (agents[node.id] && !useBoard.getState().termNodes[activeBoard ?? "main"]?.[`term-${node.id}`]) {
+    const termId = `term-${node.id}`;
+    const termExists = !!useBoard.getState().termNodes[activeBoard ?? "main"]?.[termId];
+    if (agents[node.id]) {
+      if (termExists) {
+        // Already expanded — focus THAT card instead of zooming the agent
+        // and leaving the terminal offscreen.
+        useBoard.getState().requestFocus(termId);
+        return;
+      }
       useBoard.getState().openTermNode(node.id);
+      // Close the drawer copy — the canvas card replaces it, same as the
+      // drawer's own pop-out button does.
+      setOpenTerms((ts) => ts.filter((t) => t.id !== node.id));
     }
     fitView({ nodes: [{ id: node.id }], padding: 0.9, maxZoom: 1.4, duration: 300 });
   };
