@@ -558,7 +558,11 @@ fn spawn_agent(
                         // A delegation awaiting this child's result moves to
                         // the replacement — otherwise the original exit marks
                         // the ticket failed and the parent's result is lost.
-                        if let Some(edge) = state_fb.pending_results.lock().unwrap().remove(&id) {
+                        // The lock guard must drop before re-locking — an
+                        // if-let keeps the first guard alive through its
+                        // body and std::sync::Mutex is not reentrant.
+                        let edge = state_fb.pending_results.lock().unwrap().remove(&id);
+                        if let Some(edge) = edge {
                             state_fb.pending_results.lock().unwrap().insert(new_id.clone(), edge);
                         }
                         let _ = state_fb.events.send(Event::Control(ServerMsg::Spawned {
