@@ -789,11 +789,15 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .workspaces_snapshot()
                 .unwrap_or_default()
                 .into_iter()
-                .map(|(workspace_id, name, repo, board_id)| protocol::SnapshotWorkspace {
+                .map(|(workspace_id, name, repo, board_id)| {
+                    let agent_chain = state.store.workspace_chain(&workspace_id).ok().flatten();
+                    protocol::SnapshotWorkspace {
                     workspace_id,
                     name,
                     repo,
                     board_id,
+                    agent_chain,
+                    }
                 })
                 .collect(),
             delegations: state

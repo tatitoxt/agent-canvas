@@ -111,6 +111,7 @@ export type SnapshotWorkspace = {
   name: string;
   repo: string;
   board_id?: string | null;
+  agent_chain?: string[] | null;
 };
 
 export type SnapshotDelegation = {
@@ -210,6 +211,10 @@ export class CanvasClient {
    * connect(), or the board would be stuck offline forever. */
   isClosed(): boolean {
     return this.ws.readyState === WebSocket.CLOSED;
+  }
+
+  setAgentChain(workspaceId: string, chain: string[]) {
+    this.send({ cmd: "set_agent_chain", workspace_id: workspaceId, chain });
   }
 
   spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string, accountId?: string, initialInput?: string) {

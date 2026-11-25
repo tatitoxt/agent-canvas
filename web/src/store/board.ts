@@ -50,6 +50,8 @@ export type LiveWorkspace = {
   name: string;
   repo: string;
   board_id?: string | null;
+  /** Ordered CLI fallback chain; absent = daemon auto-detected default. */
+  agent_chain?: string[] | null;
 };
 
 export type LiveEdge = {
@@ -509,6 +511,7 @@ type BoardState = {
   viewportRect: { left: number; top: number; right: number; bottom: number } | null;
   pendingSpawnPos: { x: number; y: number } | null;
   setPendingSpawnPos: (p: { x: number; y: number } | null) => void;
+  setAgentChain: (workspaceId: string, chain: string[]) => void;
   openTermNode: (agentId: string, pos?: { x: number; y: number }) => void;
   closeTermNode: (id: string) => void;
   moveTermNode: (id: string, x: number, y: number) => void;
@@ -1037,7 +1040,7 @@ export const useBoard = create<BoardState>((set, get) => ({
             const workspaces = Object.fromEntries(
               (msg.workspaces ?? []).map((w) => [
                 w.workspace_id,
-                { id: w.workspace_id, name: w.name, repo: w.repo, board_id: w.board_id ?? "main" },
+                { id: w.workspace_id, name: w.name, repo: w.repo, board_id: w.board_id ?? "main", agent_chain: w.agent_chain ?? null },
               ]),
             );
             const positions = Object.fromEntries(
@@ -1487,6 +1490,12 @@ export const useBoard = create<BoardState>((set, get) => ({
   viewportRect: null,
   pendingSpawnPos: null,
   setPendingSpawnPos: (p) => set({ pendingSpawnPos: p }),
+  setAgentChain: (workspaceId, chain) => {
+    const ws = get().workspaces[workspaceId];
+    if (!ws) return;
+    set({ workspaces: { ...get().workspaces, [workspaceId]: { ...ws, agent_chain: chain } } });
+    client?.setAgentChain(workspaceId, chain);
+  },
   openTermNode: (agentId, pos) => {
     const board = get().activeBoard;
     const id = `term-${agentId}`;

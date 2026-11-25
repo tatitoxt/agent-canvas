@@ -820,7 +820,83 @@ export function OrchestratorNode({
  * A workspace: a container agents live inside. Several coexist on one
  * canvas — like Codex/Claude "projects", but spatial.
  */
+/** Ordered CLI fallback chain editor — drag rows to reorder. Lives in the
+ * workspace node pill; empty means the daemon auto-detects installed CLIs. */
+function ChainEditor({ workspaceId }: { workspaceId: string }) {
+  const chain = useBoard((s) => s.workspaces[workspaceId]?.agent_chain ?? null);
+  const setAgentChain = useBoard((s) => s.setAgentChain);
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<string[] | null>(null);
+  const items = draft ?? chain ?? [];
+  const move = (from: number, to: number) => {
+    const next = [...items];
+    const [x] = next.splice(from, 1);
+    next.splice(to, 0, x);
+    setDraft(next);
+  };
+  return (
+    <span style={{ position: "relative" }} onClick={(e) => e.stopPropagation()}>
+      <button
+        title="Fallback chain — order of CLIs tried when one fails at launch"
+        style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", cursor: "pointer", fontSize: 10, padding: 0 }}
+        onClick={() => { setOpen(!open); setDraft(chain ? [...chain] : []); }}
+      >
+        ⛓
+      </button>
+      {open && (
+        <div
+          className="glass"
+          style={{ position: "absolute", top: 18, left: 0, zIndex: 40, padding: 8, borderRadius: 10, width: 190, fontSize: 11 }}
+        >
+          <div style={{ color: "var(--cv-ink-faint)", marginBottom: 6, fontSize: 10 }}>
+            fallback chain — drag to reorder; empty = auto
+          </div>
+          {items.map((cli, i) => (
+            <div
+              key={cli}
+              draggable
+              onDragStart={(e) => e.dataTransfer.setData("text/plain", String(i))}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); move(Number(e.dataTransfer.getData("text/plain")), i); }}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 4px", cursor: "grab", borderRadius: 6, background: "rgba(255,255,255,0.03)", marginBottom: 3 }}
+            >
+              <span style={{ color: "var(--cv-ink-faint)" }}>⋮⋮</span>
+              <CliMark cli={cli} color="#9a968e" size={12} />
+              <span style={{ flex: 1 }}>{cli}</span>
+              <button
+                style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", cursor: "pointer", fontSize: 10 }}
+                onClick={() => setDraft(items.filter((c) => c !== cli))}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+            {["claude", "codex", "gemini"].filter((c) => !items.includes(c)).map((c) => (
+              <button key={c} style={{ fontSize: 10, cursor: "pointer" }} onClick={() => setDraft([...items, c])}>
+                + {c}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            <button
+              style={{ fontSize: 10, cursor: "pointer" }}
+              onClick={() => { setAgentChain(workspaceId, draft ?? []); setOpen(false); }}
+            >
+              save
+            </button>
+            <button style={{ fontSize: 10, cursor: "pointer" }} onClick={() => setOpen(false)}>
+              cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
 export function WorkspaceNode({
+  id,
   data,
   selected,
 }: NodeProps<Node<WorkspaceNodeData>>) {
@@ -856,6 +932,7 @@ export function WorkspaceNode({
         <span style={{ color: "var(--cv-ink-faint)", fontWeight: 400 }}>
           {data.repo}
         </span>
+        <ChainEditor workspaceId={id} />
       </div>
     </div>
   );
