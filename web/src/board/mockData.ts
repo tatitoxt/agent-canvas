@@ -38,7 +38,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
   {
     id: "a2",
     type: "agent",
-    position: { x: 400, y: 230 },
+    position: { x: 430, y: 260 },
     parentId: "ws-1",
     extent: "parent",
     data: {
@@ -52,7 +52,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
   {
     id: "a5",
     type: "agent",
-    position: { x: 780, y: 60 },
+    position: { x: 910, y: 40 },
     parentId: "ws-1",
     extent: "parent",
     data: {
@@ -66,7 +66,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
   {
     id: "a3",
     type: "agent",
-    position: { x: 400, y: 400 },
+    position: { x: 460, y: 460 },
     parentId: "ws-1",
     extent: "parent",
     data: {

@@ -152,8 +152,8 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const wired = data.delegating;
   const live = data.status === "working" || data.status === "waiting" || data.status === "blocked";
   const border = live
-    ? `1.5px solid color-mix(in srgb, ${statusColor} ${data.status === "working" ? 55 : 80}%, transparent)`
-    : `1px solid color-mix(in srgb, ${statusColor} 22%, transparent)`;
+    ? `1.5px solid color-mix(in srgb, ${statusColor} ${data.status === "working" ? 85 : 95}%, transparent)`
+    : `1px solid color-mix(in srgb, ${statusColor} 35%, transparent)`;
   const glow = data.status === "waiting" || data.status === "blocked"
     ? `0 0 18px color-mix(in srgb, ${statusColor} 25%, transparent), 0 18px 44px rgba(0,0,0,0.5)`
     : wired
@@ -205,12 +205,17 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   }
   return (
     <div
-      className={`glass agent-card ${data.status === "waiting" ? "node-waiting" : ""}`}
+      className={`glass agent-card ${live ? "card-ring" : ""} ${data.status === "waiting" ? "node-waiting" : ""}`}
       style={{
         position: "relative",
         width: 460,
         padding: 0,
-        overflow: "hidden",
+        // Fausto's spec: a light trail orbits the border in the state color
+        // (card-ring reads --cv-ring). Selection is a DIFFERENT outline —
+        // solid amber, independent of state.
+        ["--cv-ring" as never]: live ? `color-mix(in srgb, ${statusColor} 90%, white 10%)` : undefined,
+        outline: selected ? "2px solid var(--cv-accent)" : undefined,
+        outlineOffset: selected ? 2 : undefined,
         // Deska's card is near-opaque glass — the dot canvas barely bleeds.
         background: "color-mix(in srgb, var(--cv-base) 64%, transparent)",
         border,
@@ -218,20 +223,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         cursor: "pointer",
       }}
     >
-      {/* CLI identity hairline — brand color across the card top; the status
-          ring keeps state meaning, this stripe carries the agent's identity. */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: meta.color, opacity: 0.85, pointerEvents: "none" }} />
       <Handle type="target" position={Position.Left} />
-      {/* CLI identity hairline — a 2px strip of the brand color across the
-          top edge, the way Deska tints a panel by its type. Scanning the
-          canvas you read agents by color before reading a single word. */}
-      <div
-        style={{
-          height: 2,
-          background: `linear-gradient(90deg, ${meta.color}, color-mix(in srgb, ${meta.color} 35%, transparent))`,
-          opacity: 0.85,
-        }}
-      />
       {/* Deska header: [mark] title-in-cli-color  ▮▮▮ running  [logo] Cli  (chrome on hover) */}
       <div
         style={{
