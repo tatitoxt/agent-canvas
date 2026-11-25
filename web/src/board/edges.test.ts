@@ -22,6 +22,35 @@ describe("absoluteNodePosition", () => {
     const nodes = new Map([[parent.id, parent], [card.id, card]]);
     expect(absoluteNodePosition(card, nodes)).toEqual({ x: 95, y: 115 });
   });
+
+  it("keeps nested workspace cards and edge anchors in the same absolute coordinate space", () => {
+    const workspace = { id: "workspace", position: { x: 320, y: 180 } };
+    const source = {
+      id: "source", parentId: "workspace", position: { x: 40, y: 50 },
+      internals: { positionAbsolute: { x: 360, y: 230 } },
+    };
+    const target = {
+      id: "target", parentId: "workspace", position: { x: 470, y: 50 },
+      internals: { positionAbsolute: { x: 790, y: 230 } },
+    };
+    const middle = {
+      id: "middle", parentId: "workspace", position: { x: 250, y: 40 },
+      internals: { positionAbsolute: { x: 570, y: 220 } },
+    };
+    const nodes = new Map([[workspace.id, workspace], [source.id, source], [target.id, target], [middle.id, middle]]);
+    const sourcePos = absoluteNodePosition(source, nodes);
+    const targetPos = absoluteNodePosition(target, nodes);
+    const middlePos = absoluteNodePosition(middle, nodes);
+    expect(sourcePos).toEqual({ x: 360, y: 230 });
+    expect(targetPos).toEqual({ x: 790, y: 230 });
+
+    const obstacles = [{ x: middlePos.x, y: middlePos.y, w: 180, h: 120 }];
+    const labelWidth = 150;
+    const result = detourPath(sourcePos.x + 180, sourcePos.y + 60, targetPos.x, targetPos.y + 60, obstacles, labelWidth, obstacles);
+    const label = { x: result.lx - labelWidth / 2, y: result.ly - 13, w: labelWidth, h: 26 };
+    expect(label.x < 754 && label.x + label.w > 566 && label.y < 344 && label.y + label.h > 216).toBe(false);
+    expectClear(result.path, obstacles);
+  });
 });
 
 function routePoints(path: string): Point[] {

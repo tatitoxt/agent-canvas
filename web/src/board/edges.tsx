@@ -33,29 +33,6 @@ export function absoluteNodePosition(node: PositionNode, nodesById: Map<string, 
   return { x: parentPosition.x + node.position.x, y: parentPosition.y + node.position.y };
 }
 
-/** Cards the cable must not cross — agents (redesign size), panels, terms.
- * Cheap obstacle set for the re-router; positions come from the board store. */
-function obstacleRects(exclude: string[]): Rect[] {
-  const st = useBoard.getState();
-  const rects: Rect[] = [];
-  for (const [id, pos] of Object.entries(st.positions)) {
-    if (exclude.includes(id)) continue;
-    const sz = st.agentSizes?.[id];
-    rects.push({ x: pos.x, y: pos.y, w: sz?.w ?? 460, h: sz?.h ?? 260 });
-  }
-  const board = st.activeBoard;
-  for (const [id, n] of Object.entries(st.panelNodes[board] ?? {})) {
-    if (exclude.includes(id)) continue;
-    rects.push({ x: n.x, y: n.y, w: n.w ?? 320, h: n.h ?? 420 });
-  }
-  for (const [id, n] of Object.entries(st.termNodes[board] ?? {})) {
-    if (exclude.includes(id)) continue;
-    if (n.collapsed) continue;
-    rects.push({ x: n.x, y: n.y, w: n.w ?? 560, h: n.h ?? 320 });
-  }
-  return rects;
-}
-
 const pad = 14;
 type Point = { x: number; y: number };
 
@@ -211,27 +188,22 @@ export function DelegationEdge({
   const nodes = getNodes();
   const nodesById = new Map(nodes.map((n) => [n.id, n]));
   const otherNodes = nodes.filter((n) => n.type !== "workspace");
-  const nodeRect = (n: (typeof otherNodes)[number]) => {
+  // React Flow's edge anchors are absolute even for children nested in a
+  // workspace. Build both path and label obstacles from the same measured,
+  // absolute node geometry; store coordinates are board-relative and drift
+  // from anchors for nested demo/live nodes.
+  const allNodeRects = otherNodes.map((n) => {
     const p = absoluteNodePosition(n, nodesById);
     const w = n.measured?.width ?? (n.width as number) ?? 380;
     const h = n.measured?.height ?? (n.height as number) ?? 200;
-    return { x: p.x - 8, y: p.y - 8, w: w + 16, h: h + 16 };
-  };
-  const nodeObstacles = otherNodes
+    return { id: n.id, x: p.x - 8, y: p.y - 8, w: w + 16, h: h + 16 };
+  });
+  const nodeObstacles = allNodeRects
     .filter((n) => n.id !== source && n.id !== target)
-    .map(nodeRect);
-  const obstacles = obstacleRects([source, target]);
+    .map(({ x, y, w, h }) => ({ x, y, w, h }));
   // Labels must avoid endpoints too. Compute parent-relative workspace cards
   // in absolute flow coordinates so chips do not land on their own terminal.
-  const labelObstacles = otherNodes.map((n) => {
-    const p = absoluteNodePosition(n, nodesById);
-    return {
-      x: p.x - 8,
-      y: p.y - 8,
-      w: n.measured?.width ?? (n.width as number) ?? 380,
-      h: n.measured?.height ?? (n.height as number) ?? 200,
-    };
-  });
+  const labelObstacles = allNodeRects;
   const label =
     data?.state === "returned"
       ? `${data.result ?? ""}${data.files ? ` · ${data.files} file${data.files === 1 ? "" : "s"}` : ""}`
@@ -239,7 +211,7 @@ export function DelegationEdge({
   const labelWidth = Math.min(208, Math.max(96, (label?.length ?? 0) * 6.1 + 44));
   const routed = detourPath(
     sourceX, sourceY, targetX, targetY,
-    [...obstacles, ...nodeObstacles], labelWidth,
+    nodeObstacles, labelWidth,
     labelObstacles,
   );
   const [bezierPath] = getBezierPath({
@@ -250,7 +222,7 @@ export function DelegationEdge({
         targetY,
         targetPosition,
       });
-  const path = obstacles.length || nodeObstacles.length ? routed.path : bezierPath;
+  const path = nodeObstacles.length ? routed.path : bezierPath;
   const labelX = routed.lx;
   const labelY = routed.ly;
   const style = STATE_STYLE[data?.state ?? "delegated"];

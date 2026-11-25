@@ -21,6 +21,7 @@
 - [x] Validation for this continuation: typecheck, 31/31 unit tests, production build, 39/39 E2E, and `git diff --check` pass.
 - [x] Agent-card scanability pass: title 15px, status 12.5px, task label 11.5px, and task text 14px with stronger ink. Reviewed capture `/tmp/canvas-design/card-density-next.png`; tasks remain clamped and fit the default cards. Increased the demo workspace height and lowered the docs card by 60 units to preserve a visible gap after the larger text. E2E enforces non-overlapping demo cards. Full 40/40 E2E, 31/31 unit tests, typecheck, and production build pass.
 - [x] Tools library on short viewports: added E2E at 800×620 to prove the dock scrolls and exposes lower entries Mission Map and Issues; focused test passes.
+- [x] Delegation routing now uses React Flow's measured absolute node geometry for both card obstacles and label placement, avoiding mixed board-relative/absolute coordinates for children inside workspaces. Added nested-workspace geometry regression coverage; 32 unit tests, typecheck, and 40/40 full E2E pass on the rerun. First full run had one transient Gather viewport-bound failure; focused and complete reruns passed.
 - [ ] Next visual pass: inspect resized-card body and overall panel/chrome density in desktop app, then continue remaining Deska/Symvibe feature gaps. Keep PR #47 open and do not merge.
 
 ## Feedback de Fausto (mensaje dictado, prioridad literal) — checklist
