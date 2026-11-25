@@ -28,4 +28,6 @@ export const PANEL_META: Record<string, PanelMeta> = {
   settings: { title: "Settings", icon: "settings", w: 360, h: 480 },
   skills: { title: "Skills", icon: "skills", w: 340, h: 440 },
   history: { title: "Tasks", icon: "tasks", w: 360, h: 440 },
+  sc: { title: "Source Control", icon: "github", w: 340, h: 440 },
+  tickets: { title: "Delegations", icon: "zap", w: 340, h: 440 },
 };

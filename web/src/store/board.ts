@@ -800,6 +800,18 @@ export const useBoard = create<BoardState>((set, get) => ({
             }
             break;
           }
+          case "delegation_failed": {
+            const edge = edges[msg.edge_id];
+            if (edge) {
+              set({
+                edges: {
+                  ...edges,
+                  [msg.edge_id]: { ...edge, state: "failed" },
+                },
+              });
+            }
+            break;
+          }
           case "snapshot": {
             const agents = Object.fromEntries(
               msg.agents.map((a) => [
@@ -816,6 +828,9 @@ export const useBoard = create<BoardState>((set, get) => ({
                   worktree: a.worktree || undefined,
                   output_bytes: a.output_bytes,
                   restored: true,
+                  files: a.files ?? 0,
+                  paths: a.paths ?? [],
+                  branch: a.branch ?? undefined,
                 },
               ]),
             );

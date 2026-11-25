@@ -713,8 +713,8 @@ function Board() {
       .filter(
         (e) =>
           (agents[e.from]?.board_id ??
-            agents[e.to]?.board_id ??
             orchestrators[e.from]?.board ??
+            agents[e.to]?.board_id ??
             "main") === activeBoard,
       )
       .map((e) => ({

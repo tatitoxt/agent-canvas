@@ -425,6 +425,7 @@ fn spawn_agent(
     });
     let ev2 = state.events.clone();
     let store2 = state.store.clone();
+    let repo_root2 = state.repo_root.clone();
     let pending = state.pending_results.clone();
     let agents3 = state.agents.clone();
     tokio::spawn(async move {
@@ -439,19 +440,26 @@ fn spawn_agent(
                     .map(|b| String::from_utf8_lossy(&b).to_string())
                     .and_then(|t| canvas_result_line(&t))
                     .map(|s| s.trim().to_string());
+                // Files the child left dirty in its worktree — kept on
+                // the ticket for the failed path too.
+                let files = store2
+                    .agent_worktree_abs(&id, &repo_root2)
+                    .ok()
+                    .flatten()
+                    .map(|w| dirty_file_count(&w))
+                    .unwrap_or(0);
                 if let Some(summary) = summary {
-                    let files = store2
-                        .agent_worktree(&id)
-                        .ok()
-                        .flatten()
-                        .map(|w| dirty_file_count(std::path::Path::new(&w)))
-                        .unwrap_or(0);
                     let _ = store2.delegation_resolved(&edge_id, &summary, files);
                     let _ = ev2.send(Event::Control(ServerMsg::Result {
                         edge_id,
                         summary,
                         files,
                     }));
+                } else {
+                    // Exited without a result: close the ticket so the
+                    // board stops showing it as in flight.
+                    let _ = store2.delegation_failed(&edge_id, files);
+                    let _ = ev2.send(Event::Control(ServerMsg::DelegationFailed { edge_id }));
                 }
             }
             let _ = ev2.send(Event::Control(ServerMsg::Status {
@@ -578,6 +586,25 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                             .metadata()
                             .map(|m| m.len())
                             .unwrap_or(0);
+                        // Replay the diff state too: a fresh client shouldn't
+                        // show a dirty worktree as clean until the diff
+                        // ticker next decides something changed.
+                        let wt = state
+                            .agents
+                            .worktree(&id)
+                            .or_else(|| {
+                                state
+                                    .store
+                                    .agent_worktree_abs(&id, &state.repo_root)
+                                    .ok()
+                                    .flatten()
+                            });
+                        let (files, paths, branch) = wt
+                            .map(|w| {
+                                let paths = dirty_files(&w);
+                                (paths.len() as u32, paths, worktree_branch(&w))
+                            })
+                            .unwrap_or_default();
                         protocol::SnapshotAgent {
                             status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
                             agent_id: id,
@@ -589,6 +616,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                             board_id,
                             account_label,
                             output_bytes: ob,
+                            files,
+                            paths,
+                            branch,
                         }
                     })
                     .collect()
@@ -1531,12 +1561,21 @@ fn handle_client_msg(
             Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault register failed: {e}") }),
         },
         ClientMsg::GitPush { agent_id } => {
+            // Resolve under the agent's own workspace repo — an agent in an
+            // external workspace pushes its branch there, not under CANVAS_REPO.
+            let repo = state
+                .store
+                .agent_repo(&agent_id)
+                .ok()
+                .flatten()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| state.repo_root.clone());
             let wt = state
                 .store
                 .agent_worktree(&agent_id)
                 .ok()
                 .flatten()
-                .map(|w| state.repo_root.join(&w))
+                .map(|w| repo.join(&w))
                 .filter(|p| p.is_dir());
             match wt {
                 Some(dir) => {
@@ -1737,27 +1776,9 @@ fn handle_client_msg(
                 .or_else(|| {
                     state
                         .store
-                        .agent_worktree(&agent_id)
+                        .agent_worktree_abs(&agent_id, &state.repo_root)
                         .ok()
                         .flatten()
-                        .map(|p| {
-                            // Rows persist the worktree relative to the repo
-                            // the agent spawned in: its workspace's repo,
-                            // else the daemon's own root.
-                            let p = std::path::PathBuf::from(p);
-                            if p.is_absolute() {
-                                p
-                            } else {
-                                state
-                                    .store
-                                    .agent_repo(&agent_id)
-                                    .ok()
-                                    .flatten()
-                                    .map(std::path::PathBuf::from)
-                                    .unwrap_or_else(|| state.repo_root.clone())
-                                    .join(p)
-                            }
-                        })
                 });
             match wt {
                 Some(wt) => send_control(ServerMsg::DiffDetail {

@@ -590,9 +590,11 @@ fn strip_ansi(s: &str) -> String {
 
 /// Paths with uncommitted changes in a worktree — parsed from
 /// `git status --porcelain` (handles `??` and `old -> new` renames).
+/// `-uall` expands untracked directories into their files — otherwise a
+/// new dir counts as one entry and hides what the child actually wrote.
 pub fn dirty_files(worktree: &Path) -> Vec<String> {
     let Ok(out) = std::process::Command::new("git")
-        .args(["status", "--porcelain=v1"])
+        .args(["status", "--porcelain=v1", "--untracked-files=all"])
         .current_dir(worktree)
         .output()
     else {

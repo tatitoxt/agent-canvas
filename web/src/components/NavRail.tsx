@@ -329,6 +329,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
       { icon: "issue", label: "Issues", hint: "live list from the repo's GitHub", onClick: () => onSelect("issues"), key: "issues", fact: ghCounts.issues != null ? `${ghCounts.issues} open` : undefined },
     ] as const : []),
     { icon: "ticket", label: "Dex Tickets", hint: "notes and tasks on the board", onClick: () => onSelect("notes"), key: "notes", fact: noteCount ? `${noteCount}` : undefined },
+    { icon: "zap", label: "Delegations", hint: "delegation tickets — status, result, open the edge", onClick: () => onSelect("tickets"), key: "tickets" },
     { icon: "artifacts", label: "Artifacts", hint: "shots, docs and files the agents produced", onClick: () => onSelect("artifacts"), key: "artifacts", fact: artifactCount ? `${artifactCount}` : undefined },
     { icon: "loops", label: "Loops", hint: "recurring instructions per agent", onClick: () => onSelect("loops"), key: "loops", fact: loopCount ? `${loopCount} active` : undefined },
   ];
@@ -377,6 +378,16 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
       }}
     >
       <div style={sectionLabel}>Source control</div>
+      <button
+        style={menuRow}
+        title="open the full source-control panel as a canvas card"
+        onClick={() => { onSelect("sc"); setMenu(null); }}
+        onMouseEnter={(e) => hoverRow(e, true)}
+        onMouseLeave={(e) => hoverRow(e, false)}
+      >
+        <Icon name="expand" size={13} color="var(--cv-ink-dim)" />
+        <span style={{ flex: 1 }}>open as panel</span>
+      </button>
       {gitAgents.length === 0 && (
         <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
           no agents with worktrees

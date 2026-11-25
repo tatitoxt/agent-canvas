@@ -283,6 +283,9 @@ pub enum ServerMsg {
     Error { agent_id: Option<String>, message: String },
     Delegation { edge_id: String, from: String, to: String, task: String },
     Result { edge_id: String, summary: String, files: u32 },
+    /// A delegated child exited without ever printing a result —
+    /// the ticket is done but empty-handed.
+    DelegationFailed { edge_id: String },
     WorkspaceCreated { workspace_id: String, name: String, repo: String, board_id: Option<String> },
     BoardCreated { board_id: String, name: String },
     /// A node (agent or workspace) changed boards.
@@ -494,6 +497,12 @@ pub struct SnapshotAgent {
     pub account_label: Option<String>,
     /// Bytes of PTY output captured to disk (usage metering).
     pub output_bytes: u64,
+    /// Uncommitted-change count / paths / branch of the worktree —
+    /// replayed in the snapshot so a fresh client isn't stuck on
+    /// "clean" until the diff ticker next fires.
+    pub files: u32,
+    pub paths: Vec<String>,
+    pub branch: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
