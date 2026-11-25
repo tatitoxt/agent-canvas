@@ -1748,8 +1748,14 @@ fn handle_client_msg(
             match vault_sandbox_resolve(state, &dir, &path) {
                 Ok(file) if file.is_file() => {
                     // 256 KiB cap — the viewer is for code, not binaries
-                    // or minified bundles. A NUL in the first chunk means
-                    // binary: refuse with an honest error.
+                    // or minified bundles. Size-check BEFORE reading: an
+                    // oversized file must never enter daemon memory.
+                    let too_big = std::fs::metadata(&file).map(|md| md.len() > 256 * 1024).unwrap_or(false);
+                    if too_big {
+                        send_control(ServerMsg::Error { agent_id: None, message: format!("file too large to view (256 KiB cap): {path}") });
+                        return;
+                    }
+                    // A NUL in the first chunk means binary: refuse.
                     match std::fs::read(&file) {
                         Ok(bytes) => {
                             if bytes.len() > 256 * 1024 {
@@ -2447,7 +2453,7 @@ async fn main() -> Result<()> {
         });
     let agents = Arc::new(AgentManager::new());
     agents.set_transcript_dir(repo_root.join(".canvas").join("transcripts"));
-    let allowed_roots: Vec<PathBuf> = {
+    let mut allowed_roots: Vec<PathBuf> = {
             // The board repo is always inside the sandbox; extra roots
             // (external vaults like ~/vault-demo) opt in one per line in
             // `.canvas/allowed-roots` — Deska's allowedRoots model.
@@ -2471,6 +2477,20 @@ async fn main() -> Result<()> {
             }
             roots
     };
+
+    // Workspaces registered before the auto-whitelist upgrade never got
+    // their grant — they were explicit operator gestures at creation, so
+    // backfill them into the sandbox at boot.
+    if let Ok(rows) = store.workspaces_snapshot() {
+        for (_, _, repo, _) in &rows {
+            if let Some(canon) = canon_through_missing(std::path::Path::new(repo)) {
+                let already = allowed_roots.iter().any(|ar| canon.starts_with(ar));
+                if !already {
+                    allowed_roots.push(canon);
+                }
+            }
+        }
+    }
 
     let state = Arc::new(AppState {
         token: token.clone(),

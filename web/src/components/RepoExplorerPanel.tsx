@@ -39,7 +39,7 @@ export function RepoExplorerPanel() {
   const base = (p: string) => p.split("/").pop() ?? p;
 
   return (
-    <div style={{ ...panelRoot, display: "flex", minHeight: 0 }}>
+    <div style={{ ...panelRoot, flexDirection: "row", minHeight: 0 }}>
       <div style={{ width: "42%", borderRight: "1px solid var(--cv-glass-edge)", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <select
           value={dir}
