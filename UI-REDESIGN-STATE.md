@@ -7,6 +7,7 @@
 - Screenshot tool: `cd /tmp/canvas-design && node shot.mjs http://localhost:5173 previewN.png` (playwright)
 
 ## Roadmap continuation — 2026-11-25
+- [x] Artifacts “Add to Board” now opens the full artifact text as a readable, resizable canvas window, closes Tools, and switches back to the canvas. E2E creates >400 chars, confirms full content and panel closure, then resizes the window. Validation: 49/49 E2E, 39/39 unit tests and `git diff --check` pass; visual capture `/tmp/canvas-design/artifact-window-full-content-v2.png`.
 - [x] “Add to Board” de una nota ya fijada ahora enfoca la ventana existente en el board activo en vez de crear duplicados. Regresión E2E pinnea la nota, vuelve a abrir Vault y pinnea de nuevo; se mantiene una sola ventana viva. Validación: build de producción, 49/49 E2E, 39/39 unit tests y `git diff --check` pasan.
 - [x] Agent card resize inside workspaces: preserve React Flow's transient dimensions while the resize gesture is active, then persist the final width, height, and relative position. Fixes controlled-node reconciliation overwriting the resize; both nested and loose-card E2E interactions pass.
 - [x] Resized agent card body uses a flex column with a scrollable content region, so a user-chosen short height does not clip terminal details. E2E verifies the scroll region with overflowing content.

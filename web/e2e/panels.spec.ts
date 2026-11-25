@@ -307,6 +307,40 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await expect(artifacts).toBeVisible();
   await expect(artifacts.getByText("Artifacts", { exact: true }).first()).toBeVisible();
   await expect(artifacts.getByRole("button", { name: "+ new" })).toBeVisible();
+
+  const title = `Canvas artifact ${Date.now()}`;
+  const body = `artifact-body-${"x".repeat(400)}`;
+  await artifacts.getByRole("button", { name: "+ new" }).click();
+  await artifacts.getByPlaceholder("title").fill(title);
+  await artifacts.getByPlaceholder("contents (optional)").fill(body);
+  await artifacts.getByRole("button", { name: "create" }).click();
+  await artifacts.locator("button[title^='Add to Board']").click();
+
+  await expect(page.locator(".react-flow__node-panel [data-panel='artifacts']")).toHaveCount(0);
+  const card = page.locator(".react-flow__node-shape").filter({ hasText: title });
+  await expect(card).toBeVisible();
+  await expect(card.locator("textarea")).toHaveValue(body);
+  await card.click({ position: { x: 80, y: 20 } });
+  const grip = card.locator(".react-flow__resize-control.handle.bottom.right");
+  await expect(grip).toBeVisible();
+  // Add-to-board requests a fitView; wait for that viewport animation before
+  // comparing screen-space dimensions with the resize result.
+  let previousWidth = 0;
+  await expect.poll(async () => {
+    const width = (await card.boundingBox())?.width ?? 0;
+    const stable = previousWidth > 0 && Math.abs(width - previousWidth) < 1;
+    previousWidth = width;
+    return stable;
+  }).toBe(true);
+  const original = await card.boundingBox();
+  const handle = await grip.boundingBox();
+  expect(original).not.toBeNull();
+  expect(handle).not.toBeNull();
+  await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle!.x + handle!.width / 2 + 50, handle!.y + handle!.height / 2 + 40, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => (await card.boundingBox())?.width ?? 0).toBeGreaterThan(original!.width + 20);
 });
 
 test("Add to canvas closes Tools even when the dock is pinned", async ({ page }) => {

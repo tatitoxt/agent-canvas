@@ -715,7 +715,7 @@ type BoardState = {
   /** nodeId -> panel key the card was pinned from (dashed anchor cable). */
   anchors: Record<string, Record<string, string>>;
   moveShape: (id: string, x: number, y: number) => void;
-  updateShape: (id: string, patch: Partial<import("../board/types").ShapeDef>) => void;
+  updateShape: (id: string, patch: Partial<import("../board/types").ShapeDef>, persist?: boolean) => void;
   deleteShape: (id: string) => void;
   /** Symvibe-style orchestrator cards: a board node wired to consoles with
    * cables; its composer broadcasts the command to every wired PTY. */
@@ -2178,8 +2178,8 @@ export const useBoard = create<BoardState>((set, get) => ({
       kind: "pin" as const,
       x: pos?.x ?? 320 + Math.random() * 240,
       y: pos?.y ?? 220 + Math.random() * 160,
-      w: 250,
-      h: 150,
+      w: 380,
+      h: 240,
       color: color ?? "#f5a524",
       title,
       text: body ?? "",
@@ -2205,12 +2205,12 @@ export const useBoard = create<BoardState>((set, get) => ({
     set({ shapes: next });
   },
 
-  updateShape: (id, patch) => {
+  updateShape: (id, patch, persist = true) => {
     const { activeBoard, shapes } = get();
     const s = shapes[activeBoard]?.[id];
     if (!s) return;
     const next = { ...shapes, [activeBoard]: { ...shapes[activeBoard], [id]: { ...s, ...patch } } };
-    localStorage.setItem("cv-shapes", JSON.stringify(next));
+    if (persist) localStorage.setItem("cv-shapes", JSON.stringify(next));
     set({ shapes: next });
   },
 

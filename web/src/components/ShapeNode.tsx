@@ -1,4 +1,4 @@
-import type { NodeProps, Node } from "@xyflow/react";
+import { NodeResizer, type NodeProps, type Node } from "@xyflow/react";
 import type { ShapeNodeData, ShapeDef } from "../board/types";
 import { useBoard } from "../store/board";
 
@@ -61,26 +61,36 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
 
   if (s.kind === "pin") {
     return (
-      <div
-        style={{
-          position: "relative",
-          width: s.w,
-          height: s.h,
-          borderRadius: 12,
-          background: "color-mix(in srgb, var(--cv-bg, #101014) 72%, transparent)",
-          backdropFilter: "blur(18px) saturate(1.2)",
-          border: `1.5px solid ${s.anchor ? `${s.color}55` : "var(--cv-glass-edge)"}`,
-          boxShadow: "0 8px 28px rgba(0,0,0,0.4)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
+      <>
+        <NodeResizer
+          isVisible={selected}
+          minWidth={220}
+          minHeight={140}
+          handleClassName="cv-node-resize-handle"
+          lineClassName="cv-node-resize-line"
+          onResize={(_, p) => updateShape(id, { w: Math.round(p.width), h: Math.round(p.height) }, false)}
+          onResizeEnd={(_, p) => updateShape(id, { w: Math.round(p.width), h: Math.round(p.height) })}
+        />
         <div
           style={{
-            padding: "8px 12px 6px",
+            position: "relative",
+            width: s.w,
+            height: s.h,
+            borderRadius: 12,
+            background: "color-mix(in srgb, var(--cv-bg, #101014) 72%, transparent)",
+            backdropFilter: "blur(18px) saturate(1.2)",
+            border: `1.5px solid ${s.anchor ? `${s.color}55` : "var(--cv-glass-edge)"}`,
+            boxShadow: "0 8px 28px rgba(0,0,0,0.4)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+        <div
+          style={{
+            padding: "10px 14px 8px",
             borderBottom: "1px solid rgba(255,255,255,0.07)",
-            fontSize: 11,
+            fontSize: 12.5,
             fontWeight: 700,
             color: "var(--cv-ink)",
             display: "flex",
@@ -110,15 +120,15 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
           placeholder="…"
           style={{
             flex: 1,
-            padding: "8px 12px",
+            padding: "10px 14px",
             background: "transparent",
             border: "none",
             outline: "none",
             resize: "none",
-            fontSize: 11.5,
-            lineHeight: 1.5,
+            fontSize: 13,
+            lineHeight: 1.55,
             fontFamily: "inherit",
-            color: "var(--cv-ink-dim)",
+            color: "var(--cv-ink)",
           }}
         />
         {selected && (
@@ -144,7 +154,8 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
             ×
           </button>
         )}
-      </div>
+        </div>
+      </>
     );
   }
 
