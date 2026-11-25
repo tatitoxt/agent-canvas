@@ -11,8 +11,13 @@ export function RepoExplorerPanel() {
   const repoTree = useBoard((s) => s.repoTree);
   const repoRead = useBoard((s) => s.repoRead);
   const notice = useBoard((s) => s.notice);
-  const repos = [...new Set(Object.values(workspaces).map((w) => w.repo))];
-  const [dir, setDir] = useState<string>(repos[0] ?? "");
+  const explorerDir = useBoard((s) => s.explorerDir);
+  const repos = [...new Set([...Object.values(workspaces).map((w) => w.repo), ...(explorerDir ? [explorerDir] : [])])];
+  const [dir, setDir] = useState<string>(explorerDir ?? repos[0] ?? "");
+  // Per-agent file buttons aim the explorer at a worktree — follow them.
+  useEffect(() => {
+    if (explorerDir) setDir(explorerDir);
+  }, [explorerDir]);
   const [sel, setSel] = useState<string | null>(null);
 
   useEffect(() => {

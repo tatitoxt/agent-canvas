@@ -124,6 +124,26 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
         <span style={{ flex: 1 }} />
         <button
           className="nodrag"
+          title="Files — open this agent's worktree in the repo explorer"
+          onClick={() => {
+            const st = useBoard.getState();
+            const a = st.agents[agentId];
+            const wsRepo = a?.workspace_id ? st.workspaces[a.workspace_id]?.repo : undefined;
+            st.openExplorer(a?.worktree ?? wsRepo);
+          }}
+          style={{
+            border: "none",
+            background: "transparent",
+            cursor: "pointer",
+            color: "var(--cv-ink-dim)",
+            fontSize: 11,
+            padding: "0 2px",
+          }}
+        >
+          ⌸
+        </button>
+        <button
+          className="nodrag"
           title="Copy transcript to clipboard"
           onClick={() => {
             const buf = useBoard.getState().ptyBuffer(agentId);
