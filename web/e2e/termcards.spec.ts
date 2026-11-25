@@ -19,11 +19,10 @@ async function spawnTerm(page: import("@playwright/test").Page) {
 
 async function openDrawer(page: import("@playwright/test").Page) {
   const node = page.locator(".react-flow__node").first();
-  const b = await node.boundingBox();
-  if (b) {
-    await page.mouse.click(b.x + 30, b.y + 30);
-    await page.waitForTimeout(900);
-  }
+  const openTerminal = node.locator("[title='Open terminal']");
+  await expect(openTerminal).toBeVisible({ timeout: 5_000 });
+  await openTerminal.click();
+  await page.waitForTimeout(900);
 }
 
 test("pop out creates a canvas term card; put back returns it to the drawer", async ({ page }) => {
