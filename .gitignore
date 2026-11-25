@@ -12,3 +12,6 @@ web/tsconfig.tsbuildinfo
 
 # local board state
 .canvas/
+test-results/
+web/e2e/.e2e-stack.json
+playwright-report/

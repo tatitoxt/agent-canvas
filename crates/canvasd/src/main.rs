@@ -42,8 +42,11 @@ struct AppState {
     pending_inputs: Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
     /// Published artifacts: share id → (title, mime, bytes). Served at
     /// /share/{id} without auth — the 128-bit id is the capability.
-    shares: Arc<std::sync::Mutex<std::collections::HashMap<String, (String, String, Vec<u8>)>>>,
+    shares: ShareMap,
 }
+
+/// Published artifacts: share id → (title, mime, bytes).
+type ShareMap = Arc<std::sync::Mutex<std::collections::HashMap<String, (String, String, Vec<u8>)>>>;
 
 /// Write PTY input honoring the supervised-input gate: `supervised`
 /// agents hold destructive-looking input until the operator approves.
