@@ -13,7 +13,7 @@
 4. [x] Labels de cables más fuertes — HECHO (12px font-medium)
 5. [ ] **Cables no deben atravesar cards** — routing prolijo. Actualmente los edges van en línea recta/curva simple y cruzan nodos. Implementar obstacle-aware routing (ver `web/src/board/edges.tsx` — custom edge component). Opciones: routing con waypoints que esquiva bounding boxes de nodos, o elevar z-index visual + curvar alrededor. Fausto: "el cable pasa por todo arriba de Atlas, no se nota, pero cuando hacés clic en dock se ve que se cortan las terminales".
 6. [x] Minimap chico abajo-derecha + zoom controls — YA ESTÁ así (mmSize 148×96, marginRight 184). Confirmar visualmente con Fausto qué le pareció "horrible" — quizás eran los colores viejos (ya actualizados a verde working).
-7. [ ] **File explorer NO debe abrir como sidebar** — debe ser panel flotante. Ver el componente que abre al clickear files junto a la terminal (probablemente en App.tsx o components/FilesPanel). Convertir de sidebar docked a floating panel draggable estilo Deska.
+7. [x] **File explorer como ventana del canvas** — verificado creando un workspace, agregando Explorer a canvas, leyendo `README.md` y probando que la tarjeta se puede mover. Agregar cobertura de resize en otra iteración.
 8. [ ] **Terminales usables de verdad** — el daemon canvasd nunca terminó de compilar. Relanzado: `cargo build -p canvasd` en el worktree (background shell). Cuando esté: correrlo en :4242 y spawnear agentes reales para probar escribir en las PTYs. Nota: el hijo encontró una vuln de path traversal y estaba implementando sandbox allowedRoots — verificar estado de eso en main.
 
 ## Decisiones de diseño ya aplicadas (no revertir)
@@ -136,4 +136,5 @@ REMAINING LEVERS if still slow:
 - [x] Título de terminal por rol: `reviewer-1` → `Review 1`, `builder_2` → `Builder 2`, `tester-4` → `Test 4`; mantiene nombres custom y numeración para `Terminal` genérico. En validación local: 8 unit tests, 6 E2E terminal, typecheck y build.
 - [x] Add to Board de Obsidian verificado en E2E: cierra Tools y monta Vault Explorer en vivo como ventana del canvas. Add Inbox también tiene cobertura de cierre + montaje.
 - [x] Add to Board de Artifacts verificado en E2E: cierra Tools y monta la biblioteca con su control `+ new` activo.
+- [x] Tools: corregido el cierre prematuro del submenú compartido; New workspace y Add shape ahora mantienen sus opciones abiertas. E2E cubre ambas rutas.
 - [ ] Próximo orden sugerido: revisar el file explorer flotante; después seguir con los pendientes visuales de topbar y chrome. Mantener cada lote pequeño y verificable en PR #47, sin merge.

@@ -122,14 +122,14 @@ export function ToolsMenu({
 
   const dismiss = () => { if (!pinned) setOpen(false); };
 
-  const item = (icon: string, label: string, onClick: () => void, hint?: string, on?: boolean) => (
+  const item = (icon: string, label: string, onClick: () => void, hint?: string, on?: boolean, keepSub = false) => (
     <button
       key={label}
       style={{ ...rowBtn, color: on ? "var(--cv-accent)" : "var(--cv-ink)" }}
       title={hint}
       onClick={() => {
         onClick();
-        setSub(null);
+        if (!keepSub) setSub(null);
       }}
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
@@ -181,7 +181,7 @@ export function ToolsMenu({
           <div style={sectionLabel}>Board</div>
           {item("automations", "New orchestrator", () => { spawnOrchestrator(); dismiss(); }, "wire consoles, command all")}
           {item("accounts", "Team builder", () => { setTeamOpen(true); dismiss(); }, "roles × one CLI")}
-          {item("shape", "Add shape", () => setSub((s) => (s === "shape" ? null : "shape")), "whiteboard")}
+          {item("shape", "Add shape", () => setSub((s) => (s === "shape" ? null : "shape")), "whiteboard", false, true)}
           {sub === "shape" && (
             <div style={{ display: "flex", gap: 6, padding: "4px 10px 6px" }}>
               {(["rect", "ellipse", "diamond", "sticky"] as const).map((k) => (
@@ -197,7 +197,7 @@ export function ToolsMenu({
               ))}
             </div>
           )}
-          {item("ws", "New workspace", () => setSub((s) => (s === "ws" ? null : "ws")))}
+          {item("ws", "New workspace", () => setSub((s) => (s === "ws" ? null : "ws")), undefined, false, true)}
           {sub === "ws" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 5, padding: "4px 10px 6px" }}>
               <input style={miniInput} placeholder="workspace name" value={wsName} onChange={(e) => setWsName(e.target.value)} autoFocus />

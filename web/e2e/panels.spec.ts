@@ -5,11 +5,11 @@ import { resolve } from "node:path";
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
 
 async function boot(page: import("@playwright/test").Page) {
-  const { port, token, vault } = stack();
+  const { port, token, vault, repo } = stack();
   await page.addInitScript((v) => localStorage.setItem("cv-vault-dir", v), vault);
   await page.goto(`http://127.0.0.1:${port}/?token=${token}`);
   await expect(page.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
-  return { port, token, vault };
+  return { port, token, vault, repo };
 }
 
 test("Tools opens as a dock and collapses to panel icons", async ({ page }) => {
@@ -25,6 +25,18 @@ test("Tools opens as a dock and collapses to panel icons", async ({ page }) => {
   await expect(dock.getByText("Board", { exact: true })).toBeVisible();
   await dock.getByRole("button", { name: "Close Tools panel" }).click();
   await expect(dock).toBeHidden();
+});
+
+test("Tools Add shape opens its choices and creates a canvas shape", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add shape" }).click();
+  const rect = dock.locator("button[title='rect']");
+  await expect(rect).toBeVisible();
+  await rect.click();
+  await expect(dock).toBeHidden();
+  await expect(page.locator(".react-flow__node-shape")).toBeVisible();
 });
 
 test("Add to canvas closes Tools and mounts a live Inbox panel", async ({ page }) => {
@@ -62,6 +74,30 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await expect(artifacts).toBeVisible();
   await expect(artifacts.getByText("Artifacts", { exact: true }).first()).toBeVisible();
   await expect(artifacts.getByRole("button", { name: "+ new" })).toBeVisible();
+});
+
+test("Add Explorer to canvas mounts a live repository file browser", async ({ page }) => {
+  const { repo } = await boot(page);
+  // The explorer is useful only when it has an actual workspace/repository.
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "New workspace" }).click();
+  await page.getByPlaceholder("workspace name").fill("E2E Repo");
+  const repoInput = page.getByPlaceholder("repo path (~/repos/my-app)");
+  await repoInput.fill(repo);
+  await repoInput.press("Enter");
+  await expect(tools).toBeHidden();
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Explorer to canvas" }).click();
+  await expect(dock).toBeHidden();
+  const explorerNode = page.locator(".react-flow__node[data-id='panel-explorer']");
+  await expect(explorerNode).toBeVisible();
+  await expect(explorerNode.getByText("select a file")).toBeVisible();
+  const readme = explorerNode.getByRole("button", { name: "README.md" });
+  await expect(readme).toBeVisible({ timeout: 8_000 });
+  await readme.click();
+  await expect(explorerNode.locator("pre")).toContainText("# e2e scratch repo");
 });
 
 test("Add to canvas closes Tools even when the dock is pinned", async ({ page }) => {
