@@ -371,6 +371,8 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
           {expanded && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--cv-ink)" }}>Library</span>}
           <button
             title={expanded ? "Collapse tools — icons only" : "Library — expand for panel names"}
+            aria-label={expanded ? "Collapse Library" : "Expand Library"}
+            aria-expanded={expanded}
             onClick={toggleExpanded}
             style={{ ...tinyBtn(false), borderRadius: 999 }}
           >

@@ -153,4 +153,6 @@ REMAINING LEVERS if still slow:
 - [x] E2E completo tras controles accesibles: 27/27 pasan localmente; typecheck, build, 23 unit tests y `git diff --check` pasan.
 - [x] Paneles y terminales flotantes: chrome de minimizar/expandir/cerrar con nombres accesibles; los clicks no inician drag del header. E2E verifica minimizar/restaurar por teclado y cerrar el panel.
 - [x] E2E completa tras pulir el chrome de paneles: 28/28; typecheck, build y 23 unit tests pasan.
+- [x] Library: expand/collapse ahora expone `aria-expanded` y nombre accesible; E2E confirma expansión horizontal, labels (Source Control, Obsidian, Dex Tickets), navegación a Obsidian y ausencia de flyout.
+- [x] E2E completa tras Library: 29/29; typecheck, build y 23 unit tests pasan.
 - [ ] Próximo orden sugerido: auditar los demás controles/estados del chrome contra la captura de referencia y corregir discrepancias visibles/funcionales. Mantener lotes pequeños y verificables en PR #47, sin merge.

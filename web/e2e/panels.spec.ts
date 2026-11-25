@@ -27,6 +27,24 @@ test("Tools opens as a dock and collapses to panel icons", async ({ page }) => {
   await expect(dock).toBeHidden();
 });
 
+test("Library expands horizontally to labeled tools without a flyout", async ({ page }) => {
+  await boot(page);
+  const expand = page.getByRole("button", { name: "Expand Library" });
+  await expect(expand).toHaveAttribute("aria-expanded", "false");
+  const before = await page.locator("nav.glass").filter({ has: expand }).boundingBox();
+  await expand.click();
+  await expect(page.getByRole("button", { name: "Collapse Library" })).toHaveAttribute("aria-expanded", "true");
+  const rail = page.locator("nav.cv-menu-scroll");
+  await expect(rail.getByRole("button", { name: "Source Control" })).toBeVisible();
+  await expect(rail.getByRole("button", { name: "Obsidian" })).toBeVisible();
+  await expect(rail.getByRole("button", { name: "Dex Tickets" })).toBeVisible();
+  const after = await rail.boundingBox();
+  expect(after!.width).toBeGreaterThan(before!.width * 2);
+  await rail.getByRole("button", { name: "Obsidian" }).click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='vault']").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Collapse Library" })).toBeVisible();
+});
+
 test("topbar controls fuse into one glass bubble on hover", async ({ page }) => {
   await boot(page);
   const showChrome = page.getByTitle("Show panels and menus");
