@@ -188,6 +188,48 @@ fn vault_sandbox_dir(state: &AppState, dir: &str) -> Result<PathBuf, String> {
     }
 }
 
+/// Resolve a repository directory for Code Editor writes. Vault roots are
+/// intentionally broader than writable repository roots, so write access is
+/// limited to the board repo and repos explicitly registered as workspaces.
+fn registered_repo_dir(repo_root: &std::path::Path, store: &store::Store, dir: &str) -> Result<PathBuf, String> {
+    let requested = if dir == "~" || dir.starts_with("~/") {
+        std::env::var("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_default()
+            .join(dir.strip_prefix("~/").unwrap_or(""))
+    } else {
+        PathBuf::from(dir)
+    };
+    let mut roots = vec![repo_root.to_path_buf()];
+    let workspaces = store
+        .workspaces_snapshot()
+        .map_err(|e| e.to_string())?;
+    roots.extend(workspaces.into_iter().map(|(_, _, repo, _)| {
+        if repo == "~" || repo.starts_with("~/") {
+            std::env::var("HOME")
+                .map(PathBuf::from)
+                .unwrap_or_default()
+                .join(repo.strip_prefix("~/").unwrap_or(""))
+        } else {
+            PathBuf::from(repo)
+        }
+    }));
+
+    for root in roots {
+        let Ok(root) = std::fs::canonicalize(root) else { continue };
+        let candidate = if requested.is_absolute() {
+            requested.clone()
+        } else {
+            root.join(&requested)
+        };
+        let Ok(candidate) = std::fs::canonicalize(candidate) else { continue };
+        if candidate.starts_with(&root) && candidate.is_dir() {
+            return Ok(candidate);
+        }
+    }
+    Err(format!("access denied: repository is not registered or not found: {dir}"))
+}
+
 
 /// Write PTY input honoring the supervised-input gate: `supervised`
 /// agents hold destructive-looking input until the operator approves.
@@ -1780,7 +1822,8 @@ fn handle_client_msg(
                 if text.len() > 256 * 1024 || text.as_bytes().contains(&0) {
                     return Err("file exceeds the 256 KiB text editor limit".into());
                 }
-                let file = vault_sandbox_resolve(state, &dir, &path)?;
+                let repo_dir = registered_repo_dir(&state.repo_root, &state.store, &dir)?;
+                let file = vault_sandbox_resolve(state, &repo_dir.to_string_lossy(), &path)?;
                 if !file.is_file() { return Err(format!("write refused: file does not exist: {path}")); }
                 let current = std::fs::read_to_string(&file).map_err(|_| format!("file is not UTF-8 text: {path}"))?;
                 if current != base_text { return Err(format!("file changed on disk; reload before saving: {path}")); }
@@ -2808,5 +2851,51 @@ mod fallback_tests {
             }
         }
         assert_eq!(chain, vec!["codex", "claude", "gemini"]);
+    }
+}
+
+#[cfg(test)]
+mod repo_write_authorization_tests {
+    use super::registered_repo_dir;
+    use crate::store::Store;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+
+    fn temp_root() -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "canvas-repo-write-auth-{}-{}",
+            std::process::id(),
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed),
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    #[test]
+    fn only_board_and_registered_workspace_repositories_are_writable() {
+        let repo = temp_root();
+        let vault = temp_root();
+        let store = Store::open(&repo).unwrap();
+
+        // A directory may be readable/writable through the wider Vault
+        // sandbox without being authorized for Code Editor writes.
+        assert!(registered_repo_dir(&repo, &store, vault.to_str().unwrap()).is_err());
+        assert_eq!(
+            registered_repo_dir(&repo, &store, repo.to_str().unwrap()).unwrap(),
+            std::fs::canonicalize(&repo).unwrap(),
+        );
+
+        store
+            .workspace_created("ws-1", "registered", vault.to_str().unwrap(), None)
+            .unwrap();
+        assert_eq!(
+            registered_repo_dir(&repo, &store, vault.to_str().unwrap()).unwrap(),
+            std::fs::canonicalize(&vault).unwrap(),
+        );
+
+        std::fs::remove_dir_all(repo).unwrap();
+        std::fs::remove_dir_all(vault).unwrap();
     }
 }

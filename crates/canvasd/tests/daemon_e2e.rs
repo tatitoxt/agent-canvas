@@ -19,6 +19,7 @@ struct Daemon {
     port: u16,
     token: String,
     repo: std::path::PathBuf,
+    home: std::path::PathBuf,
 }
 
 impl Daemon {
@@ -35,6 +36,13 @@ impl Daemon {
             std::process::id(),
             N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
         ));
+        let home = std::env::temp_dir().join(format!(
+            "canvasd-e2e-home-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        ));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
         let _ = std::fs::remove_dir_all(&repo);
         std::fs::create_dir_all(&repo).unwrap();
         Command::new("git").args(["init", "-q"]).current_dir(&repo).output().unwrap();
@@ -53,6 +61,7 @@ impl Daemon {
         let mut child = Command::new(env!("CARGO_BIN_EXE_canvasd"))
             .env("CANVASD_PORT", port.to_string())
             .env("CANVAS_REPO", &repo)
+            .env("HOME", &home)
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
@@ -69,7 +78,7 @@ impl Daemon {
             }
         }
         assert!(!token.is_empty(), "canvasd never printed its session token");
-        Self { child, port, token, repo }
+        Self { child, port, token, repo, home }
     }
 
     fn ws_url(&self, token: &str) -> String {
@@ -81,6 +90,7 @@ impl Drop for Daemon {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = std::fs::remove_dir_all(&self.repo);
+        let _ = std::fs::remove_dir_all(&self.home);
     }
 }
 
@@ -237,6 +247,75 @@ async fn end_to_end_agent_lifecycle() {
         seen.iter().any(|m| m["type"] == "status" && m["status"] == "exited"),
         "confirmed kill must exit the agent"
     );
+}
+
+#[tokio::test]
+async fn repo_write_requires_a_registered_repository_not_only_a_vault_grant() {
+    let d = Daemon::start();
+    let vault = d.home.join("vault");
+    let workspace = d.home.join("workspace");
+    std::fs::create_dir_all(&vault).unwrap();
+    std::fs::create_dir_all(&workspace).unwrap();
+    std::fs::write(vault.join("private.md"), "original vault contents").unwrap();
+    std::fs::write(workspace.join("README.md"), "workspace original").unwrap();
+
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .expect("ws connect");
+    let snap = next_ctrl(&mut ws, Duration::from_secs(5)).await.unwrap();
+    assert_eq!(snap["type"], "snapshot");
+
+    // An explicit Vault grant makes the path accessible to vault features,
+    // but must not authorize repository editor writes.
+    ws.send(Message::Text(
+        json!({"cmd":"vault_register","dir":vault.to_str().unwrap()}).to_string().into(),
+    ))
+    .await
+    .unwrap();
+    collect_until(&mut ws, Duration::from_secs(3), |m| m["type"] == "vault_discovered").await;
+    ws.send(Message::Text(
+        json!({
+            "cmd":"repo_write", "dir":vault.to_str().unwrap(), "path":"private.md",
+            "text":"overwritten", "base_text":"original vault contents"
+        })
+        .to_string().into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(3), |m| {
+        m["type"] == "error" && m["message"].as_str().unwrap_or("").contains("repository is not registered")
+    })
+    .await;
+    assert!(seen.iter().any(|m| m["type"] == "error"), "Vault grant must not grant repo-write access: {seen:?}");
+    assert_eq!(std::fs::read_to_string(vault.join("private.md")).unwrap(), "original vault contents");
+
+    // Registering a workspace is the explicit action that grants the Code
+    // Editor write path for that repository.
+    ws.send(Message::Text(
+        json!({"cmd":"create_workspace","name":"writable","repo":workspace.to_str().unwrap()})
+            .to_string().into(),
+    ))
+    .await
+    .unwrap();
+    collect_until(&mut ws, Duration::from_secs(3), |m| m["type"] == "workspace_created").await;
+    ws.send(Message::Text(
+        json!({
+            "cmd":"repo_write", "dir":workspace.to_str().unwrap(), "path":"README.md",
+            "text":"workspace updated", "base_text":"workspace original"
+        })
+        .to_string().into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(3), |m| {
+        m["type"] == "repo_file" && m["path"] == "README.md"
+    })
+    .await;
+    assert!(seen.iter().any(|m| m["type"] == "repo_file"), "registered workspace should remain editable: {seen:?}");
+    assert_eq!(std::fs::read_to_string(workspace.join("README.md")).unwrap(), "workspace updated");
+
+    let _ = std::fs::remove_dir_all(vault);
+    let _ = std::fs::remove_dir_all(workspace);
 }
 
 #[tokio::test]
