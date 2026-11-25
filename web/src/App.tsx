@@ -479,7 +479,7 @@ function Board() {
       .map((a) => {
       const ws = a.workspace_id ? workspaces[a.workspace_id] : undefined;
       const position = positions[a.id] ??
-        (ws ? { x: 60 + (i % 3) * 300, y: 80 + Math.floor(i / 3) * 190 } : { x: 1100, y: 60 + i * 170 });
+        (ws ? { x: 60 + (i % 3) * 300, y: 80 + Math.floor(i / 3) * 190 } : { x: 1000 + (i % 2) * 380, y: 60 + Math.floor(i / 2) * 200 });
       i += 1;
       return {
         id: a.id,
