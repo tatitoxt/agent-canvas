@@ -15,7 +15,10 @@
 - [x] Terminal preview hierarchy: kept the real ANSI/xterm screen model and added restrained contrast, clearer row spacing, emphasis for actual bold spans, and an accent rail on the latest visible row; E2E writes ANSI bold output and checks the rendered preview.
 - [x] Validation for terminal preview: production build and focused PTY/preview E2E pass.
 - [x] CI found an async rendering race in the canvas preview: xterm parses PTY writes asynchronously, so the first preview render could remain stuck at the prompt. The preview now redraws only after all queued xterm writes flush; strict-mode duplicate effects are covered. Added a unit test for ANSI color/bold parsing and made the E2E assert output row and latest-row marker separately.
-- [x] Validation after the CI fix: typecheck, 31/31 unit tests, 38/38 E2E, production build, and `git diff --check` pass.
+- [x] Validation after the async preview fix: typecheck, 31/31 unit tests, production build, and focused E2E pass. Full suite rerun in progress after adding the task row below.
+- [x] Task hierarchy in agent cards: a small amber “Task” label and readable two-line-clamped description distinguish the requested work from terminal output without inventing transcript roles. Covered by a focused E2E assertion. Commit `8c3a875`.
+- [x] Stabilized the workspace-resize E2E: fit the frame before the pointer drag, clear only persisted workspace dimensions for the case, and compare saved canvas units against the base size. Full 39/39 E2E now passes, including persistence after reload.
+- [x] Validation for this continuation: typecheck, 31/31 unit tests, production build, 39/39 E2E, and `git diff --check` pass.
 - [ ] Next visual pass: inspect resized-card body and overall panel/chrome density in desktop app, then continue remaining Deska/Symvibe feature gaps. Keep PR #47 open and do not merge.
 
 ## Feedback de Fausto (mensaje dictado, prioridad literal) — checklist
