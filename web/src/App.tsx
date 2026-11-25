@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toPng } from "html-to-image";
 import {
   MiniMap,
@@ -48,13 +48,17 @@ import { TermNode } from "./board/TermNode";
 import { useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
 
+// Memoized at the registry: every store write rebuilds the nodes array, so
+// without memo each keystroke of PTY output re-rendered every card on the
+// board. Node internals (xterm, vault readers) subscribe to the store
+// themselves, so skipping prop-identical renders is safe.
 const nodeTypes = {
-  agent: AgentNode,
-  orchestrator: OrchestratorNode,
-  workspace: WorkspaceNode,
-  web: WebNode,
-  shape: ShapeNode,
-  md: MdNode,
+  agent: memo(AgentNode),
+  orchestrator: memo(OrchestratorNode),
+  workspace: memo(WorkspaceNode),
+  web: memo(WebNode),
+  shape: memo(ShapeNode),
+  md: memo(MdNode),
   panel: PanelNode,
   term: TermNode,
 };
