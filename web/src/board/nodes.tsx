@@ -477,6 +477,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         style={{
           display: "flex",
           alignItems: "center",
+          gap: 8,
           marginTop: 9,
           paddingTop: 8,
           borderTop: "1px solid rgba(255,255,255,0.06)",
