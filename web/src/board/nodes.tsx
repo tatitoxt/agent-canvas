@@ -954,8 +954,8 @@ export function WorkspaceNode({
         handleClassName="cv-node-resize-handle"
         lineClassName="cv-node-resize-line"
         onResizeEnd={(_, p) => {
-          const node = rf.getNode(data.id);
-          if (node) rf.setNodes((nodes) => nodes.map((n) => n.id === data.id ? { ...n, style: { ...n.style, width: Math.round(p.width), height: Math.round(p.height) } } : n));
+          const node = rf.getNode(id);
+          if (node) rf.setNodes((nodes) => nodes.map((n) => n.id === id ? { ...n, style: { ...n.style, width: Math.round(p.width), height: Math.round(p.height) } } : n));
         }}
       />
       <div
