@@ -492,14 +492,19 @@ fn read_repo_file(root: &PathBuf, path: &str) -> Result<String, String> {
 
 fn registered_repo_root(state: &CanvasState, dir: &str) -> Result<PathBuf, String> {
     let requested = std::fs::canonicalize(dir).map_err(|_| format!("access denied: repository not found: {dir}"))?;
-    if requested == state.repo_root {
+    if std::fs::canonicalize(&state.repo_root)
+        .map(|root| requested.starts_with(root))
+        .unwrap_or(false)
+    {
         return Ok(requested);
     }
     let workspaces = state.store.workspaces_snapshot().map_err(|e| e.to_string())?;
     for (_, _, repo, _) in workspaces {
         if let Ok(root) = std::fs::canonicalize(repo) {
-            if root == requested {
-                return Ok(root);
+            // Per-agent worktrees live below their workspace repo. Resolve
+            // the requested directory first so a symlink cannot escape it.
+            if requested.starts_with(&root) {
+                return Ok(requested);
             }
         }
     }
@@ -527,18 +532,23 @@ fn repo_read(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: S
 mod repo_explorer_tests {
     use super::{read_repo_file, repo_tree_entries};
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
 
     fn temp_root() -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
-            "canvas-repo-explorer-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        root
+        loop {
+            let root = std::env::temp_dir().join(format!(
+                "canvas-repo-explorer-{}-{}",
+                std::process::id(),
+                NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+            ));
+            match std::fs::create_dir(&root) {
+                Ok(()) => return root,
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => panic!("could not create test repo: {e}"),
+            }
+        }
     }
 
     #[test]
