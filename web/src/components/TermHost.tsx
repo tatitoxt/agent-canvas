@@ -32,7 +32,12 @@ export function TermHost({ agentId }: { agentId: string }) {
 
     const { attachPty, detachPty, sendInput, ptyBuffer, requestTranscript } = useBoard.getState();
     const history = ptyBuffer(agentId);
-    if (history?.length) term.write(history);
+    if (history?.length) {
+      // Replaying scrollback means this card is a restore, not a fresh
+      // shell — mark it the way Deska does so the timeline stays honest.
+      term.write("\x1b[2m\x1b[3m--- restored session ---\x1b[0m\r\n");
+      term.write(history);
+    }
     const onBytes = (bytes: Uint8Array) => term.write(bytes);
     attachPty(agentId, onBytes);
     if (useBoard.getState().agents[agentId]?.status === "exited") {

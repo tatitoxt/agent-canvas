@@ -26,6 +26,7 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
     <div
       className="glass"
       style={{
+        position: "relative",
         width: "100%",
         height: "100%",
         borderRadius: 14,
@@ -37,6 +38,7 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
           : "var(--cv-shadow)",
       }}
     >
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: meta.color, opacity: 0.85, pointerEvents: "none", zIndex: 1 }} />
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
       <NodeResizer
         isVisible={selected}

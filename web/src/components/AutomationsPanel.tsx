@@ -1,4 +1,12 @@
 import { useState } from "react";
+
+/** One-click starting points — Deska's botoneable automation examples. */
+const PRESETS = [
+  { name: "morning digest", prompt: "Summarize what changed in this repo since yesterday and what is worth my attention today", mins: 1440 },
+  { name: "hourly PR check", prompt: "Check the repo's open pull requests and report any that are waiting on me", mins: 60 },
+  { name: "water break", prompt: "Post a short reminder to drink water and stretch", mins: 60 },
+];
+
 import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 
@@ -63,6 +71,7 @@ export function AutomationsPanel() {
     });
     setName("");
     setPrompt("");
+    setEveryMins("");
     setCreating(false);
   };
 
@@ -150,8 +159,24 @@ export function AutomationsPanel() {
           </div>
         )}
         {list.length === 0 && !creating && (
-          <div style={{ padding: "18px 12px", fontSize: 11.5, color: "var(--cv-ink-dim)" }}>
-            No automations yet — save a recurring task and run it on demand.
+          <div style={{ padding: "14px 12px", fontSize: 11.5, color: "var(--cv-ink-dim)" }}>
+            <div style={{ marginBottom: 8 }}>Nothing saved yet — start from an example:</div>
+            {PRESETS.map((p) => (
+              <button
+                key={p.name}
+                className="glass-pill"
+                style={{ display: "block", width: "100%", textAlign: "left", margin: "0 0 6px", padding: "7px 10px", fontSize: 11.5, cursor: "pointer", border: "none", color: "var(--cv-ink)" }}
+                onClick={() => {
+                  setName(p.name);
+                  setPrompt(p.prompt);
+                  setEveryMins(String(p.mins));
+                  setCreating(true);
+                }}
+              >
+                {p.name}
+                <span style={{ display: "block", fontSize: 10, color: "var(--cv-ink-dim)", marginTop: 2 }}>{p.prompt.slice(0, 64)}…</span>
+              </button>
+            ))}
           </div>
         )}
         {list.length > 0 && <div style={label}>saved</div>}
