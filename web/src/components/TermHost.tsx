@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
 import { useBoard } from "../store/board";
 
@@ -11,7 +12,11 @@ import { useBoard } from "../store/board";
 export function TermHost({ agentId }: { agentId: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
   const termFont = useBoard((s) => s.termFont);
+  // In-terminal find — a mini bar over the buffer (next/prev, Enter=next).
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQ, setFindQ] = useState("");
 
   useEffect(() => {
     const term = new Terminal({
@@ -26,7 +31,10 @@ export function TermHost({ agentId }: { agentId: string }) {
       convertEol: true,
     });
     const fit = new FitAddon();
+    const search = new SearchAddon();
     term.loadAddon(fit);
+    term.loadAddon(search);
+    searchRef.current = search;
     term.open(hostRef.current!);
     fit.fit();
 
@@ -78,6 +86,7 @@ export function TermHost({ agentId }: { agentId: string }) {
       ro.disconnect();
       term.dispose();
       termRef.current = null;
+      searchRef.current = null;
     };
   }, [agentId]);
 
@@ -89,5 +98,94 @@ export function TermHost({ agentId }: { agentId: string }) {
     }
   }, [termFont]);
 
-  return <div ref={hostRef} className="min-h-0 flex-1" />;
+  const findInput = (
+    <input
+      autoFocus
+      value={findQ}
+      placeholder="find in buffer"
+      onChange={(e) => {
+        setFindQ(e.target.value);
+        if (e.target.value) searchRef.current?.findNext(e.target.value);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          if (e.shiftKey) searchRef.current?.findPrevious(findQ);
+          else searchRef.current?.findNext(findQ);
+        }
+        if (e.key === "Escape") {
+          setFindOpen(false);
+          // Hand focus back to xterm — otherwise the next keystrokes are lost.
+          termRef.current?.focus();
+        }
+      }}
+      style={{
+        width: 130,
+        fontSize: 10.5,
+        padding: "3px 8px",
+        borderRadius: 999,
+        border: "1px solid var(--cv-glass-edge)",
+        background: "rgba(18,18,20,0.92)",
+        color: "var(--cv-ink)",
+        outline: "none",
+      }}
+    />
+  );
+
+  return (
+    <div className="min-h-0 flex-1" style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+      {findOpen && (
+        <div
+          className="nodrag"
+          style={{
+            display: "flex",
+            gap: 4,
+            alignItems: "center",
+            justifyContent: "flex-end",
+            padding: "2px 8px",
+            borderBottom: "1px solid var(--cv-glass-edge)",
+            background: "rgba(18,18,20,0.6)",
+          }}
+        >
+          {findInput}
+          <button
+            title="previous match (shift+enter)"
+            onClick={() => searchRef.current?.findPrevious(findQ)}
+            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11, padding: "0 2px" }}
+          >
+            ↑
+          </button>
+          <button
+            title="next match (enter)"
+            onClick={() => searchRef.current?.findNext(findQ)}
+            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11, padding: "0 2px" }}
+          >
+            ↓
+          </button>
+          <button
+            title="close find"
+            onClick={() => {
+              setFindOpen(false);
+              termRef.current?.focus();
+            }}
+            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11, padding: "0 2px" }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      <div ref={hostRef} className="min-h-0 flex-1" />
+      <div
+        className="nodrag"
+        style={{ position: "absolute", top: findOpen ? 30 : 6, right: 8, display: findOpen ? "none" : "flex", gap: 4, alignItems: "center", zIndex: 5 }}
+      >
+        <button
+          title="find in terminal buffer"
+          onClick={() => setFindOpen((v) => !v)}
+          style={{ background: "none", border: "none", color: findOpen ? "var(--cv-accent)" : "var(--cv-ink-dim)", cursor: "pointer", fontSize: 12, padding: "0 2px" }}
+        >
+          ⌕
+        </button>
+      </div>
+    </div>
+  );
 }
