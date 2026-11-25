@@ -142,4 +142,6 @@ REMAINING LEVERS if still slow:
 - [x] Suite E2E robustecida: selectores de terminal apuntan a nodos agente, selección evita controles del header, doble clic busca una zona despejada y el resize apunta al grip bottom-right. 25/25 E2E pasan localmente.
 - [x] Edge routing: los cables detectan colisiones con múltiples tarjetas y prueban rutas ortogonales compactas antes de rodear el campo completo. Unit tests cubren obstáculos múltiples, conexiones verticales en ambas direcciones y trayectos despejados.
 - [x] Validación integral tras el router: typecheck, build, 23 unit tests y 25/25 E2E pasan localmente; `git diff --check` limpio.
-- [ ] Próximo orden sugerido: revisar el file explorer flotante y su consistencia visual; después seguir con los pendientes visuales de topbar y chrome. Mantener cada lote pequeño y verificable en PR #47, sin merge.
+- [x] Repo Explorer: descarta respuestas tardías de listado/archivo que pertenecen al repositorio anterior al cambiar de workspace. Evita mostrar un árbol cruzado o un archivo obsoleto durante la navegación.
+- [x] Validación integral del Explorer: typecheck, build, 23 unit tests y 25/25 E2E pasan localmente; E2E recorre add-to-board, resize persistente y apertura real de README.
+- [ ] Próximo orden sugerido: pulir visualmente las filas/lectura del Explorer y revisar topbar/chrome (bubble fusion y controles). Mantener lotes pequeños y verificables en PR #47, sin merge.

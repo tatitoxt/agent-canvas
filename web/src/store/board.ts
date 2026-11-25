@@ -388,6 +388,8 @@ type BoardState = {
   vaultEntries: string[];
   repoEntries: string[];
   repoFile: { path: string; text: string } | null;
+  repoRequestDir: string;
+  repoRequestPath: string;
   vaultFile: { path: string; text: string } | null;
   /** Latest vault full-text search hits. */
   vaultHits: { path: string; line: number; text: string }[];
@@ -1191,10 +1193,15 @@ export const useBoard = create<BoardState>((set, get) => ({
             set({ vaultEntries: msg.entries });
             break;
           case "repo_listing":
-            set({ repoEntries: msg.entries });
+            // Ignore late replies from a previous repo after the user has
+            // switched the Explorer. Otherwise stale files can appear under
+            // the newly selected workspace.
+            if (msg.dir === get().repoRequestDir) set({ repoEntries: msg.entries });
             break;
           case "repo_file":
-            set({ repoFile: { path: msg.path, text: msg.text } });
+            if (msg.dir === get().repoRequestDir && msg.path === get().repoRequestPath) {
+              set({ repoFile: { path: msg.path, text: msg.text } });
+            }
             break;
           case "vault_hits":
             set({ vaultHits: msg.hits });
@@ -1435,6 +1442,8 @@ export const useBoard = create<BoardState>((set, get) => ({
     client?.vaultList(dir);
   },
   explorerDir: null,
+  repoRequestDir: "",
+  repoRequestPath: "",
   openExplorer: (dir) => {
     if (dir) set({ explorerDir: dir });
     const board = get().activeBoard;
@@ -1443,11 +1452,11 @@ export const useBoard = create<BoardState>((set, get) => ({
     else get().openPanelNode("explorer");
   },
   repoTree: (dir) => {
-    set({ repoEntries: [], repoFile: null });
+    set({ repoRequestDir: dir, repoRequestPath: "", repoEntries: [], repoFile: null });
     client?.repoTree(dir);
   },
   repoRead: (dir, path) => {
-    set({ repoFile: null });
+    set({ repoRequestDir: dir, repoRequestPath: path, repoFile: null });
     client?.repoRead(dir, path);
   },
   vaultRead: (path) => client?.vaultRead(get().vaultDir, path),
