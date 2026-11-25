@@ -1163,7 +1163,12 @@ export const useBoard = create<BoardState>((set, get) => ({
     const board = get().activeBoard;
     const n = get().panelNodes[board]?.[id];
     if (!n) return;
-    const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: { ...n, w, h } } };
+    // PANEL_META minimums are a hard floor — a card smaller than its content
+    // minimum renders a broken, unusable panel.
+    const meta = PANEL_META[n.panel];
+    const cw = Math.max(w, meta?.minW ?? 0);
+    const ch = Math.max(h, meta?.minH ?? 0);
+    const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: { ...n, w: cw, h: ch } } };
     localStorage.setItem("cv-panelnodes", JSON.stringify(next));
     set({ panelNodes: next });
   },
