@@ -11,6 +11,34 @@ import { useBoard } from "../store/board";
  * queries, and keeps the PTY size in sync with the box. */
 const DECOR = { matchBackground: "#7a5a1e", matchOverviewRuler: "#e8b25a", activeMatchBackground: "#e8b25a", activeMatchColorOverviewRuler: "#ffffff" };
 
+
+/** tmux-style grouped clients: several TermHosts can mirror the same PTY
+ * (split panes). One PTY has ONE size — the smallest pane wins, recomputed
+ * on every resize, so both views render identically instead of fighting
+ * over the width and corrupting reflow. */
+type Mirror = { term: Terminal; fit: FitAddon; host: HTMLDivElement };
+const mirrors = new Map<string, Set<Mirror>>();
+
+function syncMirroredSize(agentId: string) {
+  const set = mirrors.get(agentId);
+  if (!set || set.size === 0) return;
+  let cols = Infinity;
+  let rows = Infinity;
+  for (const m of set) {
+    const d = m.fit.proposeDimensions();
+    if (!d) continue;
+    cols = Math.min(cols, d.cols);
+    rows = Math.min(rows, d.rows);
+  }
+  if (!isFinite(cols) || !isFinite(rows) || cols < 1 || rows < 1) return;
+  for (const m of set) {
+    if (m.term.cols !== cols || m.term.rows !== rows) m.term.resize(cols, rows);
+  }
+  if (useBoard.getState().agents[agentId]?.status !== "exited") {
+    useBoard.getState().resizePty(agentId, cols, rows);
+  }
+}
+
 export function TermHost({ agentId }: { agentId: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -38,7 +66,10 @@ export function TermHost({ agentId }: { agentId: string }) {
     term.loadAddon(search);
     searchRef.current = search;
     term.open(hostRef.current!);
-    fit.fit();
+    const mirror: Mirror = { term, fit, host: hostRef.current! };
+    if (!mirrors.has(agentId)) mirrors.set(agentId, new Set());
+    mirrors.get(agentId)!.add(mirror);
+    syncMirroredSize(agentId);
 
     const { attachPty, detachPty, sendInput, ptyBuffer, requestTranscript } = useBoard.getState();
     const history = ptyBuffer(agentId);
@@ -72,12 +103,7 @@ export function TermHost({ agentId }: { agentId: string }) {
       })
     );
 
-    const ro = new ResizeObserver(() => {
-      fit.fit();
-      if (term.cols && term.rows && alive()) {
-        useBoard.getState().resizePty(agentId, term.cols, term.rows);
-      }
-    });
+    const ro = new ResizeObserver(() => syncMirroredSize(agentId));
     ro.observe(hostRef.current!);
     termRef.current = term;
 
@@ -86,6 +112,8 @@ export function TermHost({ agentId }: { agentId: string }) {
       oscHandlers.forEach((h) => h.dispose());
       detachPty(agentId, onBytes);
       ro.disconnect();
+      mirrors.get(agentId)?.delete(mirror);
+      syncMirroredSize(agentId);
       term.dispose();
       termRef.current = null;
       searchRef.current = null;
