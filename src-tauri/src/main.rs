@@ -439,6 +439,150 @@ fn vault_list_entries(root: &PathBuf) -> Vec<String> {
     entries
 }
 
+/// Flat repository file list for the Code Editor. Repositories must already
+/// be registered as workspaces; don't let a renderer-provided path grant
+/// itself access to arbitrary files on the host.
+fn repo_tree_entries(root: &PathBuf) -> Vec<String> {
+    let mut entries = Vec::new();
+    let mut stack = vec![root.clone()];
+    while let Some(dir) = stack.pop() {
+        let Ok(read_dir) = std::fs::read_dir(&dir) else { continue };
+        for entry in read_dir.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build") {
+                continue;
+            }
+            if entry.file_type().map(|kind| kind.is_symlink()).unwrap_or(true) {
+                continue;
+            }
+            if path.is_dir() && stack.len() + entries.len() < 6000 {
+                stack.push(path);
+            } else if path.is_file() {
+                if let Ok(relative) = path.strip_prefix(root) {
+                    entries.push(relative.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    entries.sort();
+    entries
+}
+
+fn read_repo_file(root: &PathBuf, path: &str) -> Result<String, String> {
+    let rel = std::path::Path::new(path);
+    if rel.is_absolute() || rel.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err("access denied: path escapes the repository".into());
+    }
+    let canonical = std::fs::canonicalize(root.join(rel)).map_err(|_| format!("read failed: {path}"))?;
+    let root = std::fs::canonicalize(root).map_err(|e| e.to_string())?;
+    if !canonical.starts_with(&root) || !canonical.is_file() {
+        return Err("access denied: path is outside the repository".into());
+    }
+    let metadata = std::fs::metadata(&canonical).map_err(|e| e.to_string())?;
+    if metadata.len() > 256 * 1024 {
+        return Err(format!("file too large to view (256 KiB cap): {path}"));
+    }
+    let bytes = std::fs::read(&canonical).map_err(|e| e.to_string())?;
+    if bytes.len() > 256 * 1024 || bytes[..bytes.len().min(8192)].contains(&0) {
+        return Err(format!("binary or oversized file — not viewable: {path}"));
+    }
+    Ok(String::from_utf8_lossy(&bytes).to_string())
+}
+
+fn registered_repo_root(state: &CanvasState, dir: &str) -> Result<PathBuf, String> {
+    let requested = std::fs::canonicalize(dir).map_err(|_| format!("access denied: repository not found: {dir}"))?;
+    if requested == state.repo_root {
+        return Ok(requested);
+    }
+    let workspaces = state.store.workspaces_snapshot().map_err(|e| e.to_string())?;
+    for (_, _, repo, _) in workspaces {
+        if let Ok(root) = std::fs::canonicalize(repo) {
+            if root == requested {
+                return Ok(root);
+            }
+        }
+    }
+    Err("access denied: repository is not registered as a workspace".into())
+}
+
+#[tauri::command]
+fn repo_tree(app: AppHandle, state: State<'_, CanvasState>, dir: String) -> Result<(), String> {
+    let root = registered_repo_root(state.inner(), &dir)?;
+    let mut entries = repo_tree_entries(&root);
+    entries.truncate(4000);
+    emit_control(&app, &ServerMsg::RepoListing { dir, entries });
+    Ok(())
+}
+
+#[tauri::command]
+fn repo_read(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String) -> Result<(), String> {
+    let root = registered_repo_root(state.inner(), &dir)?;
+    let text = read_repo_file(&root, &path)?;
+    emit_control(&app, &ServerMsg::RepoFile { dir, path, text });
+    Ok(())
+}
+
+#[cfg(test)]
+mod repo_explorer_tests {
+    use super::{read_repo_file, repo_tree_entries};
+    use std::path::PathBuf;
+
+    fn temp_root() -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "canvas-repo-explorer-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    #[test]
+    fn lists_source_files_and_skips_hidden_and_dependency_directories() {
+        let root = temp_root();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::create_dir_all(root.join("node_modules/pkg")).unwrap();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        std::fs::write(root.join("src/main.ts"), "export {};").unwrap();
+        std::fs::write(root.join("node_modules/pkg/index.js"), "ignored").unwrap();
+        std::fs::write(root.join(".git/config"), "ignored").unwrap();
+
+        assert_eq!(repo_tree_entries(&root), vec!["src/main.ts"]);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn reads_text_but_rejects_traversal_binary_and_oversized_files() {
+        let root = temp_root();
+        std::fs::write(root.join("README.md"), "hello").unwrap();
+        std::fs::write(root.join("binary.dat"), [0, 1, 2]).unwrap();
+        std::fs::write(root.join("large.txt"), vec![b'x'; 256 * 1024 + 1]).unwrap();
+
+        assert_eq!(read_repo_file(&root, "README.md").unwrap(), "hello");
+        assert!(read_repo_file(&root, "../outside").unwrap_err().contains("access denied"));
+        assert!(read_repo_file(&root, "binary.dat").unwrap_err().contains("binary"));
+        assert!(read_repo_file(&root, "large.txt").unwrap_err().contains("too large"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_symlinks_that_escape_the_repository() {
+        let root = temp_root();
+        let outside = temp_root();
+        std::fs::write(outside.join("secret.txt"), "secret").unwrap();
+        std::os::unix::fs::symlink(outside.join("secret.txt"), root.join("secret.txt")).unwrap();
+
+        assert!(read_repo_file(&root, "secret.txt").unwrap_err().contains("access denied"));
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(outside).unwrap();
+    }
+}
+
 fn vault_links(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut rest = text;
@@ -2017,6 +2161,8 @@ fn main() {
             git_push,
             studio_doc,
             vault_list,
+            repo_tree,
+            repo_read,
             vault_search,
             vault_read,
             vault_peek,
