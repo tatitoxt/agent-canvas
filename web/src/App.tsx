@@ -863,6 +863,10 @@ function Board() {
       // A group drop moves every dragged card to the tab — moving only
       // the grabbed one splits the group across boards.
       let movedAny = false;
+      // moveCardToBoard switches the active board as a side effect —
+      // capture it once or every local card after the first fails the
+      // check and stays behind.
+      const srcBoard = useBoard.getState().activeBoard;
       for (const n of dragged) {
         const a = agents[n.id] ?? workspaces[n.id];
         if (a) {
@@ -871,7 +875,7 @@ function Board() {
             movedAny = true;
           }
         } else if (/^(term|panel|shape|md|web|orch)-/.test(n.id)) {
-          if (target !== useBoard.getState().activeBoard) {
+          if (target !== srcBoard) {
             useBoard.getState().moveCardToBoard(n.id, target);
             movedAny = true;
           }
