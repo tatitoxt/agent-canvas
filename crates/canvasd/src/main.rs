@@ -410,6 +410,40 @@ fn vault_list_entries(root: &PathBuf) -> Vec<String> {
     entries
 }
 
+
+/// Recursively list ALL files under a repo root for the explorer panel.
+/// Same discipline as the vault walker: no dotfiles, no heavy build
+/// dirs, never follow symlinks, capped.
+fn repo_tree_entries(root: &PathBuf) -> Vec<String> {
+    let mut entries = Vec::new();
+    let mut stack = vec![root.clone()];
+    while let Some(d) = stack.pop() {
+        if let Ok(rd) = std::fs::read_dir(&d) {
+            for e in rd.flatten() {
+                let p = e.path();
+                let name = e.file_name().to_string_lossy().to_string();
+                if name.starts_with('.')
+                    || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build")
+                {
+                    continue;
+                }
+                if e.file_type().map(|t| t.is_symlink()).unwrap_or(true) {
+                    continue;
+                }
+                if p.is_dir() && stack.len() + entries.len() < 6000 {
+                    stack.push(p);
+                } else if p.is_file() {
+                    if let Ok(rel) = p.strip_prefix(root) {
+                        entries.push(rel.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+    entries.sort();
+    entries
+}
+
 /// Extract link targets from markdown text: `[[name|alias]]` → `name`,
 /// `](path.md)` → `path`. No regex dep — manual scanning.
 fn vault_links(text: &str) -> Vec<String> {
@@ -1136,6 +1170,14 @@ fn handle_client_msg(
             }
         }
         ClientMsg::CreateWorkspace { name, repo, board_id } => {
+            // Registering a workspace is an explicit operator gesture —
+            // its repo joins the sandbox so the explorer and vault ops
+            // can browse it.
+            if let Some(canon) = canon_through_missing(std::path::Path::new(&repo)) {
+                if !root_allowed(state, &canon) {
+                    persist_allowed_root(state, &canon);
+                }
+            }
             // Path validated on spawn side; a workspace is just a named
             // container + its repo.
             let id = uuid::Uuid::new_v4().simple().to_string()[..12].to_string();
@@ -1690,6 +1732,46 @@ fn handle_client_msg(
                 }
                 (Err(e), _) | (_, Err(e)) => send_control(ServerMsg::Error { agent_id: None, message: e }),
                 _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault rename refused: {path}") }),
+            }
+        }
+        ClientMsg::RepoTree { dir } => {
+            match vault_sandbox_dir(state, &dir) {
+                Ok(root) => {
+                    let mut entries = repo_tree_entries(&root);
+                    entries.truncate(4000);
+                    send_control(ServerMsg::RepoListing { dir, entries });
+                }
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e }),
+            }
+        }
+        ClientMsg::RepoRead { dir, path } => {
+            match vault_sandbox_resolve(state, &dir, &path) {
+                Ok(file) if file.is_file() => {
+                    // 256 KiB cap — the viewer is for code, not binaries
+                    // or minified bundles. Size-check BEFORE reading: an
+                    // oversized file must never enter daemon memory.
+                    let too_big = std::fs::metadata(&file).map(|md| md.len() > 256 * 1024).unwrap_or(false);
+                    if too_big {
+                        send_control(ServerMsg::Error { agent_id: None, message: format!("file too large to view (256 KiB cap): {path}") });
+                        return;
+                    }
+                    // A NUL in the first chunk means binary: refuse.
+                    match std::fs::read(&file) {
+                        Ok(bytes) => {
+                            if bytes.len() > 256 * 1024 {
+                                send_control(ServerMsg::Error { agent_id: None, message: format!("file too large to view ({} KiB cap): {path}", 256) });
+                            } else if bytes[..bytes.len().min(8192)].contains(&0) {
+                                send_control(ServerMsg::Error { agent_id: None, message: format!("binary file — not viewable: {path}") });
+                            } else {
+                                let text = String::from_utf8_lossy(&bytes).to_string();
+                                send_control(ServerMsg::RepoFile { dir, path, text });
+                            }
+                        }
+                        _ => send_control(ServerMsg::Error { agent_id: None, message: format!("read failed: {path}") }),
+                    }
+                }
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e }),
+                _ => send_control(ServerMsg::Error { agent_id: None, message: format!("read failed: {path}") }),
             }
         }
         ClientMsg::VaultRead { dir, path } => {
@@ -2371,7 +2453,7 @@ async fn main() -> Result<()> {
         });
     let agents = Arc::new(AgentManager::new());
     agents.set_transcript_dir(repo_root.join(".canvas").join("transcripts"));
-    let allowed_roots: Vec<PathBuf> = {
+    let mut allowed_roots: Vec<PathBuf> = {
             // The board repo is always inside the sandbox; extra roots
             // (external vaults like ~/vault-demo) opt in one per line in
             // `.canvas/allowed-roots` — Deska's allowedRoots model.
@@ -2395,6 +2477,20 @@ async fn main() -> Result<()> {
             }
             roots
     };
+
+    // Workspaces registered before the auto-whitelist upgrade never got
+    // their grant — they were explicit operator gestures at creation, so
+    // backfill them into the sandbox at boot.
+    if let Ok(rows) = store.workspaces_snapshot() {
+        for (_, _, repo, _) in &rows {
+            if let Some(canon) = canon_through_missing(std::path::Path::new(repo)) {
+                let already = allowed_roots.iter().any(|ar| canon.starts_with(ar));
+                if !already {
+                    allowed_roots.push(canon);
+                }
+            }
+        }
+    }
 
     let state = Arc::new(AppState {
         token: token.clone(),

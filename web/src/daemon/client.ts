@@ -82,6 +82,8 @@ export type ServerMsg =
   | { type: "git_pushed"; agent_id: string; output: string }
   | { type: "studio_doc_md"; text: string }
   | { type: "vault_listing"; dir: string; entries: string[] }
+  | { type: "repo_listing"; dir: string; entries: string[] }
+  | { type: "repo_file"; dir: string; path: string; text: string }
   | { type: "vault_file"; path: string; text: string }
   | { type: "vault_peeked"; path: string; text: string }
   | { type: "vault_asset_data"; path: string; mime: string; data: string }
@@ -228,6 +230,14 @@ export class CanvasClient {
 
   vaultList(dir: string) {
     this.send({ cmd: "vault_list", dir });
+  }
+
+  repoTree(dir: string) {
+    this.send({ cmd: "repo_tree", dir });
+  }
+
+  repoRead(dir: string, path: string) {
+    this.send({ cmd: "repo_read", dir, path });
   }
 
   vaultRead(dir: string, path: string) {

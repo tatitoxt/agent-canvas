@@ -172,6 +172,16 @@ export class TauriCanvasClient {
     void invoke("vault_list", { dir }).catch(console.error);
   }
 
+  repoTree(_dir: string) {
+    // Tauri shell: repo explorer needs the canvasd control socket; the
+    // embedded host does not implement repo_tree yet — no-op like
+    // setAgentChain until it does.
+  }
+
+  repoRead(_dir: string, _path: string) {
+    // See repoTree.
+  }
+
   vaultRead(dir: string, path: string) {
     void invoke("vault_read", { dir, path }).catch(console.error);
   }

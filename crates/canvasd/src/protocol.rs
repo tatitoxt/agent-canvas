@@ -72,6 +72,11 @@ pub enum ClientMsg {
     NoteDelete { note_id: String },
     /// List markdown files under a vault directory (Obsidian-style vault).
     VaultList { dir: String },
+    /// List the file tree of a repository/root directory — all file types,
+    /// for the repo explorer panel. Same sandbox rules as the vault.
+    RepoTree { dir: String },
+    /// Read a text file for the repo viewer — capped, binary rejected.
+    RepoRead { dir: String, path: String },
     /// Read one file from the vault.
     VaultRead { dir: String, path: String },
     /// Read one file without making it "the open note" — powers `![[embeds]]`.
@@ -368,6 +373,10 @@ pub enum ServerMsg {
     GitPushed { agent_id: String, output: String },
     /// Vault file listing (VaultList answer): "sub/path.md" entries.
     VaultListing { dir: String, entries: Vec<String> },
+    /// Repo explorer: flat file tree of a root.
+    RepoListing { dir: String, entries: Vec<String> },
+    /// Repo viewer: file contents (utf-8 text, size-capped).
+    RepoFile { dir: String, path: String, text: String },
     /// Vault file contents (VaultRead answer).
     VaultFile { path: String, text: String },
     /// Vault file contents for an embed (VaultPeek answer) — cached client-side,
