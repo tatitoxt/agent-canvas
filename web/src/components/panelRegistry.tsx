@@ -15,6 +15,8 @@ import { VaultPanel } from "./VaultPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { SkillsPanel } from "./SkillsPanel";
 import { HistoryPanel } from "./HistoryPanel";
+import { SourceControlPanel } from "./SourceControlPanel";
+import { DevTicketsPanel } from "./DevTicketsPanel";
 import { PANEL_META, type PanelMeta } from "./panelMeta";
 
 export interface PanelDef extends PanelMeta {
@@ -54,4 +56,6 @@ export const PANEL_DEFS: Record<string, PanelDef> = {
   settings: { ...PANEL_META.settings, render: () => <SettingsPanel /> },
   skills: { ...PANEL_META.skills, render: () => <SkillsPanel /> },
   history: { ...PANEL_META.history, render: () => <HistoryNode /> },
+  sc: { ...PANEL_META.sc, render: () => <SourceControlPanel /> },
+  tickets: { ...PANEL_META.tickets, render: () => <DevTicketsPanel /> },
 };

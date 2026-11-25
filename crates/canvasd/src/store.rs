@@ -385,6 +385,29 @@ impl Store {
         Ok(rows.next().transpose()?)
     }
 
+    /// Absolute path of the agent's persisted worktree. Rows store it
+    /// relative to the repo the agent spawned in: its workspace's repo,
+    /// else `fallback_root` (the daemon's own).
+    pub fn agent_worktree_abs(
+        &self,
+        id: &str,
+        fallback_root: &std::path::Path,
+    ) -> Result<Option<std::path::PathBuf>> {
+        Ok(self.agent_worktree(id)?.map(|p| {
+            let p = std::path::PathBuf::from(p);
+            if p.is_absolute() {
+                p
+            } else {
+                self.agent_repo(id)
+                    .ok()
+                    .flatten()
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|| fallback_root.to_path_buf())
+                    .join(p)
+            }
+        }))
+    }
+
     /// Repo the agent's worktree lives in — its workspace's repo; None when
     /// it spawned straight on the daemon's own repo root.
     pub fn agent_repo(&self, id: &str) -> Result<Option<String>> {
@@ -488,7 +511,17 @@ impl Store {
         Ok(())
     }
 
-    #[allow(dead_code)]
+    /// Child exited without returning a result — close the ticket as
+    /// failed so it doesn't hang as "in flight" forever. `files` keeps the
+    /// child's remaining worktree edits visible on the ticket.
+    pub fn delegation_failed(&self, id: &str, files: u32) -> Result<()> {
+        self.conn.lock().unwrap().execute(
+            "UPDATE delegations SET state = 'failed', files_changed = ?2, resolved_at = datetime('now') WHERE id = ?1",
+            (id, files),
+        )?;
+        Ok(())
+    }
+
     pub fn delegation_resolved(&self, id: &str, result: &str, files: u32) -> Result<()> {
         self.conn.lock().unwrap().execute(
             "UPDATE delegations SET result = ?2, files_changed = ?3, state = 'returned', resolved_at = datetime('now') WHERE id = ?1",

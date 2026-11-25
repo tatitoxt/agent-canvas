@@ -19,7 +19,7 @@ use tokio::sync::mpsc;
 use tracing::warn;
 
 struct CanvasState {
-    agents: AgentManager,
+    agents: Arc<AgentManager>,
     store: Arc<Store>,
     repo_root: PathBuf,
     pending_results: Mutex<HashMap<String, String>>, // agent_id → edge_id
@@ -85,9 +85,48 @@ fn spawn_wired(
 
     let app2 = app.clone();
     let store2 = state.store.clone();
+    let agents2 = state.agents.clone();
+    let repo2 = state.repo_root.clone();
+    let ws2 = workspace_id.map(|w| w.to_string());
     tauri::async_runtime::spawn(async move {
         while let Some(id) = exit_rx.recv().await {
             let _ = store2.agent_status(&id, "exited");
+            // Close delegation tickets waiting on this agent: last-chance
+            // CANVAS_RESULT scan, else fail so the board isn't stuck in flight.
+            let edges: Vec<String> = store2
+                .unresolved_delegations()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|(_, to)| to == &id)
+                .map(|(e, _)| e)
+                .collect();
+            if !edges.is_empty() {
+                let summary = agents2
+                    .scrollback(&id)
+                    .map(|b| String::from_utf8_lossy(&b).to_string())
+                    .and_then(|t| canvas_result_line(&t))
+                    .map(|s| s.trim().to_string());
+                let repo = ws2
+                    .as_deref()
+                    .and_then(|w| store2.workspace_repo(w).ok().flatten())
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| repo2.clone());
+                let files = store2
+                    .agent_worktree_abs(&id, &repo)
+                    .ok()
+                    .flatten()
+                    .map(|w| dirty_file_count(&w))
+                    .unwrap_or(0);
+                for edge_id in edges {
+                    if let Some(summary) = summary.clone() {
+                        let _ = store2.delegation_resolved(&edge_id, &summary, files);
+                        emit_control(&app2, &ServerMsg::Result { edge_id, summary, files });
+                    } else {
+                        let _ = store2.delegation_failed(&edge_id, files);
+                        emit_control(&app2, &ServerMsg::DelegationFailed { edge_id });
+                    }
+                }
+            }
             emit_control(
                 &app2,
                 &ServerMsg::Status {
@@ -671,7 +710,16 @@ fn git_push(app: AppHandle, state: State<'_, CanvasState>, agent_id: String) -> 
         .store
         .agent_worktree(&agent_id)
         .map_err(|e| e.to_string())?
-        .map(|w| state.repo_root.join(&w))
+        .map(|w| {
+            state
+                .store
+                .agent_repo(&agent_id)
+                .ok()
+                .flatten()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| state.repo_root.clone())
+                .join(&w)
+        })
         .filter(|p| p.is_dir())
         .ok_or("no worktree for agent")?;
     let out = std::process::Command::new("git")
@@ -1389,6 +1437,21 @@ fn snapshot(
                 .metadata()
                 .map(|m| m.len())
                 .unwrap_or(0);
+            // Same diff-state replay as the daemon's snapshot — a fresh
+            // client shouldn't show a dirty worktree as clean.
+            let wt = state.agents.worktree(&id).or_else(|| {
+                state
+                    .store
+                    .agent_worktree_abs(&id, &state.repo_root)
+                    .ok()
+                    .flatten()
+            });
+            let (files, paths, branch) = wt
+                .map(|w| {
+                    let paths = dirty_files(&w);
+                    (paths.len() as u32, paths, worktree_branch(&w))
+                })
+                .unwrap_or_default();
             SnapshotAgent {
             status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
             account_label: account_id.and_then(|a| acct_labels.get(&a).cloned()),
@@ -1400,6 +1463,9 @@ fn snapshot(
             workspace_id,
             board_id,
             output_bytes: ob,
+            files,
+            paths,
+            branch,
         }
         })
         .collect();
@@ -1555,7 +1621,7 @@ fn main() {
             let agents = AgentManager::new();
             agents.set_transcript_dir(repo_root.join(".canvas").join("transcripts"));
             app.manage(CanvasState {
-                agents,
+                agents: Arc::new(agents),
                 store,
                 repo_root,
                 pending_results: Mutex::new(HashMap::new()),

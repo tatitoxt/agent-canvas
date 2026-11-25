@@ -13,6 +13,10 @@ export type SnapshotAgent = {
   account_label?: string | null;
   /** PTY output bytes captured to disk. */
   output_bytes?: number;
+  /** Diff state replayed so fresh clients aren't stuck on "clean". */
+  files?: number;
+  paths?: string[];
+  branch?: string;
 };
 
 export type SnapshotArtifact = {
@@ -82,6 +86,7 @@ export type ServerMsg =
   | { type: "vault_discovered"; vaults: { name: string; path: string }[] }
   | { type: "delegation"; edge_id: string; from: string; to: string; task: string }
   | { type: "result"; edge_id: string; summary: string; files?: number }
+  | { type: "delegation_failed"; edge_id: string }
   | {
       type: "snapshot";
       boards?: { board_id: string; name: string }[];
