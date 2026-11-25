@@ -63,6 +63,10 @@ export function SpawnBar() {
   const [command, setCommand] = useState("");
   const [permission, setPermission] = useState("supervised");
   const [count, setCount] = useState(1);
+  const workspaces = useBoard((s) => s.workspaces);
+  const activeBoard = useBoard((s) => s.activeBoard);
+  const boardWs = Object.values(workspaces).filter((w) => (w.board_id ?? "main") === activeBoard);
+  const [wsId, setWsId] = useState<string>("");
   const wrap = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -167,6 +171,24 @@ export function SpawnBar() {
                   );
                 })}
               </div>
+              {boardWs.length > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 10, color: "var(--cv-ink-dim)", flex: 1 }} title="inside a workspace the agent gets its own git worktree of that repo">
+                    workspace
+                  </span>
+                  <select
+                    value={wsId}
+                    onChange={(e) => setWsId(e.target.value)}
+                    style={{ ...inputStyle, width: 150, cursor: "pointer" }}
+                    title="spawn inside this workspace — own git worktree"
+                  >
+                    <option value="">none — plain shell</option>
+                    {boardWs.map((w) => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {choice === "custom" && (
                 <input
                   style={inputStyle}
@@ -267,7 +289,7 @@ export function SpawnBar() {
                     spawn(
                       count > 1 ? `${cmd}-p${i + 1}` : cmd,
                       cmd,
-                      undefined,
+                      wsId || undefined,
                       permission,
                       undefined,
                       count > 1

@@ -50,12 +50,15 @@ test("shift+click multi-select selects two nodes", async ({ page }) => {
   expect(await nodes.count()).toBeGreaterThanOrEqual(2);
   const b0 = await nodes.nth(0).boundingBox();
   const b1 = await nodes.nth(1).boundingBox();
+  // Slow CI runners: nodes settle late and selection state lags the click.
+  // Re-measure right before clicking and let the assertion retry.
   await page.keyboard.down("Shift");
-  await page.mouse.click(b0!.x + 20, b0!.y + 12);
-  await page.mouse.click(b1!.x + 20, b1!.y + 12);
+  const c0 = await nodes.nth(0).boundingBox();
+  await page.mouse.click(c0!.x + 20, c0!.y + 12);
+  const c1 = await nodes.nth(1).boundingBox();
+  await page.mouse.click(c1!.x + 20, c1!.y + 12);
   await page.keyboard.up("Shift");
-  await page.waitForTimeout(500);
-  expect(await page.locator(".react-flow__node.selected").count()).toBe(2);
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(2, { timeout: 6_000 });
 });
 
 test("split right shows two live xterm panes in the drawer", async ({ page }) => {

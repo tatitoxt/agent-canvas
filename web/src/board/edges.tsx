@@ -2,6 +2,7 @@ import {
   BaseEdge,
   EdgeLabelRenderer,
   getBezierPath,
+  useReactFlow,
   type Edge,
   type EdgeProps,
 } from "@xyflow/react";
@@ -87,16 +88,27 @@ export function DelegationEdge({
   target,
   sourceX,
   sourceY,
+  sourcePosition,
   targetX,
   targetY,
-  sourcePosition,
   targetPosition,
   data,
   markerEnd,
 }: EdgeProps<Edge<DelegationEdgeData>>) {
+  // Orthogonal routing with node avoidance from main, enhanced with the
+  // recent detour router so paths can clear multiple intervening nodes.
+  const { getNodes } = useReactFlow();
+  const nodeObstacles = getNodes()
+    .filter((n) => n.id !== source && n.id !== target && n.type !== "workspace")
+    .map((n) => {
+      const p = ((n as { internals?: { positionAbsolute?: { x: number; y: number } } }).internals?.positionAbsolute ?? n.position) as { x: number; y: number };
+      const w = n.measured?.width ?? (n.width as number) ?? 380;
+      const h = n.measured?.height ?? (n.height as number) ?? 200;
+      return { x: p.x - 8, y: p.y - 8, w: w + 16, h: h + 16 };
+    });
   const obstacles = obstacleRects([source, target]);
-  const routed = detourPath(sourceX, sourceY, targetX, targetY, obstacles);
-  const [path, labelX, labelY] = obstacles.length
+  const routed = detourPath(sourceX, sourceY, targetX, targetY, [...obstacles, ...nodeObstacles]);
+  const [path, labelX, labelY] = obstacles.length || nodeObstacles.length
     ? [routed.path, routed.lx, routed.ly]
     : getBezierPath({
         sourceX,
@@ -124,7 +136,7 @@ export function DelegationEdge({
         <EdgeLabelRenderer>
           <div
             className="glass-pill nodrag nopan pointer-events-auto absolute max-w-52 -translate-x-1/2 -translate-y-1/2 cursor-pointer px-2.5 py-1 text-[12px] leading-snug font-medium"
-            style={{ left: labelX, top: labelY }}
+            style={{ left: labelX, top: labelY, zIndex: 10 }}
             title="Open this delegation's full record"
             onClick={() => useBoard.getState().setEdgeDetail(id)}
           >

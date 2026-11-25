@@ -49,16 +49,20 @@ export function SettingsPanel() {
   const clearDone = useBoard((s) => s.clearDone);
   const undoMove = useBoard((s) => s.undoMove);
   const moveHistory = useBoard((s) => s.moveHistory);
+  const panelSummaries = useBoard((s) => s.panelSummaries);
+  const togglePanelSummaries = useBoard((s) => s.togglePanelSummaries);
+  const vaultDir = useBoard((s) => s.vaultDir);
   const supported = typeof Notification !== "undefined";
   const [perm, setPerm] = useState<NotificationPermission>(supported ? Notification.permission : "denied");
   const [cleared, setCleared] = useState<number | null>(null);
   return (
     <div
-      style={{ ...panelRoot, padding: "12px 10px" }}
+      style={{ ...panelRoot, padding: "12px 10px", overflow: "hidden" }}
     >
-      <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 10px", color: "var(--cv-ink)" }}>
+      <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 10px", color: "var(--cv-ink)", flexShrink: 0 }}>
         Settings
       </div>
+      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
       <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--cv-ink-dim)", padding: "0 12px 6px", textTransform: "uppercase", letterSpacing: 0.6 }}>
         Theme
       </div>
@@ -90,6 +94,23 @@ export function SettingsPanel() {
         <button className="glass" style={{ ...rowBtn, flex: 0, padding: "7px 14px" }} onClick={() => bumpFont(-1)}>−</button>
         <span style={{ flex: 1, textAlign: "center", fontSize: 11, color: "var(--cv-ink)" }}>{termFont}px</span>
         <button className="glass" style={{ ...rowBtn, flex: 0, padding: "7px 14px" }} onClick={() => bumpFont(1)}>+</button>
+      </div>
+      <div style={label}>Canvas</div>
+      <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ flex: 1, fontSize: 10.5, color: "var(--cv-ink-dim)" }}>card summaries under titles</span>
+        <button
+          className="glass"
+          style={{ ...rowBtn, flex: 0, padding: "7px 12px", outline: panelSummaries ? "1.5px solid var(--cv-accent)" : "none" }}
+          onClick={() => togglePanelSummaries()}
+        >
+          {panelSummaries ? "on" : "off"}
+        </button>
+      </div>
+      <div style={label}>Vault</div>
+      <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ flex: 1, fontSize: 10.5, color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={vaultDir || "no vault mounted"}>
+          {vaultDir || "no vault mounted — use the vault panel"}
+        </span>
       </div>
       <div style={label}>Daemon</div>
       <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>
@@ -235,6 +256,7 @@ export function SettingsPanel() {
       </div>
       <div style={{ fontSize: 9.5, color: "var(--cv-ink-dim)", padding: "0 12px 6px", lineHeight: 1.4 }}>
         Carries your presets, shapes, notes, thread and theme between machines — canvas layouts live in the daemon's .canvas/board.db.
+      </div>
       </div>
     </div>
   );

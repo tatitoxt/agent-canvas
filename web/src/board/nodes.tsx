@@ -936,8 +936,16 @@ export function WorkspaceNode({
   selected,
 }: NodeProps<Node<WorkspaceNodeData>>) {
   const rf = useReactFlow();
+  const { fitView } = rf;
   return (
     <div
+      onDoubleClick={(e) => {
+        // The container is mostly transparent, so canvas double-clicks fall
+        // through to the pane (spawn chooser) — catch them here and zoom to
+        // the region, same gesture as group frames.
+        e.stopPropagation();
+        fitView({ nodes: [{ id }], padding: 0.15, duration: 300 });
+      }}
       style={{
         width: "100%",
         height: "100%",

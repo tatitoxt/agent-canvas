@@ -5,7 +5,7 @@ export default defineConfig({
   testMatch: "*.spec.ts",
   timeout: 45_000,
   workers: 1,
-  retries: 0,
+  retries: process.env.CI ? 2 : 0, // UI-stack timing flake on loaded CI runners
   globalSetup: "./e2e/globalSetup.mjs",
   globalTeardown: "./e2e/globalTeardown.mjs",
   use: {

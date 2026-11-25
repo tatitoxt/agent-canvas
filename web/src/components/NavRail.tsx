@@ -521,13 +521,6 @@ export function RightRail() {
  * the screen. A 3-column grid keeps it exactly on the 50% axis:
  * create on its left, the small round inbox on its right. */
 export function BottomDock({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
-  const agents = useBoard((s) => s.agents);
-  const edges = useBoard((s) => s.edges);
-  const approvals = useBoard((s) => s.approvals);
-  const inboxCount =
-    Object.keys(approvals).length +
-    Object.values(agents).filter((a) => a.status === "waiting" || a.status === "blocked").length +
-    Object.values(edges).filter((e) => e.state === "delegated").length;
   const [dexText, setDexText] = useState("");
   const [dexHist, setDexHist] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(-1);
@@ -686,19 +679,7 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
         </div>
       </div>
 
-      {/* ── right of Dex · inbox, small and round ─────────── */}
-      <div style={{ justifySelf: "start", display: "flex", alignItems: "flex-end", gap: 8, marginLeft: 16, pointerEvents: "auto" }}>
-        <nav className="glass" style={{ ...bubbleRow, borderRadius: 999, padding: 3 }}>
-          <button
-            title="Inbox — approvals, waiting agents, delegations in flight"
-            onClick={() => onSelect("inbox")}
-            style={miniBtn(active === "inbox")}
-          >
-            <Icon name="inbox" size={13} />
-            {inboxCount > 0 && <span style={badge("var(--cv-waiting)")}>{inboxCount}</span>}
-          </button>
-        </nav>
-      </div>
+      {/* inbox lives in ONE place: the topbar bell — no bottom bubble. */}
     </div>
   );
 }

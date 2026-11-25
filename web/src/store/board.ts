@@ -406,7 +406,7 @@ type BoardState = {
   notes: Record<string, { note_id: string; board_id: string; col: string; text: string; pos: number; due?: string }>;
   /** Saved node positions — replayed from the daemon's layout table. */
   positions: Record<string, { x: number; y: number }>;
-  /** Per-agent custom card size from user resize — width always, height optional. */
+  /** Per-agent size overrides for cards resized on the canvas. */
   agentSizes: Record<string, { w: number; h?: number }>;
   resizeAgentCard: (id: string, w: number, h?: number, persist?: boolean) => void;
   /** Drop position for a delegation child, keyed by parent agent id —
@@ -582,6 +582,10 @@ type BoardState = {
   /** Deska's "Gather loose windows into groups" — pulls every unwired,
    * unparented agent card into a tight grid and reframes the view. */
   gatherLoose: () => void;
+  /** Snapshot of the last gather for undo — positions before the moves
+   * plus the frame it created. */
+  lastGather: { board: string; items: { id: string; kind: "agent" | "panel" | "term"; x: number; y: number }[]; frameId: string } | null;
+  undoGather: () => void;
   /** Frame a board rect as a "Group N" region; returns its label. */
   frameNodes: (x: number, y: number, w: number, h: number) => string;
   /** Hide panels and menus — every chrome element (rails, topbar, spawn
@@ -702,8 +706,6 @@ export const useBoard = create<BoardState>((set, get) => ({
   })(),
   resizeAgentCard: (id, w, h, persist = true) => {
     const next = { ...get().agentSizes, [id]: { w, h } };
-    // drag streams updates at 60fps — writing localStorage synchronously on
-    // every frame janks the whole canvas; persist only on resize end
     if (persist) localStorage.setItem("cv-agentsizes", JSON.stringify(next));
     set({ agentSizes: next });
   },
@@ -1530,6 +1532,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   pendingTermPos: null,
   setPendingTermPos: (p) => set({ pendingTermPos: p }),
   viewportRect: null,
+  lastGather: null,
   pendingSpawnPos: null,
   setPendingSpawnPos: (p) => set({ pendingSpawnPos: p }),
   setAgentChain: (workspaceId, chain) => {
@@ -2129,6 +2132,10 @@ export const useBoard = create<BoardState>((set, get) => ({
       bumpFont(-1);
       return `terminal font ${get().termFont}px`;
     }
+    if (/undo (gather|grouping|tidy)/.test(t)) {
+      get().undoGather();
+      return "gather undone";
+    }
     if (/undo|deshacer/.test(t)) return undoMove() ? "undid last move" : "nothing to undo";
     if (/fit|reset view|zoom|overview/.test(t)) {
       requestView();
@@ -2175,11 +2182,11 @@ export const useBoard = create<BoardState>((set, get) => ({
       presets: "presets", preset: "presets",
       thread: "thread",
       accounts: "accounts", account: "accounts",
-      juice: "usage", usage: "usage", "mission map": "usage", mission: "usage",
+      juice: "usage", usage: "usage",
       memory: "memory",
       "pull requests": "prs", prs: "prs", pr: "prs",
       issues: "issues", issue: "issues",
-      "dex tickets": "tickets", "dev tickets": "tickets", tickets: "tickets", ticket: "tickets", notes: "notes",
+      "dex tickets": "notes", tickets: "notes", ticket: "notes", notes: "notes",
       artifacts: "artifacts", artifact: "artifacts",
       obsidian: "vault", vault: "vault", files: "vault",
       settings: "settings", setting: "settings",
@@ -2209,51 +2216,131 @@ export const useBoard = create<BoardState>((set, get) => ({
   setSpawnOpen: (v) => set(v ? { spawnOpen: v } : { spawnOpen: v, pendingSpawnPos: null }),
   focusSpawn: () => set({ spawnOpen: true }),
   gatherLoose: () => {
-    const { agents, positions, activeBoard, panelNodes, termNodes, mdNodes, webNodes } = get();
-    // Gather is an explicit arrange command: include every live agent and
-    // every floating tool/terminal card, even when wired or in a workspace.
+    const { agents, edges, positions, activeBoard, shapes, panelNodes, termNodes, mdNodes, webNodes } = get();
+    const wired = new Set(Object.values(edges).flatMap((e) => [e.from, e.to]));
+    // A card is "loose" when its center isn't already inside a group frame.
+    const rects = Object.values(shapes[activeBoard] ?? {}).filter(
+      (s) => s.kind === "rect" && s.w != null && s.h != null,
+    );
+    const inside = (x: number, y: number) =>
+      rects.some((r) => x >= r.x && x <= r.x + r.w! && y >= r.y && y <= r.y + r.h!);
     const loose: Array<{ id: string; x: number; y: number; w: number; h: number; move: (id: string, x: number, y: number) => void }> = [];
-    for (const a of Object.values(agents)) {
-      const p = positions[a.id];
-      // Card footprint matches the redesigned card (460 wide, ~260 tall) —
-      // the old 360×220 assumption made grid cells smaller than the cards,
-      // so gather overlapped them (Fausto's "apila una encima de otra").
-      const sz = get().agentSizes?.[a.id];
-      const aw = sz?.w ?? 460;
-      const ah = sz?.h ?? 260;
-      if ((a.board_id ?? "main") === activeBoard && a.status !== "exited") {
-        loose.push({ id: a.id, x: p?.x ?? 0, y: p?.y ?? 0, w: aw, h: ah, move: (id, x, y) => get().moveNode(id, x, y) });
+    // Agents never dragged have no positions entry — the canvas renders them
+    // on the fallback spawn grid; snapshot THAT spot, not the origin.
+    const boardAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard);
+    const fallbackPos = new Map<string, { x: number; y: number }>();
+    boardAgents.forEach((a, i) => {
+      fallbackPos.set(a.id, a.workspace_id
+        ? { x: 60 + (i % 3) * 300, y: 80 + Math.floor(i / 3) * 190 }
+        : { x: 1000 + (i % 2) * 500, y: 60 + Math.floor(i / 2) * 300 });
+    });
+    for (const a of boardAgents) {
+      const p = positions[a.id] ?? fallbackPos.get(a.id);
+      if (
+        a.status !== "exited" &&
+        !a.workspace_id &&
+        !wired.has(a.id) &&
+        !(p && positions[a.id] && inside(p.x + 180, p.y + 110))
+      ) {
+        loose.push({ id: a.id, x: p?.x ?? 0, y: p?.y ?? 0, w: 460, h: 240, move: (id, x, y) => get().moveNode(id, x, y) });
       }
     }
     for (const [id, n] of Object.entries(panelNodes[activeBoard] ?? {})) {
-      loose.push({ id, x: n.x, y: n.y, w: n.w ?? 320, h: n.h ?? 420, move: (i, x, y) => get().movePanelNode(i, x, y) });
+      if (!inside(n.x + (n.w ?? 320) / 2, n.y + (n.h ?? 420) / 2))
+        loose.push({ id, x: n.x, y: n.y, w: n.w ?? 320, h: n.h ?? 420, move: (i, x, y) => get().movePanelNode(i, x, y) });
     }
     for (const [id, n] of Object.entries(termNodes[activeBoard] ?? {})) {
-      loose.push({ id, x: n.x, y: n.y, w: n.w ?? 560, h: n.h ?? 320, move: (i, x, y) => get().moveTermNode(i, x, y) });
+      if (!inside(n.x + (n.w ?? 560) / 2, n.y + (n.h ?? 320) / 2))
+        loose.push({ id, x: n.x, y: n.y, w: n.w ?? 560, h: n.h ?? 320, move: (i, x, y) => get().moveTermNode(i, x, y) });
     }
     for (const [id] of Object.entries(mdNodes[activeBoard] ?? {})) {
       const p = positions[id] ?? { x: 0, y: 0 };
-      loose.push({ id, ...p, w: 340, h: 260, move: (i, x, y) => get().moveNode(i, x, y) });
+      if (!inside(p.x + 170, p.y + 130))
+        loose.push({ id, ...p, w: 340, h: 260, move: (i, x, y) => get().moveNode(i, x, y) });
     }
     for (const [id] of Object.entries(webNodes[activeBoard] ?? {})) {
       const p = positions[id] ?? { x: 0, y: 0 };
-      loose.push({ id, ...p, w: 520, h: 360, move: (i, x, y) => get().moveNode(i, x, y) });
+      if (!inside(p.x + 260, p.y + 180))
+        loose.push({ id, ...p, w: 520, h: 360, move: (i, x, y) => get().moveNode(i, x, y) });
     }
     if (!loose.length) {
+      get().notify("gather — no loose windows");
       return;
     }
-    // Anchor the grid at the loosest cluster's top-left, cells sized to the
-    // biggest card so nothing overlaps.
-    const x0 = Math.min(...loose.map((l) => l.x));
-    const y0 = Math.min(...loose.map((l) => l.y));
+    // Snapshot every loose position before moving a single card — undo
+    // grouping puts them all back (Deska "put windows back").
+    const snapshotItems = loose.map((l) => ({
+      id: l.id,
+      kind: (l.id.startsWith("panel-") ? "panel" : l.id.startsWith("term-") ? "term" : "agent") as "agent" | "panel" | "term",
+      x: l.x,
+      y: l.y,
+    }));
+    // Anchor the grid inside the current viewport — scattered cards must
+    // come INTO view, not pile up where the leftmost one happened to be.
+    const vp = get().viewportRect;
+    let x0 = vp ? vp.left + 80 : Math.min(...loose.map((l) => l.x));
+    let y0 = vp ? vp.top + 110 : Math.min(...loose.map((l) => l.y));
     const cols = Math.ceil(Math.sqrt(loose.length));
     const cw = Math.max(...loose.map((l) => l.w)) + 32;
     const ch = Math.max(...loose.map((l) => l.h)) + 32;
+    // Don't bury existing groups: while the grid area intersects a frame,
+    // slide the anchor below it (few frames in practice — one pass suffices).
+    const rows0 = Math.ceil(loose.length / cols);
+    // Frame rect exactly as drawn: origin (x0-26, y0-46), size (cols*cw+12,
+    // rows*ch+56) — anything looser flags clear space as a collision.
+    for (const r of [...rects].sort((a, b) => a.y - b.y)) {
+      const gx1 = x0 - 26, gy1 = y0 - 46;
+      const gx2 = gx1 + cols * cw + 12, gy2 = gy1 + rows0 * ch + 56;
+      const overlap = gx1 < r.x + r.w! && gx2 > r.x && gy1 < r.y + r.h! && gy2 > r.y;
+      if (overlap) y0 = r.y + r.h! + 110;
+    }
     loose.forEach((l, i) =>
       l.move(l.id, x0 + (i % cols) * cw, y0 + Math.floor(i / cols) * ch),
     );
     const rows = Math.ceil(loose.length / cols);
-    get().frameNodes(x0 - 26, y0 - 46, (cols - 1) * cw + Math.max(...loose.map((l) => l.w)) + 52, (rows - 1) * ch + Math.max(...loose.map((l) => l.h)) + 76);
+    // The frame needs its id for undo — frameNodes returns the label, so
+    // capture the newest frame id from the shapes map right after.
+    const beforeIds = new Set(Object.keys(get().shapes[activeBoard] ?? {}));
+    const n = get().frameNodes(
+      x0 - 26, y0 - 46, cols * cw + 12, rows * ch + 56,
+    );
+    const frameId = Object.keys(get().shapes[activeBoard] ?? {}).find((k) => !beforeIds.has(k)) ?? "";
+    set({ lastGather: { board: activeBoard, items: snapshotItems, frameId } });
+    get().notify(`gathered ${loose.length} into ${n} — "undo gather" puts them back`);
+    get().requestView();
+  },
+  undoGather: () => {
+    const g = get().lastGather;
+    if (!g) {
+      get().notify("nothing to undo — no recent gather");
+      return;
+    }
+    // The movers write to the ACTIVE board — jump back to the board the
+    // gather happened on so positions land where the cards actually are.
+    // If that board was deleted there is nothing to restore into: drop
+    // the snapshot instead of resurrecting a board the user closed.
+    if (!get().boards[g.board]) {
+      set({ lastGather: null });
+      get().notify("gather undo expired — that board is gone");
+      return;
+    }
+    if (get().activeBoard !== g.board) get().setActiveBoard(g.board);
+    for (const item of g.items) {
+      if (item.kind === "panel") get().movePanelNode(item.id, item.x, item.y);
+      else if (item.kind === "term") get().moveTermNode(item.id, item.x, item.y);
+      else get().moveNode(item.id, item.x, item.y);
+    }
+    // Drop the frame the gather created.
+    if (g.frameId) {
+      const board = get().activeBoard;
+      const m = { ...(get().shapes[board] ?? {}) };
+      delete m[g.frameId];
+      const next = { ...get().shapes, [board]: m };
+      localStorage.setItem("cv-shapes", JSON.stringify(next));
+      set({ shapes: next });
+    }
+    set({ lastGather: null });
+    get().notify("gather undone — windows back where they were");
     get().requestView();
   },
   /** Drop a translucent "Group N" rect behind a region of the board —
