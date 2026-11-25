@@ -183,6 +183,69 @@ function logLine(
   return next;
 }
 
+/* --- automation guardrails (Deska model) ----------------------------------
+ * Global policy for automated runs, persisted per client in localStorage.
+ * An automation can opt out via `guardrailOverrides[id] = true` — its own
+ * saved fields then win over the global picks. */
+
+export type Guardrails = {
+  /** How long an automation waits on an operator answer. */
+  waitForAnswer: "15m" | "1h" | "4h" | "forever";
+  /** What happens when the wait times out. */
+  onNoAnswer: "safest" | "stop" | "proceed";
+  /** Policy for commands the policy gate rejects. */
+  onNotAllowed: "ask" | "deny";
+  /** Silence threshold before the unresponsive action runs. */
+  unresponsiveAfter: "15m" | "30m" | "1h";
+  /** What happens to a hung run. */
+  unresponsiveAction: "takeover" | "stop";
+  /** Two automations due at once. */
+  onRunCollision: "queue" | "skip";
+  /** A scheduled run was due while the machine slept. */
+  onComputerOff: "run-once" | "skip";
+};
+
+const DEFAULT_GUARDRAILS: Guardrails = {
+  waitForAnswer: "1h",
+  onNoAnswer: "safest",
+  onNotAllowed: "ask",
+  unresponsiveAfter: "30m",
+  unresponsiveAction: "stop",
+  onRunCollision: "queue",
+  onComputerOff: "run-once",
+};
+
+const GUARDRAILS_KEY = "cv-guardrails";
+
+function loadGuardrails(): { guardrails: Guardrails; overrides: Record<string, boolean> } {
+  try {
+    const v = JSON.parse(localStorage.getItem(GUARDRAILS_KEY) ?? "{}");
+    return {
+      guardrails: { ...DEFAULT_GUARDRAILS, ...(v.guardrails ?? {}) },
+      overrides: v.overrides ?? {},
+    };
+  } catch {
+    return { guardrails: { ...DEFAULT_GUARDRAILS }, overrides: {} };
+  }
+}
+
+function saveGuardrails(guardrails: Guardrails, overrides: Record<string, boolean>) {
+  try {
+    localStorage.setItem(GUARDRAILS_KEY, JSON.stringify({ guardrails, overrides }));
+  } catch {
+    /* storage full — settings stay in memory */
+  }
+}
+
+/** The 4-level permission ladder with its one-line descriptions — shown in
+ * every picker that chooses a level (spawn bar, delegate, automations). */
+export const PERMISSION_LEVELS = [
+  { id: "supervised", label: "Supervised", hint: "approve every command + edit" },
+  { id: "auto_accept", label: "Auto accept edits", hint: "edits apply silently, commands still ask" },
+  { id: "auto", label: "Auto", hint: "agent decides, you review at the end" },
+  { id: "full", label: "Full access", hint: "no prompts" },
+] as const;
+
 type BoardState = {
   connected: boolean;
   agents: Record<string, LiveAgent>;
@@ -421,6 +484,11 @@ type BoardState = {
   }) => void;
   runAutomation: (automationId: string) => void;
   deleteAutomation: (automationId: string) => void;
+  /** Global automation guardrails + per-automation override flags. */
+  guardrails: Guardrails;
+  guardrailOverrides: Record<string, boolean>;
+  setGuardrails: (patch: Partial<Guardrails>) => void;
+  setGuardrailOverride: (automationId: string, on: boolean) => void;
   createLoop: (l: {
     board_id: string;
     target: string;
@@ -506,6 +574,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   viewCmdN: 0,
   automations: {},
   loops: {},
+  guardrails: loadGuardrails().guardrails,
+  guardrailOverrides: loadGuardrails().overrides,
   attention: {},
   ptyListeners: {},
   ptyBuffers: {},
@@ -1574,6 +1644,18 @@ export const useBoard = create<BoardState>((set, get) => ({
   createAutomation: (a) => client?.createAutomation(a),
   runAutomation: (automationId) => client?.runAutomation(automationId),
   deleteAutomation: (automationId) => client?.deleteAutomation(automationId),
+  setGuardrails: (patch) => {
+    const g = { ...get().guardrails, ...patch };
+    saveGuardrails(g, get().guardrailOverrides);
+    set({ guardrails: g });
+  },
+  setGuardrailOverride: (automationId, on) => {
+    const o = { ...get().guardrailOverrides };
+    if (on) o[automationId] = true;
+    else delete o[automationId];
+    saveGuardrails(get().guardrails, o);
+    set({ guardrailOverrides: o });
+  },
   createLoop: (l) => client?.createLoop(l),
   deleteLoop: (loopId) => client?.deleteLoop(loopId),
   setLoopEnabled: (loopId, enabled) => client?.setLoopEnabled(loopId, enabled),
