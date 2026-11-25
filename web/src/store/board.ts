@@ -2231,7 +2231,7 @@ export const useBoard = create<BoardState>((set, get) => ({
         !wired.has(a.id) &&
         !(p && positions[a.id] && inside(p.x + 180, p.y + 110))
       ) {
-        loose.push({ id: a.id, x: p?.x ?? 0, y: p?.y ?? 0, w: 360, h: 220, move: (id, x, y) => get().moveNode(id, x, y) });
+        loose.push({ id: a.id, x: p?.x ?? 0, y: p?.y ?? 0, w: 460, h: 240, move: (id, x, y) => get().moveNode(id, x, y) });
       }
     }
     for (const [id, n] of Object.entries(panelNodes[activeBoard] ?? {})) {
