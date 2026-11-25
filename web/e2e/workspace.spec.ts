@@ -1,11 +1,20 @@
 import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { execSync } from "node:child_process";
 
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
 
 test("workspace resize survives canvas rerenders and reloads", async ({ page }) => {
-  const { port, token, vault, workspaceRepo } = stack();
+  const { port, token, vault } = stack();
+  const workspaceRepo = mkdtempSync(resolve(tmpdir(), "canvas-e2e-workspace-repo-"));
+  execSync("git init -q", { cwd: workspaceRepo });
+  execSync("git config user.email e2e@test", { cwd: workspaceRepo });
+  execSync("git config user.name e2e", { cwd: workspaceRepo });
+  writeFileSync(resolve(workspaceRepo, "README.md"), "# e2e workspace repo\n");
+  execSync("git add -A && git commit -qm init", { cwd: workspaceRepo });
   await page.addInitScript((v) => localStorage.setItem("cv-vault-dir", v), vault);
   await page.goto(`http://127.0.0.1:${port}/?token=${token}`);
   await expect(page.locator(".react-flow")).toBeVisible({ timeout: 15_000 });

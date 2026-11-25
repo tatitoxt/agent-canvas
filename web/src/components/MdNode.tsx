@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { NodeProps, Node } from "@xyflow/react";
+import { NodeResizer, type NodeProps, type Node } from "@xyflow/react";
 import type { MdNodeData } from "../board/types";
 import { useBoard } from "../store/board";
 
@@ -7,9 +7,10 @@ import { useBoard } from "../store/board";
  * re-polled so an agent editing the file shows up live. */
 const POLL_MS = 4000;
 
-export function MdNode({ id, data }: NodeProps<Node<MdNodeData>>) {
+export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
   const text = useBoard((s) => s.mdContents[data.path]);
   const mdNodeRemove = useBoard((s) => s.mdNodeRemove);
+  const resizeMdNode = useBoard((s) => s.resizeMdNode);
   const basename = data.path.split("/").pop() ?? data.path;
 
   useEffect(() => {
@@ -23,8 +24,8 @@ export function MdNode({ id, data }: NodeProps<Node<MdNodeData>>) {
     <div
       className="glass-panel"
       style={{
-        width: 340,
-        height: 260,
+        width: "100%",
+        height: "100%",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -32,6 +33,15 @@ export function MdNode({ id, data }: NodeProps<Node<MdNodeData>>) {
         border: "1px solid var(--cv-glass-edge)",
       }}
     >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={260}
+        minHeight={180}
+        handleClassName="cv-node-resize-handle"
+        lineClassName="cv-node-resize-line"
+        onResize={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), false)}
+        onResizeEnd={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height))}
+      />
       <div
         style={{
           display: "flex",

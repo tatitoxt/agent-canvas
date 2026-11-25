@@ -4,7 +4,7 @@ import { PANEL_META } from "../components/panelMeta";
 
 const reset = () => {
   localStorage.clear();
-  useBoard.setState({ panelNodes: {}, workspaceSizes: {}, activeBoard: "main" });
+  useBoard.setState({ panelNodes: {}, workspaceSizes: {}, mdNodeSizes: {}, activeBoard: "main" });
 };
 
 const node = (id: string, board = "main") => useBoard.getState().panelNodes[board]?.[id];
@@ -99,5 +99,16 @@ describe("workspace sizes", () => {
     expect(useBoard.getState().workspaceSizes["workspace-1"]).toEqual({ w: 520, h: 320 });
     useBoard.getState().resizeWorkspace("workspace-1", 760, 480);
     expect(JSON.parse(localStorage.getItem("cv-workspacesizes")!)["workspace-1"]).toEqual({ w: 760, h: 480 });
+  });
+});
+
+describe("markdown node sizes", () => {
+  beforeEach(reset);
+
+  it("persists resized note cards and enforces usable minimum dimensions", () => {
+    useBoard.getState().resizeMdNode("md-note", 200, 100);
+    expect(useBoard.getState().mdNodeSizes["md-note"]).toEqual({ w: 260, h: 180 });
+    useBoard.getState().resizeMdNode("md-note", 640, 420);
+    expect(JSON.parse(localStorage.getItem("cv-mdnodesizes")!)["md-note"]).toEqual({ w: 640, h: 420 });
   });
 });

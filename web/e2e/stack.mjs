@@ -15,12 +15,6 @@ export async function startStack() {
   execSync("git config user.name e2e", { cwd: repo });
   writeFileSync(join(repo, "README.md"), "# e2e scratch repo\n");
   execSync("git add -A && git commit -qm init", { cwd: repo });
-  const workspaceRepo = mkdtempSync(join(tmpdir(), "canvas-e2e-workspace-repo-"));
-  execSync("git init -q", { cwd: workspaceRepo });
-  execSync("git config user.email e2e@test", { cwd: workspaceRepo });
-  execSync("git config user.name e2e", { cwd: workspaceRepo });
-  writeFileSync(join(workspaceRepo, "README.md"), "# e2e workspace repo\n");
-  execSync("git add -A && git commit -qm init", { cwd: workspaceRepo });
   const vault = mkdtempSync(join(tmpdir(), "canvas-e2e-vault-"));
   // The daemon sandboxes vault writes to allowedRoots (repo + ~/.config/canvas/allowed-roots);
   // the throwaway vault lives outside the repo, so whitelist it for the test run.
@@ -59,9 +53,9 @@ export async function startStack() {
     proc.on("exit", () => { clearTimeout(timer); rej(new Error(`canvasd exited early; got: ${buf}`)); });
   });
   // The token is the daemon's only credential — keep it owner-only.
-  writeFileSync(STATE, JSON.stringify({ port, token, repo, workspaceRepo, vault, pid: proc.pid }), { mode: 0o600 });
+  writeFileSync(STATE, JSON.stringify({ port, token, repo, vault, pid: proc.pid }), { mode: 0o600 });
   proc.unref();
-  return { port, token, repo, workspaceRepo, vault };
+  return { port, token, repo, vault };
 }
 
 export async function stopStack() {

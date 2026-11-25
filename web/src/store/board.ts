@@ -487,6 +487,9 @@ type BoardState = {
   /** Live markdown nodes — vault files pinned on the board, re-polled
    * so an agent editing the file shows up live on the card. */
   mdNodes: Record<string, Record<string, string>>;
+  /** Per-note canvas card dimensions, keyed by Markdown node ID. */
+  mdNodeSizes: Record<string, { w: number; h: number }>;
+  resizeMdNode: (id: string, w: number, h: number, persist?: boolean) => void;
   mdContents: Record<string, string>;
   /** Binary vault assets (images) as data URLs — filled by vault_asset. */
   vaultAssets: Record<string, string>;
@@ -1471,6 +1474,14 @@ export const useBoard = create<BoardState>((set, get) => ({
   mdNodes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-mdnodes") ?? "{}"); } catch { return {}; }
   })(),
+  mdNodeSizes: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-mdnodesizes") ?? "{}"); } catch { return {}; }
+  })(),
+  resizeMdNode: (id, w, h, persist = true) => {
+    const next = { ...get().mdNodeSizes, [id]: { w: Math.max(260, w), h: Math.max(180, h) } };
+    if (persist) localStorage.setItem("cv-mdnodesizes", JSON.stringify(next));
+    set({ mdNodeSizes: next });
+  },
   panelNodes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}"); } catch { return {}; }
   })(),
