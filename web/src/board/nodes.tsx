@@ -228,10 +228,10 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         minWidth={320}
         minHeight={120}
         onResize={(_, p) => {
-          if (data.id) useBoard.getState().resizeAgentCard(data.id, Math.round(p.width), Math.round(p.height));
+          if (data.id) useBoard.getState().resizeAgentCard(data.id, Math.round(p.width), Math.round(p.height), false);
         }}
         onResizeEnd={(_, p) => {
-          if (data.id) useBoard.getState().resizeAgentCard(data.id, Math.round(p.width), Math.round(p.height));
+          if (data.id) useBoard.getState().resizeAgentCard(data.id, Math.round(p.width), Math.round(p.height), true);
         }}
       />
       <Handle type="target" position={Position.Left} />

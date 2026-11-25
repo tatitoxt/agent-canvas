@@ -338,7 +338,8 @@ body,
   mask-composite: exclude;
   animation: cv-ring-spin 3s linear infinite;
   z-index: -1;
-  filter: saturate(1.4) brightness(1.15);
+  /* no filter here — a filter on an animating element repaints the whole
+     ring every frame; the color arrives pre-brightened instead */
 }
 @keyframes cv-ring-spin {
   to {
