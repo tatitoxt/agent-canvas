@@ -128,6 +128,8 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
         height: maxed ? undefined : 300,
         width: maxed ? undefined : "36rem",
         overflow: "hidden",
+        background: "#0d0e10",
+        border: "1px solid rgba(255,255,255,0.08)",
       }}
     >
       <div
