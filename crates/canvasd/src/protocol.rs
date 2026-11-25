@@ -476,6 +476,8 @@ pub struct SnapshotWorkspace {
     pub name: String,
     pub repo: String,
     pub board_id: Option<String>,
+    /// Ordered CLI fallback chain; None = the daemon's auto-detected default.
+    pub agent_chain: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -432,6 +432,9 @@ fn chain_for(state: &Arc<AppState>, workspace_id: Option<&str>, cli: &str) -> Ve
     }
     let configured = workspace_id
         .and_then(|w| state.store.workspace_chain(w).ok().flatten())
+        // An empty saved chain means "back to auto", not "no fallback" —
+        // the chain editor uses empty as its reset state.
+        .filter(|c| !c.is_empty())
         .unwrap_or_else(detected_chain);
     let mut chain: Vec<String> = Vec::new();
     if !cli.is_empty() {
@@ -789,11 +792,15 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .workspaces_snapshot()
                 .unwrap_or_default()
                 .into_iter()
-                .map(|(workspace_id, name, repo, board_id)| protocol::SnapshotWorkspace {
+                .map(|(workspace_id, name, repo, board_id)| {
+                    let agent_chain = state.store.workspace_chain(&workspace_id).ok().flatten();
+                    protocol::SnapshotWorkspace {
                     workspace_id,
                     name,
                     repo,
                     board_id,
+                    agent_chain,
+                    }
                 })
                 .collect(),
             delegations: state

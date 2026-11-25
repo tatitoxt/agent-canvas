@@ -1538,11 +1538,15 @@ fn snapshot(
         .workspaces_snapshot()
         .unwrap_or_default()
         .into_iter()
-        .map(|(workspace_id, name, repo, board_id)| canvasd::protocol::SnapshotWorkspace {
-            workspace_id,
-            name,
-            repo,
-            board_id,
+        .map(|(workspace_id, name, repo, board_id)| {
+            let agent_chain = state.store.workspace_chain(&workspace_id).ok().flatten();
+            canvasd::protocol::SnapshotWorkspace {
+                workspace_id,
+                name,
+                repo,
+                board_id,
+                agent_chain,
+            }
         })
         .collect();
     let boards: Vec<canvasd::protocol::SnapshotBoard> = state

@@ -42,6 +42,12 @@ export class TauriCanvasClient {
     return false;
   }
 
+  setAgentChain(_workspaceId: string, _chain: string[]) {
+    // The desktop shell runs its own embedded agent host, not the canvasd
+    // control socket — chain editing is a no-op here until the shell grows
+    // the matching invoke command.
+  }
+
   spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string, accountId?: string, initialInput?: string) {
     void invoke("spawn_agent", { name, command, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null, boardId: boardId ?? null, accountId: accountId ?? null, initialInput: initialInput ?? null }).catch(
       console.error,
