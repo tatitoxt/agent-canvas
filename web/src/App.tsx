@@ -3,6 +3,7 @@ import { toPng } from "html-to-image";
 import {
   MiniMap,
   ReactFlow,
+  ViewportPortal,
   ReactFlowProvider,
   getNodesBounds,
   getViewportForBounds,
@@ -326,6 +327,9 @@ function Board() {
   }, [agents, activeBoard, attention]);
   const selRef = useRef(sel);
   selRef.current = sel;
+  /** Deska "drop to place" ghost — dashed rect at the drop position
+   * while a card is being dragged. */
+  const [dragGhost, setDragGhost] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   // Region shot: marquee-select part of the canvas → PNG of just that area.
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [shotMode, setShotMode] = useState(false);
@@ -658,8 +662,18 @@ function Board() {
     setMenu({ x: ev.clientX, y: ev.clientY, id });
   };
 
+  const onNodeDrag: OnNodeDrag = (_, node) => {
+    setDragGhost({
+      x: node.position.x,
+      y: node.position.y,
+      w: node.measured?.width ?? 200,
+      h: node.measured?.height ?? 90,
+    });
+  };
+
   const onNodeDragStop: OnNodeDrag = (event, node) => {
     // Deska-style: dropping a card on a board tab moves it there.
+    setDragGhost(null);
     const pt =
       "changedTouches" in event && event.changedTouches.length
         ? event.changedTouches[0]
@@ -888,6 +902,7 @@ function Board() {
         onNodesChange={onNodesChange}
         onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
+        onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onConnectEnd={onConnectEnd}
         onEdgeClick={(_, edge) => setEdgeDetail(edge.id)}
@@ -996,6 +1011,22 @@ function Board() {
         />
         <ViewportTracker />
         <AnchorCables nav={nav} />
+        {dragGhost && (
+          <ViewportPortal>
+            <div
+              style={{
+                position: "absolute",
+                transform: `translate(${dragGhost.x}px, ${dragGhost.y}px)`,
+                width: dragGhost.w,
+                height: dragGhost.h,
+                border: "1.5px dashed var(--cv-accent)",
+                borderRadius: 14,
+                background: "rgba(201,162,107,0.08)",
+                pointerEvents: "none",
+              }}
+            />
+          </ViewportPortal>
+        )}
       </ReactFlow>
       {connected === false && null}
       <DigestPanel />

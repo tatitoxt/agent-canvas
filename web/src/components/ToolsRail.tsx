@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./icons";
 import { TeamBuilder } from "./TeamBuilder";
+import { WebLauncher } from "./WebLauncher";
 import { useBoard } from "../store/board";
 
 const PANEL_ITEMS = [
@@ -78,11 +79,11 @@ export function ToolsMenu({
   actions: ToolsMenuActions;
 }) {
   const [open, setOpen] = useState(false);
-  const [sub, setSub] = useState<"ws" | "web" | "shape" | null>(null);
+  const [sub, setSub] = useState<"ws" | "shape" | null>(null);
   const [teamOpen, setTeamOpen] = useState(false);
+  const [launcherOpen, setLauncherOpen] = useState(false);
   const [wsName, setWsName] = useState("");
   const [wsRepo, setWsRepo] = useState("");
-  const [webUrl, setWebUrl] = useState("");
   const wrap = useRef<HTMLDivElement>(null);
 
   const activeBoard = useBoard((s) => s.activeBoard);
@@ -93,7 +94,6 @@ export function ToolsMenu({
   const summaries = useBoard((s) => s.panelSummaries);
   const togglePanelSummaries = useBoard((s) => s.togglePanelSummaries);
   const createWorkspace = useBoard((s) => s.createWorkspace);
-  const webNodeAdd = useBoard((s) => s.webNodeAdd);
   const addShape = useBoard((s) => s.addShape);
 
   useEffect(() => {
@@ -186,18 +186,7 @@ export function ToolsMenu({
                 }} />
             </div>
           )}
-          {item("web", "Pin a web page", () => setSub((s) => (s === "web" ? null : "web")), "live localhost")}
-          {sub === "web" && (
-            <div style={{ padding: "4px 10px 6px" }}>
-              <input style={miniInput} placeholder="http://localhost:5173" value={webUrl} onChange={(e) => setWebUrl(e.target.value)} autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && webUrl.trim()) {
-                    webNodeAdd(webUrl.trim());
-                    setSub(null); setOpen(false); setWebUrl("");
-                  }
-                }} />
-            </div>
-          )}
+          {item("web", "Open a page", () => { setLauncherOpen(true); setOpen(false); }, "web nodes on canvas")}
           {item("pause", "Pause all", () => pauseAll(activeBoard), "SIGSTOP every agent")}
           {item("play", "Resume all", () => resumeAll(activeBoard))}
           {item("gather", "Gather loose windows", () => { gatherLoose(); setOpen(false); }, "into a group")}
@@ -219,6 +208,7 @@ export function ToolsMenu({
           <TeamBuilder onClose={() => setTeamOpen(false)} />
         </div>
       )}
+      {launcherOpen && <WebLauncher onClose={() => setLauncherOpen(false)} />}
     </div>
   );
 }

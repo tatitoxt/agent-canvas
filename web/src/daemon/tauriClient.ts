@@ -297,3 +297,9 @@ export class TauriCanvasClient {
 export const isTauri = () =>
   typeof window !== "undefined" &&
   "__TAURI_INTERNALS__" in window;
+
+export type ChromeBookmark = { name: string; url: string; folder: string | null };
+
+/** Local Chrome bookmark bar — desktop shell only; [] when unavailable. */
+export const chromeBookmarks = (): Promise<ChromeBookmark[]> =>
+  invoke<ChromeBookmark[]>("chrome_bookmarks").catch(() => []);
