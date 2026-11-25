@@ -113,3 +113,20 @@ Pendiente ronda 3:
 - [x] Topbar fusion: cluster derecho se fusiona en una bubble glass on hover (.cv-fuse en index.css)
 - [x] MissionStrip eliminado del centro + botón Mission Map muerto eliminado (data vive en topbar live count + Inbox)
 - [ ] Próximo: transcript rows estilo Deska (verb bold + detalle) en cards, per-window color tint, input steering inline (esperando research hija), edge routing
+
+## Performance pass (2026-11-24 late, after "anda re mal la web local")
+Committed:
+1. Ring orbit animation — removed `filter: saturate() brightness()` from the
+   animating element (was repainting the whole ring every frame per card)
+2. Resize — was writing localStorage synchronously at 60fps during drags;
+   now in-memory while dragging, persisted once on release
+3. Glass blur 20px → 14px (cost scales with radius; visual diff minimal)
+Already-optimized (verified, NOT bottlenecks): activity/lastLine updates are
+coalesced at 400ms; pty screen parsing is incremental via headless xterm
+(fed counter); MiniTerm memoized; onlyRenderVisibleElements on.
+REMAINING LEVERS if still slow:
+- vite dev mode + React dev build is inherently 2-3x slower than prod —
+  test `npm run build && npm run preview` for true feel
+- backdrop-filter blur on all glass during pan/zoom is the known canvas
+  cost — could drop blur on large cards, keep on chrome only (aesthetic call)
+- edge obstacle routing recomputes per render during pan (small)
