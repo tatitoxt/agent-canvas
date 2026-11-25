@@ -1,4 +1,4 @@
-# UI Redesign — estado del trabajo (actualizado 2026-11-24)
+# UI Redesign — estado del trabajo (actualizado 2026-11-25)
 
 ## Branch / worktree
 - Worktree: `/Users/fausto/agent-canvas-ui`, branch `ui-redesign`
@@ -130,3 +130,8 @@ REMAINING LEVERS if still slow:
 - backdrop-filter blur on all glass during pan/zoom is the known canvas
   cost — could drop blur on large cards, keep on chrome only (aesthetic call)
 - edge obstacle routing recomputes per render during pan (small)
+
+## Continuación del roadmap (2026-11-25)
+- [x] Terminal drawer: resize con persistencia y redimensionado de xterm/PTY; estilo sólido oscuro en vez de glass. Commit `04a3955` en PR #47.
+- [x] Título de terminal por rol: `reviewer-1` → `Review 1`, `builder_2` → `Builder 2`, `tester-4` → `Test 4`; mantiene nombres custom y numeración para `Terminal` genérico. En validación local: 8 unit tests, 6 E2E terminal, typecheck y build.
+- [ ] Próximo orden sugerido: inspeccionar Gather contra `main` y corregir el layout si sigue apilando; luego revisar Add to Board de Obsidian/artifacts y el file explorer flotante. Mantener cada lote pequeño y verificable en PR #47, sin merge.

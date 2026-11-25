@@ -1,15 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 
-/** Where the floating terminal panel sits — default bottom-right (Deska-style
- * dock position) until the user pops it out by dragging the header. */
-const DEFAULT_POS = { x: -1, y: -1 }; // sentinel: anchored, not popped out
-const DEFAULT_SIZE = { width: 576, height: 320 };
-const TERMINAL_SIZE_KEY = "cv-terminal-drawer-size";
 import { TermHost } from "./TermHost";
 import { useBoard } from "../store/board";
 import { CliMark } from "./CliMark";
 import { STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "../board/nodes";
 import type { AgentStatus } from "../board/types";
+
+/** Where the floating terminal panel sits — default bottom-right (Deska-style
+ * dock position) until the user pops it out by dragging the header. */
+const DEFAULT_POS = { x: -1, y: -1 }; // sentinel: anchored, not popped out
+const DEFAULT_SIZE = { width: 576, height: 320 };
+const TERMINAL_SIZE_KEY = "cv-terminal-drawer-size";
+const ROLE_LABELS: Record<string, string> = {
+  review: "Review", reviewer: "Review", builder: "Builder", frontend: "Frontend",
+  backend: "Backend", test: "Test", tester: "Test", docs: "Docs", doc: "Docs",
+  design: "Design", security: "Security", general: "General",
+};
+
+export function terminalTitle(name: string, termNo: number): string {
+  const namedRole = name.match(/^([a-z][a-z _-]*?)[-_ ](\d+)$/i);
+  const roleKey = namedRole?.[1].toLowerCase().replace(/[ _-]/g, "");
+  if (namedRole && roleKey && ROLE_LABELS[roleKey]) return `${ROLE_LABELS[roleKey]} ${namedRole[2]}`;
+  if (/^terminal(?:[-_ ]?\d+)?$/i.test(name)) return `Terminal ${termNo > 0 ? termNo : ""}`.trim();
+  return name || `Terminal ${termNo > 0 ? termNo : ""}`.trim();
+}
 
 type Props = { agentId: string; name: string; index?: number; onClose: () => void };
 
@@ -70,6 +84,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   const termNo = Object.keys(agentsMap)
     .filter((id) => (agentsMap[id].board_id ?? "main") === activeBoard)
     .indexOf(agentId) + 1;
+  const title = terminalTitle(name, termNo);
   const status = (agent?.status === "exited" ? "done" : agent?.status ?? "idle") as AgentStatus;
   const cli = (agent?.command ?? "bash").split(/\s+/)[0].toLowerCase();
   const meta = cliMeta(cli);
@@ -218,7 +233,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             ›_
           </span>
           <span style={{ color: "var(--cv-ink)", whiteSpace: "nowrap" }}>
-            {termNo > 0 ? `Terminal ${termNo}` : name}
+            {title}
           </span>
           <span
             style={{
