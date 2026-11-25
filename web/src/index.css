@@ -500,15 +500,16 @@ body,
 }
 .cv-topbar-fuse:hover {
   gap: 4px !important;
-  background: color-mix(in srgb, var(--cv-base) 72%, transparent);
+  background: color-mix(in srgb, var(--cv-ink) 7%, color-mix(in srgb, var(--cv-base) 82%, transparent));
   backdrop-filter: blur(20px) saturate(1.15);
   -webkit-backdrop-filter: blur(20px) saturate(1.15);
   box-shadow: inset 0 0 0 1px var(--cv-glass-edge), var(--cv-shadow-hover);
 }
-.cv-topbar-fuse:hover > .glass-pill,
+.cv-topbar-fuse:hover .glass-pill,
 .cv-topbar-fuse:hover .cv-fuse {
   background: transparent;
   box-shadow: none;
+  border-color: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }

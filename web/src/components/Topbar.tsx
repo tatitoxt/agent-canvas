@@ -279,7 +279,7 @@ export function Topbar({
         alignItems: "flex-start",
         gap: 8,
         padding: 3,
-        pointerEvents: "none",
+        pointerEvents: "auto",
       }}
     >
       {/* ── left: app · machine · workspaces · worktrees · tasks ── */}
