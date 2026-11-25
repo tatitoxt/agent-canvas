@@ -70,6 +70,38 @@ test("Paper theme switches the canvas to a readable warm light palette and persi
   await expect(page.locator("html")).toHaveAttribute("data-theme", "paper");
 });
 
+test("terminal font setting applies to live terminals, clamps, and persists", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title='Terminal — spawn a plain shell']").first().click();
+  const card = page.locator(".agent-card").first();
+  await expect(card).toBeVisible({ timeout: 8_000 });
+  await card.locator("[title='Open terminal']").click();
+  const terminal = page.locator(".terminal-drawer .xterm").first();
+  await expect(terminal).toBeVisible({ timeout: 5_000 });
+
+  await page.locator("button[title='Settings']").click();
+  const settings = page.locator(".react-flow__node-panel [data-panel='settings']").first();
+  const font = settings.getByRole("status", { name: "Terminal font 13 pixels" });
+  await expect(font).toBeVisible();
+  await settings.getByRole("button", { name: "Increase terminal font" }).click();
+  await expect(settings.getByRole("status", { name: "Terminal font 14 pixels" })).toBeVisible();
+  await expect.poll(() => terminal.locator(".xterm-rows").evaluate((el) => getComputedStyle(el).fontSize)).toBe("14px");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("cv-term-font"))).toBe("14");
+  for (let i = 0; i < 8; i++) await settings.getByRole("button", { name: "Increase terminal font" }).click();
+  await expect(settings.getByRole("status", { name: "Terminal font 22 pixels" })).toBeVisible();
+  await expect(settings.getByRole("button", { name: "Increase terminal font" })).toBeDisabled();
+});
+
+test("terminal font preference restores after reload", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("cv-term-font", "17"));
+  const { port, token } = stack();
+  await page.goto(`http://127.0.0.1:${port}/?token=${token}`);
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
+  await page.locator("button[title='Settings']").click();
+  const settings = page.locator(".react-flow__node-panel [data-panel='settings']").first();
+  await expect(settings.getByRole("status", { name: "Terminal font 17 pixels" })).toBeVisible();
+});
+
 test("Tools opens as a dock and collapses to panel icons", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();

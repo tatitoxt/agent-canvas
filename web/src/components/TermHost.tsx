@@ -121,12 +121,16 @@ export function TermHost({ agentId }: { agentId: string }) {
   }, [agentId]);
 
   useEffect(() => {
-    const term = termRef.current;
-    if (term && term.options.fontSize !== termFont) {
-      term.options.fontSize = termFont;
-      term.refresh(0, Math.max(0, term.rows - 1));
+    const activeMirrors = mirrors.get(agentId);
+    if (!activeMirrors) return;
+    for (const mirror of activeMirrors) {
+      if (mirror.term.options.fontSize !== termFont) {
+        mirror.term.options.fontSize = termFont;
+        mirror.term.refresh(0, Math.max(0, mirror.term.rows - 1));
+        mirror.fit.fit();
+      }
     }
-  }, [termFont]);
+  }, [agentId, termFont]);
 
   const findInput = (
     <input

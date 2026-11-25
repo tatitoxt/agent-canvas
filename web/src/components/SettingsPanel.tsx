@@ -91,9 +91,9 @@ export function SettingsPanel() {
       </div>
       <div style={label}>Terminal font</div>
       <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>
-        <button className="glass" style={{ ...rowBtn, flex: 0, padding: "7px 14px" }} onClick={() => bumpFont(-1)}>−</button>
-        <span style={{ flex: 1, textAlign: "center", fontSize: 11, color: "var(--cv-ink)" }}>{termFont}px</span>
-        <button className="glass" style={{ ...rowBtn, flex: 0, padding: "7px 14px" }} onClick={() => bumpFont(1)}>+</button>
+        <button aria-label="Decrease terminal font" className="glass" style={{ ...rowBtn, flex: 0, padding: "7px 14px" }} onClick={() => bumpFont(-1)} disabled={termFont <= 9}>−</button>
+        <span role="status" aria-label={`Terminal font ${termFont} pixels`} style={{ flex: 1, textAlign: "center", fontSize: 11, color: "var(--cv-ink)" }}>{termFont}px</span>
+        <button aria-label="Increase terminal font" className="glass" style={{ ...rowBtn, flex: 0, padding: "7px 14px" }} onClick={() => bumpFont(1)} disabled={termFont >= 22}>+</button>
       </div>
       <div style={label}>Canvas</div>
       <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>

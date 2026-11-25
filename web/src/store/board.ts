@@ -793,7 +793,10 @@ export const useBoard = create<BoardState>((set, get) => ({
   },
   pendingPositions: {},
   approvals: {},
-  termFont: 13,
+  termFont: (() => {
+    const saved = Number(localStorage.getItem("cv-term-font"));
+    return Number.isFinite(saved) && saved >= 9 && saved <= 22 ? saved : 13;
+  })(),
   moveHistory: [],
   viewCmdN: 0,
   automations: {},
@@ -1974,8 +1977,11 @@ export const useBoard = create<BoardState>((set, get) => ({
     client?.moveNode(agentId, x, y);
   },
 
-  bumpFont: (delta) =>
-    set((s) => ({ termFont: Math.min(22, Math.max(9, s.termFont + delta)) })),
+  bumpFont: (delta) => {
+    const termFont = Math.min(22, Math.max(9, get().termFont + Math.trunc(delta)));
+    localStorage.setItem("cv-term-font", String(termFont));
+    set({ termFont });
+  },
 
   undoMove: () => {
     const { moveHistory, positions } = get();
