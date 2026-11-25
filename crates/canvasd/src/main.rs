@@ -78,7 +78,6 @@ fn vault_sandbox_resolve(state: &AppState, dir: &str, path: &str) -> Result<Path
     if !allowed {
         return Err("access denied: path is outside allowed directories".into());
     }
-    let target = canon_root.join(rel);
     // Walk the components that exist: any symlink in the chain must
     // resolve inside the vault. `symlink_metadata` (lstat) sees dangling
     // links that `exists()` misses — a dangling symlink is never a
