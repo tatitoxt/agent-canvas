@@ -77,6 +77,9 @@ pub enum ClientMsg {
     RepoTree { dir: String },
     /// Read a text file for the repo viewer — capped, binary rejected.
     RepoRead { dir: String, path: String },
+    /// Save edits to an existing text file under a registered repository.
+    /// The base text is checked to avoid overwriting external changes.
+    RepoWrite { dir: String, path: String, text: String, base_text: String },
     /// Read one file from the vault.
     VaultRead { dir: String, path: String },
     /// Read one file without making it "the open note" — powers `![[embeds]]`.

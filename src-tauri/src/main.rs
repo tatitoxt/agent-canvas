@@ -490,6 +490,21 @@ fn read_repo_file(root: &PathBuf, path: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&bytes).to_string())
 }
 
+fn write_repo_file(root: &PathBuf, path: &str, text: &str, base_text: &str) -> Result<(), String> {
+    if text.len() > 256 * 1024 || text.as_bytes().contains(&0) {
+        return Err("file exceeds the 256 KiB text editor limit".into());
+    }
+    let current = read_repo_file(root, path)?;
+    if current != base_text { return Err(format!("file changed on disk; reload before saving: {path}")); }
+    let rel = std::path::Path::new(path);
+    let canonical = std::fs::canonicalize(root.join(rel)).map_err(|_| format!("write failed: {path}"))?;
+    let canonical_root = std::fs::canonicalize(root).map_err(|e| e.to_string())?;
+    if !canonical.starts_with(&canonical_root) || !canonical.is_file() {
+        return Err("access denied: path is outside the repository".into());
+    }
+    std::fs::write(canonical, text).map_err(|e| format!("write failed: {e}"))
+}
+
 fn expand_home_path(path: &str) -> PathBuf {
     if path == "~" || path.starts_with("~/") {
         if let Ok(home) = std::env::var("HOME") {
@@ -555,9 +570,21 @@ fn repo_read(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: S
     Ok(())
 }
 
+#[tauri::command]
+fn repo_write(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String, text: String, base_text: String) -> Result<(), String> {
+    let result = registered_repo_root(state.inner(), &dir)
+        .and_then(|root| write_repo_file(&root, &path, &text, &base_text));
+    if let Err(message) = result {
+        emit_control(&app, &ServerMsg::Error { agent_id: None, message });
+        return Ok(());
+    }
+    emit_control(&app, &ServerMsg::RepoFile { dir, path, text });
+    Ok(())
+}
+
 #[cfg(test)]
 mod repo_explorer_tests {
-    use super::{expand_home_path, read_repo_file, repo_tree_entries, resolve_registered_repo_dir, uri_component};
+    use super::{expand_home_path, read_repo_file, repo_tree_entries, resolve_registered_repo_dir, uri_component, write_repo_file};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -603,6 +630,17 @@ mod repo_explorer_tests {
         assert!(read_repo_file(&root, "../outside").unwrap_err().contains("access denied"));
         assert!(read_repo_file(&root, "binary.dat").unwrap_err().contains("binary"));
         assert!(read_repo_file(&root, "large.txt").unwrap_err().contains("too large"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn writes_existing_repo_text_and_rejects_stale_drafts_and_traversal() {
+        let root = temp_root();
+        std::fs::write(root.join("README.md"), "before").unwrap();
+        write_repo_file(&root, "README.md", "after", "before").unwrap();
+        assert_eq!(read_repo_file(&root, "README.md").unwrap(), "after");
+        assert!(write_repo_file(&root, "README.md", "clobber", "before").unwrap_err().contains("changed on disk"));
+        assert!(write_repo_file(&root, "../outside", "x", "").unwrap_err().contains("access denied"));
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -2275,6 +2313,7 @@ fn main() {
             vault_list,
             repo_tree,
             repo_read,
+            repo_write,
             vault_search,
             vault_read,
             vault_peek,

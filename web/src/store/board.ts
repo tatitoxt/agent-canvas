@@ -523,6 +523,7 @@ type BoardState = {
   explorerDir: string | null;
   openExplorer: (dir?: string) => void;
   repoRead: (dir: string, path: string) => void;
+  repoWrite: (dir: string, path: string, text: string, baseText: string) => void;
   vaultRead: (path: string) => void;
   vaultPeek: (path: string) => void;
   vaultAsset: (path: string) => void;
@@ -1534,6 +1535,10 @@ export const useBoard = create<BoardState>((set, get) => ({
   repoRead: (dir, path) => {
     set({ repoRequestDir: dir, repoRequestPath: path, repoFile: null });
     client?.repoRead(dir, path);
+  },
+  repoWrite: (dir, path, text, baseText) => {
+    set({ notice: null });
+    client?.repoWrite(dir, path, text, baseText);
   },
   vaultRead: (path) => client?.vaultRead(get().vaultDir, path),
   vaultPeek: (path) => client?.vaultPeek(get().vaultDir, path),

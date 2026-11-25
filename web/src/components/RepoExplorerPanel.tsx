@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 import { useBoard } from "../store/board";
 import { panelRoot } from "./panelChrome";
 
-/** Repo explorer — file tree of a workspace repo plus a read-only code
- * viewer. Browse/read go through the daemon's allowed-roots sandbox. */
+/** Repository explorer and lightweight editor for registered workspaces. */
 export function RepoExplorerPanel() {
   const workspaces = useBoard((s) => s.workspaces);
   const entries = useBoard((s) => s.repoEntries);
   const file = useBoard((s) => s.repoFile);
   const repoTree = useBoard((s) => s.repoTree);
   const repoRead = useBoard((s) => s.repoRead);
+  const repoWrite = useBoard((s) => s.repoWrite);
   const notice = useBoard((s) => s.notice);
   const explorerDir = useBoard((s) => s.explorerDir);
   const repos = [...new Set([...Object.values(workspaces).map((w) => w.repo), ...(explorerDir ? [explorerDir] : [])])];
@@ -20,6 +20,43 @@ export function RepoExplorerPanel() {
   }, [explorerDir]);
   const [sel, setSel] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [baseText, setBaseText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  useEffect(() => {
+    if (!file) return;
+    if (saving && file.path === sel && file.text === draft) {
+      setSaving(false);
+      setEditing(false);
+      setSaveError("");
+      setBaseText(file.text);
+    } else if (!editing || file.path !== sel) {
+      setBaseText(file.text);
+    }
+  }, [file, saving, editing, sel, draft]);
+
+  useEffect(() => {
+    if (notice?.startsWith("error —") && saving) {
+      setSaving(false);
+      setSaveError(notice.replace(/^error —\s*/, ""));
+    }
+  }, [notice, saving]);
+
+  const beginEdit = () => {
+    if (!file) return;
+    setDraft(file.text);
+    setBaseText(file.text);
+    setSaveError("");
+    setEditing(true);
+  };
+  const save = () => {
+    if (!file || !editing || saving) return;
+    setSaving(true);
+    repoWrite(dir, file.path, draft, baseText);
+  };
 
   useEffect(() => {
     if (!dir && repos.length) setDir(repos[0]);
@@ -118,17 +155,46 @@ export function RepoExplorerPanel() {
               background: "color-mix(in srgb, var(--cv-base) 94%, transparent)",
               backdropFilter: "blur(12px)",
             }}>
-              <div style={{ fontSize: 11, fontWeight: 650, color: "var(--cv-ink)" }}>{base(file.path)}</div>
-              <div title={file.path} style={{ marginTop: 3, fontSize: 9.5, fontFamily: "monospace", color: "var(--cv-ink-faint)", whiteSpace: "nowrap" }}>{file.path}</div>
-            </div>
-            <div aria-label={`Contents of ${file.path}`} style={{ minWidth: "max-content", padding: "9px 0 14px", fontFamily: "var(--cv-font-mono, monospace)", fontSize: 11, lineHeight: 1.65, color: "var(--cv-ink)" }}>
-              {file.text.split("\n").map((line, i) => (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "42px max-content", minHeight: "1.65em" }}>
-                  <span aria-hidden="true" style={{ paddingRight: 10, textAlign: "right", color: "var(--cv-ink-faint)", userSelect: "none", borderRight: "1px solid var(--cv-glass-edge)", marginRight: 12 }}>{i + 1}</span>
-                  <code style={{ font: "inherit", whiteSpace: "pre", paddingRight: 16 }}>{line || " "}</code>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 11, fontWeight: 650, color: "var(--cv-ink)" }}>{base(file.path)}</div>
+                  <div title={file.path} style={{ marginTop: 3, fontSize: 9.5, fontFamily: "monospace", color: "var(--cv-ink-faint)", whiteSpace: "nowrap" }}>{file.path}</div>
                 </div>
-              ))}
+                {!editing ? (
+                  <button className="nodrag" onClick={beginEdit} aria-label={`Edit ${base(file.path)}`} style={editorButton}>Edit</button>
+                ) : (
+                  <>
+                    <span role="status" style={{ color: saveError ? "var(--cv-blocked)" : saving ? "var(--cv-waiting)" : "var(--cv-ink-faint)", fontSize: 9.5 }}>
+                      {saveError ? (saveError.includes("changed on disk") ? "CONFLICT" : "ERROR") : saving ? "SAVING" : draft === baseText ? "SAVED" : "UNSAVED"}
+                    </span>
+                    {saveError && <span style={{ color: "var(--cv-blocked)", fontSize: 9.5, maxWidth: 180, whiteSpace: "normal" }}>{saveError.includes("changed on disk") ? "This file changed on disk. Reload it before saving your draft." : saveError}</span>}
+                    {saveError && <button className="nodrag" onClick={() => { setEditing(false); setSaveError(""); repoRead(dir, file.path); }} style={editorButton}>Reload</button>}
+                    <button className="nodrag" onClick={save} disabled={saving || draft === baseText || !!saveError} style={editorButton}>Save</button>
+                    <button className="nodrag" onClick={() => { setDraft(file.text); setEditing(false); setSaveError(""); }} style={editorButton}>Cancel</button>
+                  </>
+                )}
+              </div>
             </div>
+            {editing ? (
+              <textarea
+                aria-label={`Edit contents of ${file.path}`}
+                className="nodrag nowheel"
+                value={draft}
+                spellCheck={false}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "s") { event.preventDefault(); save(); } if (event.key === "Escape") { setDraft(file.text); setEditing(false); setSaveError(""); } }}
+                style={{ flex: 1, minWidth: 0, minHeight: 0, width: "100%", boxSizing: "border-box", resize: "none", border: 0, outline: 0, padding: "9px 12px", background: "transparent", color: "var(--cv-ink)", font: "11px/1.65 var(--cv-font-mono, monospace)", tabSize: 2 }}
+              />
+            ) : (
+              <div aria-label={`Contents of ${file.path}`} style={{ minWidth: "max-content", padding: "9px 0 14px", fontFamily: "var(--cv-font-mono, monospace)", fontSize: 11, lineHeight: 1.65, color: "var(--cv-ink)" }}>
+                {file.text.split("\n").map((line, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "42px max-content", minHeight: "1.65em" }}>
+                    <span aria-hidden="true" style={{ paddingRight: 10, textAlign: "right", color: "var(--cv-ink-faint)", userSelect: "none", borderRight: "1px solid var(--cv-glass-edge)", marginRight: 12 }}>{i + 1}</span>
+                    <code style={{ font: "inherit", whiteSpace: "pre", paddingRight: 16 }}>{line || " "}</code>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         ) : (
           <div style={{ height: "100%", minHeight: 180, display: "grid", placeItems: "center", padding: 14, color: "var(--cv-ink-faint)", textAlign: "center" }}>
@@ -142,3 +208,9 @@ export function RepoExplorerPanel() {
     </div>
   );
 }
+
+const editorButton: React.CSSProperties = {
+  border: "1px solid var(--cv-glass-edge)", borderRadius: 6, padding: "4px 8px",
+  background: "var(--cv-glass-hi)", color: "var(--cv-ink)", fontSize: 10,
+  cursor: "pointer", whiteSpace: "nowrap",
+};

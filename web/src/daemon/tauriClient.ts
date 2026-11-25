@@ -195,6 +195,10 @@ export class TauriCanvasClient {
     void invoke("repo_read", { dir, path }).catch(console.error);
   }
 
+  repoWrite(dir: string, path: string, text: string, baseText: string) {
+    void invoke("repo_write", { dir, path, text, baseText }).catch(console.error);
+  }
+
   vaultRead(dir: string, path: string) {
     void invoke("vault_read", { dir, path }).catch(console.error);
   }

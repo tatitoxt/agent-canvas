@@ -1775,6 +1775,22 @@ fn handle_client_msg(
                 _ => send_control(ServerMsg::Error { agent_id: None, message: format!("read failed: {path}") }),
             }
         }
+        ClientMsg::RepoWrite { dir, path, text, base_text } => {
+            let result = (|| -> Result<(), String> {
+                if text.len() > 256 * 1024 || text.as_bytes().contains(&0) {
+                    return Err("file exceeds the 256 KiB text editor limit".into());
+                }
+                let file = vault_sandbox_resolve(state, &dir, &path)?;
+                if !file.is_file() { return Err(format!("write refused: file does not exist: {path}")); }
+                let current = std::fs::read_to_string(&file).map_err(|_| format!("file is not UTF-8 text: {path}"))?;
+                if current != base_text { return Err(format!("file changed on disk; reload before saving: {path}")); }
+                std::fs::write(&file, &text).map_err(|e| format!("write failed: {e}"))
+            })();
+            match result {
+                Ok(()) => send_control(ServerMsg::RepoFile { dir, path, text }),
+                Err(message) => send_control(ServerMsg::Error { agent_id: None, message }),
+            }
+        }
         ClientMsg::VaultRead { dir, path } => {
             match vault_sandbox_resolve(state, &dir, &path) {
                 Ok(file) if path.ends_with(".md") && file.is_file() => {

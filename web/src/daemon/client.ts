@@ -241,6 +241,10 @@ export class CanvasClient {
     this.send({ cmd: "repo_read", dir, path });
   }
 
+  repoWrite(dir: string, path: string, text: string, baseText: string) {
+    this.send({ cmd: "repo_write", dir, path, text, base_text: baseText });
+  }
+
   vaultRead(dir: string, path: string) {
     this.send({ cmd: "vault_read", dir, path });
   }

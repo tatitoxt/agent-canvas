@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
@@ -54,4 +54,19 @@ test("Add Explorer to canvas mounts a live repository file browser", async ({ pa
   const code = explorerNode.getByLabel("Contents of README.md");
   await expect(code).toContainText("# e2e scratch repo");
   await expect(code.getByText("1", { exact: true })).toBeVisible();
+  await explorerNode.getByRole("button", { name: "Edit README.md" }).click();
+  const editor = explorerNode.getByRole("textbox", { name: "Edit contents of README.md" });
+  await editor.fill("# Edited in Canvas\n\nSaved to the repository.\n");
+  await explorerNode.getByRole("button", { name: "Save" }).click();
+  await expect(explorerNode.getByLabel("Contents of README.md")).toContainText("Saved to the repository.");
+  expect(readFileSync(resolve(repo, "README.md"), "utf8")).toContain("Saved to the repository.");
+
+  await explorerNode.getByRole("button", { name: "Edit README.md" }).click();
+  await editor.fill("# A stale local draft\n");
+  writeFileSync(resolve(repo, "README.md"), "# Edited outside Canvas\n");
+  await explorerNode.getByRole("button", { name: "Save" }).click();
+  await expect(explorerNode.getByRole("status")).toHaveText("CONFLICT");
+  await expect(explorerNode.getByText("This file changed on disk. Reload it before saving your draft.")).toBeVisible();
+  await explorerNode.getByRole("button", { name: "Reload" }).click();
+  await expect(explorerNode.getByLabel("Contents of README.md")).toContainText("Edited outside Canvas");
 });
