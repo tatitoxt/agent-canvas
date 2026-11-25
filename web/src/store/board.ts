@@ -2218,14 +2218,20 @@ export const useBoard = create<BoardState>((set, get) => ({
     const loose: Array<{ id: string; x: number; y: number; w: number; h: number; move: (id: string, x: number, y: number) => void }> = [];
     for (const a of Object.values(agents)) {
       const p = positions[a.id];
+      // Card footprint matches the redesigned card (460 wide, ~260 tall) —
+      // the old 360×220 assumption made grid cells smaller than the cards,
+      // so gather overlapped them (Fausto's "apila una encima de otra").
+      const sz = get().agentSizes?.[a.id];
+      const aw = sz?.w ?? 460;
+      const ah = sz?.h ?? 260;
       if (
         (a.board_id ?? "main") === activeBoard &&
         a.status !== "exited" &&
         !a.workspace_id &&
         !wired.has(a.id) &&
-        !(p && inside(p.x + 180, p.y + 110))
+        !(p && inside(p.x + aw / 2, p.y + ah / 2))
       ) {
-        loose.push({ id: a.id, x: p?.x ?? 0, y: p?.y ?? 0, w: 360, h: 220, move: (id, x, y) => get().moveNode(id, x, y) });
+        loose.push({ id: a.id, x: p?.x ?? 0, y: p?.y ?? 0, w: aw, h: ah, move: (id, x, y) => get().moveNode(id, x, y) });
       }
     }
     for (const [id, n] of Object.entries(panelNodes[activeBoard] ?? {})) {
