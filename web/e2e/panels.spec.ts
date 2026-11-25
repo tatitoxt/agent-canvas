@@ -85,6 +85,19 @@ test("Tools opens as a dock and collapses to panel icons", async ({ page }) => {
   await expect(dock).toBeHidden();
 });
 
+test("Tools dock scrolls to the lower library items in a short viewport", async ({ page }) => {
+  await boot(page);
+  await page.setViewportSize({ width: 800, height: 620 });
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  const scroll = dock.locator(".cv-menu-scroll");
+  const sizes = await scroll.evaluate((el) => ({ client: el.clientHeight, total: el.scrollHeight }));
+  expect(sizes.total).toBeGreaterThan(sizes.client);
+  await scroll.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  await expect(dock.getByRole("button", { name: /Mission Map/ }).first()).toBeVisible();
+  await expect(dock.getByRole("button", { name: /Issues/ }).first()).toBeVisible();
+});
+
 test("Library expands horizontally to labeled tools without a flyout", async ({ page }) => {
   await boot(page);
   const expand = page.getByRole("button", { name: "Expand Library" });
