@@ -294,6 +294,7 @@ function Board() {
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [cardMenu, setCardMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
+  const [shapeMenu, setShapeMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [mmSize, setMmSize] = useState({ w: 148, h: 96 });
   const [sel, setSel] = useState<Array<{ id: string; x: number; y: number; w: number; h: number }>>([]);
   const [missionOpen, setMissionOpen] = useState(false);
@@ -613,6 +614,10 @@ function Board() {
     // Deska-style window menu on canvas cards (panels + popped-out terms).
     if (/^(panel|term)-/.test(node.id)) {
       setCardMenu({ x: ev.clientX, y: ev.clientY, id: node.id });
+      return;
+    }
+    if (node.id.startsWith("shape-")) {
+      setShapeMenu({ x: ev.clientX, y: ev.clientY, id: node.id });
       return;
     }
     const id = node.id;
@@ -1002,6 +1007,42 @@ function Board() {
           }
           onClose={() => setCardMenu(null)}
         />
+      )}
+      {shapeMenu && (
+        <div
+          className="glass"
+          style={{
+            position: "fixed",
+            left: shapeMenu.x,
+            top: shapeMenu.y,
+            zIndex: 60,
+            minWidth: 170,
+            padding: 6,
+            borderRadius: 12,
+          }}
+          onMouseLeave={() => setShapeMenu(null)}
+        >
+          {[
+            { icon: "draw", label: "Rename region", fn: () => useBoard.getState().requestFocus(shapeMenu.id) },
+            { icon: "x", label: "Dissolve region", fn: () => useBoard.getState().deleteShape(shapeMenu.id) },
+          ].map((r) => (
+            <button
+              key={r.label}
+              onClick={() => { r.fn(); setShapeMenu(null); }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              style={{
+                display: "flex", alignItems: "center", gap: 9, width: "100%",
+                textAlign: "left", border: "none", background: "transparent",
+                color: "var(--cv-ink-dim)", fontSize: 12, padding: "6px 10px",
+                borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap",
+              }}
+            >
+              <Icon name={r.icon} size={13} color="var(--cv-ink-faint)" />
+              {r.label}
+            </button>
+          ))}
+        </div>
       )}
       {menu && (
         <ContextMenu
