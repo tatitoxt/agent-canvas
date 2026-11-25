@@ -43,6 +43,67 @@ struct AppState {
     /// Published artifacts: share id → (title, mime, bytes). Served at
     /// /share/{id} without auth — the 128-bit id is the capability.
     shares: Arc<std::sync::Mutex<std::collections::HashMap<String, (String, String, Vec<u8>)>>>,
+    /// Canonicalized roots file operations may touch — the board repo
+    /// plus anything listed in `.canvas/allowed-roots` (one per line).
+    allowed_roots: Vec<PathBuf>,
+}
+
+
+/// Deska-style sandbox: every vault path is validated in the daemon,
+/// never trusted from the client.
+///
+/// - `path` must be relative — an absolute path would make `root.join`
+///   REPLACE the root, escaping the vault entirely.
+/// - no `..` components — no traversal above the root.
+/// - the canonicalized root must sit inside an allowed root
+///   (`.canvas/allowed-roots`, one per line, plus the board repo itself).
+/// - the target, canonicalized through its deepest existing ancestor,
+///   must stay inside the canonical root — kills symlink escapes, which
+///   the naive `!path.contains("..")` check never saw.
+fn vault_sandbox_resolve(state: &AppState, dir: &str, path: &str) -> Result<PathBuf, String> {
+    let rel = std::path::Path::new(path);
+    if rel.is_absolute() {
+        return Err("access denied: absolute paths are not allowed".into());
+    }
+    if rel.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err("access denied: path escapes the vault".into());
+    }
+    let canon_root = std::fs::canonicalize(dir).map_err(|_| format!("access denied: vault root not found: {dir}"))?;
+    let allowed = state.allowed_roots.iter().any(|ar| canon_root.starts_with(ar));
+    if !allowed {
+        return Err("access denied: path is outside allowed directories".into());
+    }
+    let target = canon_root.join(rel);
+    // Canonicalize the deepest existing ancestor, then re-append the
+    // remaining components — works for files that do not exist yet.
+    let mut probe = target.clone();
+    let mut tail: Vec<std::ffi::OsString> = Vec::new();
+    loop {
+        if probe.exists() { break; }
+        match (probe.file_name(), probe.parent()) {
+            (Some(name), Some(parent)) => {
+                tail.push(name.to_os_string());
+                probe = parent.to_path_buf();
+            }
+            _ => break,
+        }
+    }
+    let canon_base = std::fs::canonicalize(&probe).unwrap_or_else(|_| probe.clone());
+    let mut resolved = canon_base.clone();
+    for comp in tail.iter().rev() { resolved.push(comp); }
+    if !canon_base.starts_with(&canon_root) || !resolved.starts_with(&canon_root) {
+        return Err("access denied: path is outside allowed directories".into());
+    }
+    Ok(resolved)
+}
+
+fn vault_sandbox_dir(state: &AppState, dir: &str) -> Result<PathBuf, String> {
+    let canon_root = std::fs::canonicalize(dir).map_err(|_| format!("access denied: vault root not found: {dir}"))?;
+    if state.allowed_roots.iter().any(|ar| canon_root.starts_with(ar)) {
+        Ok(canon_root)
+    } else {
+        Err("access denied: path is outside allowed directories".into())
+    }
 }
 
 /// Write PTY input honoring the supervised-input gate: `supervised`
@@ -1164,16 +1225,21 @@ fn handle_client_msg(
             }
         }
         ClientMsg::VaultList { dir } => {
-            let mut entries = vault_list_entries(&PathBuf::from(&dir));
-            entries.truncate(2000);
-            send_control(ServerMsg::VaultListing { dir, entries });
+            match vault_sandbox_dir(&state, &dir) {
+                Ok(root) => {
+                    let mut entries = vault_list_entries(&root);
+                    entries.truncate(2000);
+                    send_control(ServerMsg::VaultListing { dir, entries });
+                }
+                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e }),
+            }
         }
         ClientMsg::VaultDelete { dir, path } => {
-            let root = PathBuf::from(&dir);
-            let file = root.join(&path);
-            if path.contains("..") || !path.ends_with(".md") || !file.is_file() {
-                send_control(ServerMsg::Error { agent_id: None, message: format!("vault delete refused: {path}") });
-            } else {
+            let resolved = vault_sandbox_resolve(&state, &dir, &path);
+            let root = resolved.as_ref().ok().map(|_| vault_sandbox_dir(&state, &dir).unwrap_or_else(|_| PathBuf::from(&dir)));
+            match (resolved, root) {
+                (Ok(file), Ok(root)) if path.ends_with(".md") && file.is_file() => {
+                    let (file, root) = (file, root);
                 // Obsidian-style trash: move to <vault>/.trash/ instead of
                 // unlinking, so a delete is always recoverable.
                 let trash = root.join(".trash");
@@ -1195,6 +1261,9 @@ fn handle_client_msg(
                     }
                     Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault delete failed: {e}") }),
                 }
+                }
+                (Err(e), _) => send_control(ServerMsg::Error { agent_id: None, message: e }),
+                _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault delete refused: {path}") }),
             }
         }
         ClientMsg::VaultGraph { dir } => {
@@ -1843,6 +1912,27 @@ async fn main() -> Result<()> {
         pending_results: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         pending_inputs: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         shares: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+        allowed_roots: {
+            // The board repo is always inside the sandbox; extra roots
+            // (external vaults like ~/vault-demo) opt in one per line in
+            // `.canvas/allowed-roots` — Deska's allowedRoots model.
+            let mut roots: Vec<PathBuf> = Vec::new();
+            if let Ok(c) = std::fs::canonicalize(&repo_root) { roots.push(c); }
+            let list = repo_root.join(".canvas").join("allowed-roots");
+            if let Ok(text) = std::fs::read_to_string(&list) {
+                for line in text.lines() {
+                    let line = line.trim();
+                    if line.is_empty() || line.starts_with('#') { continue; }
+                    let expanded = if let Some(rest) = line.strip_prefix("~/") {
+                        std::env::var("HOME").map(|h| format!("{h}/{rest}")).unwrap_or_else(|_| line.to_string())
+                    } else { line.to_string() };
+                    if let Ok(c) = std::fs::canonicalize(&expanded) {
+                        if !roots.contains(&c) { roots.push(c); }
+                    }
+                }
+            }
+            roots
+        },
     });
 
     let api = Router::new()

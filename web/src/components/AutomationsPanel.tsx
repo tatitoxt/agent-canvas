@@ -71,6 +71,7 @@ export function AutomationsPanel() {
     });
     setName("");
     setPrompt("");
+    setEveryMins("");
     setCreating(false);
   };
 
