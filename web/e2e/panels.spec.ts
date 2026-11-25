@@ -357,6 +357,21 @@ test("bottom Files opens Obsidian and Code Editor opens the repo explorer", asyn
   await expect(page.getByLabel("1 open code editor")).toBeVisible();
 });
 
+test("bottom dock shortcuts reveal labels on hover and focus without widening at rest", async ({ page }) => {
+  await boot(page);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  const terminal = page.locator(".cv-bottom-dock-actions button[title^='Terminal']");
+  const label = terminal.locator(".cv-bottom-dock-label");
+  await expect(label).toHaveCSS("opacity", "0");
+  await terminal.scrollIntoViewIfNeeded();
+  await terminal.hover();
+  await expect(label).toHaveText("Terminal");
+  await expect.poll(() => label.evaluate((el) => Number(getComputedStyle(el).opacity))).toBeGreaterThan(0.9);
+  await expect.poll(() => terminal.evaluate((el) => Number.parseFloat(getComputedStyle(el).width))).toBeGreaterThan(32);
+  await page.locator(".react-flow__pane").first().hover({ position: { x: 200, y: 200 } });
+  await expect(label).toHaveCSS("opacity", "0");
+});
+
 test("double-click empty canvas opens the spawn chooser (spawn-at-click)", async ({ page }) => {
   await boot(page);
   const pane = page.locator(".react-flow__pane").first();

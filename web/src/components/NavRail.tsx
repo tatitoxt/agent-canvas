@@ -526,7 +526,9 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
   const activeBoard = useBoard((s) => s.activeBoard);
   const agents = useBoard((s) => s.agents);
   const panelNodes = useBoard((s) => s.panelNodes);
-  const terminalCount = Object.values(agents).filter((a) => a.status !== "exited" && (a.board_id ?? "main") === activeBoard).length;
+  // Count every retained terminal on this board, including completed agents:
+  // their transcript/card is still open until the user clears or closes it.
+  const terminalCount = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard).length;
   const editorCount = Object.values(panelNodes[activeBoard] ?? {}).filter((n) => n.panel === "explorer").length;
   const [dexText, setDexText] = useState("");
   const [dexHist, setDexHist] = useState<string[]>([]);
@@ -580,13 +582,14 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
     >
       {/* ── left of Dex · create ──────────────────────────── */}
       <div style={{ justifySelf: "end", display: "flex", alignItems: "flex-end", gap: 8, marginRight: 16, pointerEvents: "auto" }}>
-        <nav className="glass" style={{ ...bubbleRow, padding: "4px 6px", gap: 4, borderRadius: 999 }}>
+        <nav className="glass cv-bottom-dock-actions" aria-label="Canvas shortcuts" style={{ ...bubbleRow, padding: "4px 6px", gap: 4, borderRadius: 999 }}>
           <button
             title="New task — open the spawn chooser (lives on the Orchestrator)"
             onClick={() => useBoard.getState().focusSpawn()}
             style={{ ...btn(false), borderRadius: 999 }}
           >
             <Icon name="newtask" size={16} />
+            <span className="cv-bottom-dock-label">New task</span>
           </button>
           <button
             title="Files — open your Obsidian vault"
@@ -594,6 +597,7 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
             style={{ ...btn(active === "vault"), borderRadius: 999 }}
           >
             <Icon name="vault" size={16} />
+            <span className="cv-bottom-dock-label">Files</span>
           </button>
           <button
             title="Terminal — spawn a plain shell"
@@ -602,6 +606,7 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
           >
             <Icon name="terminal" size={16} />
             {terminalCount > 0 && <span aria-label={`${terminalCount} open terminal${terminalCount === 1 ? "" : "s"}`} style={badge("var(--cv-accent)")}>{terminalCount}</span>}
+            <span className="cv-bottom-dock-label">Terminal</span>
           </button>
           <button
             title="Code Editor — open the workspace file tree and code viewer"
@@ -610,6 +615,7 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
           >
             <Icon name="code" size={16} />
             {editorCount > 0 && <span aria-label={`${editorCount} open code editor${editorCount === 1 ? "" : "s"}`} style={{ ...badge("var(--cv-glass-hi)"), color: "var(--cv-ink)" }}>{editorCount}</span>}
+            <span className="cv-bottom-dock-label">Code editor</span>
           </button>
 
         </nav>

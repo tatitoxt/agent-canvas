@@ -465,6 +465,35 @@ body,
 .cv-topbar-control-label {
   line-height: 1;
 }
+.cv-bottom-dock-actions > button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  overflow: hidden;
+  transition: width 160ms ease, padding 160ms ease, background 160ms ease;
+}
+.cv-bottom-dock-label {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 550;
+  transition: max-width 160ms ease, opacity 120ms ease;
+}
+.cv-bottom-dock-actions > button:hover,
+.cv-bottom-dock-actions > button:focus-visible {
+  width: auto !important;
+  min-width: 32px;
+  gap: 7px;
+  padding-inline: 10px !important;
+}
+.cv-bottom-dock-actions > button:hover .cv-bottom-dock-label,
+.cv-bottom-dock-actions > button:focus-visible .cv-bottom-dock-label {
+  max-width: 84px;
+  opacity: 1;
+}
 .cv-topbar-fuse {
   border-radius: 999px;
   transition: background 0.18s ease, box-shadow 0.18s ease, gap 0.18s ease;
