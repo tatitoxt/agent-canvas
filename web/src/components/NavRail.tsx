@@ -663,7 +663,7 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
             <Icon name="terminal" size={16} />
           </button>
           <button
-            title="Code Editor — notes"
+            title="Board Notes — kanban tasks"
             onClick={() => onSelect("notes")}
             style={{ ...btn(active === "notes"), borderRadius: 999 }}
           >
