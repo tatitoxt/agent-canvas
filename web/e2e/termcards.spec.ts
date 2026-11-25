@@ -57,12 +57,15 @@ test("agent cards resize from their canvas handles", async ({ page }) => {
 test("agent card terminal preview emphasizes the latest visible row", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
-  await openDrawer(page);
+  const card = page.locator(".agent-card").first();
+  await expect(card).toBeVisible({ timeout: 8_000 });
+  await card.locator("[title='Open terminal']").click();
   const terminal = page.locator(".terminal-drawer .xterm").first();
+  await expect(terminal).toBeVisible({ timeout: 5_000 });
   await terminal.click();
   await page.keyboard.type("printf '\\033[1;32mpreview-latest-row\\033[0m\\n'");
   await page.keyboard.press("Enter");
-  const card = page.locator(".agent-card").first();
+  await expect(page.locator(".terminal-drawer .xterm-rows")).toContainText("preview-latest-row", { timeout: 8_000 });
   const preview = card.getByTestId("agent-terminal-preview");
   await expect(preview).toContainText("preview-latest-row", { timeout: 8_000 });
   const rows = preview.locator(":scope > div");

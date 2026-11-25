@@ -31,6 +31,8 @@ test("agent cards resize when nested inside a workspace", async ({ page }) => {
   await page.goto(`http://127.0.0.1:${port}/`);
   const card = page.locator(".agent-card").first();
   await expect(card).toBeVisible({ timeout: 10_000 });
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", bubbles: true })));
+  await page.waitForTimeout(350);
   const before = await card.boundingBox();
   await card.locator("[data-testid='agent-card-header']").click();
   const handle = card.locator(".react-flow__resize-control.handle.bottom.right");
