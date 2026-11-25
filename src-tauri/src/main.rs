@@ -1660,12 +1660,27 @@ fn main() {
         .init();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let repo_root = std::env::var("CANVAS_REPO")
                 .map(PathBuf::from)
                 .unwrap_or_else(|_| std::env::current_dir().unwrap());
             let store = Arc::new(Store::open(&repo_root)?);
             store.mark_all_exited()?;
+            // Update check on launch: downloads + installs when GitHub
+            // Releases publishes a newer signed build. Silent on failure —
+            // offline dev runs should not complain.
+            {
+                use tauri_plugin_updater::UpdaterExt;
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Ok(updater) = handle.updater() {
+                        if let Ok(Some(update)) = updater.check().await {
+                            let _ = update.download_and_install(|_, _| {}, || {}).await;
+                        }
+                    }
+                });
+            }
             // Sweep: results that landed while the app was closed.
             {
                 let tdir = repo_root.join(".canvas").join("transcripts");

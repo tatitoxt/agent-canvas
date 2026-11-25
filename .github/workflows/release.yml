@@ -1,0 +1,86 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-macos:
+    runs-on: macos-latest
+    env:
+      SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: install frontend deps + build
+        run: |
+          cd web
+          npm ci
+          npm run build
+
+      - name: install tauri cli
+        run: npm install -g @tauri-apps/cli@^2
+
+      - name: sync version with tag
+        run: sed -i '' 's/"version": "[^"]*"/"version": "${GITHUB_REF_NAME#v}"/' src-tauri/tauri.conf.json && grep '"version"' src-tauri/tauri.conf.json | head -1
+
+      - name: unsigned build fallback (no signing keys configured)
+        if: ${{ env.SIGNING_PRIVATE_KEY == '' }}
+        run: sed -i '' 's/"createUpdaterArtifacts": true/"createUpdaterArtifacts": false/' src-tauri/tauri.conf.json
+
+      - name: build the app
+        working-directory: src-tauri
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: tauri build
+
+      - name: upload release artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          gh release create "$TAG" --title "$TAG" --generate-notes || true
+          BUNDLE="src-tauri/target/release/bundle"
+          for f in "$BUNDLE"/macos/*.app.tar.gz "$BUNDLE"/macos/*.app.tar.gz.sig "$BUNDLE"/dmg/*.dmg; do
+            [ -f "$f" ] && gh release upload "$TAG" "$f" --clobber
+          done
+          # updater manifest: signed app tarball + signature, consumed by tauri-plugin-updater
+          python3 - <<'PY'
+          import glob, json, os, subprocess
+          tars = glob.glob("src-tauri/target/release/bundle/macos/*.app.tar.gz")
+          if not tars:
+              print("no updater tarball; skipping latest.json")
+              raise SystemExit(0)
+          tar = tars[0]
+          sig_path = tar + ".sig"
+          sig = open(sig_path).read().strip() if os.path.exists(sig_path) else ""
+          tag = os.environ["GITHUB_REF_NAME"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          ver = tag.lstrip("v")
+          name = os.path.basename(tar)
+          url = f"https://github.com/{repo}/releases/download/{tag}/{name}"
+          manifest = {
+              "version": ver,
+              "notes": f"Canvas {ver}",
+              "pub_date": subprocess.check_output(["date", "-u", "+%Y-%m-%dT%H:%M:%SZ"]).decode().strip(),
+              "platforms": {
+                  "darwin-aarch64": {"signature": sig, "url": url},
+                  "darwin-x86_64": {"signature": sig, "url": url},
+              },
+          }
+          with open("latest.json", "w") as fh:
+              json.dump(manifest, fh, indent=2)
+          print("latest.json written")
+          PY
+          if [ -f latest.json ]; then gh release upload "$TAG" latest.json --clobber; else echo "no updater manifest (unsigned build) — skipping"; fi
