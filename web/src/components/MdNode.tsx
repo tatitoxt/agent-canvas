@@ -69,7 +69,28 @@ export function MdNode({ id, data }: NodeProps<Node<MdNodeData>>) {
           fontFamily: "inherit",
         }}
       >
-        {text ?? "…"}
+        {text == null
+          ? "…"
+          : text.split(/(!\[[^\]]*\]\([^)]+\))/g).map((part, i) => {
+              const m = part.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+              // Remote images stay links — auto-loading them would leak the
+              // viewer's IP and view time to the note author's server.
+              const remote = m && /^https?:\/\//i.test(m[2]);
+              return m && !remote ? (
+                <img
+                  key={i}
+                  src={m[2]}
+                  alt={m[1]}
+                  style={{ maxWidth: "100%", borderRadius: 8, display: "block", margin: "4px 0" }}
+                />
+              ) : m ? (
+                <a key={i} href={m[2]} target="_blank" rel="noreferrer" style={{ color: "var(--cv-accent)" }}>
+                  {m[1] || m[2]}
+                </a>
+              ) : (
+                <span key={i}>{part}</span>
+              );
+            })}
       </div>
     </div>
   );

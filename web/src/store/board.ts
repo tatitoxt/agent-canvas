@@ -294,7 +294,7 @@ type BoardState = {
   mdContents: Record<string, string>;
   /** Binary vault assets (images) as data URLs — filled by vault_asset. */
   vaultAssets: Record<string, string>;
-  mdNodeAdd: (path: string, anchor?: string) => void;
+  mdNodeAdd: (path: string, anchor?: string, at?: { x: number; y: number }) => void;
   mdNodeRemove: (id: string) => void;
   /** Tool panels living ON the canvas as nodes (Deska "Add to board") —
    * each renders the live panel UI inside a card: movable, resizable,
@@ -1117,7 +1117,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     }));
     const next = get().webNodes;
     localStorage.setItem("cv-webnodes", JSON.stringify(next));
-    client?.moveNode(id, 200 + Math.random() * 300, 120 + Math.random() * 200);
+    client?.moveNode(id, 300 + Math.random() * 200, 140 + Math.random() * 160);
   },
   webNodeRemove: (id) => {
     const board = get().activeBoard;
@@ -1371,7 +1371,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   anchors: (() => {
     try { return JSON.parse(localStorage.getItem("cv-anchors") ?? "{}"); } catch { return {}; }
   })(),
-  mdNodeAdd: (path, anchor) => {
+  mdNodeAdd: (path, anchor, at) => {
     const board = get().activeBoard;
     const id = `md-${Math.random().toString(16).slice(2, 10)}`;
     const next = { ...get().mdNodes, [board]: { ...(get().mdNodes[board] ?? {}), [id]: path } };
@@ -1382,7 +1382,7 @@ export const useBoard = create<BoardState>((set, get) => ({
       set({ anchors: a });
     }
     set({ mdNodes: next });
-    client?.moveNode(id, 300 + Math.random() * 200, 140 + Math.random() * 160);
+    client?.moveNode(id, at?.x ?? 300 + Math.random() * 200, at?.y ?? 140 + Math.random() * 160);
     client?.vaultRead(get().vaultDir, path);
   },
   mdNodeRemove: (id) => {
