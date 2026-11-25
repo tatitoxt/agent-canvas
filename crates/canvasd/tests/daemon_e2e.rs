@@ -274,12 +274,30 @@ async fn delegation_resolves_on_canvas_result() {
         .unwrap()
         .to_string();
 
+    // The PTY process is announced before its shell necessarily finishes
+    // startup. Wait for the first visible prompt so this test exercises
+    // result handling rather than racing bash's initial line setup.
+    let ready = collect_until(&mut ws, Duration::from_secs(5), |m| {
+        m["type"] == "activity" && m["agent_id"] == child
+    })
+    .await;
+    assert!(
+        ready.iter().any(|m| m["type"] == "activity"),
+        "child shell never produced its initial prompt"
+    );
+
     // Child prints the protocol line; the tail scanner resolves the edge.
-    ws.send(Message::Binary(pty_frame(&child, b"echo 'CANVAS_RESULT: shipped it'\n").into()))
+    ws.send(Message::Binary(pty_frame(&child, b"echo 'CANVAS_RESULT: shipped it'\r").into()))
         .await
         .unwrap();
     let seen = collect_until(&mut ws, Duration::from_secs(8), |m| m["type"] == "result").await;
-    let result = seen.iter().find(|m| m["type"] == "result").expect("edge must resolve");
+    let result = seen.iter().find(|m| m["type"] == "result").unwrap_or_else(|| {
+        let transcript = std::fs::read(d.repo.join(".canvas/transcripts").join(format!("{child}.bin")))
+            .map(|bytes| String::from_utf8_lossy(&bytes).to_string())
+            .unwrap_or_else(|error| format!("<transcript unavailable: {error}>"));
+        let parsed = canvasd::agent::canvas_result_line(&transcript);
+        panic!("edge must resolve; events: {seen:?}; parsed: {parsed:?}; transcript: {transcript:?}")
+    });
     assert_eq!(result["edge_id"].as_str().unwrap(), edge_id);
     assert!(result["summary"].as_str().unwrap().contains("shipped it"));
 }

@@ -531,11 +531,30 @@ pub fn canvas_result_line(tail: &str) -> Option<String> {
             // the screen actually shows — a result overwritten by later
             // output on the same line doesn't count, while a CRLF-writing
             // child leaves \r\r\n and its empty tail must be skipped.
-            l.split('\r')
+            let segments: Vec<String> = l
+                .split('\r')
                 .map(strip_ansi)
-                .rev()
-                .find(|s| !s.trim().is_empty())
-                .and_then(|s| s.trim().strip_prefix("CANVAS_RESULT:").map(|v| v.trim().to_string()))
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            let visible = segments.last()?;
+            if let Some(result) = visible.strip_prefix("CANVAS_RESULT:") {
+                return Some(result.trim().to_string());
+            }
+            if let Some((prefix, result)) = visible.split_once("CANVAS_RESULT:") {
+                if prefix.trim_end().ends_with(['$', '#']) {
+                    return Some(result.trim().to_string());
+                }
+            }
+            if visible.ends_with(['$', '#']) {
+                let previous = segments.iter().rev().nth(1)?;
+                let (prefix, result) = previous.split_once("CANVAS_RESULT:")?;
+                if prefix.trim_end().ends_with(['$', '#']) {
+                    return Some(result.trim().to_string());
+                }
+            }
+
+            None
         })
         .filter(|s| !s.is_empty())
 }
@@ -705,6 +724,17 @@ mod tests {
         // Result-looking text overwritten by later output on the same
         // line is not a result — the screen no longer shows it.
         assert_eq!(canvas_result_line("x \rCANVAS_RESULT: stale\rnext output"), None);
+        assert_eq!(
+            canvas_result_line("bash-3.2$ CANVAS_RESULT: shipped it\rbash-3.2$ "),
+            Some("shipped it".to_string())
+        );
+        let macos_bash_tail = concat!(
+            "\r\nThe default interactive shell is now zsh.\r\n",
+            "To update your account to use zsh.\r\n",
+            "\u{1b}[?1034hbash-3.2$ CANVAS_RESULT: shipped it\r\n",
+            "bash-3.2$ "
+        );
+        assert_eq!(canvas_result_line(macos_bash_tail).as_deref(), Some("shipped it"));
         assert_eq!(canvas_result_line("$ echo hi\r\nhi\r\n$ "), None);
     }
 
