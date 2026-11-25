@@ -75,3 +75,9 @@ Fausto respondió la pregunta de la library con este screenshot — ES la respue
 - `/tmp/canvas-design/madre-ref.png` — screenshot 2026-11-24 19:46 (copiado del Desktop, nombre original tiene U+202F). ANALIZAR AL RETOMAR — probablemente referencia Deska.
 - `/Users/fausto/Desktop/Screenshot 2026-11-24 at 10.14.47 PM.png` — Deska real completo (ya analizado, ver sección REFERENCIA DESKA REAL).
 - Desktop tiene más screenshots del 21/11 — revisar por si son referencias viejas de Deska/Symvibe.
+
+## CÓMO LEVANTAR EL ENTORNO COMPLETO (live)
+1. Daemon: `cd /Users/fausto/agent-canvas-ui && ./target/debug/canvasd` (si no corre). Al arrancar escupe `CANVASD_TOKEN=...` en stdout/log — cambia en cada reinicio.
+2. Web: abrir `http://localhost:5173/?token=<TOKEN>` — la app conecta (punto verde junto a Tasks). Sin token queda "offline" y muestra el demo mock.
+3. Para screenshots de diseño usar el modo offline (demo con 5 cards); para probar terminales reales usar el token.
+4. Verificar: ¿el token se puede fijar fijo en dev? mirar si canvasd acepta env var o config — sería más cómodo que leerlo del log cada vez.
