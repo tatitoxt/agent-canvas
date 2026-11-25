@@ -29,3 +29,6 @@ path = "src/main.rs"
 [[bin]]
 name = "canvasctl"
 path = "src/bin/canvasctl.rs"
+
+[dev-dependencies]
+tempfile = "3"
