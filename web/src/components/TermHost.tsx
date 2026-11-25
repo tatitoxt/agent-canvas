@@ -203,7 +203,7 @@ export function TermHost({ agentId }: { agentId: string }) {
           </button>
         </div>
       )}
-      <div ref={hostRef} className="min-h-0 flex-1" />
+      <div ref={hostRef} className="min-h-0 min-w-0 flex-1" style={{ minWidth: 0 }} />
       <div
         className="nodrag"
         style={{ position: "absolute", top: findOpen ? 30 : 6, right: 8, display: findOpen ? "none" : "flex", gap: 4, alignItems: "center", zIndex: 5 }}
@@ -218,8 +218,4 @@ export function TermHost({ agentId }: { agentId: string }) {
       </div>
     </div>
   );
-  return <div ref={hostRef} className="min-h-0 flex-1" />;
-  // min-w-0: inside a split flex row the xterm screen's intrinsic width
-  // would otherwise veto shrinking and clip the sibling pane.
-  return <div ref={hostRef} className="min-h-0 min-w-0 flex-1" style={{ minWidth: 0 }} />;
 }

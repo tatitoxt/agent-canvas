@@ -71,3 +71,28 @@ test("split right shows two live xterm panes in the drawer", async ({ page }) =>
   await page.waitForTimeout(900);
   expect(await page.locator(".xterm").count()).toBe(2);
 });
+
+test("terminal accepts shell input and renders PTY output", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const terminal = page.locator(".xterm").first();
+  await expect(terminal).toBeVisible();
+  await terminal.click();
+  await page.keyboard.type("printf 'terminal-e2e-ok\\n'");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".xterm-rows")).toContainText("terminal-e2e-ok", { timeout: 8_000 });
+});
+
+test("popped-out terminal keeps accepting shell input", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  await page.locator("button[title='pop out onto the canvas as a card']").first().click();
+  const cardTerminal = page.locator(".react-flow__node-term .xterm").first();
+  await expect(cardTerminal).toBeVisible({ timeout: 5_000 });
+  await cardTerminal.click();
+  await page.keyboard.type("printf 'canvas-terminal-e2e-ok\\n'");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".react-flow__node-term .xterm-rows")).toContainText("canvas-terminal-e2e-ok", { timeout: 8_000 });
+});
