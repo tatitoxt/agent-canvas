@@ -71,7 +71,7 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
           </>
         )}
         <button className="nodrag" aria-label={`Remove ${basename} from board`} title="Remove from board" onClick={() => mdNodeRemove(id)}
-          style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", display: "flex", padding: 2 }}><Icon name="ph-x" size={12} /></button>
+          style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", display: "flex", padding: 2, opacity: selected ? 1 : 0, pointerEvents: selected ? "auto" : "none", transition: "opacity 160ms ease" }}><Icon name="ph-x" size={12} /></button>
       </div>
       {text == null ? <div style={{ padding: 12, color: "var(--cv-ink-faint)", fontSize: 11 }}>Loading note…</div> : editing ? (
         <textarea
