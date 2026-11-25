@@ -1596,6 +1596,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     const next = get().webNodes;
     localStorage.setItem("cv-webnodes", JSON.stringify(next));
     client?.moveNode(id, 300 + Math.random() * 200, 140 + Math.random() * 160);
+    get().requestFocus(id);
   },
   webNodeRemove: (id) => {
     const board = get().activeBoard;

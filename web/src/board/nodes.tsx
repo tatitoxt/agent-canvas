@@ -1123,7 +1123,7 @@ export function WebNode({
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
-        outline: selected ? "1.5px solid var(--cv-glass-shine)" : "none",
+        outline: selected ? "1.5px solid rgba(232,178,90,.9)" : "none",
       }}
     >
       <NodeResizer
@@ -1140,30 +1140,51 @@ export function WebNode({
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "6px 10px",
-          fontSize: 10.5,
+          padding: "8px 12px",
+          fontSize: 11,
+          letterSpacing: "0.01em",
           color: "var(--cv-ink-dim)",
           borderBottom: "1px solid var(--cv-glass-edge)",
+          background: "rgba(255,255,255,0.025)",
           flexShrink: 0,
         }}
       >
-        <span style={{ color: "#7ba3cf" }}>◍</span>
-        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7ba3cf" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <circle cx="12" cy="12" r="10" />
+          <path d="M2 12h20" />
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+        </svg>
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--cv-ink)" }}>
           {data.url}
         </span>
-        <button
-          onClick={(e) => { e.stopPropagation(); window.open(data.url, "_blank"); }}
-          style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11 }}
-          title="open in browser"
+        <span
+          style={{
+            display: "flex",
+            gap: 2,
+            opacity: selected ? 1 : 0,
+            pointerEvents: selected ? "auto" : "none",
+            transition: "opacity 160ms ease",
+          }}
         >
-          ↗
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); webNodeRemove(id); }}
-          style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 12 }}
-        >
-          ×
-        </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); window.open(data.url, "_blank"); }}
+            style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", padding: 3, borderRadius: 6, display: "flex" }}
+            title="open in browser"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M7 17 17 7" /><path d="M7 7h10v10" />
+            </svg>
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); webNodeRemove(id); }}
+            style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", padding: 3, borderRadius: 6, display: "flex" }}
+            title="close"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18" /><path d="M6 6l12 12" />
+            </svg>
+          </button>
+        </span>
       </div>
       <iframe
         src={data.url}
