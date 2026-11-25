@@ -59,7 +59,10 @@ async function boot(page: import("@playwright/test").Page) {
 test("Paper theme switches the canvas to a readable warm light palette and persists", async ({ page }) => {
   await boot(page);
   await page.locator("button[title='Settings']").click();
-  await page.getByRole("button", { name: "Paper" }).click();
+  const settings = page.locator(".react-flow__node-panel [data-panel='settings']").first();
+  await expect(settings.getByRole("button", { name: "Use Obsidian theme", pressed: true })).toBeVisible();
+  await settings.getByRole("button", { name: "Use Paper theme" }).click();
+  await expect(settings.getByRole("button", { name: "Use Paper theme", pressed: true })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "paper");
   expect(await page.locator("body").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(236, 232, 225)");
   expect(await page.locator("html").evaluate((el) => getComputedStyle(el).getPropertyValue("--cv-shadow-card"))).toContain("#3f2f19");
@@ -68,6 +71,8 @@ test("Paper theme switches the canvas to a readable warm light palette and persi
   await expect.poll(() => page.locator(".react-flow__minimap-mask").evaluate((el) => getComputedStyle(el).fill)).toBe("rgba(63, 47, 25, 0.12)");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "paper");
+  await page.locator("button[title='Settings']").click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='settings']").first().getByRole("button", { name: "Use Paper theme", pressed: true })).toBeVisible();
 });
 
 test("terminal font setting applies to live terminals, clamps, and persists", async ({ page }) => {
@@ -111,7 +116,7 @@ test("card summary preference hides live previews and restores after reload", as
   await page.locator("button[title='Settings']").click();
   const settings = page.locator(".react-flow__node-panel [data-panel='settings']").first();
   await settings.getByRole("button", { name: "Card summaries on" }).click();
-  await expect(settings.getByRole("button", { name: "Card summaries off" })).toBeVisible();
+  await expect(settings.getByRole("button", { name: "Card summaries off", pressed: false })).toBeVisible();
   await expect(card.getByTestId("agent-card-task")).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("cv-panel-summaries"))).toBe("false");
   await page.reload();

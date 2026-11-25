@@ -71,6 +71,9 @@ export function SettingsPanel() {
         {THEMES.map((t) => (
           <button
             key={t.key}
+            aria-pressed={theme === t.key}
+            aria-label={`Use ${t.label} theme`}
+            title={`Use ${t.label} theme`}
             onClick={() => setTheme(t.key)}
             className="glass"
             style={{
@@ -101,6 +104,7 @@ export function SettingsPanel() {
         <span style={{ flex: 1, fontSize: 10.5, color: "var(--cv-ink-dim)" }}>card summaries under titles</span>
         <button
           aria-label={`Card summaries ${panelSummaries ? "on" : "off"}`}
+          aria-pressed={panelSummaries}
           className="glass"
           style={{ ...rowBtn, flex: 0, padding: "7px 12px", outline: panelSummaries ? "1.5px solid var(--cv-accent)" : "none" }}
           onClick={() => togglePanelSummaries()}
