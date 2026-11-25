@@ -48,21 +48,45 @@ impl Agent {
         }
         let tail = self.tail.lock().unwrap();
         let text = String::from_utf8_lossy(&tail);
-        let last_line = text.lines().last().unwrap_or("").trim_end();
-        let promptish = last_line.ends_with('$')
-            || last_line.ends_with('#')
-            || last_line.ends_with('>')
-            || last_line.ends_with(":?")
-            || last_line.contains("(y/n)")
-            || last_line.contains("[Y/n]")
-            || last_line.contains("Allow")
-            || last_line.contains("approve");
-        if promptish {
+        if looks_like_waiting_prompt(&text) {
             "waiting"
         } else {
             "idle"
         }
     }
+}
+
+/// Detect an interactive CLI or shell prompt from the text currently visible
+/// at the end of a PTY buffer. PTYs redraw prompts with carriage returns and
+/// CLIs commonly color the prompt, so inspect only the final visible segment
+/// after removing ANSI escapes.
+fn looks_like_waiting_prompt(tail: &str) -> bool {
+    let Some(line) = tail.lines().last().and_then(|line| {
+        line.split('\r')
+            .rev()
+            .map(strip_ansi)
+            .map(|segment| segment.trim().to_string())
+            .find(|segment| !segment.is_empty())
+    }) else {
+        return false;
+    };
+    let lower = line.to_lowercase();
+
+    // Shell prompts and the prompt glyphs used by Claude Code and Codex.
+    if line.ends_with(['$', '#', '>', '❯', '›']) {
+        return true;
+    }
+
+    // Only treat approval language as a prompt when the visible line reads
+    // like an actual question/action gate; ordinary output can mention these
+    // words without waiting for input.
+    let asks_for_approval = [
+        "(y/n)", "[y/n]", "[y]", "(yes/no)", "do you want to proceed",
+        "would you like to proceed", "needs your approval", "press enter to",
+    ];
+    asks_for_approval.iter().any(|phrase| lower.contains(phrase))
+        || ((lower.contains("allow") || lower.contains("approve") || lower.contains("permission"))
+            && (line.ends_with('?') || lower.starts_with("allow ") || lower.starts_with("approve ")))
 }
 
 impl Agent {
@@ -702,6 +726,18 @@ mod tests {
     fn ansi_stripping_yields_last_visible_line() {
         let tail = "\u{1b}[32mok\u{1b}[0m\r\n\u{1b}[1mworking…\u{1b}[0m\n";
         assert_eq!(last_visible_line(tail).as_deref(), Some("working…"));
+    }
+
+    #[test]
+    fn waiting_prompt_detection_handles_cli_glyphs_and_pty_redraws() {
+        assert!(looks_like_waiting_prompt("\u{1b}[32m❯\u{1b}[0m "));
+        assert!(looks_like_waiting_prompt("\u{1b}[34m›\u{1b}[0m "));
+        assert!(looks_like_waiting_prompt("user@box:~/repo$ "));
+        assert!(looks_like_waiting_prompt("working…\r\u{1b}[33mAllow this action?\u{1b}[0m "));
+        assert!(looks_like_waiting_prompt("Continue? [Y/n]"));
+        assert!(!looks_like_waiting_prompt("The agent will allow this when ready"));
+        assert!(!looks_like_waiting_prompt("Implemented approval handling."));
+        assert!(!looks_like_waiting_prompt("working…"));
     }
 
     #[test]
