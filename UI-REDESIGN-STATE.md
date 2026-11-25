@@ -99,3 +99,10 @@ Pendiente ronda 3:
 - [ ] Topbar: fusión en una sola bubble on hover (sigue pendiente de ronda 2)
 - [ ] Fausto manda otra foto de Deska — revisar Desktop al retomar
 - [ ] En su captura se veía panel Juice/Inbox/Automations muy plain — pendiente "cards más facheras estilo Deska"
+
+## Ronda 4 (2026-11-24 ~22:45) — library surgery + resize v1
+- [x] Library sin flyout (git menu eliminado, 65 líneas borradas), sin label vertical, expanded persiste en localStorage
+- [x] Resize v1: NodeResizer en agent cards cuando selected, ancho persiste en cv-agentsizes. LIMITACIÓN conocida: el resize visual se aplica al soltar (no live durante drag), y height se guarda pero no se aplica al layout — pendiente hacer la card flex-column con el área de terminal flex-1. La forma correcta final: width/height en el nodo RF nativo (nodes array en App.tsx) para feedback live.
+- [ ] Gather sigue roto (no investigado aún) — main ordena en grid, branch apila: buscar la regresión en la acción gather del store comparando con main
+- [ ] Topbar bubble-fusion on hover — pendiente
+- [ ] deska.dev web crawl — las notas 10/12 del vault ya cubren casi todo; fetch pendiente solo si hace falta algo específico

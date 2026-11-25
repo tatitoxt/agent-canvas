@@ -406,6 +406,9 @@ type BoardState = {
   notes: Record<string, { note_id: string; board_id: string; col: string; text: string; pos: number; due?: string }>;
   /** Saved node positions — replayed from the daemon's layout table. */
   positions: Record<string, { x: number; y: number }>;
+  /** Per-agent custom card size from user resize — width always, height optional. */
+  agentSizes: Record<string, { w: number; h?: number }>;
+  resizeAgentCard: (id: string, w: number, h?: number) => void;
   /** Drop position for a delegation child, keyed by parent agent id —
    * applied when the delegation message names the child. */
   pendingPositions: Record<string, { x: number; y: number }>;
@@ -694,6 +697,14 @@ export const useBoard = create<BoardState>((set, get) => ({
   notes: {},
   artifacts: {},
   positions: {},
+  agentSizes: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-agentsizes") ?? "{}"); } catch { return {}; }
+  })(),
+  resizeAgentCard: (id, w, h) => {
+    const next = { ...get().agentSizes, [id]: { w, h } };
+    localStorage.setItem("cv-agentsizes", JSON.stringify(next));
+    set({ agentSizes: next });
+  },
   pendingPositions: {},
   approvals: {},
   termFont: 13,

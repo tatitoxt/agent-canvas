@@ -1,4 +1,4 @@
-import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
+import { Handle, Position, NodeResizer, type NodeProps, type Node } from "@xyflow/react";
 import { useEffect, useMemo, useState } from "react";
 import { CliMark } from "../components/CliMark";
 import { Icon } from "../components/icons";
@@ -135,6 +135,7 @@ export function StatusBars({ color }: { color: string }) {
 export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const meta = cliMeta(data.cli);
   const summaries = useBoard((s) => s.panelSummaries);
+  const customSize = useBoard((s) => (data.id ? s.agentSizes[data.id] : undefined));
   const [collapsed, setCollapsed] = useState(false);
   const statusColor = STATUS_COLOR[data.status];
   // "builder-1" reads as Terminal 1 · builder — the terminal number is the
@@ -206,7 +207,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       className={`glass agent-card ${live && !selected ? "card-ring" : ""} ${data.status === "waiting" ? "node-waiting" : ""}`}
       style={{
         position: "relative",
-        width: 460,
+        width: customSize?.w ?? 460,
         padding: 0,
         // Fausto's spec: a light trail orbits the border in the state color
         // (card-ring reads --cv-ring). Selection is a DIFFERENT outline —
@@ -221,6 +222,14 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         cursor: "pointer",
       }}
     >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={320}
+        minHeight={120}
+        onResizeEnd={(_, p) => {
+          if (data.id) useBoard.getState().resizeAgentCard(data.id, Math.round(p.width), Math.round(p.height));
+        }}
+      />
       <Handle type="target" position={Position.Left} />
       {/* Deska header: [mark] title-in-cli-color  ▮▮▮ running  [logo] Cli  (chrome on hover) */}
       <div
