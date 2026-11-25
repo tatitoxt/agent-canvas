@@ -11,6 +11,7 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
   const text = useBoard((s) => s.mdContents[data.path]);
   const mdNodeRemove = useBoard((s) => s.mdNodeRemove);
   const resizeMdNode = useBoard((s) => s.resizeMdNode);
+  const boardId = useBoard((s) => s.activeBoard);
   const basename = data.path.split("/").pop() ?? data.path;
 
   useEffect(() => {
@@ -39,8 +40,8 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
         minHeight={180}
         handleClassName="cv-node-resize-handle"
         lineClassName="cv-node-resize-line"
-        onResize={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), false)}
-        onResizeEnd={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height))}
+        onResize={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), false, boardId)}
+        onResizeEnd={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), true, boardId)}
       />
       <div
         style={{

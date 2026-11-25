@@ -560,7 +560,7 @@ function Board() {
         type: "md" as const,
         deletable: true,
         position: positions[id] ?? { x: 640, y: 160 },
-        style: { width: mdNodeSizes[id]?.w ?? 340, height: mdNodeSizes[id]?.h ?? 260 },
+        style: { width: (mdNodeSizes[`${activeBoard}:${id}`] ?? mdNodeSizes[id])?.w ?? 340, height: (mdNodeSizes[`${activeBoard}:${id}`] ?? mdNodeSizes[id])?.h ?? 260 },
         data: { kind: "md" as const, id, path },
       }),
     );
@@ -1324,8 +1324,18 @@ function Board() {
         <CommandPalette
           onClose={() => setPalette(false)}
           onNav={(k) => {
-            if (PANEL_DEFS[k]) navToggle(k);
-            else setNav(k);
+            // Palette commands are explicit open/focus actions. Keep rail
+            // clicks as toggles, but never let a search result close its panel.
+            if (PANEL_DEFS[k]) {
+              const b = useBoard.getState();
+              if (b.panelNodes[b.activeBoard]?.[`panel-${k}`]) b.requestFocus(`panel-${k}`);
+              else {
+                const def = PANEL_DEFS[k];
+                const sx = k === "inbox" ? window.innerWidth - def.w - 24 : window.innerWidth * 0.42;
+                b.openPanelNode(k, screenToFlowPosition({ x: sx, y: window.innerHeight * 0.1 }), { w: def.w, h: def.h });
+              }
+            }
+            setNav(k);
             setPalette(false);
           }}
           onOpenAgent={(id, name) => {

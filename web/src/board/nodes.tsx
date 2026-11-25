@@ -208,7 +208,8 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       style={{
         position: "relative",
         width: customSize?.w ?? 460,
-        minHeight: customSize?.h,
+        height: customSize?.h,
+        overflow: customSize?.h ? "hidden" : undefined,
         padding: 0,
         // Fausto's spec: a light trail orbits the border in the state color
         // (card-ring reads --cv-ring). Selection is a DIFFERENT outline —
@@ -230,10 +231,10 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         handleClassName="cv-node-resize-handle"
         lineClassName="cv-node-resize-line"
         onResize={(_, p) => {
-          if (data.id) useBoard.getState().resizeAgentCard(data.id, Math.round(p.width), Math.round(p.height), false);
+          if (data.id) useBoard.getState().resizeAgentCard(data.id, Math.round(p.width), Math.round(p.height), false, { x: p.x, y: p.y });
         }}
         onResizeEnd={(_, p) => {
-          if (data.id) useBoard.getState().resizeAgentCard(data.id, Math.round(p.width), Math.round(p.height), true);
+          if (data.id) useBoard.getState().resizeAgentCard(data.id, Math.round(p.width), Math.round(p.height), true, { x: p.x, y: p.y });
         }}
       />
       <Handle type="target" position={Position.Left} />
@@ -962,7 +963,7 @@ export function WorkspaceNode({
         handleClassName="cv-node-resize-handle"
         lineClassName="cv-node-resize-line"
         onResizeEnd={(_, p) => {
-          useBoard.getState().resizeWorkspace(id, Math.round(p.width), Math.round(p.height));
+          useBoard.getState().resizeWorkspace(id, Math.round(p.width), Math.round(p.height), { x: p.x, y: p.y });
         }}
       />
       <div

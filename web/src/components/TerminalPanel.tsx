@@ -128,8 +128,8 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
         height: maxed ? undefined : 300,
         width: maxed ? undefined : "36rem",
         overflow: "hidden",
-        background: "#0d0e10",
-        border: "1px solid rgba(255,255,255,0.08)",
+        background: "color-mix(in srgb, var(--cv-base) 94%, #0d0e10)",
+        border: "1px solid var(--cv-glass-edge)",
       }}
     >
       <div
@@ -140,7 +140,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
           alignItems: "center",
           justifyContent: "space-between",
           padding: "8px 14px",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
+          borderBottom: "1px solid var(--cv-glass-edge)",
           cursor: "grab",
           userSelect: "none",
           touchAction: "none",

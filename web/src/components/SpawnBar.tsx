@@ -271,9 +271,10 @@ export function SpawnBar() {
                     useBoard.getState().setPendingSpawnPos(null);
                     for (let i = 0; i < count; i++) {
                       const p = { x: origin.x + (i % cols) * (cardW + gap), y: origin.y + Math.floor(i / cols) * 290 };
-                      useBoard.getState().setPendingSpawnPos(p);
+                      const name = `${cmd}-p${i + 1}`;
+                      useBoard.getState().setSpawnPositionForName(name, p);
                       spawn(
-                        `${cmd}-p${i + 1}`,
+                        name,
                         cmd,
                         undefined,
                         permission,

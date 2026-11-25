@@ -100,6 +100,23 @@ describe("workspace sizes", () => {
     useBoard.getState().resizeWorkspace("workspace-1", 760, 480);
     expect(JSON.parse(localStorage.getItem("cv-workspacesizes")!)["workspace-1"]).toEqual({ w: 760, h: 480 });
   });
+
+  it("preserves a workspace origin changed by a top or left edge resize", () => {
+    useBoard.getState().resizeWorkspace("workspace-1", 760, 480, { x: 80, y: 120 });
+    expect(useBoard.getState().positions["workspace-1"]).toEqual({ x: 80, y: 120 });
+  });
+});
+
+describe("quick panel commands", () => {
+  beforeEach(reset);
+
+  it("routes Dex Tickets and Mission Map to their own panels", () => {
+    useBoard.getState().quickRequest("open dex tickets");
+    expect(node("panel-tickets")).toBeTruthy();
+    expect(node("panel-notes")).toBeUndefined();
+    useBoard.getState().quickRequest("open mission map");
+    expect(node("panel-usage")).toBeTruthy();
+  });
 });
 
 describe("markdown node sizes", () => {
@@ -107,8 +124,11 @@ describe("markdown node sizes", () => {
 
   it("persists resized note cards and enforces usable minimum dimensions", () => {
     useBoard.getState().resizeMdNode("md-note", 200, 100);
-    expect(useBoard.getState().mdNodeSizes["md-note"]).toEqual({ w: 260, h: 180 });
+    expect(useBoard.getState().mdNodeSizes["main:md-note"]).toEqual({ w: 260, h: 180 });
     useBoard.getState().resizeMdNode("md-note", 640, 420);
-    expect(JSON.parse(localStorage.getItem("cv-mdnodesizes")!)["md-note"]).toEqual({ w: 640, h: 420 });
+    expect(JSON.parse(localStorage.getItem("cv-mdnodesizes")!)["main:md-note"]).toEqual({ w: 640, h: 420 });
+    useBoard.getState().resizeMdNode("md-note", 360, 240, true, "qa");
+    expect(useBoard.getState().mdNodeSizes["main:md-note"].w).toBe(640);
+    expect(useBoard.getState().mdNodeSizes["qa:md-note"].w).toBe(360);
   });
 });

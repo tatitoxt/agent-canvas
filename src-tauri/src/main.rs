@@ -490,30 +490,51 @@ fn read_repo_file(root: &PathBuf, path: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&bytes).to_string())
 }
 
-fn registered_repo_root(state: &CanvasState, dir: &str) -> Result<PathBuf, String> {
-    let requested = std::fs::canonicalize(dir).map_err(|_| format!("access denied: repository not found: {dir}"))?;
-    if std::fs::canonicalize(&state.repo_root)
-        .map(|root| requested.starts_with(root))
-        .unwrap_or(false)
-    {
-        return Ok(requested);
-    }
-    let workspaces = state.store.workspaces_snapshot().map_err(|e| e.to_string())?;
-    for (_, _, repo, _) in workspaces {
-        if let Ok(root) = std::fs::canonicalize(repo) {
-            // Per-agent worktrees live below their workspace repo. Resolve
-            // the requested directory first so a symlink cannot escape it.
-            if requested.starts_with(&root) {
-                return Ok(requested);
-            }
+fn expand_home_path(path: &str) -> PathBuf {
+    if path == "~" || path.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home).join(path.strip_prefix("~/").unwrap_or(""));
         }
     }
-    Err("access denied: repository is not registered as a workspace".into())
+    PathBuf::from(path)
+}
+
+fn resolve_registered_repo_dir(dir: &str, roots: &[PathBuf]) -> Result<PathBuf, String> {
+    let requested_path = expand_home_path(dir);
+    for root_path in roots {
+        let Ok(root) = std::fs::canonicalize(root_path) else { continue };
+        let candidate = if requested_path.is_absolute() {
+            requested_path.clone()
+        } else {
+            root.join(&requested_path)
+        };
+        let Ok(requested) = std::fs::canonicalize(candidate) else { continue };
+        if requested.starts_with(&root) && requested.is_dir() {
+            return Ok(requested);
+        }
+    }
+    Err(format!("access denied: repository is not registered or not found: {dir}"))
+}
+
+fn registered_repo_root(state: &CanvasState, dir: &str) -> Result<PathBuf, String> {
+    let mut registered = vec![state.repo_root.clone()];
+    let workspaces = state.store.workspaces_snapshot().map_err(|e| e.to_string())?;
+    registered.extend(workspaces.into_iter().map(|(_, _, repo, _)| expand_home_path(&repo)));
+    // Restored snapshots can carry a repository-relative worktree such as
+    // `.canvas-worktrees/<id>`. Resolve it against each registered workspace,
+    // then canonicalize before checking containment so symlinks cannot escape.
+    resolve_registered_repo_dir(dir, &registered)
 }
 
 #[tauri::command]
 fn repo_tree(app: AppHandle, state: State<'_, CanvasState>, dir: String) -> Result<(), String> {
-    let root = registered_repo_root(state.inner(), &dir)?;
+    let root = match registered_repo_root(state.inner(), &dir) {
+        Ok(root) => root,
+        Err(message) => {
+            emit_control(&app, &ServerMsg::Error { agent_id: None, message });
+            return Ok(());
+        }
+    };
     let mut entries = repo_tree_entries(&root);
     entries.truncate(4000);
     emit_control(&app, &ServerMsg::RepoListing { dir, entries });
@@ -522,15 +543,21 @@ fn repo_tree(app: AppHandle, state: State<'_, CanvasState>, dir: String) -> Resu
 
 #[tauri::command]
 fn repo_read(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String) -> Result<(), String> {
-    let root = registered_repo_root(state.inner(), &dir)?;
-    let text = read_repo_file(&root, &path)?;
+    let result = registered_repo_root(state.inner(), &dir).and_then(|root| read_repo_file(&root, &path));
+    let text = match result {
+        Ok(text) => text,
+        Err(message) => {
+            emit_control(&app, &ServerMsg::Error { agent_id: None, message });
+            return Ok(());
+        }
+    };
     emit_control(&app, &ServerMsg::RepoFile { dir, path, text });
     Ok(())
 }
 
 #[cfg(test)]
 mod repo_explorer_tests {
-    use super::{read_repo_file, repo_tree_entries};
+    use super::{expand_home_path, read_repo_file, repo_tree_entries, resolve_registered_repo_dir};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -576,6 +603,28 @@ mod repo_explorer_tests {
         assert!(read_repo_file(&root, "../outside").unwrap_err().contains("access denied"));
         assert!(read_repo_file(&root, "binary.dat").unwrap_err().contains("binary"));
         assert!(read_repo_file(&root, "large.txt").unwrap_err().contains("too large"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn expands_home_workspace_paths_and_keeps_relative_paths_relative() {
+        let home = std::env::var("HOME").unwrap();
+        assert_eq!(expand_home_path("~/projects/demo"), PathBuf::from(home).join("projects/demo"));
+        assert_eq!(expand_home_path("relative/worktree"), PathBuf::from("relative/worktree"));
+    }
+
+    #[test]
+    fn resolves_relative_worktrees_only_inside_registered_roots() {
+        let root = temp_root();
+        let worktree = root.join(".canvas-worktrees/agent-1");
+        std::fs::create_dir_all(&worktree).unwrap();
+        std::fs::write(worktree.join("README.md"), "worktree").unwrap();
+
+        let canonical_root = std::fs::canonicalize(&root).unwrap();
+        let candidate = resolve_registered_repo_dir(".canvas-worktrees/agent-1", std::slice::from_ref(&root)).unwrap();
+        assert!(candidate.starts_with(&canonical_root));
+        assert!(candidate.is_dir());
+        assert!(resolve_registered_repo_dir("../", std::slice::from_ref(&root)).is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
 

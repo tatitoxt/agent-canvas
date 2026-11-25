@@ -170,7 +170,7 @@ export function ToolsMenu({
             zIndex: 70, transition: "width 180ms ease",
           }}
         >
-          <header style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 48, padding: collapsed ? "0 10px" : "0 14px", borderBottom: "1px solid var(--cv-glass-edge)" }}>
+          <header style={{ display: "flex", flexDirection: collapsed ? "column" : "row", alignItems: "center", justifyContent: "center", gap: collapsed ? 6 : 8, minHeight: collapsed ? 112 : 48, padding: collapsed ? "8px 0" : "0 14px", borderBottom: "1px solid var(--cv-glass-edge)" }}>
             {!collapsed && <strong style={{ flex: 1, fontSize: 13, fontWeight: 650 }}>Tools</strong>}
             <button className="glass-pill" title={pinned ? "Unpin Tools panel" : "Pin Tools panel"} aria-label={pinned ? "Unpin Tools panel" : "Pin Tools panel"} onClick={() => { const next = !pinned; setPinned(next); localStorage.setItem("cv-tools-pinned", String(next)); }} style={{ width: 28, height: 28, display: "grid", placeItems: "center", color: pinned ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}><Icon name="pin" size={14} /></button>
             <button className="glass-pill" title={collapsed ? "Expand Tools panel" : "Collapse Tools panel"} aria-label={collapsed ? "Expand Tools panel" : "Collapse Tools panel"} onClick={() => setCollapsed((v) => !v)} style={{ width: 28, height: 28, display: "grid", placeItems: "center" }}><Icon name={collapsed ? "expand" : "collapse"} size={14} /></button>

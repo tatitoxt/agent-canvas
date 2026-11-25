@@ -408,10 +408,10 @@ type BoardState = {
   positions: Record<string, { x: number; y: number }>;
   /** Per-agent size overrides for cards resized on the canvas. */
   agentSizes: Record<string, { w: number; h?: number }>;
-  resizeAgentCard: (id: string, w: number, h?: number, persist?: boolean) => void;
+  resizeAgentCard: (id: string, w: number, h?: number, persist?: boolean, pos?: { x: number; y: number }) => void;
   /** Workspace frame dimensions are local UI state, keyed by workspace ID. */
   workspaceSizes: Record<string, { w: number; h: number }>;
-  resizeWorkspace: (id: string, w: number, h: number) => void;
+  resizeWorkspace: (id: string, w: number, h: number, pos?: { x: number; y: number }) => void;
   /** Drop position for a delegation child, keyed by parent agent id —
    * applied when the delegation message names the child. */
   pendingPositions: Record<string, { x: number; y: number }>;
@@ -489,7 +489,7 @@ type BoardState = {
   mdNodes: Record<string, Record<string, string>>;
   /** Per-note canvas card dimensions, keyed by Markdown node ID. */
   mdNodeSizes: Record<string, { w: number; h: number }>;
-  resizeMdNode: (id: string, w: number, h: number, persist?: boolean) => void;
+  resizeMdNode: (id: string, w: number, h: number, persist?: boolean, boardId?: string) => void;
   mdContents: Record<string, string>;
   /** Binary vault assets (images) as data URLs — filled by vault_asset. */
   vaultAssets: Record<string, string>;
@@ -528,6 +528,8 @@ type BoardState = {
   viewportRect: { left: number; top: number; right: number; bottom: number } | null;
   pendingSpawnPos: { x: number; y: number } | null;
   setPendingSpawnPos: (p: { x: number; y: number } | null) => void;
+  pendingSpawnPositions: Record<string, { x: number; y: number }>;
+  setSpawnPositionForName: (name: string, pos: { x: number; y: number }) => void;
   setAgentChain: (workspaceId: string, chain: string[]) => void;
   openTermNode: (agentId: string, pos?: { x: number; y: number }) => void;
   closeTermNode: (id: string) => void;
@@ -593,7 +595,7 @@ type BoardState = {
   gatherLoose: () => void;
   /** Snapshot of the last gather for undo — positions before the moves
    * plus the frame it created. */
-  lastGather: { board: string; items: { id: string; kind: "agent" | "panel" | "term"; x: number; y: number }[]; frameId: string } | null;
+  lastGather: { board: string; items: { id: string; kind: "agent" | "panel" | "term" | "md" | "web"; x: number; y: number }[]; frameId: string } | null;
   undoGather: () => void;
   /** Frame a board rect as a "Group N" region; returns its label. */
   frameNodes: (x: number, y: number, w: number, h: number) => string;
@@ -713,18 +715,20 @@ export const useBoard = create<BoardState>((set, get) => ({
   agentSizes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-agentsizes") ?? "{}"); } catch { return {}; }
   })(),
-  resizeAgentCard: (id, w, h, persist = true) => {
+  resizeAgentCard: (id, w, h, persist = true, pos) => {
     const next = { ...get().agentSizes, [id]: { w, h } };
     if (persist) localStorage.setItem("cv-agentsizes", JSON.stringify(next));
-    set({ agentSizes: next });
+    set({ agentSizes: next, ...(pos ? { positions: { ...get().positions, [id]: pos } } : {}) });
+    if (persist && pos) client?.moveNode(id, pos.x, pos.y);
   },
   workspaceSizes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-workspacesizes") ?? "{}"); } catch { return {}; }
   })(),
-  resizeWorkspace: (id, w, h) => {
+  resizeWorkspace: (id, w, h, pos) => {
     const next = { ...get().workspaceSizes, [id]: { w: Math.max(520, w), h: Math.max(320, h) } };
     localStorage.setItem("cv-workspacesizes", JSON.stringify(next));
-    set({ workspaceSizes: next });
+    set({ workspaceSizes: next, ...(pos ? { positions: { ...get().positions, [id]: pos } } : {}) });
+    if (pos) client?.moveNode(id, pos.x, pos.y);
   },
   pendingPositions: {},
   approvals: {},
@@ -789,6 +793,13 @@ export const useBoard = create<BoardState>((set, get) => ({
               set({ pendingSpawnPos: null });
               get().moveNode(msg.agent_id, pSpawn.x, pSpawn.y);
             }
+            const namedSpawn = get().pendingSpawnPositions[msg.name];
+            if (namedSpawn) {
+              const pendingSpawnPositions = { ...get().pendingSpawnPositions };
+              delete pendingSpawnPositions[msg.name];
+              set({ pendingSpawnPositions });
+              get().moveNode(msg.agent_id, namedSpawn.x, namedSpawn.y);
+            }
             break;
           }
           case "workspace_created":
@@ -834,6 +845,12 @@ export const useBoard = create<BoardState>((set, get) => ({
               };
               const shapes = clone(get().shapes, "cv-shapes");
               const mdNodes = clone(get().mdNodes, "cv-mdnodes");
+              const mdNodeSizes = { ...get().mdNodeSizes };
+              for (const id of Object.keys(mdNodes[dst] ?? {})) {
+                const size = mdNodeSizes[`${src}:${id}`] ?? mdNodeSizes[id];
+                if (size) mdNodeSizes[`${dst}:${id}`] = { ...size };
+              }
+              localStorage.setItem("cv-mdnodesizes", JSON.stringify(mdNodeSizes));
               const panelNodes = clone(get().panelNodes, "cv-panelnodes");
               const webNodes = clone(get().webNodes, "cv-webnodes");
               // positions is a flat id → {x,y} map: copy the entries for the
@@ -847,7 +864,7 @@ export const useBoard = create<BoardState>((set, get) => ({
               ]) {
                 if (positions[id]) positions[id] = { ...positions[id] };
               }
-              set({ shapes, mdNodes, panelNodes, webNodes, positions });
+              set({ shapes, mdNodes, mdNodeSizes, panelNodes, webNodes, positions });
               get().setActiveBoard(dst);
               get().notify(`board duplicated — cards copied (agents stay on ${get().boards[src] ?? src})`);
             }
@@ -1429,6 +1446,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     client?.repoTree(dir);
   },
   repoRead: (dir, path) => {
+    set({ repoFile: null });
     client?.repoRead(dir, path);
   },
   vaultRead: (path) => client?.vaultRead(get().vaultDir, path),
@@ -1477,8 +1495,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   mdNodeSizes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-mdnodesizes") ?? "{}"); } catch { return {}; }
   })(),
-  resizeMdNode: (id, w, h, persist = true) => {
-    const next = { ...get().mdNodeSizes, [id]: { w: Math.max(260, w), h: Math.max(180, h) } };
+  resizeMdNode: (id, w, h, persist = true, boardId = get().activeBoard) => {
+    const next = { ...get().mdNodeSizes, [`${boardId}:${id}`]: { w: Math.max(260, w), h: Math.max(180, h) } };
     if (persist) localStorage.setItem("cv-mdnodesizes", JSON.stringify(next));
     set({ mdNodeSizes: next });
   },
@@ -1568,6 +1586,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   lastGather: null,
   pendingSpawnPos: null,
   setPendingSpawnPos: (p) => set({ pendingSpawnPos: p }),
+  pendingSpawnPositions: {},
+  setSpawnPositionForName: (name, pos) => set((s) => ({ pendingSpawnPositions: { ...s.pendingSpawnPositions, [name]: pos } })),
   setAgentChain: (workspaceId, chain) => {
     const ws = get().workspaces[workspaceId];
     if (!ws) return;
@@ -2219,7 +2239,8 @@ export const useBoard = create<BoardState>((set, get) => ({
       memory: "memory",
       "pull requests": "prs", prs: "prs", pr: "prs",
       issues: "issues", issue: "issues",
-      "dex tickets": "notes", tickets: "notes", ticket: "notes", notes: "notes",
+      "dex tickets": "tickets", tickets: "tickets", ticket: "tickets", notes: "notes",
+      "mission map": "usage",
       artifacts: "artifacts", artifact: "artifacts",
       obsidian: "vault", vault: "vault", files: "vault",
       settings: "settings", setting: "settings",
@@ -2249,7 +2270,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   setSpawnOpen: (v) => set(v ? { spawnOpen: v } : { spawnOpen: v, pendingSpawnPos: null }),
   focusSpawn: () => set({ spawnOpen: true }),
   gatherLoose: () => {
-    const { agents, edges, positions, activeBoard, shapes, panelNodes, termNodes, mdNodes, webNodes } = get();
+    const { agents, edges, positions, agentSizes, activeBoard, shapes, panelNodes, termNodes, mdNodes, webNodes } = get();
     const wired = new Set(Object.values(edges).flatMap((e) => [e.from, e.to]));
     // A card is "loose" when its center isn't already inside a group frame.
     const rects = Object.values(shapes[activeBoard] ?? {}).filter(
@@ -2275,7 +2296,8 @@ export const useBoard = create<BoardState>((set, get) => ({
         !wired.has(a.id) &&
         !(p && positions[a.id] && inside(p.x + 180, p.y + 110))
       ) {
-        loose.push({ id: a.id, x: p?.x ?? 0, y: p?.y ?? 0, w: 460, h: 240, move: (id, x, y) => get().moveNode(id, x, y) });
+        const size = agentSizes[a.id];
+        loose.push({ id: a.id, x: p?.x ?? 0, y: p?.y ?? 0, w: size?.w ?? 460, h: size?.h ?? 240, move: (id, x, y) => get().moveNode(id, x, y) });
       }
     }
     for (const [id, n] of Object.entries(panelNodes[activeBoard] ?? {})) {
@@ -2287,12 +2309,12 @@ export const useBoard = create<BoardState>((set, get) => ({
         loose.push({ id, x: n.x, y: n.y, w: n.w ?? 560, h: n.h ?? 320, move: (i, x, y) => get().moveTermNode(i, x, y) });
     }
     for (const [id] of Object.entries(mdNodes[activeBoard] ?? {})) {
-      const p = positions[id] ?? { x: 0, y: 0 };
+      const p = positions[id] ?? { x: 640, y: 160 };
       if (!inside(p.x + 170, p.y + 130))
         loose.push({ id, ...p, w: 340, h: 260, move: (i, x, y) => get().moveNode(i, x, y) });
     }
     for (const [id] of Object.entries(webNodes[activeBoard] ?? {})) {
-      const p = positions[id] ?? { x: 0, y: 0 };
+      const p = positions[id] ?? { x: 600, y: 120 };
       if (!inside(p.x + 260, p.y + 180))
         loose.push({ id, ...p, w: 520, h: 360, move: (i, x, y) => get().moveNode(i, x, y) });
     }
@@ -2304,7 +2326,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     // grouping puts them all back (Deska "put windows back").
     const snapshotItems = loose.map((l) => ({
       id: l.id,
-      kind: (l.id.startsWith("panel-") ? "panel" : l.id.startsWith("term-") ? "term" : "agent") as "agent" | "panel" | "term",
+      kind: (l.id.startsWith("panel-") ? "panel" : l.id.startsWith("term-") ? "term" : l.id.startsWith("md-") ? "md" : l.id.startsWith("web-") ? "web" : "agent") as "agent" | "panel" | "term" | "md" | "web",
       x: l.x,
       y: l.y,
     }));

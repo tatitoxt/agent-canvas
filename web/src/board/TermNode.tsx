@@ -33,8 +33,8 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
-        background: "#0d0e10",
-        border: "1px solid rgba(255,255,255,0.08)",
+        background: "color-mix(in srgb, var(--cv-base) 94%, #0d0e10)",
+        border: "1px solid var(--cv-glass-edge)",
         boxShadow: selected
           ? "0 0 0 1.5px color-mix(in srgb, var(--cv-accent) 55%, transparent), var(--cv-shadow)"
           : "var(--cv-shadow)",

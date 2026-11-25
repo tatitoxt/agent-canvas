@@ -146,7 +146,7 @@ export function CommandPalette({
         group: "tasks",
         label: `task — ${n.text.slice(0, 48)}`,
         hint: n.col,
-      run: () => onNav("tickets"),
+      run: () => onNav("notes"),
       });
     }
     for (const entry of vaultEntries) {
