@@ -12,6 +12,21 @@ async function boot(page: import("@playwright/test").Page) {
   return { port, token, vault };
 }
 
+test("Tools opens as a dock and collapses to panel icons", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await expect(dock).toBeVisible();
+  await expect(dock.getByText("Board", { exact: true })).toBeVisible();
+  await dock.getByRole("button", { name: "Collapse Tools panel" }).click();
+  await expect(dock.getByRole("button", { name: "Inbox" })).toBeVisible();
+  await expect(dock.getByRole("button", { name: "Expand Tools panel" })).toBeVisible();
+  await dock.getByRole("button", { name: "Expand Tools panel" }).click();
+  await expect(dock.getByText("Board", { exact: true })).toBeVisible();
+  await dock.getByRole("button", { name: "Close Tools panel" }).click();
+  await expect(dock).toBeHidden();
+});
+
 test("double-click empty canvas opens the spawn chooser (spawn-at-click)", async ({ page }) => {
   await boot(page);
   await page.locator(".react-flow__pane").first().dblclick({ position: { x: 400, y: 300 } });

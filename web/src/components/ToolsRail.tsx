@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "./icons";
 import { TeamBuilder } from "./TeamBuilder";
 import { WebLauncher } from "./WebLauncher";
@@ -85,12 +86,19 @@ export function ToolsMenu({
   actions: ToolsMenuActions;
 }) {
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const [sub, setSub] = useState<"ws" | "shape" | null>(null);
   const [teamOpen, setTeamOpen] = useState(false);
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [wsName, setWsName] = useState("");
   const [wsRepo, setWsRepo] = useState("");
   const wrap = useRef<HTMLDivElement>(null);
+  const dock = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setPinned(localStorage.getItem("cv-tools-pinned") === "true");
+  }, []);
 
   const activeBoard = useBoard((s) => s.activeBoard);
   const spawnOrchestrator = useBoard((s) => s.spawnOrchestrator);
@@ -105,11 +113,14 @@ export function ToolsMenu({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (!wrap.current?.contains(target) && !dock.current?.contains(target) && !pinned) setOpen(false);
     };
     window.addEventListener("mousedown", onDown);
     return () => window.removeEventListener("mousedown", onDown);
-  }, [open]);
+  }, [open, pinned]);
+
+  const dismiss = () => { if (!pinned) setOpen(false); };
 
   const item = (icon: string, label: string, onClick: () => void, hint?: string, on?: boolean) => (
     <button
@@ -146,23 +157,30 @@ export function ToolsMenu({
       >
         <Icon name="tools" size={15} color={open ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
       </button>
-      {open && (
+      {open && createPortal(
         <div
-          className="cv-menu cv-menu-scroll"
+          ref={dock}
+          className="cv-menu"
+          role="dialog"
+          aria-label="Tools panel"
           style={{
-            position: "absolute",
-            top: "calc(100% + 8px)",
-            right: 0,
-            width: 236,
-            maxHeight: "72vh",
-            overflowY: "auto",
-            padding: "6px 6px 8px",
-            zIndex: 40,
+            position: "fixed", top: 76, right: 14, bottom: 18,
+            width: collapsed ? 54 : 292, maxWidth: "calc(100vw - 28px)",
+            display: "flex", flexDirection: "column", overflow: "hidden",
+            zIndex: 70, transition: "width 180ms ease",
           }}
         >
+          <header style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 48, padding: collapsed ? "0 10px" : "0 14px", borderBottom: "1px solid var(--cv-glass-edge)" }}>
+            {!collapsed && <strong style={{ flex: 1, fontSize: 13, fontWeight: 650 }}>Tools</strong>}
+            <button className="glass-pill" title={pinned ? "Unpin Tools panel" : "Pin Tools panel"} aria-label={pinned ? "Unpin Tools panel" : "Pin Tools panel"} onClick={() => { const next = !pinned; setPinned(next); localStorage.setItem("cv-tools-pinned", String(next)); }} style={{ width: 28, height: 28, display: "grid", placeItems: "center", color: pinned ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}><Icon name="pin" size={14} /></button>
+            <button className="glass-pill" title={collapsed ? "Expand Tools panel" : "Collapse Tools panel"} aria-label={collapsed ? "Expand Tools panel" : "Collapse Tools panel"} onClick={() => setCollapsed((v) => !v)} style={{ width: 28, height: 28, display: "grid", placeItems: "center" }}><Icon name={collapsed ? "expand" : "collapse"} size={14} /></button>
+            {!pinned && <button className="glass-pill" title="Close Tools panel" aria-label="Close Tools panel" onClick={() => setOpen(false)} style={{ width: 28, height: 28, display: "grid", placeItems: "center" }}><Icon name="x" size={14} /></button>}
+          </header>
+          <div className="cv-menu-scroll" style={{ flex: 1, overflowY: "auto", padding: collapsed ? "6px 5px" : "6px 6px 10px" }}>
+          {!collapsed && <>
           <div style={sectionLabel}>Board</div>
-          {item("automations", "New orchestrator", () => { spawnOrchestrator(); setOpen(false); }, "wire consoles, command all")}
-          {item("accounts", "Team builder", () => { setTeamOpen(true); setOpen(false); }, "roles × one CLI")}
+          {item("automations", "New orchestrator", () => { spawnOrchestrator(); dismiss(); }, "wire consoles, command all")}
+          {item("accounts", "Team builder", () => { setTeamOpen(true); dismiss(); }, "roles × one CLI")}
           {item("shape", "Add shape", () => setSub((s) => (s === "shape" ? null : "shape")), "whiteboard")}
           {sub === "shape" && (
             <div style={{ display: "flex", gap: 6, padding: "4px 10px 6px" }}>
@@ -172,7 +190,7 @@ export function ToolsMenu({
                   className="glass-pill"
                   style={{ ...rowBtn, width: "auto", padding: "5px 10px", justifyContent: "center", fontSize: 12 }}
                   title={k}
-                  onClick={() => { addShape(k); setSub(null); setOpen(false); }}
+                  onClick={() => { addShape(k); setSub(null); dismiss(); }}
                 >
                   {{ rect: "▢", ellipse: "◯", diamond: "◇", sticky: "▤" }[k]}
                 </button>
@@ -187,35 +205,39 @@ export function ToolsMenu({
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && wsName.trim() && wsRepo.trim()) {
                     createWorkspace(wsName.trim(), wsRepo.trim());
-                    setSub(null); setOpen(false); setWsName(""); setWsRepo("");
+                    setSub(null); dismiss(); setWsName(""); setWsRepo("");
                   }
                 }} />
             </div>
           )}
-          {item("web", "Open a page", () => { setLauncherOpen(true); setOpen(false); }, "web nodes on canvas")}
+          {item("web", "Open a page", () => { setLauncherOpen(true); dismiss(); }, "web nodes on canvas")}
           {item("pause", "Pause all", () => pauseAll(activeBoard), "SIGSTOP every agent")}
           {item("play", "Resume all", () => resumeAll(activeBoard))}
-          {item("gather", "Gather loose windows", () => { gatherLoose(); setOpen(false); }, "into a group")}
+          {item("gather", "Gather loose windows", () => { gatherLoose(); dismiss(); }, "into a group")}
           {item("eye", "Panel summaries", () => togglePanelSummaries(), summaries ? "on" : "off", summaries)}
           <div style={sectionLabel}>Capture</div>
-          {item("draw", "Pencil markups", () => { actions.onDraw(); setOpen(false); }, actions.drawOn ? "on" : "", actions.drawOn)}
-          {item("region", "Region shot", () => { actions.onRegion(); setOpen(false); }, "drag → PNG")}
-          {item("shot", "Canvas shot", () => { actions.onShot(); setOpen(false); }, "⌘⇧S")}
-          {item("digest", "Session digest", () => { actions.onDigest(); setOpen(false); }, "lose nothing")}
-          {item("studio", "Studio doc", () => { actions.onStudio(); setOpen(false); }, "repo → dossier")}
+          {item("draw", "Pencil markups", () => { actions.onDraw(); dismiss(); }, actions.drawOn ? "on" : "", actions.drawOn)}
+          {item("region", "Region shot", () => { actions.onRegion(); dismiss(); }, "drag → PNG")}
+          {item("shot", "Canvas shot", () => { actions.onShot(); dismiss(); }, "⌘⇧S")}
+          {item("digest", "Session digest", () => { actions.onDigest(); dismiss(); }, "lose nothing")}
+          {item("studio", "Studio doc", () => { actions.onStudio(); dismiss(); }, "repo → dossier")}
           <div style={sectionLabel}>Panels</div>
           {PANEL_ITEMS.map((it) => (
             <div key={it.key} style={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <div style={{ flex: 1 }}>{item(it.icon, it.label, () => { onSelect(it.key); setOpen(false); }, "hint" in it ? it.hint : undefined, active === it.key)}</div>
+              <div style={{ flex: 1 }}>{item(it.icon, it.label, () => { onSelect(it.key); dismiss(); }, "hint" in it ? it.hint : undefined, active === it.key)}</div>
               <button
                 title={`Add ${it.label} to canvas`}
                 aria-label={`Add ${it.label} to canvas`}
-                onClick={() => { actions.onAddToBoard?.(it.key); setOpen(false); }}
+                onClick={() => { actions.onAddToBoard?.(it.key); dismiss(); }}
                 style={{ border: "none", background: "transparent", color: "var(--cv-ink-faint)", borderRadius: 7, cursor: "pointer", padding: "5px 7px", fontSize: 12 }}
               >+</button>
             </div>
           ))}
-        </div>
+          </>}
+          {collapsed && PANEL_ITEMS.map((it) => <button key={it.key} title={it.label} aria-label={it.label} onClick={() => { onSelect(it.key); dismiss(); }} style={{ ...rowBtn, justifyContent: "center", padding: "9px 0", color: active === it.key ? "var(--cv-accent)" : "var(--cv-ink)" }}><Icon name={it.icon} size={16} /></button>)}
+          </div>
+        </div>,
+        document.body,
       )}
       {teamOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60 }}>
