@@ -96,7 +96,10 @@ export function Topbar({
   const delegated = boardEdges.filter((e) => e.state === "delegated").length;
   const waiting = liveAgents.filter((a) => a.status === "waiting").length;
   const blockedN = liveAgents.filter((a) => a.status === "blocked").length;
-  const notifCount = Object.keys(approvals).length + waiting + blockedN;
+  const boardApprovals = Object.keys(approvals).filter(
+    (agentId) => agents[agentId] && (agents[agentId].board_id ?? "main") === activeBoard,
+  ).length;
+  const notifCount = boardApprovals + waiting + blockedN;
 
   const shapes = useBoard((s) => s.shapes);
   const positions = useBoard((s) => s.positions);

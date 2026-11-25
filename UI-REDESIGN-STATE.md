@@ -183,4 +183,7 @@ REMAINING LEVERS if still slow:
 - [x] Validación visual y automatizada de tarjetas: captura revisada; E2E comprueba nombre, estado, CLI, jerarquía de la cabecera y ausencia de solapamientos; build, typecheck, 23/23 unit tests, 32/32 E2E y `git diff --check` pasan.
 - [x] Panels switcher actualizado para compartir la colocación real de agentes sin posición, el orden de Terminal N y el tamaño dinámico de workspaces. E2E valida apertura, fila de terminal y navegación a Mission Map.
 - [x] Validación tras alinear Panels: 26/26 unit tests, typecheck, build, 32/32 E2E y `git diff --check`.
+- [x] Badge de Inbox/notificaciones: aprobaciones ahora se cuentan solo para agentes del board activo, igual que waiting y blocked; cambiar de Space no arrastra approvals de otros boards. Validación: typecheck, 26/26 unit tests y 32/32 E2E.
+- [x] Build de producción y `git diff --check` pasan tras el ajuste del badge.
+- [ ] Publicar este ajuste al PR #47; mantener el PR abierto y sin merge.
 - [ ] Siguiente lote: seguir auditando densidad y alineación de paneles/chrome contra la referencia Deska; mantener PR #47 abierto y sin merge.
