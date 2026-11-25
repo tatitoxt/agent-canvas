@@ -352,6 +352,9 @@ pub enum ServerMsg {
         /// The board repo's git remote (https-normalized) — powers the
         /// GitHub shortcuts in the web UI; None when there is no origin.
         repo_url: Option<String>,
+        /// Detected account/model per CLI, best-effort from the CLI's own
+        /// config files — `unknown` fields are simply absent.
+        cli_identities: std::collections::HashMap<String, CliIdentity>,
     },
     /// A named account was registered.
     AccountCreated { account_id: String, cli: String, label: String, env: Option<String> },
@@ -417,6 +420,17 @@ pub struct VaultHit {
     pub line: u32,
     /// Trimmed line text (capped).
     pub text: String,
+}
+
+/// What the daemon could detect about a CLI's local account/setup from
+/// its own config files. Every field is best-effort: absent means
+/// unknown, never guessed.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CliIdentity {
+    pub account: Option<String>,
+    pub model: Option<String>,
+    /// Which file the detection came from (displayed for trust).
+    pub source: Option<String>,
 }
 
 /// An autopilot loop in a snapshot.

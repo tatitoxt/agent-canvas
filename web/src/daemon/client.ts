@@ -107,6 +107,7 @@ export type ServerMsg =
     notes?: SnapshotNote[];
     artifacts?: SnapshotArtifact[];
       repo_url?: string | null;
+      cli_identities?: Record<string, { account?: string | null; model?: string | null; source?: string | null }>;
     };
 
 export type SnapshotWorkspace = {
