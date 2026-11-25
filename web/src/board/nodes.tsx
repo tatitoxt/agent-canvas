@@ -1,5 +1,5 @@
 import { Handle, Position, NodeResizer, useReactFlow, type NodeProps, type Node } from "@xyflow/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CliMark } from "../components/CliMark";
 import { Icon } from "../components/icons";
 import { useBoard } from "../store/board";
@@ -164,6 +164,14 @@ export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>
   const summaries = useBoard((s) => s.panelSummaries);
   const customSize = useBoard((s) => s.agentSizes[data.id ?? id]);
   const [collapsed, setCollapsed] = useState(false);
+  const [steeringText, setSteeringText] = useState("");
+  const [steeringState, setSteeringState] = useState<"idle" | "sent">("idle");
+  const connected = useBoard((s) => s.connected);
+  const agentStatus = useBoard((s) => data.id ? s.agents[data.id]?.status : undefined);
+  const liveStatus = agentStatus ?? (data.status === "done" ? "exited" : data.status);
+  const canSteer = connected && Boolean(data.id) && liveStatus !== "exited" && liveStatus !== "done";
+  const steeringTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(steeringTimer.current), []);
   const statusColor = STATUS_COLOR[data.status];
   const launchTerminal = () => {
     if (data.id) useBoard.getState().requestTerm(data.id, data.name);
@@ -462,6 +470,96 @@ export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>
         </div>
       )}
       {summaries && data.id && <MiniTerm agentId={data.id} />}
+      {data.id && (
+        <form
+          data-testid="agent-steering"
+          className="nodrag"
+          aria-label={`Send instruction to ${termTitle}`}
+          onClick={(e) => e.stopPropagation()}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const message = steeringText.trim();
+            if (!message || !canSteer) return;
+            useBoard.getState().sendInput(data.id!, new TextEncoder().encode(`${message}\n`));
+            setSteeringText("");
+            setSteeringState("sent");
+            window.clearTimeout(steeringTimer.current);
+            steeringTimer.current = window.setTimeout(() => setSteeringState("idle"), 1800);
+          }}
+          style={{
+            display: "flex",
+            alignItems: "stretch",
+            gap: 6,
+            marginTop: 9,
+            padding: 5,
+            borderRadius: 9,
+            border: "1px solid var(--cv-glass-edge)",
+            background: "color-mix(in srgb, var(--cv-base) 76%, transparent)",
+          }}
+        >
+          <textarea
+            aria-label={`Instruction for ${termTitle}`}
+            data-testid="agent-steering-input"
+            className="nodrag nowheel"
+            rows={1}
+            value={steeringText}
+            disabled={!canSteer}
+            placeholder={canSteer ? "Send a direction…" : "Session ended"}
+            onPointerDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                e.currentTarget.form?.requestSubmit();
+              }
+            }}
+            onChange={(e) => {
+              setSteeringText(e.target.value);
+              setSteeringState("idle");
+              e.currentTarget.style.height = "auto";
+              e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 88)}px`;
+            }}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              minHeight: 30,
+              maxHeight: 88,
+              resize: "none",
+              border: 0,
+              outline: 0,
+              padding: "6px 7px",
+              color: "var(--cv-ink)",
+              background: "transparent",
+              font: "inherit",
+              fontSize: 11.5,
+              lineHeight: 1.4,
+            }}
+          />
+          <button
+            type="submit"
+            aria-label={`Send instruction to ${termTitle}`}
+            title={canSteer ? "Send instruction (Enter)" : "Session ended"}
+            disabled={!canSteer || !steeringText.trim()}
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{
+              alignSelf: "flex-end",
+              minWidth: 30,
+              height: 30,
+              padding: "0 9px",
+              border: "1px solid color-mix(in srgb, var(--cv-accent) 42%, transparent)",
+              borderRadius: 8,
+              color: "var(--cv-accent)",
+              background: "color-mix(in srgb, var(--cv-accent) 10%, transparent)",
+              fontSize: 10.5,
+              fontWeight: 650,
+              cursor: canSteer && steeringText.trim() ? "pointer" : "default",
+              opacity: canSteer && steeringText.trim() ? 1 : 0.48,
+            }}
+          >
+            {steeringState === "sent" ? "Sent" : "Send"}
+          </button>
+        </form>
+      )}
       {data.pendingApproval && (
         <div
           className="nodrag"

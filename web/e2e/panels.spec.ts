@@ -20,6 +20,7 @@ test("offline demo mounts without a React update loop", async ({ page }) => {
   await expect(card.getByTestId("agent-card-title")).toHaveText("Terminal 1");
   await expect(card.getByTestId("agent-card-status")).toContainText("running");
   await expect(card.getByTestId("agent-card-cli")).toContainText("Claude Code");
+  await expect(card.getByTestId("agent-steering-input")).toHaveCount(0);
   const identity = await card.getByTestId("agent-card-identity").boundingBox();
   const meta = await card.getByTestId("agent-card-meta").boundingBox();
   expect(meta!.y).toBeGreaterThan(identity!.y + identity!.height - 1);

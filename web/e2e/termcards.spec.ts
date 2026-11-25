@@ -76,6 +76,26 @@ test("agent card terminal preview emphasizes the latest visible row", async ({ p
   await expect(outputRow.locator("span").filter({ hasText: "preview-latest-row" })).toHaveCSS("font-weight", "700");
 });
 
+test("agent card sends inline steering to the live PTY and preserves Shift+Enter newlines", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  const card = page.locator(".agent-card").first();
+  await expect(card).toBeVisible({ timeout: 8_000 });
+  const input = card.getByTestId("agent-steering-input");
+  await expect(input).toBeEnabled();
+  await input.fill("printf 'inline-steering-ok\\n'");
+  await input.press("Enter");
+  await expect(input).toHaveValue("");
+  await expect(card.getByRole("button", { name: "Send instruction to Terminal 1" })).toContainText("Sent");
+  await expect(card.getByTestId("agent-terminal-preview")).toContainText("inline-steering-ok", { timeout: 8_000 });
+
+  await input.fill("printf 'shift");
+  await input.press("Shift+Enter");
+  await input.type("-newline-ok\\n'");
+  await input.press("Enter");
+  await expect(card.getByTestId("agent-terminal-preview")).toContainText("shift-newline-ok", { timeout: 8_000 });
+});
+
 test("pop out creates a canvas term card; put back returns it to the drawer", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
