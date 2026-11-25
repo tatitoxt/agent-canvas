@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
@@ -294,6 +294,31 @@ test("Add Obsidian to canvas closes Tools and mounts the live vault explorer", a
   await expect(vaultPanel.getByText("Vault Explorer")).toBeVisible();
   await expect(page.locator(".react-flow__node-panel").first()).toHaveCSS("width", /460px/);
   expect(vault).toContain("canvas-e2e-vault-");
+});
+
+test("pinned Obsidian note edits and saves back to the real vault", async ({ page }) => {
+  const { vault } = await boot(page);
+  await page.locator("button[title='Files — open your Obsidian vault']").click();
+  const explorer = page.locator(".react-flow__node-panel [data-panel='vault']").first();
+  await expect(explorer).toBeVisible();
+  await explorer.locator("button.vault-file").filter({ hasText: "Canvas E2E note" }).click();
+  const reader = page.locator(".react-flow__node-panel [data-panel='vault']").filter({ hasText: "Canvas E2E note" }).last();
+  await expect(reader.getByRole("button", { name: "Add to Board" })).toBeVisible();
+  await reader.getByRole("button", { name: "Add to Board" }).click();
+  const note = page.locator(".react-flow__node[data-id^='md-']");
+  await expect(note).toBeVisible();
+  await note.getByRole("button", { name: "Edit Canvas E2E note.md" }).click();
+  const editor = note.getByRole("textbox", { name: "Edit Canvas E2E note.md" });
+  await expect(editor).toContainText("Original vault text.");
+  await editor.fill("# Local draft\n\nThis draft must not overwrite Obsidian.\n");
+  writeFileSync(resolve(vault, "Canvas E2E note.md"), "# External edit\n\nChanged in Obsidian.\n");
+  await expect(note.getByRole("status")).toHaveText("CHANGED IN OBSIDIAN", { timeout: 8_000 });
+  await expect(note.getByRole("button", { name: "Save" })).toBeDisabled();
+  await note.getByRole("button", { name: "Reload" }).click();
+  await editor.fill("# Canvas E2E note\n\nSaved from the live board window.\n");
+  await note.getByRole("button", { name: "Save" }).click();
+  await expect(note.getByText("Saved from the live board window.")).toBeVisible();
+  await expect.poll(() => readFileSync(resolve(vault, "Canvas E2E note.md"), "utf8")).toContain("Saved from the live board window.");
 });
 
 test("Add Artifacts to canvas closes Tools and mounts the interactive artifact library", async ({ page }) => {

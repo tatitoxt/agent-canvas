@@ -16,6 +16,7 @@ export async function startStack() {
   writeFileSync(join(repo, "README.md"), "# e2e scratch repo\n");
   execSync("git add -A && git commit -qm init", { cwd: repo });
   const vault = mkdtempSync(join(tmpdir(), "canvas-e2e-vault-"));
+  writeFileSync(join(vault, "Canvas E2E note.md"), "# Canvas E2E note\n\nOriginal vault text.\n");
   // The daemon sandboxes vault writes to allowedRoots (repo + ~/.config/canvas/allowed-roots);
   // the throwaway vault lives outside the repo, so whitelist it for the test run.
   const { homedir } = await import("node:os");
