@@ -85,7 +85,7 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
             borderRadius: 6,
             border: "none",
             background: "transparent",
-            color: "var(--cv-ink-faint)",
+            color: "var(--cv-ink)",
             fontSize: 12,
             cursor: "pointer",
             display: "grid",
@@ -93,31 +93,6 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
           }}
         >
           {n.collapsed ? "▸" : "–"}
-        </button>
-        <button
-          className="nodrag"
-          title="Dock to the right edge of the view"
-          onClick={() => {
-            const { screenToFlowPosition } = rf;
-            // Flow-space right edge of the view; the card's left edge is that
-            // minus its own (flow-unit) width — zoom-independent.
-            const edge = screenToFlowPosition({ x: window.innerWidth - 16, y: 84 });
-            useBoard.getState().movePanelNode(id, edge.x - n.w, edge.y);
-          }}
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 6,
-            border: "none",
-            background: "transparent",
-            color: "var(--cv-ink-faint)",
-            fontSize: 11,
-            cursor: "pointer",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          ⬈
         </button>
         <button
           className="nodrag"
@@ -139,7 +114,7 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
             borderRadius: 6,
             border: "none",
             background: "transparent",
-            color: "var(--cv-ink-faint)",
+            color: "var(--cv-ink)",
             fontSize: 11,
             cursor: "pointer",
             display: "grid",
@@ -161,7 +136,7 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
             borderRadius: 6,
             border: "none",
             background: "transparent",
-            color: "var(--cv-ink-faint)",
+            color: "var(--cv-ink)",
             fontSize: 13,
             cursor: "pointer",
             display: "grid",
