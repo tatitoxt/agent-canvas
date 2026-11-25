@@ -136,5 +136,6 @@ REMAINING LEVERS if still slow:
 - [x] Título de terminal por rol: `reviewer-1` → `Review 1`, `builder_2` → `Builder 2`, `tester-4` → `Test 4`; mantiene nombres custom y numeración para `Terminal` genérico. En validación local: 8 unit tests, 6 E2E terminal, typecheck y build.
 - [x] Add to Board de Obsidian verificado en E2E: cierra Tools y monta Vault Explorer en vivo como ventana del canvas. Add Inbox también tiene cobertura de cierre + montaje.
 - [x] Add to Board de Artifacts verificado en E2E: cierra Tools y monta la biblioteca con su control `+ new` activo.
-- [x] Tools: corregido el cierre prematuro del submenú compartido; New workspace y Add shape ahora mantienen sus opciones abiertas. E2E cubre ambas rutas.
+- [x] Tools: corregido el cierre prematuro del submenú compartido; New workspace y Add shape ahora mantienen sus opciones abiertas. Las formas nuevas se ubican dentro del viewport visible. E2E cubre ambas rutas.
+- [x] Explorer: el E2E crea un workspace, agrega la ventana al canvas, lista y abre README.md. La prueba corre al final porque crea estado compartido en el daemon del harness.
 - [ ] Próximo orden sugerido: revisar el file explorer flotante; después seguir con los pendientes visuales de topbar y chrome. Mantener cada lote pequeño y verificable en PR #47, sin merge.

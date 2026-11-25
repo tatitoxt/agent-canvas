@@ -2035,15 +2035,23 @@ export const useBoard = create<BoardState>((set, get) => ({
   })(),
 
   addShape: (kind) => {
-    const { activeBoard, shapes } = get();
+    const { activeBoard, shapes, viewportRect } = get();
     const id = `shape-${Math.random().toString(36).slice(2, 10)}`;
+    const w = kind === "sticky" ? 170 : 190;
+    const h = kind === "sticky" ? 150 : 120;
+    const x = viewportRect
+      ? Math.max(viewportRect.left, Math.min((viewportRect.left + viewportRect.right - w) / 2, viewportRect.right - w))
+      : 300 + Math.random() * 200;
+    const y = viewportRect
+      ? Math.max(viewportRect.top, Math.min((viewportRect.top + viewportRect.bottom - h) / 2, viewportRect.bottom - h))
+      : 200 + Math.random() * 140;
     const def = {
       id,
       kind,
-      x: 300 + Math.random() * 200,
-      y: 200 + Math.random() * 140,
-      w: kind === "sticky" ? 170 : 190,
-      h: kind === "sticky" ? 150 : 120,
+      x,
+      y,
+      w,
+      h,
       color: kind === "sticky" ? "#e0c04a" : "#e8e6e3",
       text: "",
     };
