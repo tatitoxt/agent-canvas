@@ -35,3 +35,12 @@
 - Archivo: `/Users/fausto/devin-relay.md` — la madre escribe ahí, Fausto dice "leé el relay"
 - Madre = session a46c5af5d6134e5a8f22eff849b96dd2, hija = 42f5459b7f654bd8ae31bdd7debfe7bd
 - Mensajes no-interactivos: `devin --cloud -r <url> -p "msg"` (async)
+
+## REFERENCIA DESKA REAL (screenshot 2026-11-24 22:14, enviado por Fausto)
+Fausto respondió la pregunta de la library con este screenshot — ES la respuesta:
+- **Tools panel (derecha)**: panel DOCKED oscuro, no flyout. Rows con ícono+label: Inbox, Source Control, Pull request, Explorer, Dex Tickets, Artifacts. Header "Tools" con íconos de pin/collapse. Botón + abajo. => La library de Canvas tiene que ser ESTO: un panel anclado al borde derecho con rows labelleadas, no menús flotantes hover.
+- **Spaces rail (izquierda)**: rail vertical delgado con íconos, badge numérico en el space activo (cuadrado con borde teal/verde), íconos de tools debajo, + para nuevo, avatar/ícono abajo. Canvas ya tiene esto aproximado — pulir.
+- **Topbar Deska**: logo+nombre, "This Mac", proyecto, branch master, "1 task" — luego derecha: Automations, Marketplace, iPhone, search, settings, bell, avatar.
+- **Cards**: flotan sobre el wallpaper real del desktop (el canvas ES transparente al escritorio). Terminal cards muestran contenido real de shell. Headers minimalistas: título chico centrado/izquierda, chrome casi invisible.
+- **Inbox panel**: muestra "0 agents running", "Needs you", items con status Failed en rojo, botones Details/Dismiss — bandeja de atención.
+- Wallpaper visible => la ambientación con grano/luz que hicimos es la aproximación correcta para Canvas (que no es transparente al desktop).
