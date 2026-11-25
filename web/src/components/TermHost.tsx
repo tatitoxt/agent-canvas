@@ -30,7 +30,7 @@ function syncMirroredSize(agentId: string) {
     cols = Math.min(cols, d.cols);
     rows = Math.min(rows, d.rows);
   }
-  if (!isFinite(cols) || !isFinite(rows) || cols < 2 || rows < 2) return;
+  if (!isFinite(cols) || !isFinite(rows) || cols < 1 || rows < 1) return;
   for (const m of set) {
     if (m.term.cols !== cols || m.term.rows !== rows) m.term.resize(cols, rows);
   }
