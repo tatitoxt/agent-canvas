@@ -45,7 +45,7 @@ import { CardMenu } from "./components/CardMenu";
 import { isTauri } from "./daemon/tauriClient";
 import { PaneMenu } from "./components/PaneMenu";
 import { TermNode } from "./board/TermNode";
-import { useBoard } from "./store/board";
+import { getAgentSpawnPositions, useBoard } from "./store/board";
 import type { AgentStatus, BoardNodeData } from "./board/types";
 
 const nodeTypes = {
@@ -135,14 +135,13 @@ function ViewportTracker() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
   useEffect(() => {
-    useBoard.setState({
-      viewportRect: {
-        left: -vpX / zoom,
-        top: -vpY / zoom,
-        right: -vpX / zoom + winSize.w / zoom,
-        bottom: -vpY / zoom + winSize.h / zoom,
-      },
-    });
+    const viewportRect = {
+      left: -vpX / zoom,
+      top: -vpY / zoom,
+      right: -vpX / zoom + winSize.w / zoom,
+      bottom: -vpY / zoom + winSize.h / zoom,
+    };
+    useBoard.setState({ viewportRect });
   }, [vpX, vpY, zoom, winSize]);
   useEffect(() => {
     useBoard.setState({ zoomPct: Math.round(zoom * 100) });
@@ -478,13 +477,26 @@ function Board() {
         .filter((e) => e.state === "delegated")
         .flatMap((e) => [e.from, e.to]),
     );
-    let i = 0;
-    const live = Object.values(agents)
+    const boardAgents = Object.values(agents)
       .filter((a) => (a.board_id ?? "main") === activeBoard)
+      .sort((a, b) => (a.seenAt ?? 0) - (b.seenAt ?? 0));
+    const looseAgents = boardAgents.filter((a) => !a.workspace_id);
+    const explicitLoose = looseAgents.filter((a) => positions[a.id]);
+    const missingLoose = looseAgents.filter((a) => !positions[a.id]);
+    const looseFallbacks = getAgentSpawnPositions(
+      missingLoose.length,
+      useBoard.getState().viewportRect,
+      explicitLoose.map((a) => ({ ...positions[a.id], w: agentSizes[a.id]?.w ?? 460, h: agentSizes[a.id]?.h ?? 260 })),
+    );
+    const looseFallbackById = new Map(missingLoose.map((a, index) => [a.id, looseFallbacks[index]]));
+    let i = 0;
+    const live = boardAgents
       .map((a) => {
       const ws = a.workspace_id ? workspaces[a.workspace_id] : undefined;
       const position = positions[a.id] ??
-        (ws ? { x: 60 + (i % 3) * 300, y: 80 + Math.floor(i / 3) * 190 } : { x: 1000 + (i % 2) * 500, y: 60 + Math.floor(i / 2) * 300 });
+        (ws
+          ? { x: 24 + (i % 2) * 484, y: 64 + Math.floor(i / 2) * 284 }
+          : (positions[a.id] ?? looseFallbackById.get(a.id) ?? { x: 24, y: 64 }));
       i += 1;
       const csz = agentSizes[a.id];
       return {
@@ -617,9 +629,7 @@ function Board() {
         else nodeSigCache.current.set(b.id, { sig, node: b });
         const p = byId.get(b.id);
         if (!p) return base;
-        if (p.dragging) {
-          return { ...base, selected: p.selected, dragging: true, position: p.position };
-        }
+        if (p.dragging) return { ...base, selected: p.selected, dragging: true, position: p.position };
         // Reuse the previous node only while its geometry still matches the
         // store-derived node. A maximize/restore can update the store before
         // React Flow has flushed its measured position and size; blindly

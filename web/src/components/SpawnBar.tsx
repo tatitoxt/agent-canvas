@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useBoard, PERMISSION_LEVELS } from "../store/board";
+import { getAgentSpawnPositions, useBoard, PERMISSION_LEVELS } from "../store/board";
 import { CliMark } from "./CliMark";
 import { cliMeta } from "../board/nodes";
 
@@ -263,32 +263,34 @@ export function SpawnBar() {
                 disabled={!canSpawn}
                 onClick={() => {
                   const cmd = choice === "custom" ? command.trim() : choice;
-                  const origin = useBoard.getState().pendingSpawnPos;
-                  const cols = Math.ceil(Math.sqrt(count));
-                  const cardW = 460;
-                  const gap = 28;
-                  if (origin && count > 1) {
-                    useBoard.getState().setPendingSpawnPos(null);
-                    for (let i = 0; i < count; i++) {
-                      const p = { x: origin.x + (i % cols) * (cardW + gap), y: origin.y + Math.floor(i / cols) * 290 };
-                      const name = `${cmd}-p${i + 1}`;
-                      useBoard.getState().setSpawnPositionForName(name, p);
-                      spawn(
-                        name,
-                        cmd,
-                        undefined,
-                        permission,
-                        undefined,
-                        `You are worker ${i + 1} of ${count} on a parallel task — each worker has its own worktree, work independently.`,
-                      );
-                    }
-                    setCount(1);
-                    setOpen(false);
-                    return;
+                  const st = useBoard.getState();
+                  const origin = st.pendingSpawnPos;
+                  st.setPendingSpawnPos(null);
+                  const existing = Object.values(st.agents).filter((a) => (a.board_id ?? "main") === st.activeBoard);
+                  let placements: Array<{ x: number; y: number }>;
+                  if (wsId) {
+                    const wsAgents = existing.filter((a) => a.workspace_id === wsId);
+                    const row = wsAgents.length;
+                    const wsSize = st.workspaceSizes[wsId] ?? { w: 900, h: 540 };
+                    st.resizeWorkspace(wsId, Math.max(wsSize.w, 520), Math.max(wsSize.h, 100 + (row + count) * 284));
+                    placements = Array.from({ length: count }, (_, i) => ({ x: 24, y: 64 + (row + i) * 284 }));
+                  } else {
+                    const explicit = existing.filter((a) => !a.workspace_id && st.positions[a.id]);
+                    const missing = existing.filter((a) => !a.workspace_id && !st.positions[a.id]);
+                    const fallback = getAgentSpawnPositions(missing.length, st.viewportRect, explicit.map((a) => ({ ...st.positions[a.id], w: st.agentSizes[a.id]?.w ?? 460, h: st.agentSizes[a.id]?.h ?? 260 })));
+                    const occupied = [
+                      ...explicit.map((a) => ({ ...st.positions[a.id], w: st.agentSizes[a.id]?.w ?? 460, h: st.agentSizes[a.id]?.h ?? 260 })),
+                      ...fallback.map((p) => ({ ...p, w: 460, h: 260 })),
+                      ...Object.values(st.panelNodes[st.activeBoard] ?? {}).map((n) => ({ x: n.x, y: n.y, w: n.w, h: n.h })),
+                      ...Object.values(st.termNodes[st.activeBoard] ?? {}).map((n) => ({ x: n.x, y: n.y, w: n.w, h: n.h })),
+                    ];
+                    placements = getAgentSpawnPositions(count, st.viewportRect, occupied, { w: 460, h: 260 }, origin);
                   }
                   for (let i = 0; i < count; i++) {
+                    const name = count > 1 ? `${cmd}-p${i + 1}` : cmd;
+                    st.setSpawnPositionForName(name, placements[i]);
                     spawn(
-                      count > 1 ? `${cmd}-p${i + 1}` : cmd,
+                      name,
                       cmd,
                       wsId || undefined,
                       permission,

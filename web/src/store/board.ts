@@ -114,6 +114,53 @@ function newOutput(
     .slice(0, 160);
 }
 
+type CanvasPoint = { x: number; y: number };
+type CanvasRect = { x: number; y: number; w: number; h: number };
+
+/** Place new agents in the visible canvas, preferring open space near its center. */
+export function getAgentSpawnPositions(
+  count: number,
+  viewport: { left: number; top: number; right: number; bottom: number } | null,
+  occupied: CanvasRect[],
+  size = { w: 460, h: 260 },
+  origin?: CanvasPoint | null,
+): CanvasPoint[] {
+  const cols = Math.max(1, Math.floor((viewport ? viewport.right - viewport.left - 24 : 1120) / (size.w + 28)));
+  const stepX = size.w + 28;
+  const stepY = size.h + 28;
+  const area = viewport ?? { left: 0, top: 0, right: cols * stepX, bottom: 3 * stepY };
+  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, Math.max(min, max)));
+  const center = origin
+    ? { x: clamp(origin.x, area.left + 12, area.right - size.w - 12), y: clamp(origin.y, area.top + 12, area.bottom - size.h - 12) }
+    : {
+        x: clamp((area.left + area.right - size.w) / 2, area.left + 12, area.right - size.w - 12),
+        y: clamp((area.top + area.bottom - size.h) / 2, area.top + 12, area.bottom - size.h - 12),
+      };
+  const xSlots: number[] = [];
+  const ySlots: number[] = [];
+  for (let x = area.left + 12; x + size.w <= area.right - 12; x += stepX) xSlots.push(x);
+  for (let y = area.top + 12; y + size.h <= area.bottom - 12; y += stepY) ySlots.push(y);
+  const candidates = xSlots.flatMap((x) => ySlots.map((y) => ({ x, y })))
+    .sort((a, b) => Math.hypot(a.x - center.x, a.y - center.y) - Math.hypot(b.x - center.x, b.y - center.y));
+  const selected: CanvasPoint[] = [];
+  const fits = (p: CanvasPoint) => {
+    const overlapsExisting = occupied.some((r) => p.x < r.x + r.w + 18 && p.x + size.w + 18 > r.x && p.y < r.y + r.h + 18 && p.y + size.h + 18 > r.y);
+    const overlapsSelected = selected.some((r) => p.x < r.x + size.w + 18 && p.x + size.w + 18 > r.x && p.y < r.y + size.h + 18 && p.y + size.h + 18 > r.y);
+    return !overlapsExisting && !overlapsSelected;
+  };
+  for (const p of candidates) {
+    if (selected.length >= count) break;
+    if (fits(p)) selected.push(p);
+  }
+  // If the visible canvas is full, preserve non-overlap in a tidy continuation
+  // just below it. The visible cells are always returned first.
+  for (let i = 0; selected.length < count; i++) {
+    const p = { x: area.left + 12 + (i % cols) * stepX, y: area.bottom + 32 + Math.floor(i / cols) * stepY };
+    if (fits(p)) selected.push(p);
+  }
+  return selected;
+}
+
 /** Poll an agent's ring for a reply after writing `sent` to it; post
  * `← name: …` once output shows up (plus one settle pass for streaming). */
 function watchReply(
@@ -2319,7 +2366,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   setSpawnOpen: (v) => set(v ? { spawnOpen: v } : { spawnOpen: v, pendingSpawnPos: null }),
   focusSpawn: () => set({ spawnOpen: true }),
   gatherLoose: () => {
-    const { agents, edges, positions, agentSizes, activeBoard, shapes, panelNodes, termNodes, mdNodes, webNodes } = get();
+    const { agents, edges, positions, agentSizes, activeBoard, shapes, panelNodes, termNodes, mdNodes, webNodes, viewportRect } = get();
     const wired = new Set(Object.values(edges).flatMap((e) => [e.from, e.to]));
     // A card is "loose" when its center isn't already inside a group frame.
     const rects = Object.values(shapes[activeBoard] ?? {}).filter(
@@ -2328,15 +2375,25 @@ export const useBoard = create<BoardState>((set, get) => ({
     const inside = (x: number, y: number) =>
       rects.some((r) => x >= r.x && x <= r.x + r.w! && y >= r.y && y <= r.y + r.h!);
     const loose: Array<{ id: string; x: number; y: number; w: number; h: number; move: (id: string, x: number, y: number) => void }> = [];
-    // Agents never dragged have no positions entry — the canvas renders them
-    // on the fallback spawn grid; snapshot THAT spot, not the origin.
+    // Agents never dragged have no positions entry — snapshot the same
+    // visible fallback layout used by the canvas instead of an offscreen grid.
     const boardAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard);
     const fallbackPos = new Map<string, { x: number; y: number }>();
-    boardAgents.forEach((a, i) => {
+    const looseAgents = boardAgents.filter((a) => !a.workspace_id);
+    const explicitLoose = looseAgents.filter((a) => positions[a.id]);
+    const missingLoose = looseAgents.filter((a) => !positions[a.id]);
+    const fallbackLoose = getAgentSpawnPositions(
+      missingLoose.length,
+      viewportRect,
+      explicitLoose.map((a) => ({ ...positions[a.id], w: agentSizes[a.id]?.w ?? 460, h: agentSizes[a.id]?.h ?? 260 })),
+    );
+    const fallbackById = new Map(missingLoose.map((a, index) => [a.id, fallbackLoose[index]]));
+    let workspaceIndex = 0;
+    for (const a of boardAgents) {
       fallbackPos.set(a.id, a.workspace_id
-        ? { x: 60 + (i % 3) * 300, y: 80 + Math.floor(i / 3) * 190 }
-        : { x: 1000 + (i % 2) * 500, y: 60 + Math.floor(i / 2) * 300 });
-    });
+        ? { x: 24 + (workspaceIndex++ % 2) * 484, y: 64 + Math.floor((workspaceIndex - 1) / 2) * 284 }
+        : positions[a.id] ?? fallbackById.get(a.id) ?? { x: 24, y: 64 });
+    }
     for (const a of boardAgents) {
       const p = positions[a.id] ?? fallbackPos.get(a.id);
       if (
