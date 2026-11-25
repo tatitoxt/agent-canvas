@@ -138,6 +138,9 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const customSize = useBoard((s) => (data.id ? s.agentSizes[data.id] : undefined));
   const [collapsed, setCollapsed] = useState(false);
   const statusColor = STATUS_COLOR[data.status];
+  const launchTerminal = () => {
+    if (data.id) useBoard.getState().requestTerm(data.id, data.name);
+  };
   // "builder-1" reads as Terminal 1 · builder — the terminal number is the
   // identity, the role rides next to it (Fausto's naming spec).
   const roleMatch = data.name.match(/^(.*?)-(\d+)$/);
@@ -343,30 +346,45 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             opacity: selected ? 1 : undefined,
           }}
         >
-          <span
-            role="button"
+          <button
+            type="button"
+            className="nodrag"
             title="Open terminal"
-            style={{ cursor: "pointer", lineHeight: 1, display: "inline-flex" }}
-            onClick={(e) => { e.stopPropagation(); if (data.id) useBoard.getState().requestTerm(data.id, data.name); }}
+            style={{ cursor: "pointer", lineHeight: 1, display: "inline-flex", border: "none", padding: 0, background: "transparent" }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                launchTerminal();
+              }
+            }}
+            onClick={(e) => { e.stopPropagation(); launchTerminal(); }}
           >
             <Icon name="terminal" size={13} color="var(--cv-ink)" />
-          </span>
-          <span
-            role="button"
+          </button>
+          <button
+            type="button"
+            className="nodrag"
             title="collapse"
-            style={{ cursor: "pointer", lineHeight: 1 }}
+            style={{ cursor: "pointer", lineHeight: 1, border: "none", padding: 0, background: "transparent" }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }}
           >
             <Icon name="ph-min" size={12} color="var(--cv-ink)" />
-          </span>
-          <span
-            role="button"
+          </button>
+          <button
+            type="button"
+            className="nodrag"
             title="kill"
-            style={{ cursor: "pointer", lineHeight: 1, fontSize: 13 }}
+            style={{ cursor: "pointer", lineHeight: 1, fontSize: 13, border: "none", padding: 0, background: "transparent" }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); if (data.id) useBoard.getState().kill(data.id); }}
           >
             <Icon name="ph-x" size={13} color="var(--cv-ink)" />
-          </span>
+          </button>
         </span>
       </div>
       {/* Full-width section separator — Deska splits header from body

@@ -24,6 +24,16 @@ async function openDrawer(page: import("@playwright/test").Page) {
   await page.waitForTimeout(900);
 }
 
+test("agent card terminal control is keyboard-operable", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  const openTerminal = page.getByRole("button", { name: "Open terminal" }).last();
+  await expect(openTerminal).toBeVisible({ timeout: 5_000 });
+  await openTerminal.press("Enter");
+  await expect(page.locator(".terminal-drawer").first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".terminal-drawer .xterm").first()).toBeVisible({ timeout: 5_000 });
+});
+
 test("pop out creates a canvas term card; put back returns it to the drawer", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
