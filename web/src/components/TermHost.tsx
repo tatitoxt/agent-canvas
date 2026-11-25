@@ -9,6 +9,8 @@ import { useBoard } from "../store/board";
  * canvas terminal card (TermNode): mounts the emulator, replays the
  * scrollback buffer, pipes PTY bytes both ways, answers OSC color
  * queries, and keeps the PTY size in sync with the box. */
+const DECOR = { matchBackground: "#7a5a1e", matchOverviewRuler: "#e8b25a", activeMatchBackground: "#e8b25a", activeMatchColorOverviewRuler: "#ffffff" };
+
 export function TermHost({ agentId }: { agentId: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -105,12 +107,12 @@ export function TermHost({ agentId }: { agentId: string }) {
       placeholder="find in buffer"
       onChange={(e) => {
         setFindQ(e.target.value);
-        if (e.target.value) searchRef.current?.findNext(e.target.value);
+        if (e.target.value) searchRef.current?.findNext(e.target.value, { decorations: DECOR });
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
-          if (e.shiftKey) searchRef.current?.findPrevious(findQ);
-          else searchRef.current?.findNext(findQ);
+          if (e.shiftKey) searchRef.current?.findPrevious(findQ, { decorations: DECOR });
+          else searchRef.current?.findNext(findQ, { decorations: DECOR });
         }
         if (e.key === "Escape") {
           setFindOpen(false);
