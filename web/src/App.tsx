@@ -1028,6 +1028,7 @@ function Board() {
           setEdgeDetail(null);
           setWiring(null);
         }}
+        zoomOnDoubleClick={false}
         onDoubleClick={(e) => {
           // Deska-style: double-click empty canvas spawns an agent there.
           const t = e.target as HTMLElement;
