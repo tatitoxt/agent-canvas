@@ -50,11 +50,18 @@ test("Add to Board pins the active Obsidian note as a live canvas window", async
   const input = page.locator("input[placeholder='folder/note name']").first();
   await input.fill(name);
   await input.press("Enter");
+  await page.getByRole("button", { name: "Source" }).click();
+  const source = page.locator("textarea").last();
+  await source.fill(`# ${name}\n\n**Live formatted note** with [[Missing target]].`);
+  await page.getByRole("button", { name: /save to vault/ }).click();
   const add = page.locator("button", { hasText: "Add to Board" }).first();
   await expect(add).toBeVisible({ timeout: 8_000 });
   await add.click();
   await expect(page.locator(".react-flow__node-panel [data-panel='vault']")).toHaveCount(0, { timeout: 8_000 });
   await expect(page.locator(".react-flow__node-md").filter({ hasText: name })).toBeVisible({ timeout: 8_000 });
+  const noteWindow = page.locator(".react-flow__node-md").filter({ hasText: name });
+  await expect(noteWindow.locator("strong", { hasText: "Live formatted note" })).toBeVisible();
+  await expect(noteWindow.locator('a[title="Missing target (not created yet)"]')).toBeVisible();
 });
 
 test("panels mount as canvas nodes and close again", async ({ page }) => {

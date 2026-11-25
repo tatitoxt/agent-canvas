@@ -162,3 +162,8 @@ REMAINING LEVERS if still slow:
 - [x] Demo offline: el chequeo de geometría del cache se restringió a cards `panel-` y `term-`; E2E detectó y previene el loop de actualizaciones que aparecía al arrancar sin daemon.
 - [x] Validación completa tras aislar el chequeo geométrico: 30/30 E2E, 23 unit tests, typecheck, build y `git diff --check` pasan.
 - [ ] Próximo orden sugerido: auditar los demás controles/estados del chrome contra la captura de referencia y corregir discrepancias visibles/funcionales. Mantener lotes pequeños y verificables en PR #47, sin merge.
+
+## Obsidian en el canvas (2026-11-25)
+- [x] Las ventanas de notas fijadas al board ahora reutilizan el renderer Markdown del Vault real: headings, formato inline, tareas, embeds, imágenes locales, wikilinks resueltos/no resueltos y previews compatibles con el vault conectado. La ventana mantiene su lectura viva del archivo y resize, con marca LIVE VAULT y el icono oficial.
+- [x] E2E del flujo Add to Board guarda una nota con Markdown y comprueba formato y wikilink visible dentro de la ventana interactiva del canvas.
+- [x] Validación: 23/23 unit tests, 30/30 E2E, typecheck, build y `git diff --check`.

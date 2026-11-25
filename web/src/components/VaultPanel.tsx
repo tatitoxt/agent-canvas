@@ -36,7 +36,7 @@ const actionBtn: React.CSSProperties = {
  * Obsidian) and [md](url) links. */
 /** Resolve a [[wikilink]] name to a vault entry — Obsidian matches by
  * filename anywhere in the vault. */
-function resolveNotePath(entries: string[], name: string): string | null {
+export function resolveNotePath(entries: string[], name: string): string | null {
   return entries.find((e) =>
     e === name || e.endsWith(`/${name}`) || e === `${name}.md` || e.endsWith(`/${name}.md`) ||
     e.replace(/\.md$/, "") === name,
@@ -46,8 +46,9 @@ function resolveNotePath(entries: string[], name: string): string | null {
 /** A [[wikilink]] with Obsidian's hover page-preview: hovering ~400ms opens a
  * glass popover rendering the target note (fetched via vault_peek). Links to
  * notes that don't exist yet get Obsidian's dashed 'unresolved' underline. */
-function WikiLink({ name, shown, onLink }: { name: string; shown: string; onLink?: (name: string) => void }) {
-  const entries = useBoard((s) => s.vaultEntries);
+function WikiLink({ name, shown, onLink, entries: suppliedEntries }: { name: string; shown: string; onLink?: (name: string) => void; entries?: string[] }) {
+  const boardEntries = useBoard((s) => s.vaultEntries);
+  const entries = suppliedEntries ?? boardEntries;
   const path = resolveNotePath(entries, name.split("#")[0]);
   const text = useBoard((s) => (path ? s.mdContents[path] : undefined));
   const peek = useBoard((s) => s.vaultPeek);
@@ -103,7 +104,7 @@ function WikiLink({ name, shown, onLink }: { name: string; shown: string; onLink
   );
 }
 
-function mdInline(text: string, onLink?: (name: string) => void, onTag?: (tag: string) => void, fns?: Map<string, number>, scope = ""): React.ReactNode[] {
+function mdInline(text: string, onLink?: (name: string) => void, onTag?: (tag: string) => void, fns?: Map<string, number>, scope = "", entries?: string[], onOpenExternal?: (url: string) => void): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   const re = /(\[\^[^\]]+\]|\[\[[^\]|]+(?:\|[^\]]*)?\]\]|\[[^\]]+\]\([^)]*\)|\*\*[^*]+\*\*|\*[^*\n]+\*|==[^=]+==|~~[^~]+~~|`[^`]+`|(?<![\p{L}\p{N}])#[\p{L}_][\p{L}\p{N}_/-]*)/gu;
   let last = 0, k = 0;
@@ -132,7 +133,7 @@ function mdInline(text: string, onLink?: (name: string) => void, onTag?: (tag: s
       const inner = t.slice(2, -2);
       const name = inner.split("|")[0].trim();
       const shown = inner.includes("|") ? inner.split("|")[1] : name;
-      out.push(<WikiLink key={k++} name={name} shown={shown} onLink={onLink} />);
+      out.push(<WikiLink key={k++} name={name} shown={shown} onLink={onLink} entries={entries} />);
     } else if (t.startsWith("[")) {
       const mm = t.match(/\[([^\]]+)\]\(([^)]*)\)/)!;
       const href = mm[2];
@@ -143,6 +144,8 @@ function mdInline(text: string, onLink?: (name: string) => void, onTag?: (tag: s
             {mm[1]}
           </a>,
         );
+      } else if (onOpenExternal && !/^(?:https?:|mailto:|#)/i.test(href)) {
+        out.push(<a key={k++} onClick={() => onOpenExternal(href)} title={href} style={{ color: "var(--cv-accent)", cursor: "pointer", textDecoration: "none", borderBottom: "1px solid color-mix(in srgb, var(--cv-accent) 45%, transparent)" }}>{mm[1]}</a>);
       } else {
         out.push(
           <a key={k++} href={href} target="_blank" rel="noreferrer"
@@ -194,7 +197,7 @@ ReadingView.scopeN = 0;
  * bullet/numbered lists, tasks, blockquotes, fenced code. */
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|ico)$/i;
 
-function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup, embedFetch, embedAsset, embedAssetFetch }: {
+export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup, embedFetch, embedAsset, embedAssetFetch, entries, onOpenExternal }: {
   text: string;
   onLink?: (name: string) => void;
   onTag?: (tag: string) => void;
@@ -204,6 +207,8 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
   embedFetch?: (path: string) => void;
   embedAsset?: (path: string) => string | undefined;
   embedAssetFetch?: (path: string) => void;
+  entries?: string[];
+  onOpenExternal?: (url: string) => void;
 }) {
   const lines = text.split("\n");
   // Heading folding (Obsidian): chevron on each heading collapses the body
@@ -346,7 +351,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
         els.push(<div key={i} style={{ margin: "4px 0" }}>{mdInline(`[[${emb[1].trim()}]]`, onLink, onTag, fns, fnScope)}</div>);
       } else {
         els.push(
-          <NoteEmbed key={i} name={emb[1].trim()} section={emb[2]?.trim()} lookup={embedLookup} fetchPath={embedFetch} onLink={onLink} onTag={onTag} assetSrc={embedAsset} assetFetch={embedAssetFetch} />,
+          <NoteEmbed key={i} name={emb[1].trim()} section={emb[2]?.trim()} lookup={embedLookup} fetchPath={embedFetch} onLink={onLink} onTag={onTag} assetSrc={embedAsset} assetFetch={embedAssetFetch} entries={entries} />,
         );
       }
       continue;
@@ -368,7 +373,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
           >
             {isFolded ? "▸" : "▾"}
           </span>
-          {mdInline(h[2], onLink, onTag, fns, fnScope)}
+          {mdInline(h[2], onLink, onTag, fns, fnScope, entries, onOpenExternal)}
         </div>,
       );
       continue;
@@ -384,7 +389,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
           >
             {task[2] === " " ? "☐" : "☑"}
           </span>
-          <span style={{ opacity: task[2] === " " ? 1 : 0.55, textDecoration: task[2] === " " ? "none" : "line-through" }}>{mdInline(task[3], onLink, onTag, fns, fnScope)}</span>
+          <span style={{ opacity: task[2] === " " ? 1 : 0.55, textDecoration: task[2] === " " ? "none" : "line-through" }}>{mdInline(task[3], onLink, onTag, fns, fnScope, entries, onOpenExternal)}</span>
         </div>,
       );
       continue;
@@ -394,7 +399,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
       els.push(
         <div key={i} style={{ paddingLeft: 14 + bullet[1].length * 6, margin: "3px 0" }}>
           <span style={{ color: "var(--cv-accent)", marginRight: 7 }}>•</span>
-          {mdInline(bullet[2], onLink, onTag, fns, fnScope)}
+          {mdInline(bullet[2], onLink, onTag, fns, fnScope, entries, onOpenExternal)}
         </div>,
       );
       continue;
@@ -404,7 +409,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
       els.push(
         <div key={i} style={{ paddingLeft: 14 + num[1].length * 6, margin: "3px 0" }}>
           <span style={{ color: "var(--cv-accent)", marginRight: 7, fontSize: "0.95em" }}>{num[2]}.</span>
-          {mdInline(num[3], onLink, onTag, fns, fnScope)}
+          {mdInline(num[3], onLink, onTag, fns, fnScope, entries, onOpenExternal)}
         </div>,
       );
       continue;
@@ -441,7 +446,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
                     key={j}
                     style={{ padding: cell, textAlign: "left", color: "var(--cv-accent)", borderBottom: "1px solid rgba(255,255,255,0.14)", fontWeight: 700, whiteSpace: "nowrap" }}
                   >
-                    {mdInline(c, onLink, onTag, fns, fnScope)}
+                    {mdInline(c, onLink, onTag, fns, fnScope, entries, onOpenExternal)}
                   </th>
                 ))}
               </tr>
@@ -451,7 +456,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
                 <tr key={j} style={{ background: j % 2 ? "rgba(255,255,255,0.02)" : "transparent" }}>
                   {r.map((c, k) => (
                     <td key={k} style={{ padding: cell, borderBottom: "1px solid rgba(255,255,255,0.06)", color: "var(--cv-ink)" }}>
-                      {mdInline(c, onLink, onTag, fns, fnScope)}
+                      {mdInline(c, onLink, onTag, fns, fnScope, entries, onOpenExternal)}
                     </td>
                   ))}
                 </tr>
@@ -494,7 +499,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
           >
             <div style={{ color, fontWeight: 700, fontSize: 11.5, marginBottom: quote.length > 1 ? 2 : 0 }}>{title}</div>
             {quote.slice(1).filter((q) => q.trim()).map((q, j) => (
-              <div key={j} style={{ margin: "2px 0" }}>{mdInline(q, onLink, onTag, fns, fnScope)}</div>
+              <div key={j} style={{ margin: "2px 0" }}>{mdInline(q, onLink, onTag, fns, fnScope, entries, onOpenExternal)}</div>
             ))}
           </div>,
         );
@@ -502,7 +507,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
         quote.forEach((q, j) => {
           els.push(
             <div key={`${i}-${j}`} style={{ margin: "6px 0", paddingLeft: 12, borderLeft: "2px solid var(--cv-accent)", color: "var(--cv-ink-dim)", fontStyle: "italic" }}>
-              {mdInline(q, onLink, onTag, fns, fnScope)}
+              {mdInline(q, onLink, onTag, fns, fnScope, entries, onOpenExternal)}
             </div>,
           );
         });
@@ -514,7 +519,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
       continue;
     }
     if (l.trim() === "") { els.push(<div key={i} style={{ height: 7 }} />); continue; }
-    els.push(<div key={i} style={{ margin: "3px 0" }}>{mdInline(l, onLink, onTag, fns, fnScope)}</div>);
+    els.push(<div key={i} style={{ margin: "3px 0" }}>{mdInline(l, onLink, onTag, fns, fnScope, entries, onOpenExternal)}</div>);
   }
   if (fns.size) {
     els.push(
@@ -532,7 +537,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
             ) : (
               <span style={{ color: "var(--cv-accent)", fontWeight: 700, flexShrink: 0 }}>{fns.get(id) ?? 0}.</span>
             )}
-            <span>{mdInline(def, onLink, onTag, fns, fnScope)}</span>
+            <span>{mdInline(def, onLink, onTag, fns, fnScope, entries, onOpenExternal)}</span>
           </div>
         ))}
       </div>,
@@ -568,12 +573,13 @@ function sectionSlice(text: string, section: string): string {
   return lines.slice(idx, end).join("\n");
 }
 
-function NoteEmbed({ name, section, lookup, fetchPath, onLink, onTag, assetSrc, assetFetch }: {
+function NoteEmbed({ name, section, lookup, fetchPath, onLink, onTag, assetSrc, assetFetch, entries }: {
   name: string;
   section?: string;
   lookup: (n: string) => { path: string; text?: string } | null;
   fetchPath?: (p: string) => void;
   onLink?: (name: string) => void;
+  entries?: string[];
   onTag?: (tag: string) => void;
   assetSrc?: (p: string) => string | undefined;
   assetFetch?: (p: string) => void;
@@ -633,7 +639,7 @@ function NoteEmbed({ name, section, lookup, fetchPath, onLink, onTag, assetSrc, 
       {missing ? (
         <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", fontStyle: "italic" }}>loading…</div>
       ) : (
-        <ReadingView text={section ? sectionSlice(hit.text!, section) : hit.text!} depth={1} onLink={onLink} onTag={onTag} />
+        <ReadingView text={section ? sectionSlice(hit.text!, section) : hit.text!} depth={1} onLink={onLink} onTag={onTag} entries={entries} />
       )}
     </div>
   );
