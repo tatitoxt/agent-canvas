@@ -37,6 +37,16 @@ test("Add to canvas closes Tools and mounts a live Inbox panel", async ({ page }
   await expect(page.locator(".react-flow__node-panel [data-panel='inbox']").first()).toBeVisible();
 });
 
+test("bottom Files opens Obsidian and Code Editor opens the repo explorer", async ({ page }) => {
+  await boot(page);
+  const filesButton = page.locator("button[title='Files — open your Obsidian vault']");
+  await expect(filesButton).toBeVisible();
+  await filesButton.click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='vault']").first()).toBeVisible();
+  await page.locator("button[title='Code Editor — open the workspace file tree and code viewer']").click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='explorer']").first()).toBeVisible();
+});
+
 test("double-click empty canvas opens the spawn chooser (spawn-at-click)", async ({ page }) => {
   await boot(page);
   await page.locator(".react-flow__pane").first().dblclick({ position: { x: 400, y: 300 } });
