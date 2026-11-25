@@ -327,6 +327,9 @@ function Board() {
   }, [agents, activeBoard, attention]);
   const selRef = useRef(sel);
   selRef.current = sel;
+  /** Deska "drop to place" ghost — dashed rect at the drop position
+   * while a card is being dragged. */
+  const [dragGhost, setDragGhost] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   // Region shot: marquee-select part of the canvas → PNG of just that area.
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [shotMode, setShotMode] = useState(false);
@@ -720,6 +723,12 @@ function Board() {
   const onNodeDrag: OnNodeDrag = (_, node) => {
     const s = snapFor(node);
     setGuides({ v: s.dx ? s.v : [], h: s.dy ? s.h : [] });
+    setDragGhost({
+      x: node.position.x,
+      y: node.position.y,
+      w: node.measured?.width ?? 200,
+      h: node.measured?.height ?? 90,
+    });
   };
 
   // OS drag & drop — a file dropped on the canvas becomes a markdown card:
@@ -768,8 +777,10 @@ function Board() {
     }
   }, [screenToFlowPosition]);
 
+
   const onNodeDragStop: OnNodeDrag = (event, node) => {
     // Deska-style: dropping a card on a board tab moves it there.
+    setDragGhost(null);
     const pt =
       "changedTouches" in event && event.changedTouches.length
         ? event.changedTouches[0]
@@ -1133,6 +1144,22 @@ function Board() {
             <div key={`gh${y}`} style={{ position: "absolute", top: y, left: -100000, height: 0, width: 200000, borderTop: "1px dashed var(--cv-accent)", pointerEvents: "none", opacity: 0.7 }} />
           ))}
         </ViewportPortal>
+        {dragGhost && (
+          <ViewportPortal>
+            <div
+              style={{
+                position: "absolute",
+                transform: `translate(${dragGhost.x}px, ${dragGhost.y}px)`,
+                width: dragGhost.w,
+                height: dragGhost.h,
+                border: "1.5px dashed var(--cv-accent)",
+                borderRadius: 14,
+                background: "rgba(201,162,107,0.08)",
+                pointerEvents: "none",
+              }}
+            />
+          </ViewportPortal>
+        )}
       </ReactFlow>
       {connected === false && null}
       <DigestPanel />

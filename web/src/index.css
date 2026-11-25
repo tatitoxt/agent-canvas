@@ -116,6 +116,20 @@ body,
   stroke: rgba(255, 255, 255, 0.38);
   stroke-width: 1.25;
 }
+/* Deska marquee — dashed accent selection rectangle with a light fill. */
+.react-flow__selection {
+  border: 1.5px dashed var(--cv-accent);
+  background: rgba(201, 162, 107, 0.07);
+  border-radius: 6px;
+}
+
+/* Selected cards get a dashed preview outline, same accent. */
+.react-flow__node.selected {
+  outline: 1.5px dashed var(--cv-accent);
+  outline-offset: 4px;
+  border-radius: 14px;
+}
+
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: rgba(255, 255, 255, 0.4);
 }
