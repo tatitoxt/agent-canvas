@@ -214,6 +214,9 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         cursor: "pointer",
       }}
     >
+      {/* CLI identity hairline — brand color across the card top; the status
+          ring keeps state meaning, this stripe carries the agent's identity. */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: meta.color, opacity: 0.85, pointerEvents: "none" }} />
       <Handle type="target" position={Position.Left} />
       {/* Deska header: [›_] Terminal N   ▮▮▮ running   [logo] Cli   (— × only when selected) */}
       <div
