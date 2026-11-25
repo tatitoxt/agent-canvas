@@ -461,6 +461,9 @@ struct FallbackState {
     account_id: Option<String>,
     /// CLIs not yet tried, in order.
     remaining: Vec<String>,
+    /// Task text queued for the original PTY — re-injected into the
+    /// replacement so a fallback never silently drops the user's task.
+    initial_input: Option<String>,
 }
 
 /// `spawn_agent` (standalone node) and `delegate` (edge-owned child).
@@ -494,6 +497,8 @@ fn spawn_agent(
     permission: &str,
     board_id: Option<&str>,
     account_id: Option<&str>,
+    initial_input: Option<&str>,
+    chain_override: Option<Vec<String>>,
 ) -> Result<(String, Option<String>)> {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<(String, Vec<u8>)>();
     let (exit_tx, mut exit_rx) = mpsc::unbounded_channel::<String>();
@@ -521,7 +526,7 @@ fn spawn_agent(
                 {
                     let next = fb.remaining[0].clone();
                     let cmd = substitute_cli(&fb.command, &next);
-                    let nm = format!("{} (fallback: {})", fb.name, next);
+                    let nm = fb.name.clone();
                     let st3 = state_fb.clone();
                     let fb_cmd = cmd.clone();
                     let fb_nm = nm.clone();
@@ -534,7 +539,45 @@ fn spawn_agent(
                         &fb.permission,
                         fb.board_id.as_deref(),
                         fb.account_id.as_deref(),
+                        fb.initial_input.as_deref(),
+                        // The replacement's chain is what remained — never
+                        // recomputed, so a fully-dead chain ends instead of
+                        // looping through the same failing CLIs forever.
+                        Some(fb.remaining.clone()),
                     ) {
+                        if let Some(text) = fb.initial_input.clone() {
+                            let st4 = state_fb.clone();
+                            let target = new_id.clone();
+                            tokio::spawn(async move {
+                                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                                // gated_write, not raw input: a supervised
+                                // automation that falls back keeps its
+                                // approval gate on the replacement too.
+                                let mut data = text.into_bytes();
+                                data.push(b'\r');
+                                gated_write(&st4, &target, &data);
+                            });
+                        }
+                        // A delegation awaiting this child's result moves to
+                        // the replacement — otherwise the original exit marks
+                        // the ticket failed and the parent's result is lost.
+                        // The lock guard must drop before re-locking — an
+                        // if-let keeps the first guard alive through its
+                        // body and std::sync::Mutex is not reentrant.
+                        let edge = state_fb.pending_results.lock().unwrap().remove(&id);
+                        if let Some(edge) = edge {
+                            // The replacement may have exited in the microseconds
+                            // since spawn — its exit runs on a different watcher,
+                            // so a ticket keyed to it would strand in flight.
+                            // Already dead: fail the ticket now instead.
+                            let replacement_live = state_fb.agents.statuses().iter().any(|(aid, st)| aid == &new_id && *st != "exited");
+                            if replacement_live {
+                                state_fb.pending_results.lock().unwrap().insert(new_id.clone(), edge);
+                            } else {
+                                let _ = store2.delegation_failed(&edge, 0);
+                                let _ = ev2.send(Event::Control(ServerMsg::DelegationFailed { edge_id: edge }));
+                            }
+                        }
                         let _ = state_fb.events.send(Event::Control(ServerMsg::Spawned {
                             agent_id: new_id,
                             name: fb_nm,
@@ -542,6 +585,7 @@ fn spawn_agent(
                             permission: fb.permission.clone(),
                             workspace_id: fb.workspace_id.clone(),
                             board_id: new_board.or(fb.board_id.clone()),
+                            fallback_from: Some(command_cli(&fb.command).to_string()),
                         }));
                     }
                 }
@@ -612,7 +656,7 @@ fn spawn_agent(
     pty_env.push(("CANVAS_MEMORY".to_string(), mem_path.to_string_lossy().to_string()));
     // Fallback chain: sync spawn failures (missing binary, bad exec) retry
     // with the next CLI; early PTY deaths retry from the exit watcher.
-    let chain = chain_for(state, workspace_id, command_cli(command));
+    let chain = chain_override.unwrap_or_else(|| chain_for(state, workspace_id, command_cli(command)));
     let mut remaining: Vec<String> = chain.iter().skip(1).cloned().collect();
     let mut cmd_attempt = command.to_string();
     let id = loop {
@@ -651,6 +695,7 @@ fn spawn_agent(
                 board_id: board_id.map(str::to_string),
                 account_id: account_id.map(str::to_string),
                 remaining,
+                initial_input: initial_input.map(str::to_string),
             },
         );
     }
@@ -1062,7 +1107,7 @@ fn handle_client_msg(
         }
         ClientMsg::SpawnAgent { name, command, cwd, workspace_id, permission, board_id, account_id, initial_input } => {
             let level = protocol::normalize_permission(permission.as_deref());
-            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, board_id.as_deref(), account_id.as_deref()) {
+            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, board_id.as_deref(), account_id.as_deref(), initial_input.as_deref(), None) {
                 Ok((id, board)) => {
                     // Quick request: type the task into the fresh PTY once the
                     // CLI has had a moment to boot (CLIs redraw their TUI on
@@ -1070,14 +1115,20 @@ fn handle_client_msg(
                     if let Some(text) = initial_input {
                         let agents = state.agents.clone();
                         let target = id.clone();
+                        let pf = state.pending_fallbacks.clone();
                         tokio::spawn(async move {
                             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                             let mut data = text.into_bytes();
                             data.push(b'\r');
                             let _ = agents.write(&target, &data);
+                            // Delivered to the original — a later fallback
+                            // must not run the task a second time.
+                            if let Some(fb) = pf.lock().unwrap().get_mut(&target) {
+                                fb.initial_input = None;
+                            }
                         });
                     }
-                    send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id, board_id: board });
+                    send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None });
                 }
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: None,
@@ -1094,7 +1145,7 @@ fn handle_client_msg(
             // The child lands on the requested board, else its parent's
             // (orchestrator nodes aren't agents — they carry theirs over).
             let parent_board = board_id.or(state.store.agent_board(&from).ok().flatten());
-            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, parent_board.as_deref(), account_id.as_deref()) {
+            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, parent_board.as_deref(), account_id.as_deref(), initial_input.as_deref(), None) {
                 Ok((id, board)) => {
                     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
                     if let Err(e) = state.store.delegation_created(&edge_id, &from, &id, &task) {
@@ -1104,11 +1155,17 @@ fn handle_client_msg(
                     if let Some(text) = initial_input {
                         let agents = state.agents.clone();
                         let target = id.clone();
+                        let pf = state.pending_fallbacks.clone();
                         tokio::spawn(async move {
                             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                             let mut data = text.into_bytes();
                             data.push(b'\r');
                             let _ = agents.write(&target, &data);
+                            // Delivered to the original — a later fallback
+                            // must not run the task a second time.
+                            if let Some(fb) = pf.lock().unwrap().get_mut(&target) {
+                                fb.initial_input = None;
+                            }
                         });
                     }
                     send_control(ServerMsg::Spawned {
@@ -1118,6 +1175,7 @@ fn handle_client_msg(
                         permission: level.to_string(),
                         workspace_id: workspace_id.clone(),
                         board_id: board,
+                        fallback_from: None,
                     });
                     send_control(ServerMsg::Delegation {
                         edge_id,
@@ -1185,6 +1243,8 @@ fn handle_client_msg(
             match action.as_str() {
                 "kill" => match state.agents.kill(&agent_id) {
                     Ok(()) => {
+                        // A deliberate kill is operator intent — never retry.
+                        state.pending_fallbacks.lock().unwrap().remove(&agent_id);
                         let _ = state.store.agent_status(&agent_id, "exited");
                         send_control(ServerMsg::Status {
                             agent_id,
@@ -2117,7 +2177,7 @@ fn fire_loop(state: &Arc<AppState>, row: &store::LoopRow) {
 fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
     let (automation_id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, _, _, _) =
         row;
-    match spawn_agent(state, &name, &command, ".", workspace_id.as_deref(), &permission, None, None) {
+    match spawn_agent(state, &name, &command, ".", workspace_id.as_deref(), &permission, None, None, Some(&prompt), None) {
         Ok((agent_id, run_board)) => {
             state
                 .agents
@@ -2130,6 +2190,7 @@ fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
                 permission,
                 workspace_id,
                 board_id: run_board,
+                fallback_from: None,
             }));
             // Inject the saved prompt into the fresh PTY — gated, so a
             // supervised run still gets a gate.
@@ -2139,6 +2200,11 @@ fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
                 tokio::time::sleep(std::time::Duration::from_millis(800)).await;
                 gated_write(&st, &agent_id2, prompt.as_bytes());
                 gated_write(&st, &agent_id2, b"\n");
+                // Delivered to the original — a later fallback must not
+                // run the automation a second time.
+                if let Some(fb) = st.pending_fallbacks.lock().unwrap().get_mut(&agent_id2) {
+                    fb.initial_input = None;
+                }
             });
         }
         Err(e) => {

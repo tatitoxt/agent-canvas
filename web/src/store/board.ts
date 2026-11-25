@@ -714,6 +714,13 @@ export const useBoard = create<BoardState>((set, get) => ({
         const { agents, edges } = get();
         switch (msg.type) {
           case "spawned": {
+            // Chain fallback replacements arrive with "(fallback: cli)" in
+            // the name — surface the substitution so a silent CLI swap never
+            // goes unnoticed.
+            if (msg.fallback_from) {
+              const actual = (msg.command ?? "").split(/\s+/)[0];
+              get().notify(`fallback: ${msg.fallback_from} failed at launch — spawned as ${actual}`);
+            }
             set({
               agents: {
                 ...agents,

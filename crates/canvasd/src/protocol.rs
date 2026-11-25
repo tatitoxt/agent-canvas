@@ -272,7 +272,19 @@ pub fn clamp_to_parent<'a>(requested: &'a str, parent: Option<&str>) -> &'a str 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMsg {
-    Spawned { agent_id: String, name: String, command: String, permission: String, workspace_id: Option<String>, board_id: Option<String> },
+    Spawned {
+        agent_id: String,
+        name: String,
+        command: String,
+        permission: String,
+        workspace_id: Option<String>,
+        board_id: Option<String>,
+        /// Set when this spawn is a chain fallback replacement: the CLI that
+        /// was originally requested (and failed). Keeps the substitution
+        /// structural instead of embedding it in the display name.
+        #[serde(default)]
+        fallback_from: Option<String>,
+    },
     Status { agent_id: String, status: AgentStatus },
     /// Live one-line activity preview — the agent's latest non-empty PTY
     /// line, ANSI-stripped. Deska's "background work" summaries: the node
