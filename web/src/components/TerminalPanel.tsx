@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /** Where the floating terminal panel sits — default bottom-right (Deska-style
  * dock position) until the user pops it out by dragging the header. */
@@ -27,11 +27,24 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   // this one inside the same drawer.
   const [split, setSplit] = useState<null | "right" | "down">(null);
   const [splitAgent, setSplitAgent] = useState<string | null>(null);
+  // "split with NEW terminal": a fresh independent shell in the second pane
+  // (Deska behavior) instead of mirroring an existing agent.
+  const [pendingNew, setPendingNew] = useState<{ name: string; since: number } | null>(null);
 
   // Card-style header info: Terminal N · status · CLI mark + label.
   const agent = useBoard((s) => s.agents[agentId]);
   const activeBoard = useBoard((s) => s.activeBoard);
   const agentsMap = useBoard((s) => s.agents);
+  useEffect(() => {
+    if (!pendingNew) return;
+    // Only match shells spawned AFTER the request — a same-named terminal
+    // from an earlier session must not steal the pane.
+    const hit = Object.values(agentsMap).find((a) => a.name === pendingNew.name && (a.seenAt ?? 0) >= pendingNew.since - 2000);
+    if (hit) {
+      setSplitAgent(hit.id);
+      setPendingNew(null);
+    }
+  }, [agentsMap, pendingNew]);
   // The pane's agent is only valid while it lives on the board being shown —
   // after a board switch the picker would lie (display the first option)
   // while keystrokes still went to the previous board's agent.
@@ -393,6 +406,17 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
                     </option>
                   ))}
               </select>
+              <button
+                title="split with a NEW independent terminal — fresh bash shell in this pane"
+                onClick={() => {
+                  const name = `split-term-${Date.now() % 100000}`;
+                  setPendingNew({ name, since: Date.now() });
+                  useBoard.getState().spawn(name, "bash");
+                }}
+                style={{ border: "none", background: "transparent", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11 }}
+              >
+                ＋
+              </button>
               <button
                 title="close split"
                 onClick={() => setSplit(null)}
