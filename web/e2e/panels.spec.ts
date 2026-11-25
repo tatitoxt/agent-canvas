@@ -109,6 +109,7 @@ test("bottom Files opens Obsidian and Code Editor opens the repo explorer", asyn
   await expect(page.locator(".react-flow__node-panel [data-panel='vault']").first()).toBeVisible();
   await page.locator("button[title='Code Editor — open the workspace file tree and code viewer']").click();
   await expect(page.locator(".react-flow__node-panel [data-panel='explorer']").first()).toBeVisible();
+  await expect(page.getByLabel("1 open code editor")).toBeVisible();
 });
 
 test("double-click empty canvas opens the spawn chooser (spawn-at-click)", async ({ page }) => {

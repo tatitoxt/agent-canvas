@@ -521,6 +521,11 @@ export function RightRail() {
  * the screen. A 3-column grid keeps it exactly on the 50% axis:
  * create on its left, the small round inbox on its right. */
 export function BottomDock({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
+  const activeBoard = useBoard((s) => s.activeBoard);
+  const agents = useBoard((s) => s.agents);
+  const panelNodes = useBoard((s) => s.panelNodes);
+  const terminalCount = Object.values(agents).filter((a) => a.status !== "exited" && (a.board_id ?? "main") === activeBoard).length;
+  const editorCount = Object.values(panelNodes[activeBoard] ?? {}).filter((n) => n.panel === "explorer").length;
   const [dexText, setDexText] = useState("");
   const [dexHist, setDexHist] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(-1);
@@ -594,6 +599,7 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
             style={{ ...btn(false), borderRadius: 999 }}
           >
             <Icon name="terminal" size={16} />
+            {terminalCount > 0 && <span aria-label={`${terminalCount} open terminal${terminalCount === 1 ? "" : "s"}`} style={badge("var(--cv-accent)")}>{terminalCount}</span>}
           </button>
           <button
             title="Code Editor — open the workspace file tree and code viewer"
@@ -601,6 +607,7 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
             style={{ ...btn(active === "explorer"), borderRadius: 999 }}
           >
             <Icon name="code" size={16} />
+            {editorCount > 0 && <span aria-label={`${editorCount} open code editor${editorCount === 1 ? "" : "s"}`} style={{ ...badge("var(--cv-glass-hi)"), color: "var(--cv-ink)" }}>{editorCount}</span>}
           </button>
 
         </nav>

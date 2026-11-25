@@ -27,6 +27,7 @@ async function openDrawer(page: import("@playwright/test").Page) {
 test("pop out creates a canvas term card; put back returns it to the drawer", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
+  await expect(page.getByLabel(/\d+ open terminals?/)).toBeVisible();
   await openDrawer(page);
   const popBtn = page.locator("button[title='pop out onto the canvas as a card']").first();
   await expect(popBtn).toBeVisible({ timeout: 5_000 });
