@@ -27,6 +27,16 @@ test("Tools opens as a dock and collapses to panel icons", async ({ page }) => {
   await expect(dock).toBeHidden();
 });
 
+test("Add to canvas closes Tools and mounts a live Inbox panel", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await expect(dock).toBeVisible();
+  await dock.getByRole("button", { name: "Add Inbox to canvas" }).click();
+  await expect(dock).toBeHidden();
+  await expect(page.locator(".react-flow__node-panel [data-panel='inbox']").first()).toBeVisible();
+});
+
 test("double-click empty canvas opens the spawn chooser (spawn-at-click)", async ({ page }) => {
   await boot(page);
   await page.locator(".react-flow__pane").first().dblclick({ position: { x: 400, y: 300 } });
