@@ -357,8 +357,10 @@ export function Topbar({
 
       <div style={{ flex: 1 }} />
 
-      {/* ── right: loose round glass buttons — no container bubble ── */}
+      {/* ── right: loose round glass buttons that fuse into one bubble on
+          hover — Deska's topbar trick ── */}
       <div
+        className="cv-fuse"
         style={{
           display: "flex",
           alignItems: "center",
@@ -527,14 +529,6 @@ export function Topbar({
           onClick={() => onNav("usage")}
         >
           <Icon name="juice" size={15} color={nav === "usage" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
-        </button>
-        <button
-          className="glass-pill"
-          style={{ ...iconBtn(false), background: "transparent", border: "none" }}
-          title="Mission Map — who's working, waiting and done"
-          onClick={tools.onMission}
-        >
-          <Icon name="map" size={15} color="var(--cv-ink-dim)" />
         </button>
         <button
           className="glass-pill"

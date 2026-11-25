@@ -40,7 +40,6 @@ import { CommandPalette } from "./components/CommandPalette";
 import { DelegationPanel } from "./components/DelegationPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { Topbar } from "./components/Topbar";
-import { MissionStrip } from "./components/MissionStrip";
 import { ContextMenu } from "./components/ContextMenu";
 import { CardMenu } from "./components/CardMenu";
 import { isTauri } from "./daemon/tauriClient";
@@ -315,17 +314,6 @@ function Board() {
   const [shapeMenu, setShapeMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [mmSize, setMmSize] = useState({ w: 148, h: 96 });
   const [sel, setSel] = useState<Array<{ id: string; x: number; y: number; w: number; h: number }>>([]);
-  const [missionOpen, setMissionOpen] = useState(false);
-  const missionCounts = useMemo(() => {
-    const c: Record<string, number> = { working: 0, waiting: 0, blocked: 0, done: 0 };
-    for (const a of Object.values(agents)) {
-      if ((a.board_id ?? "main") !== activeBoard) continue;
-      if (attention[a.id]) c.blocked++;
-      else if (a.status === "exited") c.done++;
-      else if (a.status === "working" || a.status === "waiting" || a.status === "blocked") c[a.status]++;
-    }
-    return c;
-  }, [agents, activeBoard, attention]);
   const selRef = useRef(sel);
   selRef.current = sel;
   /** Deska "drop to place" ghost — dashed rect at the drop position
@@ -906,15 +894,9 @@ function Board() {
               onStudio: () => useBoard.getState().studioDocNow(),
               onDraw: () => setPencil((m) => !m),
               onRegion: () => setShotMode((m) => !m),
-              onMission: () => setMissionOpen((o) => !o),
               drawOn: pencil,
               regionOn: shotMode,
             }}
-          />
-          <MissionStrip
-            counts={missionCounts}
-            open={missionOpen}
-            onToggle={() => setMissionOpen((o) => !o)}
           />
         </>
       )}
