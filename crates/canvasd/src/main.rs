@@ -664,6 +664,7 @@ fn spawn_agent(
                                 let _ = ev2.send(Event::Control(ServerMsg::DelegationFailed { edge_id: edge }));
                             }
                         }
+                        let wt = state_fb.agents.worktree(&new_id).map(|p| p.to_string_lossy().to_string());
                         let _ = state_fb.events.send(Event::Control(ServerMsg::Spawned {
                             agent_id: new_id,
                             name: fb_nm,
@@ -672,6 +673,7 @@ fn spawn_agent(
                             workspace_id: fb.workspace_id.clone(),
                             board_id: new_board.or(fb.board_id.clone()),
                             fallback_from: Some(command_cli(&fb.command).to_string()),
+                            worktree: wt,
                         }));
                     }
                 }
@@ -1223,7 +1225,8 @@ fn handle_client_msg(
                             }
                         });
                     }
-                    send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None });
+                    let wt = state.agents.worktree(&id).map(|p| p.to_string_lossy().to_string());
+                    send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None, worktree: wt });
                 }
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: None,
@@ -1263,6 +1266,7 @@ fn handle_client_msg(
                             }
                         });
                     }
+                    let wt = state.agents.worktree(&id).map(|p| p.to_string_lossy().to_string());
                     send_control(ServerMsg::Spawned {
                         agent_id: id.clone(),
                         name,
@@ -1271,6 +1275,7 @@ fn handle_client_msg(
                         workspace_id: workspace_id.clone(),
                         board_id: board,
                         fallback_from: None,
+                        worktree: wt,
                     });
                     send_control(ServerMsg::Delegation {
                         edge_id,
@@ -2326,6 +2331,7 @@ fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
                 .agents
                 .set_automation(&agent_id, idle_secs.max(0) as u64, on_approval == "deny");
             let _ = state.store.automation_ran(&automation_id);
+            let wt = state.agents.worktree(&agent_id).map(|p| p.to_string_lossy().to_string());
             let _ = state.events.send(Event::Control(ServerMsg::Spawned {
                 agent_id: agent_id.clone(),
                 name,
@@ -2334,6 +2340,7 @@ fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
                 workspace_id,
                 board_id: run_board,
                 fallback_from: None,
+                worktree: wt,
             }));
             // Inject the saved prompt into the fresh PTY — gated, so a
             // supervised run still gets a gate.

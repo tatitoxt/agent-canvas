@@ -749,6 +749,7 @@ export const useBoard = create<BoardState>((set, get) => ({
                   board_id: msg.board_id ?? "main",
                   seenAt: Date.now(),
                   account_label: pendingAccts.get(msg.name) ?? null,
+                  worktree: msg.worktree ?? undefined,
                 },
               },
             });
