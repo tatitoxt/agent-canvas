@@ -102,6 +102,28 @@ test("terminal font preference restores after reload", async ({ page }) => {
   await expect(settings.getByRole("status", { name: "Terminal font 17 pixels" })).toBeVisible();
 });
 
+test("board settings import rejects malformed data without partial writes", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("cv-theme", "obsidian"));
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
+  await page.locator("button[title='Settings']").click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='settings']").first();
+  await panel.getByLabel("Import board settings JSON").setInputFiles({ name: "invalid.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ app: "agent-canvas", v: 1, data: { "cv-theme": "paper", bad: "injected" } })) });
+  await expect(panel.getByRole("status").last()).toHaveText("The export contains invalid settings.");
+  expect(await page.evaluate(() => localStorage.getItem("cv-theme"))).toBe("obsidian");
+});
+
+test("board settings import restores a valid exported theme", async ({ page }) => {
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
+  await page.locator("button[title='Settings']").click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='settings']").first();
+  await panel.getByLabel("Import board settings JSON").setInputFiles({ name: "canvas-export.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ app: "agent-canvas", v: 1, data: { "cv-theme": "paper" } })) });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "paper");
+});
+
 test("Tools opens as a dock and collapses to panel icons", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();

@@ -55,6 +55,7 @@ export function SettingsPanel() {
   const supported = typeof Notification !== "undefined";
   const [perm, setPerm] = useState<NotificationPermission>(supported ? Notification.permission : "denied");
   const [cleared, setCleared] = useState<number | null>(null);
+  const [importFeedback, setImportFeedback] = useState<string | null>(null);
   return (
     <div
       style={{ ...panelRoot, padding: "12px 10px", overflow: "hidden" }}
@@ -211,6 +212,7 @@ export function SettingsPanel() {
       </div>
       <div style={{ padding: "0 12px 8px", display: "flex", gap: 8 }}>
         <button
+          aria-label="Export board settings as JSON"
           onClick={() => {
             const data: Record<string, string> = {};
             for (let i = 0; i < localStorage.length; i++) {
@@ -222,7 +224,7 @@ export function SettingsPanel() {
             a.href = URL.createObjectURL(blob);
             a.download = "canvas-export.json";
             a.click();
-            URL.revokeObjectURL(a.href);
+            window.setTimeout(() => URL.revokeObjectURL(a.href), 0);
           }}
           className="glass"
           style={{ flex: 1, padding: "7px 6px", border: "none", cursor: "pointer", fontSize: 10.5, color: "var(--cv-ink)" }}
@@ -235,25 +237,37 @@ export function SettingsPanel() {
         >
           import json
           <input
+            aria-label="Import board settings JSON"
             type="file"
             accept="application/json"
             style={{ display: "none" }}
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (!f) return;
+              const input = e.currentTarget;
               void f.text().then((t) => {
                 try {
-                  const j = JSON.parse(t) as { data?: Record<string, string> };
-                  for (const [k, v] of Object.entries(j.data ?? {})) {
-                    if (k.startsWith("cv-") && typeof v === "string") localStorage.setItem(k, v);
+                  const j: unknown = JSON.parse(t);
+                  if (!j || typeof j !== "object" || (j as { app?: unknown }).app !== "agent-canvas" || ![1, 2].includes((j as { v?: number }).v ?? -1)) {
+                    throw new Error("This file is not a supported Agent Canvas export.");
                   }
+                  const data = (j as { data?: unknown }).data;
+                  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("The export is missing its settings data.");
+                  const entries = Object.entries(data as Record<string, unknown>);
+                  if (entries.some(([k, v]) => !k.startsWith("cv-") || typeof v !== "string")) throw new Error("The export contains invalid settings.");
+                  for (const [k, v] of entries) localStorage.setItem(k, v as string);
+                  setImportFeedback(`Imported ${entries.length} settings. Reloading…`);
                   location.reload();
-                } catch { /* bad file — ignore */ }
-              });
+                } catch (error) {
+                  setImportFeedback(error instanceof Error ? error.message : "Could not read this settings file.");
+                  input.value = "";
+                }
+              }).catch(() => setImportFeedback("Could not read this settings file."));
             }}
           />
         </label>
       </div>
+      {importFeedback && <div role="status" style={{ fontSize: 10, color: "var(--cv-accent)", padding: "0 12px 6px" }}>{importFeedback}</div>}
       <div style={{ fontSize: 9.5, color: "var(--cv-ink-dim)", padding: "0 12px 6px", lineHeight: 1.4 }}>
         Carries your presets, shapes, notes, thread and theme between machines — canvas layouts live in the daemon's .canvas/board.db.
       </div>
