@@ -138,27 +138,24 @@ body,
   font-family: inherit;
 }
 
-/* React Flow's default resize handles are tiny and nearly invisible against
-   the dark canvas. Keep a clear grab target on every selected card. */
+/* Resize through invisible hit areas around the whole selected card. The
+   four corners plus four edge lines remain draggable without drawing the
+   usual corner dots, handles or resize outline over the content. */
 .cv-node-resize-handle {
-  width: 12px !important;
-  height: 12px !important;
-  border: 2px solid var(--cv-base) !important;
-  border-radius: 4px !important;
-  background: var(--cv-accent) !important;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--cv-accent) 65%, transparent);
+  width: 18px !important;
+  height: 18px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  opacity: 0 !important;
   z-index: 12 !important;
 }
 .cv-node-resize-line {
-  border-color: color-mix(in srgb, var(--cv-accent) 55%, transparent) !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  opacity: 0 !important;
   z-index: 11 !important;
-}
-.cv-workspace-node .react-flow__resize-control.handle {
-  width: 12px !important;
-  height: 12px !important;
-  border: 2px solid var(--cv-base) !important;
-  border-radius: 4px !important;
-  background: var(--cv-accent) !important;
 }
 
 .react-flow__handle {

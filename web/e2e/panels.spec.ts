@@ -347,8 +347,9 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await expect(card).toBeVisible();
   await expect(card.locator("textarea")).toHaveValue(body);
   await card.click({ position: { x: 80, y: 20 } });
-  const grip = card.locator(".react-flow__resize-control.handle.bottom.right");
-  await expect(grip).toBeVisible();
+  const grip = card.locator(".react-flow__resize-control.line.right");
+  await expect(grip).toBeAttached();
+  await expect(grip).toHaveCSS("opacity", "0");
   // Add-to-board requests a fitView; wait for that viewport animation before
   // comparing screen-space dimensions with the resize result.
   let stableSamples = 0;
@@ -371,18 +372,82 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   expect(handle).not.toBeNull();
   const handleIsHitTarget = await page.evaluate(({ x, y }) => {
     const target = document.elementFromPoint(x, y);
-    return !!target?.closest(".react-flow__resize-control.handle.bottom.right");
+    return !!target?.closest(".react-flow__resize-control.line.right");
   }, { x: handle!.x + handle!.width / 2, y: handle!.y + handle!.height / 2 });
-  expect(handleIsHitTarget, "the resize handle must be above canvas chrome at its pointer position").toBe(true);
+  expect(handleIsHitTarget, "the invisible right-edge resize zone must receive the pointer").toBe(true);
   await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2);
   await page.mouse.down();
-  await page.mouse.move(handle!.x + handle!.width / 2 + 50, handle!.y + handle!.height / 2 + 40, { steps: 6 });
+  await page.mouse.move(handle!.x + handle!.width / 2 + 50, handle!.y + handle!.height / 2, { steps: 6 });
   await page.mouse.up();
   await expect.poll(async () => page.evaluate((id) => {
     const all = JSON.parse(localStorage.getItem("cv-shapes") ?? "{}");
     return all.main?.[id]?.w ?? 0;
   }, shapeId)).toBeGreaterThan(originalShape.w + 20);
   await expect.poll(async () => (await card.boundingBox())?.width ?? 0).toBeGreaterThan(original!.width + 20);
+});
+
+test("web preview windows resize and keep their dimensions after reload", async ({ page }) => {
+  await page.route("https://example.com/**", (route) => route.fulfill({
+    status: 200,
+    contentType: "text/html; charset=utf-8",
+    body: "<!doctype html><html><body style='margin:0;background:#f5f1e8;color:#24211d;font:16px system-ui;padding:32px'><small>LIVE PREVIEW</small><h1>Canvas workspace</h1><p>A responsive web window beside your agents.</p><button>Preview action</button></body></html>",
+  }));
+  await boot(page);
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  if (!(await tools.isVisible())) await page.locator("button[title^='Tools —']").click({ timeout: 5_000 });
+  await expect(tools).toBeVisible({ timeout: 5_000 });
+  await tools.getByRole("button", { name: "Open a page" }).click({ timeout: 5_000 });
+  const launcher = page.getByRole("dialog", { name: "Open a page" });
+  const address = launcher.getByPlaceholder("address — example.com or localhost:3000");
+  await address.fill("example.com", { timeout: 5_000 });
+  await address.press("Enter", { timeout: 5_000 });
+
+  const web = page.locator(".react-flow__node[data-id^='web-']").last();
+  await expect(web).toBeVisible();
+  await expect(web.frameLocator("iframe").getByText("Canvas workspace")).toBeVisible();
+  const webId = await web.getAttribute("data-id");
+  await web.click({ position: { x: 90, y: 18 } });
+  const cornerHandles = web.locator(".react-flow__resize-control.handle");
+  await expect(cornerHandles).toHaveCount(4);
+  for (const handle of await cornerHandles.all()) await expect(handle).toHaveCSS("opacity", "0");
+  const edgeZones = web.locator(".react-flow__resize-control.line");
+  await expect(edgeZones).toHaveCount(4);
+  for (const line of await edgeZones.all()) await expect(line).toHaveCSS("opacity", "0");
+  const grip = web.locator(".react-flow__resize-control.line.bottom");
+  await expect(grip).toBeAttached();
+  const original = await web.boundingBox();
+  const handle = await grip.boundingBox();
+  expect(original).not.toBeNull();
+  expect(handle).not.toBeNull();
+  await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2 + 60, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await web.boundingBox())?.height ?? 0).toBeGreaterThan(original!.height + 30);
+  const savedHeight = await page.evaluate((id) => {
+    const sizes = JSON.parse(localStorage.getItem("cv-webnodesizes") ?? "{}");
+    return sizes[`main:${id}`]?.h ?? 0;
+  }, webId);
+  expect(savedHeight).toBeGreaterThan(370);
+  if (process.env.CANVAS_PREVIEW_PATH) {
+    await page.screenshot({ path: process.env.CANVAS_PREVIEW_PATH, animations: "disabled" });
+    const detail = await web.boundingBox();
+    if (detail) {
+      const x = Math.max(0, detail.x - 18);
+      const y = Math.max(0, detail.y - 18);
+      await page.screenshot({
+        path: process.env.CANVAS_DETAIL_PATH ?? process.env.CANVAS_PREVIEW_PATH.replace(/\.png$/i, "-web-window.png"),
+        clip: { x, y, width: Math.min(detail.width + 36, 1440 - x), height: Math.min(detail.height + 36, 900 - y) },
+        animations: "disabled",
+      });
+    }
+  }
+  await page.reload();
+  const restored = page.locator(`.react-flow__node[data-id="${webId}"]`);
+  await expect(restored).toBeVisible();
+  // fitView changes screen-space dimensions on reload, so compare the node's
+  // own CSS size with the persisted flow-space size rather than its bbox.
+  await expect.poll(async () => restored.evaluate((el) => Number.parseFloat(getComputedStyle(el).height))).toBe(savedHeight);
 });
 
 test("Add to canvas closes Tools even when the dock is pinned", async ({ page }) => {

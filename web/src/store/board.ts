@@ -449,6 +449,9 @@ type BoardState = {
   studioDoc: string | null;
   /** Embedded web pages on the canvas: node id -> url, per board. */
   webNodes: Record<string, Record<string, string>>;
+  /** Per-page canvas window dimensions, keyed by board and web node id. */
+  webNodeSizes: Record<string, { w: number; h: number }>;
+  resizeWebNode: (id: string, w: number, h: number, persist?: boolean, boardId?: string) => void;
   /** UI theme — swaps the seed tokens; glass derives via color-mix. */
   theme: string;
   setTheme: (t: string) => void;
@@ -769,6 +772,14 @@ export const useBoard = create<BoardState>((set, get) => ({
   webNodes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-webnodes") ?? "{}"); } catch { return {}; }
   })(),
+  webNodeSizes: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-webnodesizes") ?? "{}"); } catch { return {}; }
+  })(),
+  resizeWebNode: (id, w, h, persist = true, boardId = get().activeBoard) => {
+    const next = { ...get().webNodeSizes, [`${boardId}:${id}`]: { w: Math.max(320, w), h: Math.max(220, h) } };
+    if (persist) localStorage.setItem("cv-webnodesizes", JSON.stringify(next));
+    set({ webNodeSizes: next });
+  },
   notes: {},
   artifacts: {},
   positions: {},
@@ -1594,6 +1605,11 @@ export const useBoard = create<BoardState>((set, get) => ({
       return { webNodes: { ...st.webNodes, [board]: m } };
     });
     localStorage.setItem("cv-webnodes", JSON.stringify(get().webNodes));
+    const sizeKey = `${board}:${id}`;
+    const sizes = { ...get().webNodeSizes };
+    delete sizes[sizeKey];
+    localStorage.setItem("cv-webnodesizes", JSON.stringify(sizes));
+    set({ webNodeSizes: sizes });
   },
 
   mdNodes: (() => {

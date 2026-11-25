@@ -1112,6 +1112,7 @@ export function WebNode({
   selected,
 }: NodeProps<Node<WebNodeData>>) {
   const webNodeRemove = useBoard((s) => s.webNodeRemove);
+  const resizeWebNode = useBoard((s) => s.resizeWebNode);
   return (
     <div
       className="glass"
@@ -1125,6 +1126,15 @@ export function WebNode({
         outline: selected ? "1.5px solid var(--cv-glass-shine)" : "none",
       }}
     >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={320}
+        minHeight={220}
+        handleClassName="cv-node-resize-handle"
+        lineClassName="cv-node-resize-line"
+        onResize={(_, p) => resizeWebNode(id, Math.round(p.width), Math.round(p.height), false)}
+        onResizeEnd={(_, p) => resizeWebNode(id, Math.round(p.width), Math.round(p.height))}
+      />
       <div
         style={{
           display: "flex",

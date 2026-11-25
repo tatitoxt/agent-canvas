@@ -163,6 +163,7 @@ function Board() {
   const approvals = useBoard((s) => s.approvals);
   const attention = useBoard((s) => s.attention);
   const webNodes = useBoard((s) => s.webNodes);
+  const webNodeSizes = useBoard((s) => s.webNodeSizes);
   const orchestrators = useBoard((s) => s.orchestrators);
   const shapes = useBoard((s) => s.shapes);
   const moveShape = useBoard((s) => s.moveShape);
@@ -571,7 +572,8 @@ function Board() {
         type: "web" as const,
         deletable: true,
         position: positions[id] ?? { x: 600, y: 120 },
-        style: { width: 520, height: 340 },
+        style: { width: webNodeSizes[`${activeBoard}:${id}`]?.w ?? 520, height: webNodeSizes[`${activeBoard}:${id}`]?.h ?? 340 },
+        zIndex: cardZ[id] ?? 0,
         data: { kind: "web" as const, url },
       }),
     );
@@ -608,6 +610,7 @@ function Board() {
         deletable: true,
         position: positions[id] ?? { x: 640, y: 160 },
         style: { width: (mdNodeSizes[`${activeBoard}:${id}`] ?? mdNodeSizes[id])?.w ?? 340, height: (mdNodeSizes[`${activeBoard}:${id}`] ?? mdNodeSizes[id])?.h ?? 260 },
+        zIndex: cardZ[id] ?? 0,
         data: { kind: "md" as const, id, path },
       }),
     );
@@ -640,7 +643,7 @@ function Board() {
     return useMock
       ? [...initialNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs]
       : [...wsNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs];
-  }, [agents, positions, connected, workspaces, workspaceSizes, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges, shapes, mdNodes, mdNodeSizes, panelNodes, termNodes, cardZ, agentSizes]);
+  }, [agents, positions, connected, workspaces, workspaceSizes, approvals, attention, activeBoard, webNodes, webNodeSizes, orchestrators, liveEdges, shapes, mdNodes, mdNodeSizes, panelNodes, termNodes, cardZ, agentSizes]);
 
   // Controlled React Flow needs change application for selection and drag to
   // stick. rfNodes is the rendered array: baseNodes is re-derived from the
@@ -693,13 +696,13 @@ function Board() {
   );
 
   const onNodeClick: NodeMouseHandler = (e, node) => {
-    // Keep the active card above floating rails so its resize handles remain
-    // reachable even when the board viewport places it near the chrome.
-    if (node.type === "shape" || node.type === "panel" || node.type === "term") {
+    // Shift+click is multi-select — don't change the visual stacking order.
+    if (e.shiftKey) return;
+    // Keep the active window above its siblings and floating rails. Every
+    // canvas window shares one persistent z-order regardless of its content.
+    if (["shape", "panel", "term", "web", "md"].includes(node.type ?? "")) {
       useBoard.getState().bringCardToFront(node.id);
     }
-    // Shift+click is multi-select — don't rewire.
-    if (e.shiftKey) return;
     // In Connect mode a click on an agent card wires/unwires it to the
     // orchestrator. Otherwise React Flow keeps the click as pure selection.
     if (wiringFrom && agents[node.id]) {
