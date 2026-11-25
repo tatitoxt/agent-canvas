@@ -641,8 +641,9 @@ function Board() {
       toggleWire(wiringFrom, node.id);
       return;
     }
-    const a = agents[node.id];
-    if (a) openTerm({ id: a.id, name: a.name });
+    // Click selects the card — nothing more. Opening a terminal is
+    // double-click (expands in place) or the card's own buttons; the
+    // bottom-right drawer never appears as a confusing duplicate.
   };
 
   // Double-click focuses a node — single click already opens its terminal.
@@ -651,6 +652,22 @@ function Board() {
     const sh = shapes[activeBoard ?? "main"]?.[node.id];
     if (sh?.kind === "pin" && sh.anchor) {
       useBoard.getState().requestNav(sh.anchor);
+    }
+    // Double-click an agent card expands its terminal IN PLACE — popped out
+    // as a full canvas card instead of the bottom-right drawer duplicate.
+    const termId = `term-${node.id}`;
+    const termExists = !!useBoard.getState().termNodes[activeBoard ?? "main"]?.[termId];
+    if (agents[node.id]) {
+      if (termExists) {
+        // Already expanded — focus THAT card instead of zooming the agent
+        // and leaving the terminal offscreen.
+        useBoard.getState().requestFocus(termId);
+        return;
+      }
+      useBoard.getState().openTermNode(node.id);
+      // Close the drawer copy — the canvas card replaces it, same as the
+      // drawer's own pop-out button does.
+      setOpenTerms((ts) => ts.filter((t) => t.id !== node.id));
     }
     fitView({ nodes: [{ id: node.id }], padding: 0.9, maxZoom: 1.4, duration: 300 });
   };
