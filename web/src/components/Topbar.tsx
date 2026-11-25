@@ -294,6 +294,19 @@ export function Topbar({
               )}
               <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "6px 4px 2px", borderTop: "1px solid var(--cv-glass-edge)" }}>
                 <input style={miniInput} placeholder="+ workspace name" value={wsName} onChange={(e) => setWsName(e.target.value)} />
+                {isTauri() && (
+                  <button
+                    style={{ ...miniInput, width: "auto", cursor: "pointer", flexShrink: 0 } as React.CSSProperties}
+                    title="pick the repo folder with the native dialog"
+                    onClick={async () => {
+                      const { open } = await import("@tauri-apps/plugin-dialog");
+                      const dir = await open({ directory: true, title: "Repo for the workspace" });
+                      if (typeof dir === "string") setWsRepo(dir);
+                    }}
+                  >
+                    📁 pick folder…
+                  </button>
+                )}
                 <input style={miniInput} placeholder="repo path (~/repos/my-app)" value={wsRepo} onChange={(e) => setWsRepo(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && wsName.trim() && wsRepo.trim()) {
