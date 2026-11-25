@@ -139,17 +139,26 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const { screenToFlowPosition } = useReactFlow();
   const [collapsed, setCollapsed] = useState(false);
   const statusColor = STATUS_COLOR[data.status];
+  // "builder-1" reads as Terminal 1 · builder — the terminal number is the
+  // identity, the role rides next to it (Fausto's naming spec).
+  const roleMatch = data.name.match(/^(.*?)-(\d+)$/);
+  const termNo = data.termNo ?? (roleMatch ? Number(roleMatch[2]) : undefined);
+  const termTitle = termNo != null ? `Terminal ${termNo}` : data.name;
+  const roleLabel = termNo != null ? (roleMatch ? roleMatch[1] : data.name) : undefined;
   // Deska's rule: state never recolors the card. Border stays a neutral
   // hairline — the ONLY colored outline is amber when the agent is wired
   // to the orchestrator (Fausto's vision: "outline naranja cuando habla
   // con Dex"). State lives in the bars glyph + label inside the header.
   const wired = data.delegating;
-  const border = wired
-    ? "1.5px solid var(--cv-accent)"
-    : "1px solid var(--cv-glass-edge)";
-  const glow = wired
-    ? "0 0 18px color-mix(in srgb, var(--cv-accent) 22%, transparent), 0 12px 32px rgba(0,0,0,0.35)"
-    : undefined;
+  const live = data.status === "working" || data.status === "waiting" || data.status === "blocked";
+  const border = live
+    ? `1.5px solid color-mix(in srgb, ${statusColor} ${data.status === "working" ? 55 : 80}%, transparent)`
+    : `1px solid color-mix(in srgb, ${statusColor} 22%, transparent)`;
+  const glow = data.status === "waiting" || data.status === "blocked"
+    ? `0 0 18px color-mix(in srgb, ${statusColor} 25%, transparent), 0 18px 44px rgba(0,0,0,0.5)`
+    : wired
+      ? "0 0 18px color-mix(in srgb, var(--cv-accent) 22%, transparent), 0 18px 44px rgba(0,0,0,0.5)"
+      : undefined;
   if (collapsed) {
     // Deska's collapsed terminal — glyph tile + number in a small pill.
     return (
@@ -263,14 +272,29 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             overflow: "hidden",
             textOverflow: "ellipsis",
             minWidth: 0,
-            // Deska paints the terminal title in the CLI's color — a Claude
-            // card reads clay, a Codex card reads green, before anything else.
-            color: `color-mix(in srgb, ${meta.color} 88%, var(--cv-ink))`,
+            color: "var(--cv-ink)",
           }}
           title={data.name}
         >
-          {data.termNo ? `Terminal ${data.termNo}` : data.name}
+          {termTitle}
         </div>
+        {roleLabel && (
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 500,
+              color: "var(--cv-ink-faint)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxWidth: 110,
+              flex: "none",
+            }}
+            title={data.name}
+          >
+            {roleLabel}
+          </span>
+        )}
         <span
           style={{
             display: "inline-flex",
@@ -293,12 +317,13 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             gap: 5.5,
             marginLeft: "auto",
             fontSize: 11.5,
-            fontWeight: 500,
+            fontWeight: 600,
             flex: "none",
             whiteSpace: "nowrap",
           }}
         >
-          <span style={{ color: "var(--cv-ink-faint)" }}>{meta.label}</span>
+          <CliMark cli={data.cli} color={meta.color} size={12} />
+          <span style={{ color: meta.color }}>{meta.label}</span>
         </span>
         <span
           className="nodrag card-chrome"

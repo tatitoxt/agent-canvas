@@ -54,7 +54,7 @@ export function DelegationEdge({
       {label && (
         <EdgeLabelRenderer>
           <div
-            className="glass-pill nodrag nopan pointer-events-auto absolute max-w-52 -translate-x-1/2 -translate-y-1/2 cursor-pointer px-2.5 py-1 text-[10.5px] leading-snug"
+            className="glass-pill nodrag nopan pointer-events-auto absolute max-w-52 -translate-x-1/2 -translate-y-1/2 cursor-pointer px-2.5 py-1 text-[12px] leading-snug font-medium"
             style={{ left: labelX, top: labelY }}
             title="Open this delegation's full record"
             onClick={() => useBoard.getState().setEdgeDetail(id)}

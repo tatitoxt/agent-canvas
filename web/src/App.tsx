@@ -1120,7 +1120,7 @@ function Board() {
             if (data.kind === "workspace") return "#1d1d20";
             if (data.kind === "agent" && data.status) {
               const map: Record<AgentStatus, string> = {
-                working: "#ff8f4d",
+                working: "#34c77b",
                 waiting: "#f5b83d",
                 blocked: "#e0695f",
                 done: "#54c48e",

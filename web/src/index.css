@@ -38,7 +38,7 @@
   /* statuses — Deska as Fausto observed it: working is ORANGE, needs-you
      amber, blocked salmon, done a calm green, idle neutral grey. State
      lives in the small glyph + label — never recolors the whole card. */
-  --cv-working: #ff8f4d;
+  --cv-working: #34c77b;
   --cv-waiting: #f5b83d;
   --cv-blocked: #e0695f;
   --cv-done: #54c48e;
