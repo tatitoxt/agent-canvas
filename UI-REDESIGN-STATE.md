@@ -21,7 +21,9 @@
 - [x] Validation for this continuation: typecheck, 31/31 unit tests, production build, 39/39 E2E, and `git diff --check` pass.
 - [x] Agent-card scanability pass: title 15px, status 12.5px, task label 11.5px, and task text 14px with stronger ink. Reviewed capture `/tmp/canvas-design/card-density-next.png`; tasks remain clamped and fit the default cards. Increased the demo workspace height and lowered the docs card by 60 units to preserve a visible gap after the larger text. E2E enforces non-overlapping demo cards. Full 40/40 E2E, 31/31 unit tests, typecheck, and production build pass.
 - [x] Tools library on short viewports: added E2E at 800×620 to prove the dock scrolls and exposes lower entries Mission Map and Issues; focused test passes.
-- [x] Delegation routing now uses React Flow's measured absolute node geometry for both card obstacles and label placement, avoiding mixed board-relative/absolute coordinates for children inside workspaces. Added nested-workspace geometry regression coverage; 32 unit tests, typecheck, and 40/40 full E2E pass on the rerun. First full run had one transient Gather viewport-bound failure; focused and complete reruns passed.
+- [x] Delegation routing now uses React Flow's measured absolute node geometry for both card obstacles and label placement, avoiding mixed board-relative/absolute coordinates for children inside workspaces. Added nested-workspace geometry regression coverage.
+- [x] Terminal drawer shares the card's PTY model-announcement parser and shows a compact model label only when the CLI actually announces one. Parser tests cover ANSI-stripped and missing model lines; no synthetic E2E was kept because shell input echo is not stored in the PTY output buffer. Final validation: 34 unit tests, typecheck, production build, and 40/40 full E2E pass.
+- [x] Latest PR head `0d6c798` passed local 40/40 E2E; previous CI run passed web, canvasd, E2E and Tauri Ubuntu. Tauri macOS and Devin Review were still running at last poll.
 - [ ] Next visual pass: inspect resized-card body and overall panel/chrome density in desktop app, then continue remaining Deska/Symvibe feature gaps. Keep PR #47 open and do not merge.
 
 ## Feedback de Fausto (mensaje dictado, prioridad literal) — checklist
@@ -32,7 +34,7 @@
 5. [x] **Cables evitan cards** — edge routing detecta obstáculos múltiples y busca trayectos ortogonales compactos; unit tests cubren conexiones y rutas despejadas.
 6. [x] Minimap chico abajo-derecha + zoom controls — YA ESTÁ así (mmSize 148×96, marginRight 184). Confirmar visualmente con Fausto qué le pareció "horrible" — quizás eran los colores viejos (ya actualizados a verde working).
 7. [x] **File explorer como ventana del canvas** — E2E crea un workspace, agrega Explorer al canvas, lo mueve, lo redimensiona con persistencia y abre `README.md`.
-8. [~] **Terminales usables** — el drawer y la tarjeta flotante montan xterm sobre la PTY; E2E escribe comandos de shell y verifica la salida, split y resize. Smoke tests ejecutaron `codex --version` por la PTY real y abrieron Codex TUI 0.172.0 en PTY: pantalla interactiva y selector de sesiones respondieron, `Ctrl+C` cerró limpio. Pendiente probar la sesión TUI dentro de una terminal de Canvas y revisar detección de modelo allí.
+8. [~] **Terminales usables** — el drawer y la tarjeta flotante montan xterm sobre la PTY; E2E escribe comandos de shell y verifica la salida, split y resize. Smoke tests ejecutaron `codex --version` por la PTY real y abrieron Codex TUI 0.172.0 en PTY: pantalla interactiva y selector de sesiones respondieron, `Ctrl+C` cerró limpio. Cards y drawer leen un modelo si el CLI lo anuncia en el buffer; pendiente revisar esa señal con un TUI real dentro de Canvas.
 
 ## Decisiones de diseño ya aplicadas (no revertir)
 - IBM Plex Sans/Mono (tipografía Deska)

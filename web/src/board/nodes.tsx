@@ -72,6 +72,17 @@ const decoder = new TextDecoder();
 const MODEL_RE =
   /(opus[\s\d.]*|sonnet[\s\d.]*|haiku[\s\d.]*|gpt-[\w.-]+|gemini-[\w.-]+|o\d[a-z0-9.-]*|kimi-[\w.-]+|qwen[\w.-]*|deepseek[\w.-]*|minimax[\w.-]*|mistral[\w.-]*|codex[\w.-]*mini[\w.-]*)/i;
 
+export function announcedModel(buf?: Uint8Array): string | undefined {
+  if (!buf?.length) return undefined;
+  const tail = decoder.decode(buf.slice(Math.max(0, buf.length - 4000)));
+  const parsed = tail.replace(/\r/g, "").split("\n").map((line) => line.replace(ANSI_RE, ""));
+  for (let i = parsed.length - 1; i >= 0; i--) {
+    const match = parsed[i].match(MODEL_RE);
+    if (match) return match[0];
+  }
+  return undefined;
+}
+
 function MiniTerm({ agentId }: { agentId: string }) {
   const buf = useBoard((s) => s.ptyBuffers[agentId]);
   const [screenRevision, setScreenRevision] = useState(0);
@@ -611,16 +622,7 @@ function FooterSize({ agentId }: { agentId?: string }) {
  * announced, for the Deska-style footer (bottom-right). */
 function FooterModel({ agentId }: { agentId?: string }) {
   const buf = useBoard((s) => (agentId ? s.ptyBuffers[agentId] : undefined));
-  const model = useMemo(() => {
-    if (!buf || buf.length === 0) return undefined as string | undefined;
-    const tail = decoder.decode(buf.slice(Math.max(0, buf.length - 4000)));
-    const parsed = tail.replace(/\r/g, "").split("\n").map((l) => l.replace(ANSI_RE, ""));
-    for (let i = parsed.length - 1; i >= 0; i--) {
-      const m = parsed[i].match(MODEL_RE);
-      if (m) return m[0];
-    }
-    return undefined;
-  }, [buf, agentId]);
+  const model = useMemo(() => announcedModel(buf), [buf, agentId]);
   return <>{model}</>;
 }
 

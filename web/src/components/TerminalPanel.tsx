@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { TermHost } from "./TermHost";
 import { useBoard } from "../store/board";
 import { CliMark } from "./CliMark";
-import { STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "../board/nodes";
+import { announcedModel, STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "../board/nodes";
 import type { AgentStatus } from "../board/types";
 
 /** Where the floating terminal panel sits — default bottom-right (Deska-style
@@ -64,6 +64,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   const agent = useBoard((s) => s.agents[agentId]);
   const activeBoard = useBoard((s) => s.activeBoard);
   const agentsMap = useBoard((s) => s.agents);
+  const ptyBuffer = useBoard((s) => s.ptyBuffers[agentId]);
   useEffect(() => {
     if (!pendingNew) return;
     // Only match shells spawned AFTER the request — a same-named terminal
@@ -89,6 +90,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   const cli = (agent?.command ?? "bash").split(/\s+/)[0].toLowerCase();
   const meta = cliMeta(cli);
   const statusColor = STATUS_COLOR[status];
+  const model = announcedModel(ptyBuffer);
 
 
 
@@ -249,6 +251,15 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             <StatusBars color={statusColor} />
             {STATUS_LABEL[status]}
           </span>
+          {model && (
+            <span
+              data-testid="terminal-model"
+              title="model announced by this CLI"
+              style={{ color: "var(--cv-ink-dim)", fontSize: 10.5, whiteSpace: "nowrap" }}
+            >
+              {model}
+            </span>
+          )}
           <span
             style={{
               display: "inline-flex",
