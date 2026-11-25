@@ -29,7 +29,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   const [splitAgent, setSplitAgent] = useState<string | null>(null);
   // "split with NEW terminal": a fresh independent shell in the second pane
   // (Deska behavior) instead of mirroring an existing agent.
-  const [pendingNew, setPendingNew] = useState<string | null>(null);
+  const [pendingNew, setPendingNew] = useState<{ name: string; since: number } | null>(null);
 
   // Card-style header info: Terminal N · status · CLI mark + label.
   const agent = useBoard((s) => s.agents[agentId]);
@@ -37,7 +37,9 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   const agentsMap = useBoard((s) => s.agents);
   useEffect(() => {
     if (!pendingNew) return;
-    const hit = Object.values(agentsMap).find((a) => a.name === pendingNew);
+    // Only match shells spawned AFTER the request — a same-named terminal
+    // from an earlier session must not steal the pane.
+    const hit = Object.values(agentsMap).find((a) => a.name === pendingNew.name && (a.seenAt ?? 0) >= pendingNew.since - 2000);
     if (hit) {
       setSplitAgent(hit.id);
       setPendingNew(null);
@@ -408,7 +410,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
                 title="split with a NEW independent terminal — fresh bash shell in this pane"
                 onClick={() => {
                   const name = `split-term-${Date.now() % 100000}`;
-                  setPendingNew(name);
+                  setPendingNew({ name, since: Date.now() });
                   useBoard.getState().spawn(name, "bash");
                 }}
                 style={{ border: "none", background: "transparent", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11 }}
