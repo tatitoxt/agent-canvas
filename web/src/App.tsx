@@ -127,7 +127,23 @@ function AnchorCables({ nav }: { nav: string }) {
 }
 
 function ViewportTracker() {
-  const { zoom } = useViewport();
+  const { zoom, x: vpX, y: vpY } = useViewport();
+  const [winSize, setWinSize] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
+  useEffect(() => {
+    const onResize = () => setWinSize({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  useEffect(() => {
+    useBoard.setState({
+      viewportRect: {
+        left: -vpX / zoom,
+        top: -vpY / zoom,
+        right: -vpX / zoom + winSize.w / zoom,
+        bottom: -vpY / zoom + winSize.h / zoom,
+      },
+    });
+  }, [vpX, vpY, zoom, winSize]);
   useEffect(() => {
     useBoard.setState({ zoomPct: Math.round(zoom * 100) });
   }, [zoom]);
@@ -648,8 +664,13 @@ function Board() {
       "changedTouches" in event && event.changedTouches.length
         ? event.changedTouches[0]
         : (event as MouseEvent);
-    const tabEl = document.elementFromPoint(pt.clientX, pt.clientY);
-    const target = tabEl?.closest?.("[data-board-tab]")?.getAttribute("data-board-tab");
+    // The dragged card itself is under the cursor at drop time — walk the
+    // stack past every .react-flow__node until something else is hit.
+    const target = document
+      .elementsFromPoint(pt.clientX, pt.clientY)
+      .filter((el) => !el.closest(".react-flow__node"))
+      .map((el) => el.closest("[data-board-tab]")?.getAttribute("data-board-tab"))
+      .find(Boolean);
     if (target) {
       const a = agents[node.id] ?? workspaces[node.id];
       if (a) {

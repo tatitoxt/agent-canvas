@@ -173,6 +173,7 @@ function SpacesBubble() {
         ) : (
           <button
             key={id}
+            data-board-tab={id}
             onClick={() => setActiveBoard(id)}
             onDoubleClick={() => { setEditing(id); setEditName(n); }}
             onContextMenu={(e) => { e.preventDefault(); setEditing(id); setEditName(n); }}
