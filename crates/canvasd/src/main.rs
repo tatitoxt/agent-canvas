@@ -969,6 +969,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .collect(),
             layout: state.store.layout_map().unwrap_or_default(),
             repo_url: state.repo_url.clone(),
+            cli_identities: canvasd::detect::detect_cli_identities(KNOWN_CLIS),
             accounts: state
                 .store
                 .accounts_snapshot()
@@ -2394,6 +2395,7 @@ fn generate_token() -> String {
 fn uuid_like() -> String {
     uuid::Uuid::new_v4().simple().to_string()[..12].to_string()
 }
+
 
 #[tokio::main]
 async fn main() -> Result<()> {

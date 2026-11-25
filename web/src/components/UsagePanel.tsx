@@ -14,6 +14,7 @@ export function UsagePanel() {
   const ledger = useBoard((s) => s.acctLedger);
   const activeBoard = useBoard((s) => s.activeBoard);
   const requestFocus = useBoard((s) => s.requestFocus);
+  const cliIdentities = useBoard((s) => s.cliIdentities);
 
   const boardAgents = Object.values(agents).filter(
     (a) => (a.board_id ?? "main") === activeBoard,
@@ -214,6 +215,22 @@ export function UsagePanel() {
             </span>
           </button>
         ))}
+        {/* detected CLI setup — real data from each CLI's own config
+            files; quota is honest: no CLI exposes remaining quota
+            locally, so it is never invented. */}
+        {Object.keys(cliIdentities).length > 0 && (
+          <div style={{ padding: "10px 12px 2px", borderTop: "1px solid var(--cv-glass-edge)", marginTop: 8 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "var(--cv-ink-faint)", marginBottom: 5 }}>
+              detected setup
+            </div>
+            {Object.entries(cliIdentities).map(([cli, id]) => (
+              <div key={cli} style={{ fontSize: 10, color: "var(--cv-ink-dim)", paddingBottom: 4 }} title={id.source ? `detected from ${id.source}` : undefined}>
+                <span style={{ color: "var(--cv-ink)", fontWeight: 600 }}>{cli}</span>
+                {" — "}{id.account ?? "account unknown"}{" · default model: "}{id.model ?? "unknown"}{" · quota unknown"}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

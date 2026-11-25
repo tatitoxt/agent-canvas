@@ -362,6 +362,7 @@ type BoardState = {
   workspaces: Record<string, LiveWorkspace>;
   /** The board repo's origin (https) — powers the GitHub shortcuts. */
   repoUrl: string | null;
+  cliIdentities: Record<string, { account?: string | null; model?: string | null; source?: string | null }>;
   /** Registered named CLI accounts (id → account). */
   accounts: Record<string, { account_id: string; cli: string; label: string }>;
   /** PTY bytes produced per usage key since this client connected — the
@@ -668,6 +669,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   edges: {},
   workspaces: {},
   repoUrl: null,
+  cliIdentities: {},
   accounts: {},
   memories: {},
   digest: null,
@@ -1111,6 +1113,7 @@ export const useBoard = create<BoardState>((set, get) => ({
               workspaces,
               approvals: msg.approvals ?? {},
               repoUrl: msg.repo_url ?? null,
+              cliIdentities: msg.cli_identities ?? {},
               automations,
               loops,
               boards: { main: "Main", ...boards },
