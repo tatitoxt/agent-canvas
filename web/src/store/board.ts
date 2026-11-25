@@ -461,6 +461,9 @@ type BoardState = {
   notify: (text: string) => void;
   vaultList: (dir: string) => void;
   repoTree: (dir: string) => void;
+  /** Directory the repo explorer opens to — set by per-agent file buttons. */
+  explorerDir: string | null;
+  openExplorer: (dir?: string) => void;
   repoRead: (dir: string, path: string) => void;
   vaultRead: (path: string) => void;
   vaultPeek: (path: string) => void;
@@ -1398,6 +1401,14 @@ export const useBoard = create<BoardState>((set, get) => ({
     set({ vaultDir: dir });
     try { localStorage.setItem("cv-vault-dir", dir); } catch { /* noop */ }
     client?.vaultList(dir);
+  },
+  explorerDir: null,
+  openExplorer: (dir) => {
+    if (dir) set({ explorerDir: dir });
+    const board = get().activeBoard;
+    const exists = get().panelNodes[board]?.["panel-explorer"];
+    if (exists) get().requestFocus("panel-explorer");
+    else get().openPanelNode("explorer");
   },
   repoTree: (dir) => {
     set({ repoEntries: [], repoFile: null });
