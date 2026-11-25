@@ -1188,7 +1188,15 @@ export const useBoard = create<BoardState>((set, get) => ({
     // back to exactly the rect it floated at before.
     const m = n.maximized
       ? { ...n, maximized: false, ...(n.prevRect ?? {}) }
-      : { ...n, maximized: true, collapsed: false, prevRect: { x: n.x, y: n.y, w: n.w, h: n.h }, ...(viewRect ?? {}) };
+      : {
+          ...n,
+          maximized: true,
+          collapsed: false,
+          // Restore to the expanded height — a collapsed card stores only
+          // its 34px title bar in h, the real height lives in expandH.
+          prevRect: { x: n.x, y: n.y, w: n.w, h: n.collapsed ? n.expandH ?? n.h : n.h },
+          ...(viewRect ?? {}),
+        };
     const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: m } };
     localStorage.setItem("cv-panelnodes", JSON.stringify(next));
     set({ panelNodes: next });
@@ -1258,7 +1266,10 @@ export const useBoard = create<BoardState>((set, get) => ({
     let newId = `${id}-${i}`;
     while (get().panelNodes[board]?.[newId]) newId = `${id}-${++i}`;
     const off = dir === "right" ? { x: n.x + n.w + 16, y: n.y } : { x: n.x, y: n.y + n.h + 16 };
-    const m = { ...(get().panelNodes[board] ?? {}), [newId]: { ...n, ...off } };
+    // Never clone the maximize bookkeeping: two cards sharing one
+    // prevRect would restore onto the exact same spot.
+    const { maximized: _mx, prevRect: _pr, ...rest } = n;
+    const m = { ...(get().panelNodes[board] ?? {}), [newId]: { ...rest, ...off } };
     const next = { ...get().panelNodes, [board]: m };
     localStorage.setItem("cv-panelnodes", JSON.stringify(next));
     set({ panelNodes: next });

@@ -107,7 +107,9 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
             if (n.maximized) {
               useBoard.getState().maximizePanelNode(id);
             } else {
-              const tl = rf.screenToFlowPosition({ x: 12, y: 12 });
+              // y=64 keeps the title bar below the top chrome — otherwise
+              // the restore button lands under the topbar and can't be clicked.
+              const tl = rf.screenToFlowPosition({ x: 12, y: 64 });
               const br = rf.screenToFlowPosition({ x: window.innerWidth - 12, y: window.innerHeight - 12 });
               useBoard.getState().maximizePanelNode(id, { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y });
             }
