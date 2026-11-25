@@ -127,6 +127,18 @@ test("card summary preference hides live previews and restores after reload", as
   await expect(page.locator(".agent-card").first().getByTestId("agent-card-task")).toHaveCount(0);
 });
 
+test("Settings clear action names its exited-agent scope and reports an empty result", async ({ page }) => {
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
+  await page.locator("button[title='Settings']").click();
+  const settings = page.locator(".react-flow__node-panel [data-panel='settings']").first();
+  const clear = settings.getByRole("button", { name: "Clear exited agents" });
+  await expect(clear).toHaveText("clear exited agents");
+  await clear.click();
+  await expect(settings.getByRole("button", { name: "Clear exited agents" })).toHaveText("no exited agents");
+});
+
 test("board settings import rejects malformed data without partial writes", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("cv-theme", "obsidian"));
   const { port } = stack();

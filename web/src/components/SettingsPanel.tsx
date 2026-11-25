@@ -141,11 +141,12 @@ export function SettingsPanel() {
       <div style={label}>Canvas</div>
       <div style={{ padding: "0 12px 8px", display: "flex", gap: 8 }}>
         <button
+          aria-label="Clear exited agents"
           className="glass"
           style={rowBtn}
           onClick={() => setCleared(clearDone())}
         >
-          {cleared == null ? "clear done agents" : cleared > 0 ? `cleared ${cleared}` : "nothing to clear"}
+          {cleared == null ? "clear exited agents" : cleared > 0 ? `cleared ${cleared} exited` : "no exited agents"}
         </button>
         <button
           className="glass"
