@@ -563,7 +563,17 @@ fn spawn_agent(
                         // body and std::sync::Mutex is not reentrant.
                         let edge = state_fb.pending_results.lock().unwrap().remove(&id);
                         if let Some(edge) = edge {
-                            state_fb.pending_results.lock().unwrap().insert(new_id.clone(), edge);
+                            // The replacement may have exited in the microseconds
+                            // since spawn — its exit runs on a different watcher,
+                            // so a ticket keyed to it would strand in flight.
+                            // Already dead: fail the ticket now instead.
+                            let replacement_live = state_fb.agents.statuses().iter().any(|(aid, st)| aid == &new_id && *st != "exited");
+                            if replacement_live {
+                                state_fb.pending_results.lock().unwrap().insert(new_id.clone(), edge);
+                            } else {
+                                let _ = store2.delegation_failed(&edge, 0);
+                                let _ = ev2.send(Event::Control(ServerMsg::DelegationFailed { edge_id: edge }));
+                            }
                         }
                         let _ = state_fb.events.send(Event::Control(ServerMsg::Spawned {
                             agent_id: new_id,
