@@ -7,7 +7,21 @@ import { Icon } from "./icons";
 /** Right-click on empty canvas — Deska "Add to board": drops any tool
  * panel as a card at the click point. */
 export function PaneMenu({ x, y, onClose }: { x: number; y: number; onClose: () => void }) {
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, getViewport } = useReactFlow();
+
+  // Keep the spawned card inside the visible canvas — a click near the
+  // right/bottom edge must not plant a wide card mostly offscreen.
+  const clampToView = (p: { x: number; y: number }, w: number, h: number) => {
+    const vp = getViewport();
+    const left = -vp.x / vp.zoom;
+    const top = -vp.y / vp.zoom;
+    const right = left + window.innerWidth / vp.zoom;
+    const bottom = top + window.innerHeight / vp.zoom;
+    return {
+      x: Math.min(Math.max(p.x, left + 16), Math.max(left + 16, right - w - 16)),
+      y: Math.min(Math.max(p.y, top + 16), Math.max(top + 16, bottom - h - 16)),
+    };
+  };
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,7 +59,7 @@ export function PaneMenu({ x, y, onClose }: { x: number; y: number; onClose: () 
         onClick={() => {
           const p = screenToFlowPosition({ x, y });
           const b = useBoard.getState();
-          b.setPendingTermPos({ x: p.x, y: p.y });
+          b.setPendingTermPos(clampToView(p, 560, 320));
           b.spawn("terminal", "bash");
           onClose();
         }}
@@ -72,7 +86,7 @@ export function PaneMenu({ x, y, onClose }: { x: number; y: number; onClose: () 
         onClick={() => {
           const p = screenToFlowPosition({ x, y });
           const b = useBoard.getState();
-          b.setPendingSpawnPos({ x: p.x, y: p.y });
+          b.setPendingSpawnPos(clampToView(p, 460, 220));
           b.setSpawnOpen(true);
           onClose();
         }}
@@ -103,7 +117,7 @@ export function PaneMenu({ x, y, onClose }: { x: number; y: number; onClose: () 
           key={key}
           onClick={() => {
             const p = screenToFlowPosition({ x, y });
-            useBoard.getState().openPanelNode(key, p, { w: def.w, h: def.h });
+            useBoard.getState().openPanelNode(key, clampToView(p, def.w ?? 380, def.h ?? 320), { w: def.w, h: def.h });
             onClose();
           }}
           style={{

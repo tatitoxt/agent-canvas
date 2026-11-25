@@ -323,6 +323,9 @@ type BoardState = {
   setPendingTermPos: (p: { x: number; y: number } | null) => void;
   /** Same trick for the spawn chooser: right-click "New agent…" plants the
    * spawned card where the click landed. Consumed once. */
+  /** Visible canvas rect in flow coords — synced from App's viewport so
+   * position-dependent actions (pop-out, spawn) can clamp into view. */
+  viewportRect: { left: number; top: number; right: number; bottom: number } | null;
   pendingSpawnPos: { x: number; y: number } | null;
   setPendingSpawnPos: (p: { x: number; y: number } | null) => void;
   openTermNode: (agentId: string, pos?: { x: number; y: number }) => void;
@@ -1184,6 +1187,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   })(),
   pendingTermPos: null,
   setPendingTermPos: (p) => set({ pendingTermPos: p }),
+  viewportRect: null,
   pendingSpawnPos: null,
   setPendingSpawnPos: (p) => set({ pendingSpawnPos: p }),
   openTermNode: (agentId, pos) => {
@@ -1194,8 +1198,17 @@ export const useBoard = create<BoardState>((set, get) => ({
     // Default spot: just right of the agent's own card so the popped-out
     // terminal lands next to what it belongs to.
     const ap = get().positions[agentId];
-    const fx = pos?.x ?? (ap ? ap.x + 360 : 420 + Math.random() * 140);
-    const fy = pos?.y ?? (ap ? ap.y : 160 + Math.random() * 90);
+    let fx = pos?.x ?? (ap ? ap.x + 360 : 420 + Math.random() * 140);
+    let fy = pos?.y ?? (ap ? ap.y : 160 + Math.random() * 90);
+    // Pop-out must stay visible: an agent parked near the right edge would
+    // otherwise push its 560px terminal card offscreen. Flip left of the
+    // card first, then clamp into the visible rect.
+    const vp = get().viewportRect;
+    if (vp && !pos) {
+      if (fx + 560 > vp.right - 16 && ap) fx = ap.x - 560 - 24;
+      fx = Math.min(Math.max(fx, vp.left + 16), Math.max(vp.left + 16, vp.right - 560 - 16));
+      fy = Math.min(Math.max(fy, vp.top + 16), Math.max(vp.top + 16, vp.bottom - 320 - 16));
+    }
     const m = { ...(get().termNodes[board] ?? {}), [id]: { x: fx, y: fy, w: 560, h: 320 } };
     const next = { ...get().termNodes, [board]: m };
     localStorage.setItem("cv-termnodes", JSON.stringify(next));
@@ -1295,7 +1308,14 @@ export const useBoard = create<BoardState>((set, get) => ({
       if (!item) return all;
       const src = { ...(all[board] ?? {}) };
       delete src[id];
-      const next = { ...all, [board]: src, [boardId]: { ...(all[boardId] ?? {}), [id]: item } };
+      // Singleton cards (panels, terms) may already exist on the destination
+      // board with their own carefully-arranged layout — dropping a second
+      // copy must not clobber it. Keep the destination card; the source
+      // copy simply closes.
+      const dst = all[boardId]?.[id]
+        ? (all[boardId] ?? {})
+        : { ...(all[boardId] ?? {}), [id]: item };
+      const next = { ...all, [board]: src, [boardId]: dst };
       localStorage.setItem(key, JSON.stringify(next));
       return next;
     };
