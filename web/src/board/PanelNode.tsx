@@ -80,6 +80,16 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
         )}
         <span style={{ fontSize: 11, fontWeight: 650, color: "var(--cv-ink)" }}>{def.title}</span>
         <span style={{ flex: 1 }} />
+        <span
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+            opacity: selected ? 1 : 0,
+            pointerEvents: selected ? "auto" : "none",
+            transition: "opacity 160ms ease",
+          }}
+        >
         <button
           className="nodrag"
           title={n.collapsed ? "Expand" : "Collapse"}
@@ -161,6 +171,7 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
         >
           <Icon name="ph-x" size={13} color="var(--cv-ink)" />
         </button>
+        </span>
       </div>
       {!n.collapsed && (
         <div className="nodrag nowheel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
