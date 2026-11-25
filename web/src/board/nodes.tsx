@@ -208,6 +208,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       style={{
         position: "relative",
         width: customSize?.w ?? 460,
+        minHeight: customSize?.h,
         padding: 0,
         // Fausto's spec: a light trail orbits the border in the state color
         // (card-ring reads --cv-ring). Selection is a DIFFERENT outline —
