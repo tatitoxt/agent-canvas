@@ -88,6 +88,17 @@ test("topbar controls fuse into one glass bubble on hover", async ({ page }) => 
   await expect.poll(() => bar.evaluate((el) => getComputedStyle(el).boxShadow)).toBe("none");
 });
 
+test("topbar labels Panels and opens Mission Map from its live summary", async ({ page }) => {
+  await boot(page);
+  await expect(page.getByRole("button", { name: /Panels/ })).toBeVisible();
+  const mission = page.getByRole("button", { name: /Mission Map.*live/ });
+  await expect(mission).toBeVisible();
+  await mission.click();
+  const panel = page.locator(".react-flow__node-panel").filter({ hasText: "Mission Map" }).first();
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText(/terminals · .*active/)).toBeVisible();
+});
+
 test("Tools Add shape opens its choices and creates a canvas shape", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();

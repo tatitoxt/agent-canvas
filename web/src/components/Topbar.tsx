@@ -101,7 +101,7 @@ export function Topbar({
   const webNodes = useBoard((s) => s.webNodes);
   const orchestrators = useBoard((s) => s.orchestrators);
 
-  const [menu, setMenu] = useState<"machine" | "ws" | "wt" | "tasks" | "usage" | "panels" | null>(null);
+  const [menu, setMenu] = useState<"machine" | "ws" | "wt" | "tasks" | "panels" | null>(null);
   const [wsName, setWsName] = useState("");
   const [wsRepo, setWsRepo] = useState("");
 
@@ -186,7 +186,7 @@ export function Topbar({
     return () => window.removeEventListener("mousedown", onDown);
   }, [menu]);
 
-  const drop = (key: "machine" | "ws" | "wt" | "tasks" | "usage" | "panels", node: React.ReactNode) =>
+  const drop = (key: "machine" | "ws" | "wt" | "tasks" | "panels", node: React.ReactNode) =>
     menu === key ? (
       <div
         className="cv-menu cv-menu-scroll"
@@ -412,23 +412,32 @@ export function Topbar({
         <div style={{ position: "relative" }}>
           <button
             className="glass-pill"
-            style={{ ...iconBtn(menu === "panels"), background: "transparent", border: "none" }}
+            style={{
+              ...pill,
+              ...iconBtn(menu === "panels"),
+              width: "auto",
+              padding: "0 10px",
+              display: "flex",
+              gap: 7,
+              background: "transparent",
+              border: "none",
+              fontSize: 11,
+              color: menu === "panels" ? "var(--cv-accent)" : "var(--cv-ink-dim)",
+            }}
             title="Panels on the canvas — which terminals are open"
             onClick={() => setMenu((m) => (m === "panels" ? null : "panels"))}
           >
             <Icon name="windows" size={15} color={menu === "panels" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+            <span>Panels</span>
             {panelItems.length > 0 && (
               <span
                 style={{
-                  position: "absolute",
-                  top: 2,
-                  right: 2,
                   minWidth: 13,
-                  height: 13,
+                  height: 17,
                   borderRadius: 999,
                   background: "var(--cv-glass-hi)",
                   color: "var(--cv-ink)",
-                  fontSize: 8.5,
+                  fontSize: 9,
                   fontWeight: 700,
                   display: "grid",
                   placeItems: "center",
@@ -491,33 +500,38 @@ export function Topbar({
             </>
           ))}
         </div>
-        <div style={{ position: "relative" }}>
-          <button
-            className="glass-pill"
-            style={{ ...pill, border: "none", background: "transparent", fontSize: 10.5, color: "var(--cv-ink-dim)" }}
-            title="Usage — PTY output captured per agent"
-            onClick={() => setMenu((m) => (m === "usage" ? null : "usage"))}
-          >
+        <button
+          className="glass-pill cv-topbar-summary"
+          style={{
+            ...pill,
+            height: 34,
+            padding: "0 11px",
+            border: "none",
+            background: "transparent",
+            color: nav === "usage" ? "var(--cv-accent)" : "var(--cv-ink-dim)",
+            gap: 7,
+          }}
+          title="Mission Map — agents, terminals, models and accounts"
+          onClick={() => onNav("usage")}
+        >
+          <Icon name="mission-map" size={15} color={nav === "usage" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <span>Mission Map</span>
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "3px 7px",
+            borderRadius: 999,
+            background: "var(--cv-glass-hi)",
+            color: "var(--cv-ink)",
+            fontSize: 10,
+            fontWeight: 650,
+            fontVariantNumeric: "tabular-nums",
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: 999, background: liveAgents.length ? "var(--cv-working)" : "var(--cv-ink-faint)" }} />
             {liveAgents.length} live
-            <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>▾</span>
-          </button>
-          {drop("usage", (
-            <>
-              <div style={sectionLabel}>Usage</div>
-              {liveAgents.length === 0 &&
-                row("monitor", "no live agents", "spawn one from the + button")}
-              {liveAgents.map((a) => {
-                const kb = (a.output_bytes ?? 0) / 1024;
-                return row(
-                  "terminal",
-                  a.name,
-                  `${a.status} · ${kb < 1024 ? `${kb.toFixed(1)} KB` : `${(kb / 1024).toFixed(1)} MB`} output`,
-                  () => useBoard.getState().requestFocus(a.id),
-                );
-              })}
-            </>
-          ))}
-        </div>
+          </span>
+        </button>
         <button
           className="glass-pill"
           style={{ ...iconBtn(false), background: "transparent", border: "none" }}
@@ -562,14 +576,6 @@ export function Topbar({
               {notifCount}
             </span>
           )}
-        </button>
-        <button
-          className="glass-pill"
-          style={{ ...iconBtn(nav === "usage"), background: "transparent", border: "none" }}
-          title="Mission Map — agents, terminals, models and accounts"
-          onClick={() => onNav("usage")}
-        >
-          <Icon name="orchestrator" size={15} color={nav === "usage" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
         </button>
         <button
           className="glass-pill"

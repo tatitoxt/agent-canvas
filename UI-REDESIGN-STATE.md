@@ -175,4 +175,6 @@ REMAINING LEVERS if still slow:
 - [x] Roadmap reconciliado con evidencia actual: Library sin flyout y routing que esquiva tarjetas están completados; PTY interactiva queda validada para shell, pero falta una pasada manual con CLIs de IA reales.
 - [x] Validación tras el tema Paper: 23/23 unit tests, 31/31 E2E, typecheck, build y `git diff --check`.
 - [x] CI de PR #47 tras `753ae07`: Devin Review, canvasd, e2e, Tauri macOS, Tauri Ubuntu y web pasan.
-- [ ] Siguiente lote: auditar el chrome restante y densidad/alineación de paneles contra la captura Deska; mantener PR #47 abierto y sin merge.
+- [x] Topbar: Panels y Mission Map ahora son controles etiquetados; el resumen live abre Mission Map y se eliminó el acceso duplicado con icono de orchestrator. E2E verifica navegación y panel.
+- [x] Validación topbar: typecheck, build, 23/23 unit tests, 32/32 E2E, captura revisada y `git diff --check`.
+- [ ] Siguiente lote: auditar densidad/alineación de paneles y controles del chrome contra la captura Deska; mantener PR #47 abierto y sin merge.
