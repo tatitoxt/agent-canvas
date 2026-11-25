@@ -26,8 +26,26 @@ test("Add Explorer to canvas mounts a live repository file browser", async ({ pa
   const explorerNode = page.locator(".react-flow__node[data-id='panel-explorer']");
   await expect(explorerNode).toBeVisible();
   await expect(explorerNode.getByText("select a file")).toBeVisible();
+  await explorerNode.click({ position: { x: 32, y: 16 } });
+  const resizeHandle = explorerNode.locator(".react-flow__resize-control.handle.bottom.right");
+  await expect(resizeHandle).toBeVisible();
+  const grip = await resizeHandle.boundingBox();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + grip!.width / 2 + 120, grip!.y + grip!.height / 2 + 80, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => page.evaluate(() => {
+    const nodes = JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}");
+    return nodes.main?.["panel-explorer"]?.w ?? 0;
+  })).toBeGreaterThan(480);
+  const persistedHeight = await page.evaluate(() => {
+    const nodes = JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}");
+    return nodes.main?.["panel-explorer"]?.h ?? 0;
+  });
+  expect(persistedHeight).toBeGreaterThan(480);
+  await explorerNode.locator("select").selectOption(repo);
   const readme = explorerNode.getByRole("button", { name: "README.md" });
   await expect(readme).toBeVisible({ timeout: 8_000 });
   await readme.click();
-  await expect(explorerNode.locator("pre")).toContainText("# e2e workspace repo");
+  await expect(explorerNode.locator("pre")).toContainText("# e2e scratch repo");
 });

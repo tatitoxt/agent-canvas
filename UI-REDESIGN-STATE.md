@@ -13,7 +13,7 @@
 4. [x] Labels de cables más fuertes — HECHO (12px font-medium)
 5. [ ] **Cables no deben atravesar cards** — routing prolijo. Actualmente los edges van en línea recta/curva simple y cruzan nodos. Implementar obstacle-aware routing (ver `web/src/board/edges.tsx` — custom edge component). Opciones: routing con waypoints que esquiva bounding boxes de nodos, o elevar z-index visual + curvar alrededor. Fausto: "el cable pasa por todo arriba de Atlas, no se nota, pero cuando hacés clic en dock se ve que se cortan las terminales".
 6. [x] Minimap chico abajo-derecha + zoom controls — YA ESTÁ así (mmSize 148×96, marginRight 184). Confirmar visualmente con Fausto qué le pareció "horrible" — quizás eran los colores viejos (ya actualizados a verde working).
-7. [x] **File explorer como ventana del canvas** — verificado creando un workspace, agregando Explorer a canvas, leyendo `README.md` y probando que la tarjeta se puede mover. Agregar cobertura de resize en otra iteración.
+7. [x] **File explorer como ventana del canvas** — E2E crea un workspace, agrega Explorer al canvas, lo mueve, lo redimensiona con persistencia y abre `README.md`.
 8. [ ] **Terminales usables de verdad** — el daemon canvasd nunca terminó de compilar. Relanzado: `cargo build -p canvasd` en el worktree (background shell). Cuando esté: correrlo en :4242 y spawnear agentes reales para probar escribir en las PTYs. Nota: el hijo encontró una vuln de path traversal y estaba implementando sandbox allowedRoots — verificar estado de eso en main.
 
 ## Decisiones de diseño ya aplicadas (no revertir)
@@ -138,5 +138,6 @@ REMAINING LEVERS if still slow:
 - [x] Add to Board de Artifacts verificado en E2E: cierra Tools y monta la biblioteca con su control `+ new` activo.
 - [x] Tools: corregido el cierre prematuro del submenú compartido; New workspace y Add shape ahora mantienen sus opciones abiertas. Las formas nuevas se ubican dentro del viewport visible. E2E cubre ambas rutas.
 - [x] Explorer: el E2E crea un workspace, agrega la ventana al canvas, lista y abre README.md. La prueba corre al final porque crea estado compartido en el daemon del harness.
+- [x] Explorer resize: el E2E agranda el panel y verifica que ancho/alto persisten en el estado del board.
 - [x] Suite E2E robustecida: selectores de terminal apuntan a nodos agente, selección evita controles del header, doble clic busca una zona despejada y el resize apunta al grip bottom-right. 25/25 E2E pasan localmente.
 - [ ] Próximo orden sugerido: revisar el file explorer flotante; después seguir con los pendientes visuales de topbar y chrome. Mantener cada lote pequeño y verificable en PR #47, sin merge.
