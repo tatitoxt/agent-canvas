@@ -159,4 +159,6 @@ REMAINING LEVERS if still slow:
 - [x] E2E integral tras sincronización de geometría: 29/29; typecheck, build y 23 unit tests pasan.
 - [x] Terminales flotantes: el header ahora ofrece maximizar/restaurar con persistencia del rectángulo anterior; la PTY permanece montada. E2E lo activa por teclado y verifica el tamaño al volver.
 - [x] E2E completa tras maximize/restore de terminales: 29/29; typecheck, build y 23 unit tests pasan.
+- [x] Demo offline: el chequeo de geometría del cache se restringió a cards `panel-` y `term-`; E2E detectó y previene el loop de actualizaciones que aparecía al arrancar sin daemon.
+- [x] Validación completa tras aislar el chequeo geométrico: 30/30 E2E, 23 unit tests, typecheck, build y `git diff --check` pasan.
 - [ ] Próximo orden sugerido: auditar los demás controles/estados del chrome contra la captura de referencia y corregir discrepancias visibles/funcionales. Mantener lotes pequeños y verificables en PR #47, sin merge.

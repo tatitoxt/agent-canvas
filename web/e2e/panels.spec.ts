@@ -4,6 +4,20 @@ import { resolve } from "node:path";
 
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
 
+test("offline demo mounts without a React update loop", async ({ page }) => {
+  const { port } = stack();
+  const depthErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("Maximum update depth exceeded")) {
+      depthErrors.push(message.text());
+    }
+  });
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(900);
+  expect(depthErrors).toEqual([]);
+});
+
 async function boot(page: import("@playwright/test").Page) {
   const { port, token, vault, repo } = stack();
   await page.addInitScript((v) => localStorage.setItem("cv-vault-dir", v), vault);

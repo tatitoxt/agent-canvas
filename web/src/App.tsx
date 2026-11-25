@@ -624,11 +624,13 @@ function Board() {
         // store-derived node. A maximize/restore can update the store before
         // React Flow has flushed its measured position and size; blindly
         // reusing that stale object leaves restored cards at viewport size.
-        const geometryMatches =
+        const hasControlledCardGeometry = /^(panel|term)-/.test(b.id);
+        const geometryMatches = !hasControlledCardGeometry || (
           p.position.x === base.position.x &&
           p.position.y === base.position.y &&
           p.style?.width === base.style?.width &&
-          p.style?.height === base.style?.height;
+          p.style?.height === base.style?.height
+        );
         if (cached?.sig === sig && geometryMatches) return p;
         return { ...base, selected: p.selected, dragging: p.dragging };
       });
