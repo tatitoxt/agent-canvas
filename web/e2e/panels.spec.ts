@@ -110,7 +110,17 @@ test("topbar controls fuse into one glass bubble on hover", async ({ page }) => 
 
 test("topbar labels Panels and opens Mission Map from its live summary", async ({ page }) => {
   await boot(page);
-  await expect(page.getByRole("button", { name: /Panels/ })).toBeVisible();
+  await page.locator("button[title*='New task']").first().click();
+  await page.locator("button[title='Terminal']").click();
+  await page.locator("button", { hasText: "+ spawn" }).last().click();
+  await expect(page.locator(".react-flow__node-agent").first()).toBeVisible({ timeout: 10_000 });
+  const panelsButton = page.getByRole("button", { name: /Panels/ });
+  await expect(panelsButton).toBeVisible();
+  await panelsButton.click();
+  const panelsMenu = page.locator(".cv-menu-scroll").filter({ hasText: "Panels ·" }).first();
+  await expect(panelsMenu).toBeVisible();
+  await expect(panelsMenu.getByRole("button", { name: /Terminal/ }).first()).toBeVisible();
+  await panelsButton.click();
   const mission = page.getByRole("button", { name: /Mission Map.*live/ });
   await expect(mission).toBeVisible();
   await mission.click();

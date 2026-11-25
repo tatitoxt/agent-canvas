@@ -459,6 +459,9 @@ function Board() {
   }, [pencil]);
 
   const baseNodes = useMemo<Node<BoardNodeData>[]>(() => {
+    const fallbackWorkspaceAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard && a.workspace_id && !positions[a.id]);
+    const wsFallbackCount = new Map<string, number>();
+    for (const a of fallbackWorkspaceAgents) wsFallbackCount.set(a.workspace_id!, (wsFallbackCount.get(a.workspace_id!) ?? 0) + 1);
     const wsNodes: Node<BoardNodeData>[] = Object.values(workspaces)
       .filter((w) => (w.board_id ?? "main") === activeBoard)
       .map((w) => ({
@@ -466,7 +469,10 @@ function Board() {
       type: "workspace" as const,
       deletable: false,
       position: positions[w.id] ?? { x: 60, y: 60 },
-      style: { width: workspaceSizes[w.id]?.w ?? 900, height: workspaceSizes[w.id]?.h ?? 540 },
+      style: {
+        width: workspaceSizes[w.id]?.w ?? 900,
+        height: Math.max(workspaceSizes[w.id]?.h ?? 540, 100 + (wsFallbackCount.get(w.id) ?? 0) * 284),
+      },
       className: "cv-workspace-node",
       data: { kind: "workspace" as const, name: w.name, repo: w.repo },
     }));
@@ -489,13 +495,21 @@ function Board() {
       explicitLoose.map((a) => ({ ...positions[a.id], w: agentSizes[a.id]?.w ?? 460, h: agentSizes[a.id]?.h ?? 260 })),
     );
     const looseFallbackById = new Map(missingLoose.map((a, index) => [a.id, looseFallbacks[index]]));
+    const workspaceFallbackById = new Map<string, { x: number; y: number }>();
+    const workspaceOffsets = new Map<string, number>();
+    for (const a of boardAgents) {
+      if (!a.workspace_id || positions[a.id]) continue;
+      const offset = workspaceOffsets.get(a.workspace_id) ?? 0;
+      workspaceFallbackById.set(a.id, { x: 24, y: 64 + offset * 284 });
+      workspaceOffsets.set(a.workspace_id, offset + 1);
+    }
     let i = 0;
     const live = boardAgents
       .map((a) => {
       const ws = a.workspace_id ? workspaces[a.workspace_id] : undefined;
       const position = positions[a.id] ??
         (ws
-          ? { x: 24 + (i % 2) * 484, y: 64 + Math.floor(i / 2) * 284 }
+          ? (workspaceFallbackById.get(a.id) ?? { x: 24, y: 64 })
           : (positions[a.id] ?? looseFallbackById.get(a.id) ?? { x: 24, y: 64 }));
       i += 1;
       const csz = agentSizes[a.id];

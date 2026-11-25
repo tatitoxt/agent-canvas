@@ -161,7 +161,7 @@ REMAINING LEVERS if still slow:
 - [x] E2E completa tras maximize/restore de terminales: 29/29; typecheck, build y 23 unit tests pasan.
 - [x] Demo offline: el chequeo de geometría del cache se restringió a cards `panel-` y `term-`; E2E detectó y previene el loop de actualizaciones que aparecía al arrancar sin daemon.
 - [x] Validación completa tras aislar el chequeo geométrico: 30/30 E2E, 23 unit tests, typecheck, build y `git diff --check` pasan.
-- [ ] Próximo orden sugerido: auditar los demás controles/estados del chrome contra la captura de referencia y corregir discrepancias visibles/funcionales. Mantener lotes pequeños y verificables en PR #47, sin merge.
+- [x] Panels switcher audit: las posiciones fallback de agentes y las dimensiones de workspace ahora coinciden con el layout real del canvas; los títulos respetan el orden Terminal N. E2E abre el switcher y verifica que una terminal se pueda enfocar.
 
 ## Obsidian en el canvas (2026-11-25)
 - [x] Las ventanas de notas fijadas al board ahora reutilizan el renderer Markdown del Vault real: headings, formato inline, tareas, embeds, imágenes locales, wikilinks resueltos/no resueltos y previews compatibles con el vault conectado. La ventana mantiene su lectura viva del archivo y resize, con marca LIVE VAULT y el icono oficial.
@@ -181,4 +181,6 @@ REMAINING LEVERS if still slow:
 - [x] Spawn placement: agentes sin posición aparecen en espacios libres visibles; spawn múltiple reserva posiciones independientes antes de recibir eventos del daemon; `Gather` comparte la distribución fallback; workspace spawn crece el marco y apila tarjetas con el tamaño real. Validación: 26/26 unit tests, 32/32 E2E, typecheck, build y `git diff --check`. Captura revisada en `/tmp/canvas-design/spawn-layout-final3.png`.
 - [x] Tarjetas de agentes: cabecera en dos filas para separar Terminal/rol/acciones de estado/CLI, con icono de terminal y marcas de modelo legibles. El demo ajusta tamaño/posición de workspaces para que React Flow no recorte tarjetas ni las apile en el borde.
 - [x] Validación visual y automatizada de tarjetas: captura revisada; E2E comprueba nombre, estado, CLI, jerarquía de la cabecera y ausencia de solapamientos; build, typecheck, 23/23 unit tests, 32/32 E2E y `git diff --check` pasan.
-- [ ] Siguiente lote: auditar densidad/alineación de paneles y controles del chrome contra la captura Deska; mantener PR #47 abierto y sin merge.
+- [x] Panels switcher actualizado para compartir la colocación real de agentes sin posición, el orden de Terminal N y el tamaño dinámico de workspaces. E2E valida apertura, fila de terminal y navegación a Mission Map.
+- [x] Validación tras alinear Panels: 26/26 unit tests, typecheck, build, 32/32 E2E y `git diff --check`.
+- [ ] Siguiente lote: seguir auditando densidad y alineación de paneles/chrome contra la referencia Deska; mantener PR #47 abierto y sin merge.

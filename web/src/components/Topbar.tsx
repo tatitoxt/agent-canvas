@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useBoard } from "../store/board";
+import { getAgentSpawnPositions, useBoard } from "../store/board";
 import { isTauri } from "../daemon/tauriClient";
 import { Icon } from "./icons";
 import { ToolsMenu, type ToolsMenuActions } from "./ToolsRail";
@@ -100,6 +100,9 @@ export function Topbar({
 
   const shapes = useBoard((s) => s.shapes);
   const positions = useBoard((s) => s.positions);
+  const workspaceSizes = useBoard((s) => s.workspaceSizes);
+  const agentSizes = useBoard((s) => s.agentSizes);
+  const viewportRect = useBoard((s) => s.viewportRect);
   const panelNodes = useBoard((s) => s.panelNodes);
   const termNodes = useBoard((s) => s.termNodes);
   const mdNodes = useBoard((s) => s.mdNodes);
@@ -116,9 +119,28 @@ export function Topbar({
   const panelItems: PanelItem[] = [];
   // Same ordering the board uses for "Terminal N" titles so the switcher
   // matches what the card header shows.
-  const boardAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard);
+  const boardAgents = Object.values(agents)
+    .filter((a) => (a.board_id ?? "main") === activeBoard)
+    .sort((a, b) => (a.seenAt ?? 0) - (b.seenAt ?? 0));
   const termNo = new Map(boardAgents.map((a, i) => [a.id, i + 1]));
-  boardAgents.forEach((a, agentIdx) => {
+  const looseAgents = boardAgents.filter((a) => !a.workspace_id);
+  const explicitLoose = looseAgents.filter((a) => positions[a.id]);
+  const missingLoose = looseAgents.filter((a) => !positions[a.id]);
+  const looseFallbacks = getAgentSpawnPositions(
+    missingLoose.length,
+    viewportRect,
+    explicitLoose.map((a) => ({ ...positions[a.id], w: agentSizes[a.id]?.w ?? 460, h: agentSizes[a.id]?.h ?? 260 })),
+  );
+  const looseFallbackById = new Map(missingLoose.map((a, i) => [a.id, looseFallbacks[i]]));
+  const workspaceFallbackById = new Map<string, { x: number; y: number }>();
+  const workspaceOffsets = new Map<string, number>();
+  for (const a of boardAgents) {
+    if (!a.workspace_id || positions[a.id]) continue;
+    const offset = workspaceOffsets.get(a.workspace_id) ?? 0;
+    workspaceFallbackById.set(a.id, { x: 24, y: 64 + offset * 284 });
+    workspaceOffsets.set(a.workspace_id, offset + 1);
+  }
+  boardAgents.forEach((a) => {
     // Agents inside a workspace keep positions RELATIVE to the parent node —
     // translate to absolute canvas coords so region grouping and focus work.
     // Never-dragged agents have no positions entry: replicate the canvas
@@ -126,8 +148,8 @@ export function Topbar({
     // unmoved workspace's rect — and group falsely under it.
     const ws = a.workspace_id ? workspaces[a.workspace_id] : undefined;
     const rel = positions[a.id] ?? (ws
-      ? { x: 60 + (agentIdx % 3) * 300, y: 80 + Math.floor(agentIdx / 3) * 190 }
-      : { x: 1000 + (agentIdx % 2) * 500, y: 60 + Math.floor(agentIdx / 2) * 300 });
+      ? (workspaceFallbackById.get(a.id) ?? { x: 24, y: 64 })
+      : (looseFallbackById.get(a.id) ?? { x: 24, y: 64 }));
     const base = ws ? (positions[ws.id] ?? { x: 60, y: 60 }) : { x: 0, y: 0 };
     const p = { x: base.x + rel.x, y: base.y + rel.y };
     const done = a.status === "exited";
@@ -169,7 +191,17 @@ export function Topbar({
     // Workspaces are regions too — terminals inside them group under the ws name.
     ...Object.values(workspaces)
       .filter((w) => (w.board_id ?? "main") === activeBoard)
-      .map((w) => ({ id: w.id, ...(positions[w.id] ?? { x: 60, y: 60 }), w: 900, h: 540, text: `workspace ${w.name}` })),
+      .map((w) => {
+        const fallbackCount = boardAgents.filter((a) => a.workspace_id === w.id && !positions[a.id]).length;
+        const size = workspaceSizes[w.id] ?? { w: 900, h: 540 };
+        return {
+          id: w.id,
+          ...(positions[w.id] ?? { x: 60, y: 60 }),
+          w: size.w,
+          h: Math.max(size.h, 100 + fallbackCount * 284),
+          text: `workspace ${w.name}`,
+        };
+      }),
   ];
   const itemRegion = (it: PanelItem) => {
     const hits = regionRects.filter((r) => it.cx >= r.x && it.cx <= r.x + r.w! && it.cy >= r.y && it.cy <= r.y + r.h!);
