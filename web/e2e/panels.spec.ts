@@ -101,6 +101,25 @@ test("Add to canvas closes Tools even when the dock is pinned", async ({ page })
   await expect(page.locator(".react-flow__node-panel [data-panel='automations']").first()).toBeVisible();
 });
 
+test("panel chrome minimizes, restores, and closes with accessible controls", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Inbox to canvas" }).click();
+  const panel = page.locator(".react-flow__node-panel").filter({ has: page.locator("[data-panel='inbox']") }).first();
+  await expect(panel).toBeVisible();
+  const minimize = panel.getByRole("button", { name: "Minimize panel" });
+  await minimize.focus();
+  await page.keyboard.press("Enter");
+  await expect(panel.locator(".nodrag.nowheel")).toBeHidden();
+  const expand = panel.getByRole("button", { name: "Expand panel" });
+  await expand.focus();
+  await page.keyboard.press("Enter");
+  await expect(panel.locator(".nodrag.nowheel")).toBeVisible();
+  await panel.getByRole("button", { name: "Close panel" }).click();
+  await expect(panel).toBeHidden();
+});
+
 test("bottom Files opens Obsidian and Code Editor opens the repo explorer", async ({ page }) => {
   await boot(page);
   const filesButton = page.locator("button[title='Files — open your Obsidian vault']");

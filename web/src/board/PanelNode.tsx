@@ -69,6 +69,9 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
           cursor: "grab",
         }}
         onDoubleClick={() => useBoard.getState().collapsePanelNode(id)}
+        onPointerDown={(e) => {
+          if ((e.target as HTMLElement).closest("button, a, input, select, textarea")) e.stopPropagation();
+        }}
       >
         {def.img ? (
           <img src={def.img} alt="" width={14} height={14} style={{ display: "block" }} />
@@ -80,7 +83,10 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
         <button
           className="nodrag"
           title={n.collapsed ? "Expand" : "Collapse"}
-          onClick={() => useBoard.getState().collapsePanelNode(id)}
+          aria-label={n.collapsed ? "Expand panel" : "Minimize panel"}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); useBoard.getState().collapsePanelNode(id); }}
           style={{
             width: 20,
             height: 20,
@@ -99,7 +105,11 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
         <button
           className="nodrag"
           title={n.maximized ? "Restore size" : "Maximize — fill the view"}
-          onClick={() => {
+          aria-label={n.maximized ? "Restore panel size" : "Maximize panel"}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
             if (n.maximized) {
               useBoard.getState().maximizePanelNode(id);
             } else {
@@ -128,7 +138,11 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
         <button
           className="nodrag"
           title="Close panel"
-          onClick={() => {
+          aria-label="Close panel"
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
             useBoard.getState().closePanelNode(id);
             useBoard.getState().requestNav("canvas");
           }}

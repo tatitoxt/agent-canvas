@@ -151,4 +151,6 @@ REMAINING LEVERS if still slow:
 - [x] E2E completo tras topbar: 26/26 pasan; typecheck y build pasan.
 - [x] Agent cards: controles de abrir terminal, colapsar y cerrar convertidos a botones nativos, accesibles por teclado; E2E abre la terminal con Enter y verifica el xterm interactivo.
 - [x] E2E completo tras controles accesibles: 27/27 pasan localmente; typecheck, build, 23 unit tests y `git diff --check` pasan.
+- [x] Paneles y terminales flotantes: chrome de minimizar/expandir/cerrar con nombres accesibles; los clicks no inician drag del header. E2E verifica minimizar/restaurar por teclado y cerrar el panel.
+- [x] E2E completa tras pulir el chrome de paneles: 28/28; typecheck, build y 23 unit tests pasan.
 - [ ] Próximo orden sugerido: auditar los demás controles/estados del chrome contra la captura de referencia y corregir discrepancias visibles/funcionales. Mantener lotes pequeños y verificables en PR #47, sin merge.

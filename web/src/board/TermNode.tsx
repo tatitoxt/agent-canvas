@@ -174,7 +174,10 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
         <button
           className="nodrag"
           title={n.collapsed ? "Expand" : "Collapse"}
-          onClick={() => useBoard.getState().collapseTermNode(id)}
+          aria-label={n.collapsed ? "Expand terminal card" : "Minimize terminal card"}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); useBoard.getState().collapseTermNode(id); }}
           style={{
             width: 20,
             height: 20,
@@ -193,7 +196,11 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
         <button
           className="nodrag"
           title="Put back — card closes, terminal returns to the drawer"
-          onClick={() => {
+          aria-label="Put terminal back in drawer"
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
             useBoard.getState().closeTermNode(id);
             actions?.openTerm?.({ id: agentId, name: agent?.name ?? "terminal" });
           }}
