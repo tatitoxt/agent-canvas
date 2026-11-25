@@ -63,3 +63,20 @@ The daemon validates every vault file path in its own process, never trusting th
 - paths must be relative, inside the vault root — absolute paths and `..` are refused;
 - symlinks that escape the vault are refused (canonicalized resolution);
 - the vault root itself must sit inside an **allowed root**: the board repo always qualifies, and extra roots (e.g. an external notes vault) opt in one per line in `.canvas/allowed-roots` (`~` is expanded). Denied operations return `access denied: path is outside allowed directories`.
+
+## Desktop auto-updates
+
+The Tauri shell embeds `web/dist`, so web changes only reach desktop users through a new app build. The updater flow:
+
+1. **One-time key setup** (repo admin):
+   ```
+   npm i -g @tauri-apps/cli@^2
+   tauri signer generate -w ~/.tauri/canvas.key
+   ```
+   Then paste the **public key** into `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`, and add two repo secrets (Settings → Secrets → Actions):
+   - `TAURI_SIGNING_PRIVATE_KEY` — contents of `~/.tauri/canvas.key`
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — the password used when generating
+2. **Release**: push a semver tag (`git tag v0.2.0 && git push origin v0.2.0`). The `release` workflow builds the `.app` + `.dmg` on a macOS runner, signs the updater artifacts, and publishes everything plus a `latest.json` manifest to GitHub Releases.
+3. **Client**: on launch the app checks `releases/latest/download/latest.json`; a newer signed build downloads and installs in the background.
+
+Until the pubkey/secrets are in place the workflow automatically builds **unsigned** (updater artifacts are disabled for that run) and still publishes the `.dmg`/`.app`; once the secrets exist, signed updater artifacts and `latest.json` are produced with no workflow changes.
