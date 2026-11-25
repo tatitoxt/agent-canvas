@@ -26,6 +26,7 @@
 - [x] Settings terminal font now persists in localStorage, restores safely only for valid 9–22 px values, reports an accessible size, and disables controls at the limits. Applying a new size updates and refits every xterm mirror for that PTY. E2E covers a live terminal, persistence, and both clamp behavior and reload restore.
 - [x] Board settings import now validates the Agent Canvas envelope, version, and every key/value before writing anything; invalid files produce a visible error instead of being silently ignored. Export URL cleanup is deferred until the download click has been processed. E2E covers valid theme restore and invalid input with no partial storage writes.
 - [x] Card summaries preference now persists. E2E verifies the task/mini-terminal summaries disappear from the cards, remain hidden after reload, and Settings displays the saved state.
+- [x] CI cleanup: release workflow’s tag-only trigger now ignores file pushes, so feature-branch PR commits do not create a failing release run; `v*` tag releases remain its trigger.
 - [x] Latest PR head `0d6c798` passed local 40/40 E2E; previous CI run passed web, canvasd, E2E and Tauri Ubuntu. Tauri macOS and Devin Review were still running at last poll.
 - [ ] Next visual pass: inspect resized-card body and overall panel/chrome density in desktop app, then continue remaining Deska/Symvibe feature gaps. Keep PR #47 open and do not merge.
 
