@@ -845,7 +845,7 @@ function ChainEditor({ workspaceId }: { workspaceId: string }) {
       </button>
       {open && (
         <div
-          className="glass"
+          className="glass nodrag"
           style={{ position: "absolute", top: 18, left: 0, zIndex: 40, padding: 8, borderRadius: 10, width: 190, fontSize: 11 }}
         >
           <div style={{ color: "var(--cv-ink-faint)", marginBottom: 6, fontSize: 10 }}>
@@ -854,6 +854,7 @@ function ChainEditor({ workspaceId }: { workspaceId: string }) {
           {items.map((cli, i) => (
             <div
               key={cli}
+              className="nodrag"
               draggable
               onDragStart={(e) => e.dataTransfer.setData("text/plain", String(i))}
               onDragOver={(e) => e.preventDefault()}

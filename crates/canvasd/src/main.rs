@@ -432,6 +432,9 @@ fn chain_for(state: &Arc<AppState>, workspace_id: Option<&str>, cli: &str) -> Ve
     }
     let configured = workspace_id
         .and_then(|w| state.store.workspace_chain(w).ok().flatten())
+        // An empty saved chain means "back to auto", not "no fallback" —
+        // the chain editor uses empty as its reset state.
+        .filter(|c| !c.is_empty())
         .unwrap_or_else(detected_chain);
     let mut chain: Vec<String> = Vec::new();
     if !cli.is_empty() {
