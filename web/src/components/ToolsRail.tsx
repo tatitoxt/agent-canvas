@@ -31,11 +31,11 @@ const rowBtn: React.CSSProperties = {
   alignItems: "center",
   gap: 9,
   width: "100%",
-  padding: "6px 10px",
+  padding: "7px 10px",
   border: "none",
   background: "transparent",
   color: "var(--cv-ink)",
-  fontSize: 11.5,
+  fontSize: 12.5,
   fontWeight: 550,
   textAlign: "left",
   cursor: "pointer",
@@ -43,12 +43,12 @@ const rowBtn: React.CSSProperties = {
 };
 
 const sectionLabel: React.CSSProperties = {
-  fontSize: 8.5,
+  fontSize: 9.5,
   fontWeight: 700,
-  letterSpacing: 1,
+  letterSpacing: 0.8,
   textTransform: "uppercase",
   color: "var(--cv-ink-faint)",
-  padding: "8px 10px 3px",
+  padding: "10px 10px 4px",
 };
 
 const miniInput: React.CSSProperties = {
@@ -136,7 +136,6 @@ export function ToolsMenu({
     >
       <Icon name={icon} size={14} color={on ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
       <span style={{ flex: 1 }}>{label}</span>
-      {hint && <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>{hint}</span>}
     </button>
   );
 
@@ -178,6 +177,22 @@ export function ToolsMenu({
           </header>
           <div className="cv-menu-scroll" style={{ flex: 1, overflowY: "auto", padding: collapsed ? "6px 5px" : "6px 6px 10px" }}>
           {!collapsed && <>
+          <div style={sectionLabel}>Apps &amp; panels</div>
+          {PANEL_ITEMS.map((it) => (
+            <div key={it.key} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <div style={{ flex: 1 }}>{item(it.icon, it.label, () => { onSelect(it.key); dismiss(); }, "hint" in it ? it.hint : undefined, active === it.key)}</div>
+              <button
+                title={`Add ${it.label} to canvas`}
+                aria-label={`Add ${it.label} to canvas`}
+                onClick={() => {
+                  actions.onAddToBoard?.(it.key);
+                  setOpen(false);
+                }}
+                style={{ border: "none", background: "transparent", color: "var(--cv-ink-faint)", borderRadius: 7, cursor: "pointer", padding: "5px 7px", fontSize: 12 }}
+              >+</button>
+            </div>
+          ))}
+          <div style={{ height: 1, margin: "8px 10px", background: "var(--cv-glass-edge)" }} />
           <div style={sectionLabel}>Board</div>
           {item("automations", "New orchestrator", () => { spawnOrchestrator(); dismiss(); }, "wire consoles, command all")}
           {item("accounts", "Team builder", () => { setTeamOpen(true); dismiss(); }, "roles × one CLI")}
@@ -221,21 +236,6 @@ export function ToolsMenu({
           {item("shot", "Canvas shot", () => { actions.onShot(); dismiss(); }, "⌘⇧S")}
           {item("digest", "Session digest", () => { actions.onDigest(); dismiss(); }, "lose nothing")}
           {item("studio", "Studio doc", () => { actions.onStudio(); dismiss(); }, "repo → dossier")}
-          <div style={sectionLabel}>Panels</div>
-          {PANEL_ITEMS.map((it) => (
-            <div key={it.key} style={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <div style={{ flex: 1 }}>{item(it.icon, it.label, () => { onSelect(it.key); dismiss(); }, "hint" in it ? it.hint : undefined, active === it.key)}</div>
-              <button
-                title={`Add ${it.label} to canvas`}
-                aria-label={`Add ${it.label} to canvas`}
-                onClick={() => {
-                  actions.onAddToBoard?.(it.key);
-                  setOpen(false);
-                }}
-                style={{ border: "none", background: "transparent", color: "var(--cv-ink-faint)", borderRadius: 7, cursor: "pointer", padding: "5px 7px", fontSize: 12 }}
-              >+</button>
-            </div>
-          ))}
           </>}
           {collapsed && PANEL_ITEMS.map((it) => <button key={it.key} title={it.label} aria-label={it.label} onClick={() => { onSelect(it.key); dismiss(); }} style={{ ...rowBtn, justifyContent: "center", padding: "9px 0", color: active === it.key ? "var(--cv-accent)" : "var(--cv-ink)" }}><Icon name={it.icon} size={16} /></button>)}
           </div>

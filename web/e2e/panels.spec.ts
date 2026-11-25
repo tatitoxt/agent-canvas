@@ -174,6 +174,10 @@ test("Tools opens as a dock and collapses to panel icons", async ({ page }) => {
   await page.locator("button[title^='Tools —']").click();
   const dock = page.getByRole("dialog", { name: "Tools panel" });
   await expect(dock).toBeVisible();
+  await expect(dock.getByText("Apps & panels", { exact: true })).toBeVisible();
+  const inboxRow = await dock.getByRole("button", { name: "Inbox", exact: true }).boundingBox();
+  const boardActions = await dock.getByRole("button", { name: "New orchestrator" }).boundingBox();
+  expect(inboxRow!.y).toBeLessThan(boardActions!.y);
   await expect(dock.getByText("Board", { exact: true })).toBeVisible();
   await dock.getByRole("button", { name: "Collapse Tools panel" }).click();
   await expect(dock.getByRole("button", { name: "Inbox" })).toBeVisible();
