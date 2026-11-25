@@ -29,7 +29,7 @@
   --cv-glass-hi: color-mix(in srgb, var(--cv-ink) 9%, var(--cv-base));
   --cv-glass-edge: color-mix(in srgb, var(--cv-ink) 12%, transparent);
   --cv-glass-shine: color-mix(in srgb, var(--cv-ink) 15%, transparent);
-  --cv-blur: 20px;
+  --cv-blur: 14px;
 
   /* one accent — warm amber, used with meaning only (CTAs, wiring) */
   --cv-accent: #f5a524;
