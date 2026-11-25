@@ -333,7 +333,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             style={{ cursor: "pointer", lineHeight: 1 }}
             onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }}
           >
-            —
+            <Icon name="minus" size={12} color="var(--cv-ink)" />
           </span>
           <span
             role="button"
@@ -341,7 +341,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             style={{ cursor: "pointer", lineHeight: 1, fontSize: 13 }}
             onClick={(e) => { e.stopPropagation(); if (data.id) useBoard.getState().kill(data.id); }}
           >
-            ×
+            <Icon name="x" size={12} color="var(--cv-ink)" />
           </span>
         </span>
       </div>

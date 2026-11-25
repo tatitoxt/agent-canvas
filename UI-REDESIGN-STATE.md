@@ -81,3 +81,21 @@ Fausto respondió la pregunta de la library con este screenshot — ES la respue
 2. Web: abrir `http://localhost:5173/?token=<TOKEN>` — la app conecta (punto verde junto a Tasks). Sin token queda "offline" y muestra el demo mock.
 3. Para screenshots de diseño usar el modo offline (demo con 5 cards); para probar terminales reales usar el token.
 4. Verificar: ¿el token se puede fijar fijo en dev? mirar si canvasd acepta env var o config — sería más cómodo que leerlo del log cada vez.
+
+## FEEDBACK FAUSTO — ronda 3 (2026-11-24 ~22:28, con captura live real)
+Hecho ya:
+- [x] UNA sola estela (el conic tenía dos arcos — él quiere un solo cometa)
+- [x] Selección ámbar con PRIORIDAD TOTAL: seleccionar oculta ring y border de estado, solo queda ámbar
+- [x] Símbolo pin/note ◈ eliminado del chrome de agent cards
+- [x] Chrome unicode → SVG icons (x/minus/zoom para maximize) en paneles y cards
+
+Pendiente ronda 3:
+- [ ] LIBRARY: el label "Library" está vertical (writingMode) y tiene que ser horizontal; el expand tiene que abrir HORIZONTALMENTE; sigue estando el flyout — eliminar
+- [ ] RESIZE: no se puede resizear NADA — todo tiene que ser resizeable (agent cards no tienen NodeResizer! panels sí pero quizás roto)
+- [ ] GATHER: no anda — solo crea grupos/regions pero no junta las cards. Texto "Gather / No loose windows" aparece mal posicionado cerca del minimap (bottom)
+- [ ] Terminales en card = "imitación" (preview MiniTerm) vs terminal real popped-out — él quiere la terminal REAL usable en la card. Además cards de terminales spawneadas como bash no muestran logo CLI (dice "Terminal" en vez de Codex) — posiblemente esperable en bash puro, verificar con agente codex real
+- [ ] La cruz × y el menos — ya cambiados a SVG, CONFIRMAR con él si le gustan
+- [ ] "el color mal, la versión light, tóquenlo lo máximo" — INCLARO, preguntarle qué quiso decir (¿theme light roto?)
+- [ ] Topbar: fusión en una sola bubble on hover (sigue pendiente de ronda 2)
+- [ ] Fausto manda otra foto de Deska — revisar Desktop al retomar
+- [ ] En su captura se veía panel Juice/Inbox/Automations muy plain — pendiente "cards más facheras estilo Deska"
