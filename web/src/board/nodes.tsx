@@ -422,20 +422,32 @@ export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>
       )}
       {summaries && data.task && (
         <div
+          data-testid="agent-card-task"
           style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: 9,
             marginTop: 10,
             paddingTop: 9,
             borderTop: "1px solid rgba(255,255,255,0.06)",
-            fontSize: 12.5,
-            lineHeight: 1.5,
-            color: "var(--cv-ink-dim)",
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
           }}
         >
-          {data.task}
+          <span style={{ flex: "none", fontSize: 10.5, fontWeight: 700, color: "var(--cv-accent)" }}>Task</span>
+          <span
+            title={data.task}
+            style={{
+              minWidth: 0,
+              fontSize: 12.5,
+              lineHeight: 1.45,
+              color: "var(--cv-ink-dim)",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {data.task}
+          </span>
         </div>
       )}
       {summaries && data.id && <MiniTerm agentId={data.id} />}

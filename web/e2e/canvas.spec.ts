@@ -26,6 +26,16 @@ test("offline demo does not loop while React Flow reports selection", async ({ p
   expect(updateDepthErrors, "selection updates must settle without a React render loop").toEqual([]);
 });
 
+test("agent card task reads as a distinct, legible row", async ({ page }) => {
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  const task = page.locator(".agent-card").first().getByTestId("agent-card-task");
+  await expect(task).toBeVisible({ timeout: 10_000 });
+  await expect(task.getByText("Task", { exact: true })).toBeVisible();
+  await expect(task).toContainText("Scaffold checkout API");
+  await expect(task.locator("span").last()).toHaveCSS("font-size", "12.5px");
+});
+
 test("agent cards resize when nested inside a workspace", async ({ page }) => {
   const { port } = stack();
   await page.goto(`http://127.0.0.1:${port}/`);
