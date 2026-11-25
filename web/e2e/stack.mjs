@@ -22,7 +22,9 @@ export async function startStack() {
   const { mkdirSync, appendFileSync } = await import("node:fs");
   const arDir = join(homedir(), ".config", "canvas");
   mkdirSync(arDir, { recursive: true });
-  appendFileSync(join(arDir, "allowed-roots"), vault + "\n");
+  const arFile = join(arDir, "allowed-roots");
+  const prev = existsSync(arFile) ? readFileSync(arFile, "utf8") : "";
+  appendFileSync(arFile, (prev && !prev.endsWith("\n") ? "\n" : "") + vault + "\n");
 
   const port = 4300 + Math.floor(Math.random() * 400);
   const bin = resolve(import.meta.dirname, "../../target/debug/canvasd");
