@@ -379,11 +379,59 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await page.mouse.down();
   await page.mouse.move(handle!.x + handle!.width / 2 + 50, handle!.y + handle!.height / 2, { steps: 6 });
   await page.mouse.up();
+  const afterRightShape = await page.evaluate((id) => {
+    const all = JSON.parse(localStorage.getItem("cv-shapes") ?? "{}");
+    return all.main?.[id] ?? null;
+  }, shapeId);
   await expect.poll(async () => page.evaluate((id) => {
     const all = JSON.parse(localStorage.getItem("cv-shapes") ?? "{}");
     return all.main?.[id]?.w ?? 0;
   }, shapeId)).toBeGreaterThan(originalShape.w + 20);
   await expect.poll(async () => (await card.boundingBox())?.width ?? 0).toBeGreaterThan(original!.width + 20);
+
+  // Resizing from the corner should grow both dimensions while anchoring the
+  // opposite (top-left) edge. The hit zone is invisible but still interactive.
+  const afterRightEdge = await card.boundingBox();
+  const corner = card.locator(".react-flow__resize-control.handle.bottom.right");
+  await expect(corner).toHaveCSS("opacity", "0");
+  const cornerBox = await corner.boundingBox();
+  expect(afterRightEdge).not.toBeNull();
+  expect(cornerBox).not.toBeNull();
+  const cornerIsHitTarget = await page.evaluate(({ x, y }) => {
+    const target = document.elementFromPoint(x, y);
+    return !!target?.closest(".react-flow__resize-control.handle.bottom.right");
+  }, { x: cornerBox!.x + cornerBox!.width / 2, y: cornerBox!.y + cornerBox!.height / 2 });
+  expect(cornerIsHitTarget, "the invisible bottom-right corner zone must win over both edge zones").toBe(true);
+  await page.mouse.move(cornerBox!.x + cornerBox!.width / 2, cornerBox!.y + cornerBox!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cornerBox!.x + cornerBox!.width / 2 + 55, cornerBox!.y + cornerBox!.height / 2 + 45, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => page.evaluate((id) => {
+    const all = JSON.parse(localStorage.getItem("cv-shapes") ?? "{}");
+    return all.main?.[id]?.w ?? 0;
+  }, shapeId)).toBeGreaterThan(afterRightShape.w + 30);
+  await expect.poll(async () => page.evaluate((id) => {
+    const all = JSON.parse(localStorage.getItem("cv-shapes") ?? "{}");
+    return all.main?.[id]?.h ?? 0;
+  }, shapeId)).toBeGreaterThan(afterRightShape.h + 30);
+  const afterCorner = await card.boundingBox();
+  expect(afterCorner).not.toBeNull();
+  expect(Math.abs(afterCorner!.x - original!.x)).toBeLessThan(4);
+  expect(Math.abs(afterCorner!.y - original!.y)).toBeLessThan(4);
+  const savedShape = await page.evaluate((id) => {
+    const all = JSON.parse(localStorage.getItem("cv-shapes") ?? "{}");
+    return all.main?.[id] ?? null;
+  }, shapeId);
+  expect(savedShape.w).toBeGreaterThan(originalShape.w + 40);
+  expect(savedShape.h).toBeGreaterThan(originalShape.h + 30);
+  // The daemon is shared across the E2E run and may have several live PTYs;
+  // wait for the app document, then let the node assertion verify restoration
+  // instead of waiting for every embedded page and terminal to finish loading.
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 15_000 });
+  const restoredCard = page.locator(`.react-flow__node-shape[data-id="${shapeId}"]`);
+  await expect(restoredCard).toBeVisible();
+  await expect.poll(async () => restoredCard.evaluate((el) => Number.parseFloat(getComputedStyle(el).width))).toBe(savedShape.w);
+  await expect.poll(async () => restoredCard.evaluate((el) => Number.parseFloat(getComputedStyle(el).height))).toBe(savedShape.h);
 });
 
 test("web preview windows resize and keep their dimensions after reload", async ({ page }) => {
@@ -442,7 +490,10 @@ test("web preview windows resize and keep their dimensions after reload", async 
       });
     }
   }
-  await page.reload();
+  // The daemon is shared across the E2E run and may have several live PTYs;
+  // wait for the app document, then let the node assertion verify restoration
+  // instead of waiting for every embedded page and terminal to finish loading.
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 15_000 });
   const restored = page.locator(`.react-flow__node[data-id="${webId}"]`);
   await expect(restored).toBeVisible();
   // fitView changes screen-space dimensions on reload, so compare the node's
