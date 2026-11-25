@@ -113,10 +113,28 @@ export function Topbar({
   // matches what the card header shows.
   const boardAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard);
   const termNo = new Map(boardAgents.map((a, i) => [a.id, i + 1]));
-  boardAgents.forEach((a) => {
-    const p = positions[a.id] ?? { x: 0, y: 0 };
+  boardAgents.forEach((a, agentIdx) => {
+    // Agents inside a workspace keep positions RELATIVE to the parent node —
+    // translate to absolute canvas coords so region grouping and focus work.
+    // Never-dragged agents have no positions entry: replicate the canvas
+    // fallback spawn grid, or they'd measure at the origin — inside any
+    // unmoved workspace's rect — and group falsely under it.
+    const ws = a.workspace_id ? workspaces[a.workspace_id] : undefined;
+    const rel = positions[a.id] ?? (ws
+      ? { x: 60 + (agentIdx % 3) * 300, y: 80 + Math.floor(agentIdx / 3) * 190 }
+      : { x: 1000 + (agentIdx % 2) * 500, y: 60 + Math.floor(agentIdx / 2) * 300 });
+    const base = ws ? (positions[ws.id] ?? { x: 60, y: 60 }) : { x: 0, y: 0 };
+    const p = { x: base.x + rel.x, y: base.y + rel.y };
     const done = a.status === "exited";
-    panelItems.push({ id: a.id, icon: "terminal", label: `Terminal ${termNo.get(a.id)}`, sub: a.name !== "Terminal" ? a.name : undefined, hint: `${a.name} · ${done ? "done" : a.status} — click to focus`, cx: p.x + 180, cy: p.y + 110 });
+    panelItems.push({
+      id: a.id,
+      icon: "terminal",
+      label: `Terminal ${termNo.get(a.id)}`,
+      sub: [a.name !== "Terminal" ? a.name : undefined, ws ? `in ${ws.name}` : undefined].filter(Boolean).join(" · ") || undefined,
+      hint: `${a.name} · ${done ? "done" : a.status}${ws ? ` · workspace ${ws.name}` : ""} — click to focus`,
+      cx: p.x + 180,
+      cy: p.y + 110,
+    });
   });
   for (const [id, o] of Object.entries(orchestrators)) {
     if (o.board !== activeBoard) continue;
@@ -141,11 +159,18 @@ export function Topbar({
     try { host = new URL(url).hostname; } catch { /* keep the raw url */ }
     panelItems.push({ id, icon: "web", label: host, hint: "web card — click to focus", cx: p.x + 260, cy: p.y + 170 });
   }
-  const regionRects = Object.values(shapes[activeBoard] ?? {}).filter(
-    (s) => s.kind === "rect" && s.w != null && s.h != null,
-  );
-  const itemRegion = (it: PanelItem) =>
-    regionRects.find((r) => it.cx >= r.x && it.cx <= r.x + r.w! && it.cy >= r.y && it.cy <= r.y + r.h!);
+  const regionRects: { id: string; x: number; y: number; w?: number; h?: number; text?: string }[] = [
+    ...Object.values(shapes[activeBoard] ?? {}).filter((s) => s.kind === "rect" && s.w != null && s.h != null),
+    // Workspaces are regions too — terminals inside them group under the ws name.
+    ...Object.values(workspaces)
+      .filter((w) => (w.board_id ?? "main") === activeBoard)
+      .map((w) => ({ id: w.id, ...(positions[w.id] ?? { x: 60, y: 60 }), w: 900, h: 540, text: `workspace ${w.name}` })),
+  ];
+  const itemRegion = (it: PanelItem) => {
+    const hits = regionRects.filter((r) => it.cx >= r.x && it.cx <= r.x + r.w! && it.cy >= r.y && it.cy <= r.y + r.h!);
+    // Overlapping regions: the smallest one is the most specific container.
+    return hits.sort((a, b) => (a.w! * a.h!) - (b.w! * b.h!))[0];
+  };
   const panelRegions = regionRects
     .map((shape) => ({ shape, members: panelItems.filter((it) => itemRegion(it) === shape) }))
     .sort((a, b) => (a.shape.text ?? "").localeCompare(b.shape.text ?? ""));
