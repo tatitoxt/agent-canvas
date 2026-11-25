@@ -518,6 +518,9 @@ test("panel chrome minimizes, restores, and closes with accessible controls", as
   await dock.getByRole("button", { name: "Add Inbox to canvas" }).click();
   const panel = page.locator(".react-flow__node-panel").filter({ has: page.locator("[data-panel='inbox']") }).first();
   await expect(panel).toBeVisible();
+  // Panel chrome reveals once the card is selected — click first, then the
+  // keyboard flow operates the now-visible controls.
+  await panel.click({ position: { x: 60, y: 14 } });
   const minimize = panel.getByRole("button", { name: "Minimize panel" });
   await minimize.focus();
   await page.keyboard.press("Enter");

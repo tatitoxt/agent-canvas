@@ -149,7 +149,9 @@ test("panels mount as canvas nodes and close again", async ({ page }) => {
   // The vault panel mounts as a canvas node of type panel.
   await expect(page.locator(".react-flow__node-panel").first()).toBeVisible({ timeout: 8_000 });
   expect(await nodes.count()).toBeGreaterThan(before);
-  // Its close button unmounts the node again.
+  // Its close button unmounts the node again. Panel chrome appears only
+  // once the card is selected — click the panel first, then close it.
+  await page.locator(".react-flow__node-panel").first().click();
   await page.locator(".react-flow__node-panel button[title*='close' i]").first().click();
   await expect(page.locator(".react-flow__node-panel")).toHaveCount(0, { timeout: 8_000 });
 });
