@@ -156,6 +156,7 @@ test("panels mount as canvas nodes and close again", async ({ page }) => {
 
 test("inbox panel opens from the rail", async ({ page }) => {
   await boot(page);
+  // Since #54 the topbar bell is the only inbox entry — the rail bubble is gone.
   await page.locator("button[title^='Notifications']").first().click();
   // Empty-state or approval rows — the panel itself must render.
   await expect(page.locator("text=/inbox|approval|nothing|quiet/i").first()).toBeVisible({ timeout: 8_000 });

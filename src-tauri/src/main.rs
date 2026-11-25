@@ -218,7 +218,8 @@ fn spawn_agent(
             let _ = st.agents.write(&target, &data);
         });
     }
-    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None });
+    let wt = app.state::<CanvasState>().agents.worktree(&id).map(|p| p.to_string_lossy().to_string());
+    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None, worktree: wt });
     Ok(id)
 }
 
@@ -1343,7 +1344,8 @@ fn delegate(
             let _ = st.agents.write(&target, &data);
         });
     }
-    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None });
+    let wt = app.state::<CanvasState>().agents.worktree(&id).map(|p| p.to_string_lossy().to_string());
+    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None, worktree: wt });
     emit_control(
         &app,
         &ServerMsg::Delegation { edge_id, from, to: id.clone(), task },
@@ -1582,6 +1584,7 @@ fn run_automation_row(
         .agents
         .set_automation(&id, idle_secs.max(0) as u64, on_approval == "deny");
     let _ = state.store.automation_ran(&automation_id);
+    let wt = state.agents.worktree(&id).map(|p| p.to_string_lossy().to_string());
     emit_control(app, &ServerMsg::Spawned {
         agent_id: id.clone(),
         name,
@@ -1590,6 +1593,7 @@ fn run_automation_row(
         workspace_id,
         board_id: run_board,
         fallback_from: None,
+        worktree: wt,
     });
     // Inject the saved prompt — the kernel PTY buffer holds it until the
     // CLI reads stdin, gated like operator input.

@@ -18,12 +18,16 @@ async function spawnTerm(page: import("@playwright/test").Page) {
 }
 
 async function openDrawer(page: import("@playwright/test").Page) {
-  // The daemon is shared for the full Playwright run, so earlier cases leave
-  // sessions alive. Open the newest session created by this test.
-  const openTerminal = page.locator(".react-flow__node").filter({ has: page.locator("[title='Open terminal']") }).last().locator("[title='Open terminal']");
-  await expect(openTerminal).toBeVisible({ timeout: 5_000 });
-  await openTerminal.click();
-  await page.waitForTimeout(900);
+  // Since #60 a click only selects the card — the drawer opens from the
+  // right-click context menu's "open terminal".
+  const node = page.locator(".react-flow__node").first();
+  const b = await node.boundingBox();
+  if (b) {
+    await page.mouse.click(b.x + 30, b.y + 30, { button: "right" });
+    await page.waitForTimeout(400);
+    await page.locator("button", { hasText: "open terminal" }).first().click();
+    await page.waitForTimeout(900);
+  }
 }
 
 test("agent card terminal control is keyboard-operable", async ({ page }) => {

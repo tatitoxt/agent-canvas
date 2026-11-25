@@ -667,7 +667,9 @@ function Board() {
         else nodeSigCache.current.set(b.id, { sig, node: b });
         const p = byId.get(b.id);
         if (!p) return base;
-        if (p.dragging) return { ...base, selected: p.selected, dragging: true, position: p.position };
+        if (p.dragging && activeDrags.current.has(b.id)) {
+          return { ...base, selected: p.selected, dragging: true, position: p.position };
+        }
         // Reuse the previous node only while its geometry still matches the
         // store-derived node. A maximize/restore can update the store before
         // React Flow has flushed its measured position and size; blindly
@@ -689,6 +691,37 @@ function Board() {
       return out;
     });
   }, [baseNodes, resizingAgents, setRfNodes]);
+  // Drag lifecycle we track ourselves: React Flow's `dragging` flag can
+  // get stuck when the window loses focus mid-drag (alt-tab, mouse
+  // released outside the window) — the mouseup never reaches it and the
+  // flag never clears, after which the store→RF sync above would ignore
+  // every store position for that node forever (dock, gather, undo and
+  // spawn placement silently no-op on it). The sync trusts in-flight
+  // positions only for ids in this set; a blur rescue commits whatever
+  // position the card is at and clears both the set and the flags.
+  const activeDrags = useRef(new Set<string>());
+  useEffect(() => {
+    const rescue = () => {
+      if (!activeDrags.current.size) return;
+      const ids = new Set(activeDrags.current);
+      activeDrags.current.clear();
+      setRfNodes((ns) => {
+        const st = useBoard.getState();
+        for (const n of ns) {
+          if (!ids.has(n.id)) continue;
+          const { x, y } = n.position;
+          if (n.id.startsWith("shape-")) st.moveShape(n.id, x, y);
+          else if (n.id.startsWith("panel-")) st.movePanelNode(n.id, x, y);
+          else if (n.id.startsWith("term-")) st.moveTermNode(n.id, x, y);
+          else st.moveNode(n.id, x, y);
+        }
+        return ns.map((n) => (ids.has(n.id) ? { ...n, dragging: false } : n));
+      });
+    };
+    window.addEventListener("blur", rescue);
+    return () => window.removeEventListener("blur", rescue);
+  }, [setRfNodes]);
+
   const onNodesChange = useCallback(
     (changes: NodeChange<Node<BoardNodeData>>[]) =>
       setRfNodes((ns) => applyNodeChanges(changes, ns)),
@@ -863,7 +896,26 @@ function Board() {
   }, [screenToFlowPosition]);
 
 
-  const onNodeDragStop: OnNodeDrag = (event, node) => {
+  const onNodeDragStart: OnNodeDrag = (_, node, nodes) => {
+    // Multi-select drags move every selected card — track them all, or a
+    // blur rescue (and the sync effect's in-flight trust) covers only the
+    // primary card and the rest snap back mid-drag.
+    for (const n of nodes?.length ? nodes : [node]) activeDrags.current.add(n.id);
+  };
+
+  const onNodeDragStop: OnNodeDrag = (event, node, nodes) => {
+    const dragged = nodes?.length ? nodes : [node];
+    // A drag the blur rescue already committed must not write back when
+    // React Flow's zombie drag completes on the next mouseup — it would
+    // overwrite the rescued position with wherever the pointer happened
+    // to be.
+    const tracked = activeDrags.current.has(node.id);
+    for (const n of dragged) activeDrags.current.delete(n.id);
+    if (!tracked) {
+      setDragGhost(null);
+      setGuides({ v: [], h: [] });
+      return;
+    }
     // Deska-style: dropping a card on a board tab moves it there.
     setDragGhost(null);
     const pt =
@@ -878,31 +930,45 @@ function Board() {
       .map((el) => el.closest("[data-board-tab]")?.getAttribute("data-board-tab"))
       .find(Boolean);
     if (target) {
-      const a = agents[node.id] ?? workspaces[node.id];
-      if (a) {
-        if (target !== (a.board_id ?? "main")) {
-          useBoard.getState().moveToBoard(node.id, target);
-          return;
-        }
-      } else if (/^(term|panel|shape|md|web|orch)-/.test(node.id)) {
-        if (target !== useBoard.getState().activeBoard) {
-          useBoard.getState().moveCardToBoard(node.id, target);
-          return;
+      // A group drop moves every dragged card to the tab — moving only
+      // the grabbed one splits the group across boards.
+      let movedAny = false;
+      // moveCardToBoard switches the active board as a side effect —
+      // capture it once or every local card after the first fails the
+      // check and stays behind.
+      const srcBoard = useBoard.getState().activeBoard;
+      for (const n of dragged) {
+        const a = agents[n.id] ?? workspaces[n.id];
+        if (a) {
+          if (target !== (a.board_id ?? "main")) {
+            useBoard.getState().moveToBoard(n.id, target);
+            movedAny = true;
+          }
+        } else if (/^(term|panel|shape|md|web|orch)-/.test(n.id)) {
+          if (target !== srcBoard) {
+            useBoard.getState().moveCardToBoard(n.id, target);
+            movedAny = true;
+          }
         }
       }
+      if (movedAny) return;
     }
     const s0 = snapFor(node);
     setGuides({ v: [], h: [] });
-    const x = node.position.x + s0.dx;
-    const y = node.position.y + s0.dy;
-    if (node.id.startsWith("shape-")) {
-      moveShape(node.id, x, y);
-    } else if (node.id.startsWith("panel-")) {
-      useBoard.getState().movePanelNode(node.id, x, y);
-    } else if (node.id.startsWith("term-")) {
-      useBoard.getState().moveTermNode(node.id, x, y);
-    } else if (agents[node.id] || workspaces[node.id] || node.id.startsWith("web-") || node.id.startsWith("orch-") || node.id.startsWith("md-")) {
-      moveNode(node.id, x, y);
+    // Every card in a multi-select drag lands with the same snap delta —
+    // writing back only the primary used to lose the others' positions.
+    for (const n of dragged) {
+      const x = n.position.x + s0.dx;
+      const y = n.position.y + s0.dy;
+      if (n.id.startsWith("shape-")) {
+        moveShape(n.id, x, y);
+      } else if (n.id.startsWith("panel-")) {
+        useBoard.getState().movePanelNode(n.id, x, y);
+      } else if (n.id.startsWith("term-")) {
+        useBoard.getState().moveTermNode(n.id, x, y);
+      } else if (agents[n.id] || workspaces[n.id] || n.id.startsWith("web-") || n.id.startsWith("orch-") || n.id.startsWith("md-")) {
+        moveNode(n.id, x, y);
+      }
     }
   };
 
@@ -1101,6 +1167,7 @@ function Board() {
         onNodesChange={onNodesChange}
         onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
+        onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onDrop={onCanvasDrop}

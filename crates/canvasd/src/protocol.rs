@@ -292,6 +292,10 @@ pub enum ServerMsg {
         /// structural instead of embedding it in the display name.
         #[serde(default)]
         fallback_from: Option<String>,
+        /// The agent's git worktree on disk — the snapshot carries it, and
+        /// live spawns need it too or the client only learns it on reconnect.
+        #[serde(default)]
+        worktree: Option<String>,
     },
     Status { agent_id: String, status: AgentStatus },
     /// Live one-line activity preview — the agent's latest non-empty PTY
