@@ -37,6 +37,20 @@ test("Add to canvas closes Tools and mounts a live Inbox panel", async ({ page }
   await expect(page.locator(".react-flow__node-panel [data-panel='inbox']").first()).toBeVisible();
 });
 
+test("Add Obsidian to canvas closes Tools and mounts the live vault explorer", async ({ page }) => {
+  const { vault } = await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await expect(dock).toBeVisible();
+  await dock.getByRole("button", { name: "Add Obsidian to canvas" }).click();
+  await expect(dock).toBeHidden();
+  const vaultPanel = page.locator(".react-flow__node-panel [data-panel='vault']").first();
+  await expect(vaultPanel).toBeVisible();
+  await expect(vaultPanel.getByText("Vault Explorer")).toBeVisible();
+  await expect(page.locator(".react-flow__node-panel").first()).toHaveCSS("width", /460px/);
+  expect(vault).toContain("canvas-e2e-vault-");
+});
+
 test("Add to canvas closes Tools even when the dock is pinned", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();

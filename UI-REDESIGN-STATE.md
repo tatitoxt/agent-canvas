@@ -103,7 +103,7 @@ Pendiente ronda 3:
 ## Ronda 4 (2026-11-24 ~22:45) — library surgery + resize v1
 - [x] Library sin flyout (git menu eliminado, 65 líneas borradas), sin label vertical, expanded persiste en localStorage
 - [x] Resize v1: NodeResizer en agent cards cuando selected, ancho persiste en cv-agentsizes. LIMITACIÓN conocida: el resize visual se aplica al soltar (no live durante drag), y height se guarda pero no se aplica al layout — pendiente hacer la card flex-column con el área de terminal flex-1. La forma correcta final: width/height en el nodo RF nativo (nodes array en App.tsx) para feedback live.
-- [ ] Gather sigue roto (no investigado aún) — main ordena en grid, branch apila: buscar la regresión en la acción gather del store comparando con main
+- [x] Gather verificado en E2E con cuatro paneles de tamaños distintos: grilla sin solapamientos dentro del viewport; Undo restaura todas las posiciones y borra el frame. No se encontró regresión en el branch.
 - [ ] Topbar bubble-fusion on hover — pendiente
 - [ ] deska.dev web crawl — las notas 10/12 del vault ya cubren casi todo; fetch pendiente solo si hace falta algo específico
 
@@ -134,4 +134,5 @@ REMAINING LEVERS if still slow:
 ## Continuación del roadmap (2026-11-25)
 - [x] Terminal drawer: resize con persistencia y redimensionado de xterm/PTY; estilo sólido oscuro en vez de glass. Commit `04a3955` en PR #47.
 - [x] Título de terminal por rol: `reviewer-1` → `Review 1`, `builder_2` → `Builder 2`, `tester-4` → `Test 4`; mantiene nombres custom y numeración para `Terminal` genérico. En validación local: 8 unit tests, 6 E2E terminal, typecheck y build.
-- [ ] Próximo orden sugerido: inspeccionar Gather contra `main` y corregir el layout si sigue apilando; luego revisar Add to Board de Obsidian/artifacts y el file explorer flotante. Mantener cada lote pequeño y verificable en PR #47, sin merge.
+- [x] Add to Board de Obsidian verificado en E2E: cierra Tools y monta Vault Explorer en vivo como ventana del canvas. Add Inbox también tiene cobertura de cierre + montaje.
+- [ ] Próximo orden sugerido: revisar Add to Board de artifacts y el file explorer flotante; después seguir con los pendientes visuales de topbar y chrome. Mantener cada lote pequeño y verificable en PR #47, sin merge.
