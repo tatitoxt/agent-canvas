@@ -2155,7 +2155,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     get().notify(get().panelSummaries ? "card summaries on" : "card summaries off");
   },
   spawnOpen: false,
-  setSpawnOpen: (v) => set({ spawnOpen: v }),
+  setSpawnOpen: (v) => set(v ? { spawnOpen: v } : { spawnOpen: v, pendingSpawnPos: null }),
   focusSpawn: () => set({ spawnOpen: true }),
   gatherLoose: () => {
     const { agents, edges, positions, activeBoard, shapes, panelNodes, termNodes } = get();
