@@ -598,6 +598,7 @@ function Board() {
       deletable: true,
       position: { x: s.x, y: s.y },
       style: { width: s.w, height: s.h },
+      zIndex: cardZ[s.id] ?? 0,
       data: { kind: "shape" as const, shape: s },
     }));
     const mdNs: Node<BoardNodeData>[] = Object.entries(mdNodes[activeBoard] ?? {}).map(
@@ -692,6 +693,11 @@ function Board() {
   );
 
   const onNodeClick: NodeMouseHandler = (e, node) => {
+    // Keep the active card above floating rails so its resize handles remain
+    // reachable even when the board viewport places it near the chrome.
+    if (node.type === "shape" || node.type === "panel" || node.type === "term") {
+      useBoard.getState().bringCardToFront(node.id);
+    }
     // Shift+click is multi-select — don't rewire.
     if (e.shiftKey) return;
     // In Connect mode a click on an agent card wires/unwires it to the

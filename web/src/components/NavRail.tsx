@@ -8,6 +8,7 @@ const railCol: React.CSSProperties = {
   top: 226,
   bottom: 12,
   zIndex: 20,
+  pointerEvents: "none",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -360,6 +361,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         className={expanded ? "glass cv-menu-scroll" : "glass"}
         style={{
           ...bubble,
+          pointerEvents: "auto",
           alignItems: expanded ? "stretch" : "center",
           padding: expanded ? "6px 4px" : bubble.padding,
           gap: expanded ? 1 : bubble.gap,
@@ -384,7 +386,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
       </nav>
       <div style={{ flex: 1 }} />
 
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, pointerEvents: "auto" }}>
         <ExtrasBubble side="left" onSelect={onSelect} />
         <OrchestratorsBubble />
       </div>
@@ -484,7 +486,7 @@ export function RightRail() {
 
       <div style={{ flex: 1 }} />
 
-      <nav className="glass" style={{ ...bubbleRow, padding: "3px 4px", gap: 1, borderRadius: 999 }}>
+      <nav className="glass" style={{ ...bubbleRow, padding: "3px 4px", gap: 1, borderRadius: 999, pointerEvents: "auto" }}>
         <button title="Zoom out" onClick={() => useBoard.getState().requestZoom(-1)} style={tinyBtn(false)}>
           <Icon name="minus" size={11} />
         </button>

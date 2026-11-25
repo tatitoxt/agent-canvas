@@ -351,21 +351,37 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await expect(grip).toBeVisible();
   // Add-to-board requests a fitView; wait for that viewport animation before
   // comparing screen-space dimensions with the resize result.
-  let previousWidth = 0;
+  let stableSamples = 0;
+  let previousRect = "";
   await expect.poll(async () => {
-    const width = (await card.boundingBox())?.width ?? 0;
-    const stable = previousWidth > 0 && Math.abs(width - previousWidth) < 1;
-    previousWidth = width;
-    return stable;
-  }).toBe(true);
+    const rect = await card.boundingBox();
+    const current = rect ? `${rect.x.toFixed(1)}:${rect.y.toFixed(1)}:${rect.width.toFixed(1)}:${rect.height.toFixed(1)}` : "";
+    stableSamples = current && current === previousRect ? stableSamples + 1 : 0;
+    previousRect = current;
+    return stableSamples;
+  }, { intervals: [100, 100, 100, 100, 100, 100], timeout: 3_000 }).toBeGreaterThanOrEqual(4);
   const original = await card.boundingBox();
+  const shapeId = await card.getAttribute("data-id");
+  const originalShape = await page.evaluate((id) => {
+    const all = JSON.parse(localStorage.getItem("cv-shapes") ?? "{}");
+    return all.main?.[id] ?? null;
+  }, shapeId);
   const handle = await grip.boundingBox();
   expect(original).not.toBeNull();
   expect(handle).not.toBeNull();
+  const handleIsHitTarget = await page.evaluate(({ x, y }) => {
+    const target = document.elementFromPoint(x, y);
+    return !!target?.closest(".react-flow__resize-control.handle.bottom.right");
+  }, { x: handle!.x + handle!.width / 2, y: handle!.y + handle!.height / 2 });
+  expect(handleIsHitTarget, "the resize handle must be above canvas chrome at its pointer position").toBe(true);
   await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2);
   await page.mouse.down();
   await page.mouse.move(handle!.x + handle!.width / 2 + 50, handle!.y + handle!.height / 2 + 40, { steps: 6 });
   await page.mouse.up();
+  await expect.poll(async () => page.evaluate((id) => {
+    const all = JSON.parse(localStorage.getItem("cv-shapes") ?? "{}");
+    return all.main?.[id]?.w ?? 0;
+  }, shapeId)).toBeGreaterThan(originalShape.w + 20);
   await expect.poll(async () => (await card.boundingBox())?.width ?? 0).toBeGreaterThan(original!.width + 20);
 });
 
