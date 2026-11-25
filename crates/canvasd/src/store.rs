@@ -117,6 +117,9 @@ impl Store {
         )?;
         // Migrations: v0 → v1 adds agents.workspace_id (agents live inside
         // user-created workspaces that coexist on one canvas).
+        // agent_chain: ordered CLI fallback list per workspace (JSON array).
+        // NULL/absent = use the daemon's global auto-detected chain.
+        let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN agent_chain TEXT", []);
         let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         if version < 1 {
             conn.execute_batch(
@@ -459,6 +462,26 @@ impl Store {
         let mut st = conn.prepare("SELECT repo FROM workspaces WHERE id = ?1")?;
         let mut rows = st.query_map([id], |r| r.get::<_, String>(0))?;
         Ok(rows.next().transpose()?)
+    }
+
+    /// Ordered fallback CLI chain configured for a workspace (JSON array),
+    /// or None when unset — callers then use the global auto-detected chain.
+    pub fn workspace_chain(&self, id: &str) -> Result<Option<Vec<String>>> {
+        let conn = self.conn.lock().unwrap();
+        let raw: Option<String> = conn
+            .query_row("SELECT agent_chain FROM workspaces WHERE id = ?1", [id], |r| r.get(0))
+            .ok()
+            .flatten();
+        Ok(raw.and_then(|j| serde_json::from_str(&j).ok()))
+    }
+
+    pub fn set_workspace_chain(&self, id: &str, chain: &[String]) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE workspaces SET agent_chain = ?2 WHERE id = ?1",
+            rusqlite::params![id, serde_json::to_string(chain)?],
+        )?;
+        Ok(())
     }
 
     /// Tuple: (id, name, repo, board_id).

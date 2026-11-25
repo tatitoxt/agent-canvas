@@ -41,6 +41,7 @@ struct AppState {
     repo_url: Option<String>,
     /// agent_id → delegation edge_id: which child still owes a CANVAS_RESULT.
     pending_results: Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
+    pending_fallbacks: Arc<std::sync::Mutex<std::collections::HashMap<String, FallbackState>>>,
     /// agent_id → held PTY input bytes a supervised agent needs approval for.
     pending_inputs: Arc<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>>,
     /// Published artifacts: share id → (title, mime, bytes). Served at
@@ -381,6 +382,84 @@ fn vault_links(text: &str) -> Vec<String> {
 }
 
 /// Spawn a PTY agent wired to the event bus + store. Used by both
+/// CLIs the daemon knows how to fall back between, in preference order.
+const KNOWN_CLIS: &[&str] = &[
+    "claude", "codex", "gemini", "aider", "goose", "amp", "opencode", "cursor-agent",
+];
+
+/// First token of a spawn command — the CLI being launched.
+fn command_cli(command: &str) -> &str {
+    command.split_whitespace().next().unwrap_or("")
+}
+
+/// Swap the leading CLI token of a command, keeping every argument.
+fn substitute_cli(command: &str, cli: &str) -> String {
+    let rest = command.trim_start_matches(command_cli(command)).trim_start();
+    if rest.is_empty() {
+        cli.to_string()
+    } else {
+        format!("{cli} {rest}")
+    }
+}
+
+/// Binary lookup in PATH — no `which` crate needed for a flat scan.
+fn binary_on_path(bin: &str) -> bool {
+    std::env::var("PATH")
+        .unwrap_or_default()
+        .split(':')
+        .any(|dir| {
+            let p = std::path::Path::new(dir).join(bin);
+            p.is_file()
+        })
+}
+
+/// Global default chain: known CLIs actually installed, in preference order.
+fn detected_chain() -> Vec<String> {
+    KNOWN_CLIS
+        .iter()
+        .filter(|c| binary_on_path(c))
+        .map(|c| c.to_string())
+        .collect()
+}
+
+/// Fallback chain for a spawn: the workspace's configured chain when it has
+/// one, else the daemon-wide auto-detected one. The CLI being spawned leads
+/// the chain even when the configuration omits it.
+fn chain_for(state: &Arc<AppState>, workspace_id: Option<&str>, cli: &str) -> Vec<String> {
+    if !KNOWN_CLIS.contains(&cli) {
+        // Not an agent CLI (bash, sh, editors…) — nothing to fall back to.
+        return if cli.is_empty() { Vec::new() } else { vec![cli.to_string()] };
+    }
+    let configured = workspace_id
+        .and_then(|w| state.store.workspace_chain(w).ok().flatten())
+        .unwrap_or_else(detected_chain);
+    let mut chain: Vec<String> = Vec::new();
+    if !cli.is_empty() {
+        chain.push(cli.to_string());
+    }
+    for c in configured {
+        if c != cli && !chain.contains(&c) {
+            chain.push(c);
+        }
+    }
+    chain
+}
+
+/// Per-spawn retry state: when a fresh PTY dies within seconds, the next
+/// chain candidate gets a chance with the same parameters.
+struct FallbackState {
+    spawned_at: std::time::Instant,
+    name: String,
+    command: String,
+    cwd: String,
+    workspace_id: Option<String>,
+    permission: String,
+    board_id: Option<String>,
+    account_id: Option<String>,
+    /// CLIs not yet tried, in order.
+    remaining: Vec<String>,
+}
+
 /// `spawn_agent` (standalone node) and `delegate` (edge-owned child).
 /// Memory file for a node: the board repo's `.canvas/memory.md`, or the
 /// workspace's repo memory when node_id is a workspace. Every agent
@@ -421,6 +500,7 @@ fn spawn_agent(
             let _ = ev.send(Event::PtyOutput(id, bytes));
         }
     });
+    let state_fb = state.clone();
     let ev2 = state.events.clone();
     let store2 = state.store.clone();
     let repo_root2 = state.repo_root.clone();
@@ -428,6 +508,41 @@ fn spawn_agent(
     let agents3 = state.agents.clone();
     tokio::spawn(async move {
         while let Some(id) = exit_rx.recv().await {
+            // Chain fallback: a PTY dying within seconds of launch never gave
+            // the user a working agent — retry the next CLI with the same
+            // parameters and announce the replacement.
+            let fb = state_fb.pending_fallbacks.lock().unwrap().remove(&id);
+            if let Some(fb) = fb {
+                if fb.spawned_at.elapsed() < std::time::Duration::from_secs(5)
+                    && !fb.remaining.is_empty()
+                {
+                    let next = fb.remaining[0].clone();
+                    let cmd = substitute_cli(&fb.command, &next);
+                    let nm = format!("{} (fallback: {})", fb.name, next);
+                    let st3 = state_fb.clone();
+                    let fb_cmd = cmd.clone();
+                    let fb_nm = nm.clone();
+                    if let Ok((new_id, new_board)) = spawn_agent(
+                        &st3,
+                        &nm,
+                        &cmd,
+                        &fb.cwd,
+                        fb.workspace_id.as_deref(),
+                        &fb.permission,
+                        fb.board_id.as_deref(),
+                        fb.account_id.as_deref(),
+                    ) {
+                        let _ = state_fb.events.send(Event::Control(ServerMsg::Spawned {
+                            agent_id: new_id,
+                            name: fb_nm,
+                            command: fb_cmd,
+                            permission: fb.permission.clone(),
+                            workspace_id: fb.workspace_id.clone(),
+                            board_id: new_board.or(fb.board_id.clone()),
+                        }));
+                    }
+                }
+            }
             let _ = store2.agent_status(&id, "exited");
             // Final result scan: a fast child may print CANVAS_RESULT and
             // exit inside the same second — before the ticker runs. The
@@ -492,9 +607,53 @@ fn spawn_agent(
     }
     let mut pty_env = pty_env;
     pty_env.push(("CANVAS_MEMORY".to_string(), mem_path.to_string_lossy().to_string()));
-    let id = state
-        .agents
-        .spawn(name, command, cwd, &repo_root, permission, out_tx, exit_tx, &pty_env)?;
+    // Fallback chain: sync spawn failures (missing binary, bad exec) retry
+    // with the next CLI; early PTY deaths retry from the exit watcher.
+    let chain = chain_for(state, workspace_id, command_cli(command));
+    let mut remaining: Vec<String> = chain.iter().skip(1).cloned().collect();
+    let mut cmd_attempt = command.to_string();
+    let id = loop {
+        match state.agents.spawn(
+            name,
+            &cmd_attempt,
+            cwd,
+            &repo_root,
+            permission,
+            out_tx.clone(),
+            exit_tx.clone(),
+            &pty_env,
+        ) {
+            Ok(id) => break id,
+            Err(e) => {
+                if let Some(next) = remaining.first().cloned() {
+                    warn!(error = %e, cli = %command_cli(&cmd_attempt), fallback = %next, "spawn failed — trying fallback CLI");
+                    cmd_attempt = substitute_cli(&cmd_attempt, &next);
+                    remaining.remove(0);
+                    continue;
+                }
+                return Err(e);
+            }
+        }
+    };
+    if !remaining.is_empty() {
+        state.pending_fallbacks.lock().unwrap().insert(
+            id.clone(),
+            FallbackState {
+                spawned_at: std::time::Instant::now(),
+                name: name.to_string(),
+                command: cmd_attempt.clone(),
+                cwd: cwd.to_string(),
+                workspace_id: workspace_id.map(str::to_string),
+                permission: permission.to_string(),
+                board_id: board_id.map(str::to_string),
+                account_id: account_id.map(str::to_string),
+                remaining,
+            },
+        );
+    }
+    // The Spawned announcement carries the command that actually launched,
+    // which may be a fallback substitute of the requested one.
+    let command = cmd_attempt.as_str();
     // Board: explicit, else the workspace's board, else 'main'.
     let board = board_id
         .map(|b| b.to_string())
@@ -887,6 +1046,11 @@ fn handle_client_msg(
                     agent_id: None,
                     message: e.to_string(),
                 }),
+            }
+        }
+        ClientMsg::SetAgentChain { workspace_id, chain } => {
+            if let Err(e) = state.store.set_workspace_chain(&workspace_id, &chain) {
+                send_control(ServerMsg::Error { agent_id: None, message: e.to_string() });
             }
         }
         ClientMsg::SpawnAgent { name, command, cwd, workspace_id, permission, board_id, account_id, initial_input } => {
@@ -2109,6 +2273,7 @@ async fn main() -> Result<()> {
         repo_root,
         repo_url,
         pending_results: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+        pending_fallbacks: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         pending_inputs: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         shares: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         allowed_roots,
@@ -2368,4 +2533,35 @@ async fn main() -> Result<()> {
 
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+
+#[cfg(test)]
+mod fallback_tests {
+    use super::*;
+
+    #[test]
+    fn substitute_cli_keeps_arguments() {
+        assert_eq!(substitute_cli("claude --model opus", "codex"), "codex --model opus");
+        assert_eq!(substitute_cli("claude", "gemini"), "gemini");
+    }
+
+    #[test]
+    fn command_cli_reads_first_token() {
+        assert_eq!(command_cli("codex -a x"), "codex");
+        assert_eq!(command_cli(""), "");
+    }
+
+    #[test]
+    fn chain_leads_with_requested_cli_without_duplicates() {
+        let cli = "codex";
+        let configured = vec!["claude".to_string(), "codex".to_string(), "gemini".to_string()];
+        let mut chain: Vec<String> = vec![cli.to_string()];
+        for c in configured {
+            if c != cli && !chain.contains(&c) {
+                chain.push(c);
+            }
+        }
+        assert_eq!(chain, vec!["codex", "claude", "gemini"]);
+    }
 }

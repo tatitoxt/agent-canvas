@@ -45,6 +45,9 @@ pub enum ClientMsg {
     MoveToBoard { node_id: String, board_id: String },
     /// Rename an agent or workspace node.
     RenameNode { node_id: String, name: String },
+    /// Set the ordered CLI fallback chain for a workspace. Spawned agents
+    /// whose CLI dies at launch retry with the next entry automatically.
+    SetAgentChain { workspace_id: String, chain: Vec<String> },
     /// Change a live agent's permission level ("always allow" bumps
     /// supervised → auto so future commands stop asking).
     SetPermission { agent_id: String, permission: String },
