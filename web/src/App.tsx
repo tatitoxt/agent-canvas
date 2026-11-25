@@ -566,20 +566,37 @@ function Board() {
   // store, then merged over rfNodes so each node's `selected`/`dragging` flags
   // (and in-flight drag position) survive every store re-render.
   const [rfNodes, setRfNodes] = useNodesState<Node<BoardNodeData>>(baseNodes);
+  // Node identity cache: baseNodes rebuilds every node object on each store
+  // write (activity flushes every 400ms while agents output), which made
+  // React Flow re-render the whole canvas. Reuse the previous object when
+  // the node's defining inputs are unchanged so unchanged cards don't
+  // re-render.
+  const nodeSigCache = useRef(new Map<string, { sig: string; node: Node<BoardNodeData> }>());
   useEffect(() => {
     setRfNodes((prev) => {
       const byId = new Map(prev.map((n) => [n.id, n]));
-      return baseNodes.map((b) => {
+      const out = baseNodes.map((b) => {
+        const sig = JSON.stringify(b);
+        const cached = nodeSigCache.current.get(b.id);
+        let base = b;
+        if (cached?.sig === sig) base = cached.node;
+        else nodeSigCache.current.set(b.id, { sig, node: b });
         const p = byId.get(b.id);
-        return p
-          ? {
-              ...b,
-              selected: p.selected,
-              dragging: p.dragging,
-              position: p.dragging ? p.position : b.position,
-            }
-          : b;
+        if (!p) return base;
+        if (p.dragging) {
+          return { ...base, selected: p.selected, dragging: true, position: p.position };
+        }
+        // Unchanged base + no drag in flight → the previous object already
+        // carries the right selection flags and position: keep its identity
+        // so React Flow skips re-rendering this card entirely.
+        if (cached?.sig === sig) return p;
+        return { ...base, selected: p.selected, dragging: p.dragging };
       });
+      const alive = new Set(baseNodes.map((n) => n.id));
+      for (const k of nodeSigCache.current.keys()) {
+        if (!alive.has(k)) nodeSigCache.current.delete(k);
+      }
+      return out;
     });
   }, [baseNodes, setRfNodes]);
   const onNodesChange = useCallback(
