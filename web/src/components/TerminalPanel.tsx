@@ -273,6 +273,20 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             ⤢
           </button>
           <button
+            className="nodrag"
+            title="files — open this agent's worktree in the repo explorer"
+            onClick={() => {
+              const st = useBoard.getState();
+              const aid = agentId;
+              const a = aid ? st.agents[aid] : undefined;
+              const wsRepo = a?.workspace_id ? st.workspaces[a.workspace_id]?.repo : undefined;
+              st.openExplorer(a?.worktree ?? wsRepo);
+            }}
+            style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: 11 }}
+          >
+            ⌸
+          </button>
+          <button
             title="copy terminal output to clipboard"
             onClick={() => {
               const buf = useBoard.getState().ptyBuffers[agentId];
