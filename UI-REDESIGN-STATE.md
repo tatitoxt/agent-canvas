@@ -144,7 +144,8 @@ REMAINING LEVERS if still slow:
 - [x] Validación integral tras el router: typecheck, build, 23 unit tests y 25/25 E2E pasan localmente; `git diff --check` limpio.
 - [x] Repo Explorer: descarta respuestas tardías de listado/archivo que pertenecen al repositorio anterior al cambiar de workspace. Evita mostrar un árbol cruzado o un archivo obsoleto durante la navegación.
 - [x] Explorer: filtro instantáneo por ruta/nombre de archivo, estado visible para búsquedas sin resultados y prueba E2E de filtro + apertura de README en vivo.
+- [x] Explorer preview: encabezado pegajoso con nombre y ruta completa, números de línea y scroll horizontal para preservar código largo sin cortes arbitrarios; empty state orienta cómo empezar.
 - [x] Validación del Explorer: typecheck, build, 23 unit tests y E2E de montaje/resize/filtro/lectura pasan localmente. La suite general pasó 26/26 antes de esta extensión puntual.
 - [x] Topbar bubble fusion: al hover, ambos grupos (Canvas/workspaces y controles de la derecha) comparten una sola superficie glass; al salir vuelven a sus bubbles independientes. E2E verifica activación, aspecto unido y retorno al estado inicial.
 - [x] E2E completo tras topbar: 26/26 pasan; typecheck y build pasan.
-- [ ] Próximo orden sugerido: mejorar el panel de lectura del Explorer y auditar botones/estados del chrome contra la captura de referencia. Mantener lotes pequeños y verificables en PR #47, sin merge.
+- [ ] Próximo orden sugerido: auditar botones/estados del chrome contra la captura de referencia y corregir discrepancias visibles/funcionales. Mantener lotes pequeños y verificables en PR #47, sin merge.

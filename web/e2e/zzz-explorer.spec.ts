@@ -25,7 +25,7 @@ test("Add Explorer to canvas mounts a live repository file browser", async ({ pa
   await expect(dock).toBeHidden();
   const explorerNode = page.locator(".react-flow__node[data-id='panel-explorer']");
   await expect(explorerNode).toBeVisible();
-  await expect(explorerNode.getByText("select a file")).toBeVisible();
+  await expect(explorerNode.getByText("Choose a file to preview")).toBeVisible();
   await explorerNode.click({ position: { x: 32, y: 16 } });
   const resizeHandle = explorerNode.locator(".react-flow__resize-control.handle.bottom.right");
   await expect(resizeHandle).toBeVisible();
@@ -51,5 +51,7 @@ test("Add Explorer to canvas mounts a live repository file browser", async ({ pa
   const readme = explorerNode.getByRole("button", { name: "README.md" });
   await expect(readme).toBeVisible({ timeout: 8_000 });
   await readme.click();
-  await expect(explorerNode.locator("pre")).toContainText("# e2e scratch repo");
+  const code = explorerNode.getByLabel("Contents of README.md");
+  await expect(code).toContainText("# e2e scratch repo");
+  await expect(code.getByText("1", { exact: true })).toBeVisible();
 });

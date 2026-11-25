@@ -109,14 +109,34 @@ export function RepoExplorerPanel() {
           ))}
         </div>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: 8 }}>
+      <div style={{ flex: 1, overflow: "auto", minWidth: 0, minHeight: 0, background: "color-mix(in srgb, var(--cv-base) 42%, transparent)" }}>
         {file ? (
           <>
-            <div style={{ fontSize: 10, fontFamily: "monospace", color: "var(--cv-ink-faint)", marginBottom: 6 }}>{file.path}</div>
-            <pre style={{ margin: 0, fontSize: 11, fontFamily: "monospace", color: "var(--cv-ink)", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{file.text}</pre>
+            <div style={{
+              position: "sticky", top: 0, zIndex: 1, minWidth: "max-content",
+              padding: "9px 12px 8px", borderBottom: "1px solid var(--cv-glass-edge)",
+              background: "color-mix(in srgb, var(--cv-base) 94%, transparent)",
+              backdropFilter: "blur(12px)",
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 650, color: "var(--cv-ink)" }}>{base(file.path)}</div>
+              <div title={file.path} style={{ marginTop: 3, fontSize: 9.5, fontFamily: "monospace", color: "var(--cv-ink-faint)", whiteSpace: "nowrap" }}>{file.path}</div>
+            </div>
+            <div aria-label={`Contents of ${file.path}`} style={{ minWidth: "max-content", padding: "9px 0 14px", fontFamily: "var(--cv-font-mono, monospace)", fontSize: 11, lineHeight: 1.65, color: "var(--cv-ink)" }}>
+              {file.text.split("\n").map((line, i) => (
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "42px max-content", minHeight: "1.65em" }}>
+                  <span aria-hidden="true" style={{ paddingRight: 10, textAlign: "right", color: "var(--cv-ink-faint)", userSelect: "none", borderRight: "1px solid var(--cv-glass-edge)", marginRight: 12 }}>{i + 1}</span>
+                  <code style={{ font: "inherit", whiteSpace: "pre", paddingRight: 16 }}>{line || " "}</code>
+                </div>
+              ))}
+            </div>
           </>
         ) : (
-          <div style={{ padding: 10, fontSize: 11, color: "var(--cv-ink-faint)" }}>select a file</div>
+          <div style={{ height: "100%", minHeight: 180, display: "grid", placeItems: "center", padding: 14, color: "var(--cv-ink-faint)", textAlign: "center" }}>
+            <div>
+              <div style={{ fontSize: 12, color: "var(--cv-ink-dim)", marginBottom: 5 }}>Choose a file to preview</div>
+              <div style={{ fontSize: 10.5 }}>Select a repository file from the list.</div>
+            </div>
+          </div>
         )}
       </div>
     </div>
