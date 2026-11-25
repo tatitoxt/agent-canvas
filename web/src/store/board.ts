@@ -579,6 +579,10 @@ type BoardState = {
   /** Deska's "Gather loose windows into groups" — pulls every unwired,
    * unparented agent card into a tight grid and reframes the view. */
   gatherLoose: () => void;
+  /** Snapshot of the last gather for undo — positions before the moves
+   * plus the frame it created. */
+  lastGather: { items: { id: string; kind: "agent" | "panel" | "term"; x: number; y: number }[]; frameId: string } | null;
+  undoGather: () => void;
   /** Frame a board rect as a "Group N" region; returns its label. */
   frameNodes: (x: number, y: number, w: number, h: number) => string;
   /** Hide panels and menus — every chrome element (rails, topbar, spawn
@@ -1517,6 +1521,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   pendingTermPos: null,
   setPendingTermPos: (p) => set({ pendingTermPos: p }),
   viewportRect: null,
+  lastGather: null,
   pendingSpawnPos: null,
   setPendingSpawnPos: (p) => set({ pendingSpawnPos: p }),
   setAgentChain: (workspaceId, chain) => {
@@ -2116,6 +2121,10 @@ export const useBoard = create<BoardState>((set, get) => ({
       bumpFont(-1);
       return `terminal font ${get().termFont}px`;
     }
+    if (/undo (gather|grouping|tidy)/.test(t)) {
+      get().undoGather();
+      return "gather undone";
+    }
     if (/undo|deshacer/.test(t)) return undoMove() ? "undid last move" : "nothing to undo";
     if (/fit|reset view|zoom|overview/.test(t)) {
       requestView();
@@ -2229,10 +2238,19 @@ export const useBoard = create<BoardState>((set, get) => ({
       get().notify("gather — no loose windows");
       return;
     }
-    // Anchor the grid at the loosest cluster's top-left, cells sized to the
-    // biggest card so nothing overlaps.
-    const x0 = Math.min(...loose.map((l) => l.x));
-    const y0 = Math.min(...loose.map((l) => l.y));
+    // Snapshot every loose position before moving a single card — undo
+    // grouping puts them all back (Deska "put windows back").
+    const snapshotItems = loose.map((l) => ({
+      id: l.id,
+      kind: (l.id.startsWith("panel-") ? "panel" : l.id.startsWith("term-") ? "term" : "agent") as "agent" | "panel" | "term",
+      x: l.x,
+      y: l.y,
+    }));
+    // Anchor the grid inside the current viewport — scattered cards must
+    // come INTO view, not pile up where the leftmost one happened to be.
+    const vp = get().viewportRect;
+    const x0 = vp ? vp.left + 80 : Math.min(...loose.map((l) => l.x));
+    const y0 = vp ? vp.top + 110 : Math.min(...loose.map((l) => l.y));
     const cols = Math.ceil(Math.sqrt(loose.length));
     const cw = Math.max(...loose.map((l) => l.w)) + 32;
     const ch = Math.max(...loose.map((l) => l.h)) + 32;
@@ -2240,10 +2258,39 @@ export const useBoard = create<BoardState>((set, get) => ({
       l.move(l.id, x0 + (i % cols) * cw, y0 + Math.floor(i / cols) * ch),
     );
     const rows = Math.ceil(loose.length / cols);
+    // The frame needs its id for undo — frameNodes returns the label, so
+    // capture the newest frame id from the shapes map right after.
+    const beforeIds = new Set(Object.keys(get().shapes[activeBoard] ?? {}));
     const n = get().frameNodes(
       x0 - 26, y0 - 46, cols * cw + 12, rows * ch + 56,
     );
-    get().notify(`gathered ${loose.length} loose window${loose.length === 1 ? "" : "s"} into ${n}`);
+    const frameId = Object.keys(get().shapes[activeBoard] ?? {}).find((k) => !beforeIds.has(k)) ?? "";
+    set({ lastGather: { items: snapshotItems, frameId } });
+    get().notify(`gathered ${loose.length} into ${n} — "undo gather" puts them back`);
+    get().requestView();
+  },
+  undoGather: () => {
+    const g = get().lastGather;
+    if (!g) {
+      get().notify("nothing to undo — no recent gather");
+      return;
+    }
+    for (const item of g.items) {
+      if (item.kind === "panel") get().movePanelNode(item.id, item.x, item.y);
+      else if (item.kind === "term") get().moveTermNode(item.id, item.x, item.y);
+      else get().moveNode(item.id, item.x, item.y);
+    }
+    // Drop the frame the gather created.
+    if (g.frameId) {
+      const board = get().activeBoard;
+      const m = { ...(get().shapes[board] ?? {}) };
+      delete m[g.frameId];
+      const next = { ...get().shapes, [board]: m };
+      localStorage.setItem("cv-shapes", JSON.stringify(next));
+      set({ shapes: next });
+    }
+    set({ lastGather: null });
+    get().notify("gather undone — windows back where they were");
     get().requestView();
   },
   /** Drop a translucent "Group N" rect behind a region of the board —

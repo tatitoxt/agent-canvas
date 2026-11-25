@@ -78,6 +78,7 @@ export function Topbar({
   onNav: (key: string) => void;
   tools: ToolsMenuActions;
 }) {
+  const lastGather = useBoard((s) => s.lastGather);
   const connected = useBoard((s) => s.connected);
   const workspaces = useBoard((s) => s.workspaces);
   const agents = useBoard((s) => s.agents);
@@ -544,6 +545,16 @@ export function Topbar({
         >
           <Icon name="gather" size={15} color="var(--cv-ink-dim)" />
         </button>
+        {lastGather && (
+          <button
+            className="glass-pill"
+            style={{ ...iconBtn(false), background: "transparent", border: "none" }}
+            title="Undo grouping — put windows back where they were"
+            onClick={() => useBoard.getState().undoGather()}
+          >
+            <Icon name="history" size={15} color="var(--cv-accent)" />
+          </button>
+        )}
         <ToolsMenu active={nav} onSelect={onNav} actions={tools} />
         <button
           className="glass-pill"
