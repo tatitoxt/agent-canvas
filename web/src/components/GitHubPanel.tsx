@@ -155,7 +155,7 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
             }}
           >
             <div style={{ fontSize: 11.5, lineHeight: 1.35 }}>
-              <span style={{ color: "var(--cv-ink-dim)", fontFamily: "ui-monospace, monospace" }}>#{it.number}</span>{" "}
+              <span style={{ color: "var(--cv-ink-dim)", fontFamily: "var(--cv-font-mono)" }}>#{it.number}</span>{" "}
               {it.title}
               {it.draft && <span style={{ color: "var(--cv-ink-dim)", fontSize: 10 }}> · draft</span>}
             </div>

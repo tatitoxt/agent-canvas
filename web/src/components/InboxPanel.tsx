@@ -148,7 +148,7 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                     style={{
                       fontSize: 11,
                       color: "var(--cv-ink-dim)",
-                      fontFamily: "ui-monospace, SFMono-Regular, monospace",
+                      fontFamily: "var(--cv-font-mono)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -221,7 +221,7 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                     key={k}
                     className="glass-pill"
                     title={`type ${k === "↵" ? "enter" : k === "esc" ? "escape" : `'${k}'`} into ${a.name}'s terminal`}
-                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", cursor: "pointer", border: "none", color: "var(--cv-ink-dim)", fontFamily: "ui-monospace, monospace", flexShrink: 0 }}
+                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", cursor: "pointer", border: "none", color: "var(--cv-ink-dim)", fontFamily: "var(--cv-font-mono)", flexShrink: 0 }}
                     onClick={(ev) => {
                       ev.stopPropagation();
                       const seq = k === "↵" ? "\r" : k === "esc" ? "\x1b" : k;

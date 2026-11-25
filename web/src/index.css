@@ -31,21 +31,29 @@
   --cv-glass-shine: color-mix(in srgb, var(--cv-ink) 15%, transparent);
   --cv-blur: 20px;
 
-  /* one accent — vivid amber-orange (Deska's saturation, not pastel) */
+  /* one accent — warm amber, used with meaning only (CTAs, wiring) */
   --cv-accent: #f5a524;
   --cv-accent-dim: rgba(245, 165, 36, 0.16);
 
-  /* vivid statuses — saturated, the way Deska paints running/needs-you */
-  --cv-working: #3ddc84;
-  --cv-waiting: #ffb224;
-  --cv-blocked: #ff5d5d;
-  --cv-done: #34d399;
-  --cv-idle: #9aa0a6;
+  /* statuses — Deska as Fausto observed it: working is ORANGE, needs-you
+     amber, blocked salmon, done a calm green, idle neutral grey. State
+     lives in the small glyph + label — never recolors the whole card. */
+  --cv-working: #ff8f4d;
+  --cv-waiting: #f5b83d;
+  --cv-blocked: #e0695f;
+  --cv-done: #54c48e;
+  --cv-idle: #8a8f98;
+
+  /* permission/identity secondary — Deska's "accept edits on" violet */
+  --cv-perm: #b39dff;
 
   /* radii — Deska panel 12 / cluster 14 / pill 999 */
   --cv-radius: 12px;
   --cv-radius-region: 14px;
   --cv-radius-pill: 999px;
+
+  /* type — Plex mono for terminals, data, branch names */
+  --cv-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   color-scheme: dark;
 }
@@ -58,7 +66,7 @@ body,
   background: var(--cv-base);
   color: var(--cv-ink);
   font-family:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI",
+    "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
     sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -67,8 +75,8 @@ body,
 
 .glass {
   background: var(--cv-glass);
-  backdrop-filter: blur(var(--cv-blur)) saturate(1.35);
-  -webkit-backdrop-filter: blur(var(--cv-blur)) saturate(1.35);
+  backdrop-filter: blur(var(--cv-blur)) saturate(1.15);
+  -webkit-backdrop-filter: blur(var(--cv-blur)) saturate(1.15);
   border: 1px solid var(--cv-glass-edge);
   border-radius: var(--cv-radius);
   box-shadow:
@@ -78,8 +86,8 @@ body,
 
 .glass-pill {
   background: var(--cv-glass);
-  backdrop-filter: blur(var(--cv-blur)) saturate(1.35);
-  -webkit-backdrop-filter: blur(var(--cv-blur)) saturate(1.35);
+  backdrop-filter: blur(var(--cv-blur)) saturate(1.15);
+  -webkit-backdrop-filter: blur(var(--cv-blur)) saturate(1.15);
   border: 1px solid var(--cv-glass-edge);
   border-radius: var(--cv-radius-pill);
   box-shadow:
@@ -95,6 +103,29 @@ body,
     var(--cv-base);
 }
 
+/* ambient light + grain — the dot grid stays, but the canvas stops being
+   dead flat: a soft warm pool of light from the top-center, vignette at
+   the corners, and a whisper of noise over everything (Deska gets this
+   texture for free from the wallpaper; we synthesize ours) */
+.react-flow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(120% 90% at 50% -20%, color-mix(in srgb, var(--cv-ink) 5.5%, transparent), transparent 55%),
+    radial-gradient(150% 130% at 50% 118%, transparent 62%, rgba(0, 0, 0, 0.16));
+}
+.react-flow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.028 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
 .react-flow__node {
   font-family: inherit;
 }
@@ -192,6 +223,17 @@ body,
 .xterm .xterm-viewport::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.14);
   border-radius: 999px;
+}
+
+/* panel chrome buttons — hidden until hover, the way Deska keeps panel
+   titlebars monochrome and quiet until you reach for them */
+.agent-card .card-chrome {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.agent-card:hover .card-chrome,
+.react-flow__node.selected .card-chrome {
+  opacity: 1 !important;
 }
 
 /* ---------- status dot (the ONLY status indicator) ---------- */

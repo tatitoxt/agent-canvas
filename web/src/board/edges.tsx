@@ -13,9 +13,9 @@ import { useBoard } from "../store/board";
  * delegation (task down, result back), not decorative wires.
  */
 const STATE_STYLE = {
-  delegated: { stroke: "rgba(201,162,107,0.55)", chip: "task" },
-  returned: { stroke: "rgba(123,163,137,0.6)", chip: "result" },
-  failed: { stroke: "rgba(176,106,94,0.6)", chip: "failed" },
+  delegated: { stroke: "color-mix(in srgb, var(--cv-accent) 55%, transparent)", chip: "task" },
+  returned: { stroke: "color-mix(in srgb, var(--cv-done) 55%, transparent)", chip: "result" },
+  failed: { stroke: "color-mix(in srgb, var(--cv-blocked) 55%, transparent)", chip: "failed" },
 } as const;
 
 export function DelegationEdge({

@@ -98,7 +98,7 @@ export function MemoryPanel() {
           background: "var(--cv-glass-hi)",
           color: "var(--cv-ink)",
           fontSize: 11.5,
-          fontFamily: "ui-monospace, monospace",
+          fontFamily: "var(--cv-font-mono)",
           lineHeight: 1.5,
           resize: "none",
           outline: "none",

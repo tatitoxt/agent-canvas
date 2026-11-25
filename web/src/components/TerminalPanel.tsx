@@ -313,7 +313,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
                 fontSize: 10.5,
                 cursor: "pointer",
                 color: "var(--cv-ink-dim)",
-                fontFamily: "ui-monospace, monospace",
+                fontFamily: "var(--cv-font-mono)",
                 padding: "0 2px",
               }}
             >

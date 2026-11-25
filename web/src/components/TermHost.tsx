@@ -51,11 +51,11 @@ export function TermHost({ agentId }: { agentId: string }) {
   useEffect(() => {
     const term = new Terminal({
       fontSize: useBoard.getState().termFont,
-      fontFamily: "ui-monospace, Menlo, monospace",
+      fontFamily: "\"IBM Plex Mono\", ui-monospace, Menlo, monospace",
       theme: {
         background: "#121214",
         foreground: "#eceae6",
-        cursor: "#c9a26b",
+        cursor: "#f5a524",
         selectionBackground: "rgba(255,255,255,0.12)",
       },
       convertEol: true,

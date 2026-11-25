@@ -17,7 +17,7 @@ const KINDS: Record<string, { mark: string; color: string }> = {
   diff: { mark: "±", color: "#9a7fd4" },
   log: { mark: "▦", color: "#86817a" },
   image: { mark: "▩", color: "#7ba389" },
-  note: { mark: "✎", color: "#c9a26b" },
+  note: { mark: "✎", color: "var(--cv-accent)" },
   pdf: { mark: "⎙", color: "#c96b6b" },
 };
 const kindMeta = (k: string) => KINDS[k] ?? KINDS.note;
@@ -25,7 +25,7 @@ const kindMeta = (k: string) => KINDS[k] ?? KINDS.note;
 const SUGGESTIONS: { icon: string; color: string; label: string; dex: string }[] = [
   { icon: "canvas", color: "#7ba3cf", label: "Design a landing page for my app", dex: "spawn codex to design a landing page for my app" },
   { icon: "code", color: "#7ba389", label: "Build me a budget calculator", dex: "spawn codex to build me a budget calculator" },
-  { icon: "notes", color: "#c9a26b", label: "Write a new document", dex: "pdf Project overview" },
+  { icon: "notes", color: "var(--cv-accent)", label: "Write a new document", dex: "pdf Project overview" },
 ];
 
 export function ArtifactsPanel() {

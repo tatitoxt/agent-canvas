@@ -52,7 +52,7 @@ export function StudioPanel() {
             background: "var(--cv-glass-hi)",
             color: "var(--cv-ink)",
             fontSize: 11,
-            fontFamily: "ui-monospace, monospace",
+            fontFamily: "var(--cv-font-mono)",
             lineHeight: 1.55,
             whiteSpace: "pre-wrap",
           }}

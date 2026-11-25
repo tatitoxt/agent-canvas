@@ -74,7 +74,7 @@ export function NotesPanel() {
         <div style={{ margin: "0 4px 8px", display: "flex", flexDirection: "column", gap: 2, maxHeight: 90, overflowY: "auto" }}>
           {upcoming.map((n) => (
             <div key={n.note_id} style={{ display: "flex", gap: 6, fontSize: 10.5, color: overdue(n) ? "var(--cv-waiting)" : "var(--cv-ink-dim)", alignItems: "baseline" }}>
-              <span style={{ fontFamily: "ui-monospace, monospace", flexShrink: 0 }}>{n.due}</span>
+              <span style={{ fontFamily: "var(--cv-font-mono)", flexShrink: 0 }}>{n.due}</span>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--cv-ink)" }}>{n.text}</span>
             </div>
           ))}
@@ -109,7 +109,7 @@ export function NotesPanel() {
                       value={n.due ?? ""}
                       onChange={(e) => noteUpsert(n.note_id, n.col, n.text, n.pos, e.target.value || undefined)}
                       title="due date"
-                      style={{ background: "none", border: "none", color: overdue(n) ? "var(--cv-waiting)" : "var(--cv-ink-dim)", fontSize: 10, fontFamily: "ui-monospace, monospace", width: 92, padding: 0 }}
+                      style={{ background: "none", border: "none", color: overdue(n) ? "var(--cv-waiting)" : "var(--cv-ink-dim)", fontSize: 10, fontFamily: "var(--cv-font-mono)", width: 92, padding: 0 }}
                     />
                     <button
                       disabled={col.key === "todo"}
@@ -139,7 +139,7 @@ export function NotesPanel() {
           </div>
           {earlier.map((n) => (
             <div key={n.note_id} style={{ display: "flex", gap: 6, fontSize: 11, color: "var(--cv-ink-dim)", padding: "2px 6px", alignItems: "baseline" }}>
-              <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 9.5, flexShrink: 0 }}>[{n.col}]</span>
+              <span style={{ fontFamily: "var(--cv-font-mono)", fontSize: 9.5, flexShrink: 0 }}>[{n.col}]</span>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--cv-ink)" }}>{n.text}</span>
             </div>
           ))}

@@ -105,7 +105,7 @@ export function DelegationPanel({
       <div style={{ fontSize: 12, color: "var(--cv-ink)" }}>
         {edge.files ?? 0} file{(edge.files ?? 0) === 1 ? "" : "s"}
         {to?.branch && (
-          <span style={{ fontSize: 10.5, color: "var(--cv-ink-faint)", marginLeft: 8, fontFamily: "ui-monospace, monospace" }}>
+          <span style={{ fontSize: 10.5, color: "var(--cv-ink-faint)", marginLeft: 8, fontFamily: "var(--cv-font-mono)" }}>
             ⎇ {to.branch}
           </span>
         )}
@@ -115,7 +115,7 @@ export function DelegationPanel({
           style={{
             marginTop: 6,
             fontSize: 10.5,
-            fontFamily: "ui-monospace, monospace",
+            fontFamily: "var(--cv-font-mono)",
             color: "var(--cv-ink-dim)",
             maxHeight: 120,
             overflowY: "auto",
@@ -216,7 +216,7 @@ function DiffBlock({ agentId }: { agentId: string }) {
           style={{
             marginTop: 6,
             fontSize: 10,
-            fontFamily: "ui-monospace, SFMono-Regular, monospace",
+            fontFamily: "var(--cv-font-mono)",
             color: "var(--cv-ink-dim)",
             background: "rgba(0,0,0,0.3)",
             border: "1px solid var(--cv-glass-edge)",

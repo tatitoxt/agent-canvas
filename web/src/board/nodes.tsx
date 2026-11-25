@@ -52,8 +52,8 @@ const CLI_META: Record<string, { mark: string; label: string; color: string }> =
   vibe: { mark: "▦", label: "Mistral Vibe", color: "#ff7a1a" },
   pi: { mark: "▶", label: "Pi", color: "#fbbf24" },
   antigravity: { mark: "▲", label: "Antigravity", color: "#ff7043" },
-  bash: { mark: "›_", label: "Terminal", color: "#9aa0a6" },
-  live: { mark: "›_", label: "Terminal", color: "#9aa0a6" },
+  bash: { mark: "›_", label: "Terminal", color: "#8fb8ff" },
+  live: { mark: "›_", label: "Terminal", color: "#8fb8ff" },
 };
 
 const PERMISSION_LABEL: Record<string, string> = {
@@ -90,7 +90,7 @@ function MiniTerm({ agentId }: { agentId: string }) {
         borderRadius: 8,
         background: "rgba(0,0,0,0.34)",
         border: "1px solid var(--cv-glass-edge)",
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+        fontFamily: "var(--cv-font-mono)",
         fontSize: 10,
         lineHeight: 1.55,
         color: "rgba(244,242,238,0.85)",
@@ -139,21 +139,17 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const { screenToFlowPosition } = useReactFlow();
   const [collapsed, setCollapsed] = useState(false);
   const statusColor = STATUS_COLOR[data.status];
-  // Outline = the state color (waiting/running/idle/error) — Deska's
-  // hairline for quiet states, full vivid ring + halo when it needs you.
-  const attention = data.delegating || data.status === "waiting" || data.status === "blocked";
-  const border = attention || selected
-    ? `1.5px solid ${statusColor}`
-    : `1.5px solid color-mix(in srgb, ${statusColor} 50%, transparent)`;
-  const glow = attention || selected
-    ? `0 0 22px color-mix(in srgb, ${statusColor} 30%, transparent), 0 12px 32px rgba(0,0,0,0.35)`
+  // Deska's rule: state never recolors the card. Border stays a neutral
+  // hairline — the ONLY colored outline is amber when the agent is wired
+  // to the orchestrator (Fausto's vision: "outline naranja cuando habla
+  // con Dex"). State lives in the bars glyph + label inside the header.
+  const wired = data.delegating;
+  const border = wired
+    ? "1.5px solid var(--cv-accent)"
+    : "1px solid var(--cv-glass-edge)";
+  const glow = wired
+    ? "0 0 18px color-mix(in srgb, var(--cv-accent) 22%, transparent), 0 12px 32px rgba(0,0,0,0.35)"
     : undefined;
-  // The ray IS the outline — a comet of the state color walking the
-  // whole border on every live status; idle/done/exited keep a hairline.
-  const ring =
-    attention ||
-    selected ||
-    (data.status !== "idle" && data.status !== "done");
   if (collapsed) {
     // Deska's collapsed terminal — glyph tile + number in a small pill.
     return (
@@ -184,10 +180,10 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             justifyContent: "center",
             background: "var(--cv-glass-hi)",
             border: "1px solid var(--cv-glass-edge)",
-            fontFamily: "ui-monospace, SFMono-Regular, monospace",
+            fontFamily: "var(--cv-font-mono)",
             fontWeight: 700,
             fontSize: 10.5,
-            color: "#5aa2f7",
+            color: "#8fb8ff",
             lineHeight: 1,
           }}
         >
@@ -200,17 +196,16 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   }
   return (
     <div
-      className={`glass ${ring ? "card-ring" : ""} ${data.status === "waiting" ? "node-waiting" : ""}`}
+      className={`glass agent-card ${data.status === "waiting" ? "node-waiting" : ""}`}
       style={{
-        ["--cv-ring" as string]: statusColor,
         position: "relative",
         width: 460,
         padding: 0,
         overflow: "hidden",
         // Deska's card is near-opaque glass — the dot canvas barely bleeds.
-        background: "color-mix(in srgb, var(--cv-base) 70%, transparent)",
+        background: "color-mix(in srgb, var(--cv-base) 64%, transparent)",
         border,
-        boxShadow: glow,
+        boxShadow: glow ?? "0 18px 44px rgba(0,0,0,0.5), inset 0 1px 0 var(--cv-glass-shine)",
         cursor: "pointer",
       }}
     >
@@ -218,47 +213,59 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           ring keeps state meaning, this stripe carries the agent's identity. */}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: meta.color, opacity: 0.85, pointerEvents: "none" }} />
       <Handle type="target" position={Position.Left} />
-      {/* Deska header: [›_] Terminal N   ▮▮▮ running   [logo] Cli   (— × only when selected) */}
+      {/* CLI identity hairline — a 2px strip of the brand color across the
+          top edge, the way Deska tints a panel by its type. Scanning the
+          canvas you read agents by color before reading a single word. */}
+      <div
+        style={{
+          height: 2,
+          background: `linear-gradient(90deg, ${meta.color}, color-mix(in srgb, ${meta.color} 35%, transparent))`,
+          opacity: 0.85,
+        }}
+      />
+      {/* Deska header: [mark] title-in-cli-color  ▮▮▮ running  [logo] Cli  (chrome on hover) */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: 9,
           minWidth: 0,
-          padding: "10px 12px",
+          padding: "9px 12px 8px",
         }}
       >
         <span
           title={meta.label}
           style={{
             flex: "none",
-            width: 24,
-            height: 24,
+            width: 22,
+            height: 22,
             borderRadius: 6,
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            background: "var(--cv-glass-hi)",
-            border: "1px solid var(--cv-glass-edge)",
-            fontSize: 11.5,
+            background: `color-mix(in srgb, ${meta.color} 14%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${meta.color} 30%, transparent)`,
+            fontSize: 11,
             fontWeight: 700,
-            fontFamily: "ui-monospace, SFMono-Regular, monospace",
-            color: "#5aa2f7",
-            textShadow: "0 0 10px rgba(90,162,247,0.5)",
+            fontFamily: "var(--cv-font-mono)",
+            color: meta.color,
             lineHeight: 1,
           }}
         >
-          ›_
+          {meta.mark === "›_" ? "›_" : <CliMark cli={data.cli} color={meta.color} size={12} />}
         </span>
         <div
           style={{
-            fontSize: 13,
-            fontWeight: 650,
+            fontSize: 13.5,
+            fontWeight: 600,
             letterSpacing: -0.1,
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
             minWidth: 0,
+            // Deska paints the terminal title in the CLI's color — a Claude
+            // card reads clay, a Codex card reads green, before anything else.
+            color: `color-mix(in srgb, ${meta.color} 88%, var(--cv-ink))`,
           }}
           title={data.name}
         >
@@ -286,60 +293,68 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             gap: 5.5,
             marginLeft: "auto",
             fontSize: 11.5,
-            fontWeight: 600,
+            fontWeight: 500,
             flex: "none",
             whiteSpace: "nowrap",
           }}
         >
-          <CliMark cli={data.cli} color={meta.color} size={13} />
-          <span style={{ color: "var(--cv-ink-dim)" }}>{meta.label}</span>
+          <span style={{ color: "var(--cv-ink-faint)" }}>{meta.label}</span>
         </span>
-        {selected && (
-          <span className="nodrag" style={{ display: "inline-flex", alignItems: "center", gap: 7, flex: "none", color: "var(--cv-ink-faint)", fontSize: 12 }}>
-            <span
-              role="button"
-              title="pin a note to this agent — dashed connector to the card"
-              style={{ cursor: "pointer", lineHeight: 1, fontSize: 11 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!data.id) return;
-                const spot = agentPinSpot(data.id);
-                useBoard.getState().pinCard(
-                  `${data.name} — note`,
-                  "",
-                  undefined,
-                  `agent:${data.id}`,
-                  spot ? screenToFlowPosition(spot) : undefined,
-                );
-              }}
-            >
-              ◈
-            </span>
-            <span
-              role="button"
-              title="collapse"
-              style={{ cursor: "pointer", lineHeight: 1 }}
-              onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }}
-            >
-              —
-            </span>
-            <span
-              role="button"
-              title="kill"
-              style={{ cursor: "pointer", lineHeight: 1, fontSize: 13 }}
-              onClick={(e) => { e.stopPropagation(); if (data.id) useBoard.getState().kill(data.id); }}
-            >
-              ×
-            </span>
+        <span
+          className="nodrag card-chrome"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            flex: "none",
+            color: "var(--cv-ink-faint)",
+            fontSize: 12,
+            opacity: selected ? 1 : undefined,
+          }}
+        >
+          <span
+            role="button"
+            title="pin a note to this agent — dashed connector to the card"
+            style={{ cursor: "pointer", lineHeight: 1, fontSize: 11 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!data.id) return;
+              const spot = agentPinSpot(data.id);
+              useBoard.getState().pinCard(
+                `${data.name} — note`,
+                "",
+                undefined,
+                `agent:${data.id}`,
+                spot ? screenToFlowPosition(spot) : undefined,
+              );
+            }}
+          >
+            ◈
           </span>
-        )}
+          <span
+            role="button"
+            title="collapse"
+            style={{ cursor: "pointer", lineHeight: 1 }}
+            onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }}
+          >
+            —
+          </span>
+          <span
+            role="button"
+            title="kill"
+            style={{ cursor: "pointer", lineHeight: 1, fontSize: 13 }}
+            onClick={(e) => { e.stopPropagation(); if (data.id) useBoard.getState().kill(data.id); }}
+          >
+            ×
+          </span>
+        </span>
       </div>
       {/* Full-width section separator — Deska splits header from body
           edge to edge, not inside the padding. */}
       <div style={{ height: 1, background: "var(--cv-glass-edge)" }} />
 
       {!collapsed && (
-      <div style={{ padding: "9px 12px 10px" }}>
+      <div style={{ padding: "10px 13px 11px" }}>
       {/* Meta row — files / account / permission. */}
       {(data.files || data.accountLabel || data.permission) && (
         <div
@@ -348,7 +363,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             alignItems: "center",
             gap: 8,
             marginTop: 6,
-            fontSize: 9.5,
+            fontSize: 10.5,
             color: "var(--cv-ink-faint)",
           }}
         >
@@ -368,7 +383,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
               style={{
                 fontSize: 9,
                 padding: "1px 6px",
-                color: data.permission === "supervised" ? "var(--cv-ink-faint)" : "var(--cv-accent)",
+                color: data.permission === "supervised" ? "var(--cv-ink-faint)" : "var(--cv-perm)",
                 cursor: "pointer",
                 border: "none",
                 marginLeft: "auto",
@@ -395,8 +410,8 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             marginTop: 10,
             paddingTop: 9,
             borderTop: "1px solid rgba(255,255,255,0.06)",
-            fontSize: 11.5,
-            lineHeight: 1.45,
+            fontSize: 12.5,
+            lineHeight: 1.5,
             color: "var(--cv-ink-dim)",
             display: "-webkit-box",
             WebkitLineClamp: 2,
@@ -431,7 +446,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           <div
             style={{
               fontSize: 11,
-              fontFamily: "ui-monospace, SFMono-Regular, monospace",
+              fontFamily: "var(--cv-font-mono)",
               color: "var(--cv-ink-dim)",
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -481,12 +496,12 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           marginTop: 9,
           paddingTop: 8,
           borderTop: "1px solid rgba(255,255,255,0.06)",
-          fontSize: 9.5,
+          fontSize: 10,
           color: "var(--cv-ink-faint)",
         }}
       >
         {data.permission === "auto_accept" && (
-          <span style={{ color: "#9a7fd4", fontWeight: 600 }}>▸ accept edits on</span>
+          <span style={{ color: "var(--cv-perm)", fontWeight: 600 }}>▸ accept edits on</span>
         )}
         {data.restored && (
           <span title="Session pre-dates this window — replayed by the daemon" style={{ color: "var(--cv-ink-faint)" }}>
@@ -496,7 +511,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         {data.branch && (
           <span
             style={{
-              fontFamily: "ui-monospace, SFMono-Regular, monospace",
+              fontFamily: "var(--cv-font-mono)",
               marginLeft: data.permission === "auto_accept" ? 8 : 0,
             }}
             title="worktree branch"
@@ -526,7 +541,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
             ⇄ handoff
           </button>
         )}
-        <span style={{ marginLeft: "auto", fontFamily: "ui-monospace, SFMono-Regular, monospace" }}>
+        <span style={{ marginLeft: "auto", fontFamily: "var(--cv-font-mono)" }}>
           <FooterElapsed agentId={data.id} />
           <FooterSize agentId={data.id} />
           <FooterModel agentId={data.id} />
@@ -635,9 +650,9 @@ export function OrchestratorNode({
         width: 292,
         padding: 0,
         overflow: "hidden",
-        borderColor: wiring ? "var(--cv-accent)" : "var(--cv-accent-dim)",
+        borderColor: wiring ? "var(--cv-accent)" : "var(--cv-glass-edge)",
         boxShadow: wiring
-          ? "0 0 0 1px var(--cv-accent), 0 0 18px rgba(201,162,107,0.18)"
+          ? "0 0 0 1px var(--cv-accent), 0 0 18px color-mix(in srgb, var(--cv-accent) 18%, transparent)"
           : "0 14px 36px rgba(0,0,0,0.34)",
       }}
     >
@@ -651,7 +666,7 @@ export function OrchestratorNode({
           padding: "10px 12px",
           borderBottom: "1px solid var(--cv-glass-edge)",
           background:
-            "linear-gradient(180deg, rgba(201,162,107,0.13), rgba(201,162,107,0.02))",
+            "linear-gradient(180deg, color-mix(in srgb, var(--cv-accent) 6%, transparent), transparent)",
         }}
       >
         <div
@@ -683,11 +698,11 @@ export function OrchestratorNode({
           </div>
           <div
             style={{
-              fontSize: 8,
-              letterSpacing: 1.4,
-              textTransform: "uppercase",
-              color: "var(--cv-accent)",
-              fontWeight: 700,
+              fontSize: 9.5,
+              letterSpacing: 0.2,
+              color: "color-mix(in srgb, var(--cv-accent) 75%, var(--cv-ink))",
+              fontWeight: 500,
+              fontFamily: "var(--cv-font-mono)",
             }}
           >
             orchestrator · {roster.length} wired
@@ -697,7 +712,7 @@ export function OrchestratorNode({
           className="nodrag"
           onClick={() => useBoard.getState().setSpawnOpen(true)}
           title="Spawn — pick a CLI agent to run on the canvas"
-          style={{ ...actBtn, background: "var(--cv-accent)", border: "none", color: "#14110d" }}
+          style={{ ...actBtn, background: "color-mix(in srgb, var(--cv-accent) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--cv-accent) 32%, transparent)", color: "var(--cv-accent)" }}
         >
           <Icon name="plus" size={14} />
         </button>
@@ -707,7 +722,7 @@ export function OrchestratorNode({
           title={wiring ? "Done wiring" : "Pick agent consoles on the canvas to wire them here"}
           style={{
             ...actBtn,
-            background: wiring ? "rgba(201,162,107,0.16)" : "none",
+            background: wiring ? "color-mix(in srgb, var(--cv-accent) 14%, transparent)" : "none",
             border: "1px solid var(--cv-accent-dim)",
             color: wiring ? "var(--cv-accent)" : "var(--cv-ink-dim)",
             fontSize: 10,

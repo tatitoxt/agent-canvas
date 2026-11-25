@@ -435,7 +435,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
             <Icon name={expanded ? "expand" : "collapse"} size={12} />
           </button>
         </div>
-        {!expanded && <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 0.4, color: "var(--cv-ink-dim)", textTransform: "uppercase" }}>Library</span>}
+        {!expanded && <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 1.2, color: "var(--cv-ink-dim)", textTransform: "uppercase", writingMode: "vertical-rl" }}>Library</span>}
         {tools.map(renderTool)}
       </nav>
       {gitMenuEl}

@@ -997,7 +997,7 @@ function Board() {
                 width: Math.abs(marquee.x2 - marquee.x1),
                 height: Math.abs(marquee.y2 - marquee.y1),
                 border: "1.5px solid var(--cv-accent)",
-                background: "rgba(201,162,107,0.08)",
+                background: "color-mix(in srgb, var(--cv-accent) 8%, transparent)",
                 borderRadius: 8,
               }}
             />
@@ -1116,15 +1116,15 @@ function Board() {
           nodeStrokeWidth={1}
           nodeColor={(n) => {
             const data = n.data as Partial<BoardNodeData>;
-            if (data.kind === "orchestrator") return "#c9a26b";
+            if (data.kind === "orchestrator") return "#f5a524";
             if (data.kind === "workspace") return "#1d1d20";
             if (data.kind === "agent" && data.status) {
               const map: Record<AgentStatus, string> = {
-                working: "#3ddc84",
-                waiting: "#ffb224",
-                blocked: "#ff5d5d",
-                done: "#34d399",
-                idle: "#9aa0a6",
+                working: "#ff8f4d",
+                waiting: "#f5b83d",
+                blocked: "#e0695f",
+                done: "#54c48e",
+                idle: "#55565c",
               };
               return map[data.status] ?? "#33333a";
             }

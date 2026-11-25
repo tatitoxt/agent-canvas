@@ -122,7 +122,7 @@ export function SearchPanel({
                 style={{
                   fontSize: 11,
                   color: "var(--cv-ink-dim)",
-                  fontFamily: "ui-monospace, monospace",
+                  fontFamily: "var(--cv-font-mono)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",

@@ -176,7 +176,7 @@ function mdInline(text: string, onLink?: (name: string) => void, onTag?: (tag: s
       );
     } else {
       out.push(
-        <code key={k++} style={{ background: "rgba(255,255,255,0.07)", borderRadius: 4, padding: "0 4px", fontSize: "0.92em", fontFamily: "ui-monospace, monospace" }}>
+        <code key={k++} style={{ background: "rgba(255,255,255,0.07)", borderRadius: 4, padding: "0 4px", fontSize: "0.92em", fontFamily: "var(--cv-font-mono)" }}>
           {t.slice(1, -1)}
         </code>,
       );
@@ -326,7 +326,7 @@ function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embedLookup
     if (/^\s*```/.test(l)) {
       if (inCode) {
         els.push(
-          <pre key={i} style={{ margin: "8px 0", padding: "10px 12px", borderRadius: 8, background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.06)", fontSize: 10.5, fontFamily: "ui-monospace, monospace", lineHeight: 1.5, overflowX: "auto", color: "var(--cv-ink-dim)" }}>
+          <pre key={i} style={{ margin: "8px 0", padding: "10px 12px", borderRadius: 8, background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.06)", fontSize: 10.5, fontFamily: "var(--cv-font-mono)", lineHeight: 1.5, overflowX: "auto", color: "var(--cv-ink-dim)" }}>
             {codeBuf.join("\n")}
           </pre>,
         );
@@ -1021,7 +1021,7 @@ function SourceEditor({ path, text, onDraft }: { path: string; text: string; onD
           padding: "10px 12px", borderRadius: 14, resize: "none",
           border: `1px solid ${dirty ? "rgba(255,196,66,.4)" : "var(--cv-glass-edge)"}`,
           background: "var(--cv-glass-hi)", color: "var(--cv-ink)",
-          fontSize: 11, fontFamily: "ui-monospace, monospace",
+          fontSize: 11, fontFamily: "var(--cv-font-mono)",
           lineHeight: 1.55, whiteSpace: "pre-wrap", outline: "none",
         }}
       />
@@ -1378,7 +1378,7 @@ export function VaultPanel() {
           value={dir}
           onChange={(e) => setDir(e.target.value)}
           placeholder="/path/to/vault"
-          style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "6px 12px", fontSize: 11, color: "var(--cv-ink)", outline: "none", fontFamily: "ui-monospace, monospace" }}
+          style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "6px 12px", fontSize: 11, color: "var(--cv-ink)", outline: "none", fontFamily: "var(--cv-font-mono)" }}
         />
         <button className="glass-pill" style={{ fontSize: 10.5, padding: "5px 12px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }} type="submit">
           open
