@@ -26,6 +26,19 @@ async function boot(page: import("@playwright/test").Page) {
   return { port, token, vault, repo };
 }
 
+test("Paper theme switches the canvas to a readable warm light palette and persists", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title='Settings']").click();
+  await page.getByRole("button", { name: "Paper" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "paper");
+  expect(await page.locator("body").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(236, 232, 225)");
+  expect(await page.locator("html").evaluate((el) => getComputedStyle(el).getPropertyValue("--cv-shadow-card"))).toContain("#3f2f19");
+  expect(await page.locator("html").evaluate((el) => getComputedStyle(el).getPropertyValue("--cv-minimap-mask"))).toContain("#3f2f19");
+  expect(await page.locator(".react-flow").evaluate((el) => getComputedStyle(el, "::after").opacity)).toBe("0.12");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "paper");
+});
+
 test("Tools opens as a dock and collapses to panel icons", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();

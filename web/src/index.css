@@ -30,6 +30,14 @@
   --cv-glass-edge: color-mix(in srgb, var(--cv-ink) 12%, transparent);
   --cv-glass-shine: color-mix(in srgb, var(--cv-ink) 15%, transparent);
   --cv-blur: 14px;
+  --cv-shadow-card: 0 12px 32px rgba(0, 0, 0, 0.35);
+  --cv-shadow-pill: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --cv-shadow-popover: 0 18px 48px rgba(0, 0, 0, 0.55);
+  --cv-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --cv-vignette: rgba(0, 0, 0, 0.16);
+  --cv-control-divider: rgba(255, 255, 255, 0.06);
+  --cv-minimap-mask: rgba(14, 14, 16, 0.55);
+  --cv-minimap-node-stroke: rgba(255, 255, 255, 0.25);
 
   /* one accent — warm amber, used with meaning only (CTAs, wiring) */
   --cv-accent: #f5a524;
@@ -81,7 +89,7 @@ body,
   border-radius: var(--cv-radius);
   box-shadow:
     inset 0 1px 0 var(--cv-glass-shine),
-    0 12px 32px rgba(0, 0, 0, 0.35);
+    var(--cv-shadow-card);
 }
 
 .glass-pill {
@@ -92,7 +100,7 @@ body,
   border-radius: var(--cv-radius-pill);
   box-shadow:
     inset 0 1px 0 var(--cv-glass-shine),
-    0 8px 24px rgba(0, 0, 0, 0.3);
+    var(--cv-shadow-pill);
 }
 
 /* ---------- react flow base ---------- */
@@ -115,7 +123,7 @@ body,
   z-index: 0;
   background:
     radial-gradient(120% 90% at 50% -20%, color-mix(in srgb, var(--cv-ink) 5.5%, transparent), transparent 55%),
-    radial-gradient(150% 130% at 50% 118%, transparent 62%, rgba(0, 0, 0, 0.16));
+    radial-gradient(150% 130% at 50% 118%, transparent 62%, var(--cv-vignette));
 }
 .react-flow::after {
   content: "";
@@ -211,11 +219,11 @@ body,
   border: 1px solid var(--cv-glass-edge);
   background: var(--cv-glass);
   backdrop-filter: blur(var(--cv-blur));
-  box-shadow: inset 0 1px 0 var(--cv-glass-shine), 0 8px 24px rgba(0,0,0,0.3);
+  box-shadow: inset 0 1px 0 var(--cv-glass-shine), var(--cv-shadow-pill);
 }
 .react-flow__controls button {
   background: transparent;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--cv-control-divider);
   color: var(--cv-ink-dim);
   width: 26px;
   height: 26px;
@@ -310,6 +318,15 @@ body,
   --cv-base: #ece8e1;
   --cv-dot: rgba(30, 26, 20, 0.06);
   --cv-ink: #23211d;
+  --cv-glass-shine: rgba(255, 255, 255, 0.72);
+  --cv-shadow-card: 0 10px 28px rgba(63, 47, 25, 0.12);
+  --cv-shadow-pill: 0 5px 16px rgba(63, 47, 25, 0.1);
+  --cv-shadow-popover: 0 16px 40px rgba(63, 47, 25, 0.18);
+  --cv-shadow-hover: 0 5px 16px rgba(63, 47, 25, 0.12);
+  --cv-vignette: rgba(117, 91, 52, 0.035);
+  --cv-control-divider: rgba(35, 33, 29, 0.09);
+  --cv-minimap-mask: rgba(63, 47, 25, 0.12);
+  --cv-minimap-node-stroke: rgba(35, 33, 29, 0.22);
   --cv-accent: #d97706;
   --cv-accent-dim: rgba(217, 119, 6, 0.14);
   --cv-working: #16a34a;
@@ -318,6 +335,10 @@ body,
   --cv-done: #16a34a;
   --cv-idle: #7a756c;
   color-scheme: light;
+}
+
+[data-theme="paper"] .react-flow::after {
+  opacity: 0.12;
 }
 
 [data-theme="sepia"] {
@@ -380,7 +401,7 @@ body,
   border-radius: 16px;
   box-shadow:
     inset 0 1px 0 var(--cv-glass-shine),
-    0 18px 48px rgba(0, 0, 0, 0.55);
+    var(--cv-shadow-popover);
 }
 .cv-menu-scroll {
   scrollbar-width: thin;
@@ -441,7 +462,7 @@ body,
   background: color-mix(in srgb, var(--cv-base) 72%, transparent);
   backdrop-filter: blur(20px) saturate(1.15);
   -webkit-backdrop-filter: blur(20px) saturate(1.15);
-  box-shadow: inset 0 0 0 1px var(--cv-glass-edge), 0 8px 24px rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px var(--cv-glass-edge), var(--cv-shadow-hover);
 }
 .cv-topbar-fuse:hover > .glass-pill,
 .cv-topbar-fuse:hover .cv-fuse {

@@ -1146,10 +1146,10 @@ function Board() {
           zoomable
           style={{ width: mmSize.w, height: mmSize.h, marginRight: 184 }}
           className="!bg-[var(--cv-base)]"
-          maskColor="rgba(14,14,16,0.55)"
+          maskColor="var(--cv-minimap-mask)"
           maskStrokeColor="var(--cv-accent)"
           maskStrokeWidth={1.5}
-          nodeStrokeColor="rgba(255,255,255,0.25)"
+          nodeStrokeColor="var(--cv-minimap-node-stroke)"
           nodeStrokeWidth={1}
           nodeColor={(n) => {
             const data = n.data as Partial<BoardNodeData>;

@@ -9,12 +9,12 @@
 ## Feedback de Fausto (mensaje dictado, prioridad literal) — checklist
 1. [x] Outline de card en color de ESTADO (running=verde, waiting=ambar, blocked=rojo) + texto de estado en mismo color — HECHO (commit design: state-colored outlines)
 2. [x] Naming: "Terminal N" primario + rol secundario + estado + logo CLI y nombre CLI en brand color — HECHO. OJO: numeración real viene del daemon; el mock parsea `rol-N`. Verificar que el daemon asigna nombres únicos incrementales.
-3. [ ] **Library rail: revertir al estilo pre-flyout** — Fausto odia el flyout tipo iOS que vino con los PRs mergeados del hijo (`web/src/components/NavRail.tsx` — bubbles Spaces/Extras/Library con menús `cv-menu` flotantes). "Estaba mejor como estaba antes en la conversación esta" = antes de los 24 PRs. Buscar en git history del repo principal la implementación anterior del library/presets (probablemente un panel expandible simple anclado a la izquierda, no un flyout flotante). `git log --oneline main -- web/src/` en /Users/fausto/agent-canvas para encontrar el commit pre-redesign del hijo.
+3. [x] **Library rail sin flyout** — el panel Tools se acopla como dock con filas etiquetadas y conserva expand/collapse; los submenús no se cierran al elegir opciones. E2E confirma expansión y acciones de Add to canvas.
 4. [x] Labels de cables más fuertes — HECHO (12px font-medium)
-5. [ ] **Cables no deben atravesar cards** — routing prolijo. Actualmente los edges van en línea recta/curva simple y cruzan nodos. Implementar obstacle-aware routing (ver `web/src/board/edges.tsx` — custom edge component). Opciones: routing con waypoints que esquiva bounding boxes de nodos, o elevar z-index visual + curvar alrededor. Fausto: "el cable pasa por todo arriba de Atlas, no se nota, pero cuando hacés clic en dock se ve que se cortan las terminales".
+5. [x] **Cables evitan cards** — edge routing detecta obstáculos múltiples y busca trayectos ortogonales compactos; unit tests cubren conexiones y rutas despejadas.
 6. [x] Minimap chico abajo-derecha + zoom controls — YA ESTÁ así (mmSize 148×96, marginRight 184). Confirmar visualmente con Fausto qué le pareció "horrible" — quizás eran los colores viejos (ya actualizados a verde working).
 7. [x] **File explorer como ventana del canvas** — E2E crea un workspace, agrega Explorer al canvas, lo mueve, lo redimensiona con persistencia y abre `README.md`.
-8. [ ] **Terminales usables de verdad** — el daemon canvasd nunca terminó de compilar. Relanzado: `cargo build -p canvasd` en el worktree (background shell). Cuando esté: correrlo en :4242 y spawnear agentes reales para probar escribir en las PTYs. Nota: el hijo encontró una vuln de path traversal y estaba implementando sandbox allowedRoots — verificar estado de eso en main.
+8. [~] **Terminales usables** — el drawer y la tarjeta flotante montan xterm sobre la PTY; E2E escribe comandos de shell y verifica la salida, split y resize. Falta una pasada manual con una sesión real de CLI de IA para validar esos TUIs concretos.
 
 ## Decisiones de diseño ya aplicadas (no revertir)
 - IBM Plex Sans/Mono (tipografía Deska)
@@ -27,7 +27,7 @@
 
 ## Pendiente grande después del checklist
 - Densidad de contenido en cards (texto más grande, más aire)
-- Chrome general pulido (topbar, rails, bottom bar estilo Deska)
+- Chrome general pulido (topbar, rails, bottom bar estilo Deska); Paper theme recibe tokens de superficie, sombras, viñeta y minimapa cálidos para que no conserve el aspecto dark.
 - Reconciliar/pushear branch: Fausto decide si mergear a main vía la sesión madre
 - Modelo: todo este trabajo corre en swe-2-1-medium gratis (Fausto no tiene créditos para frontier)
 
@@ -167,3 +167,9 @@ REMAINING LEVERS if still slow:
 - [x] Las ventanas de notas fijadas al board ahora reutilizan el renderer Markdown del Vault real: headings, formato inline, tareas, embeds, imágenes locales, wikilinks resueltos/no resueltos y previews compatibles con el vault conectado. La ventana mantiene su lectura viva del archivo y resize, con marca LIVE VAULT y el icono oficial.
 - [x] E2E del flujo Add to Board guarda una nota con Markdown y comprueba formato y wikilink visible dentro de la ventana interactiva del canvas.
 - [x] Validación: 23/23 unit tests, 30/30 E2E, typecheck, build y `git diff --check`.
+
+## Tema Paper y estado del roadmap (2026-11-25)
+- [x] Tema Paper: sombras cálidas suaves, viñeta reducida y minimapa con máscara clara; el lienzo, controles y tarjetas dejan de heredar sombras y overlay negros del tema dark.
+- [x] E2E cambia a Paper, verifica fondo/sombra/máscara y confirma persistencia tras recargar.
+- [x] Roadmap reconciliado con evidencia actual: Library sin flyout y routing que esquiva tarjetas están completados; PTY interactiva queda validada para shell, pero falta una pasada manual con CLIs de IA reales.
+- [x] Validación tras el tema Paper: 23/23 unit tests, 31/31 E2E, typecheck, build y `git diff --check`.
