@@ -581,7 +581,7 @@ type BoardState = {
   gatherLoose: () => void;
   /** Snapshot of the last gather for undo — positions before the moves
    * plus the frame it created. */
-  lastGather: { items: { id: string; kind: "agent" | "panel" | "term"; x: number; y: number }[]; frameId: string } | null;
+  lastGather: { board: string; items: { id: string; kind: "agent" | "panel" | "term"; x: number; y: number }[]; frameId: string } | null;
   undoGather: () => void;
   /** Frame a board rect as a "Group N" region; returns its label. */
   frameNodes: (x: number, y: number, w: number, h: number) => string;
@@ -2214,14 +2214,22 @@ export const useBoard = create<BoardState>((set, get) => ({
     const inside = (x: number, y: number) =>
       rects.some((r) => x >= r.x && x <= r.x + r.w! && y >= r.y && y <= r.y + r.h!);
     const loose: Array<{ id: string; x: number; y: number; w: number; h: number; move: (id: string, x: number, y: number) => void }> = [];
-    for (const a of Object.values(agents)) {
-      const p = positions[a.id];
+    // Agents never dragged have no positions entry — the canvas renders them
+    // on the fallback spawn grid; snapshot THAT spot, not the origin.
+    const boardAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard);
+    const fallbackPos = new Map<string, { x: number; y: number }>();
+    boardAgents.forEach((a, i) => {
+      fallbackPos.set(a.id, a.workspace_id
+        ? { x: 60 + (i % 3) * 300, y: 80 + Math.floor(i / 3) * 190 }
+        : { x: 1000 + (i % 2) * 500, y: 60 + Math.floor(i / 2) * 300 });
+    });
+    for (const a of boardAgents) {
+      const p = positions[a.id] ?? fallbackPos.get(a.id);
       if (
-        (a.board_id ?? "main") === activeBoard &&
         a.status !== "exited" &&
         !a.workspace_id &&
         !wired.has(a.id) &&
-        !(p && inside(p.x + 180, p.y + 110))
+        !(p && positions[a.id] && inside(p.x + 180, p.y + 110))
       ) {
         loose.push({ id: a.id, x: p?.x ?? 0, y: p?.y ?? 0, w: 360, h: 220, move: (id, x, y) => get().moveNode(id, x, y) });
       }
@@ -2249,11 +2257,19 @@ export const useBoard = create<BoardState>((set, get) => ({
     // Anchor the grid inside the current viewport — scattered cards must
     // come INTO view, not pile up where the leftmost one happened to be.
     const vp = get().viewportRect;
-    const x0 = vp ? vp.left + 80 : Math.min(...loose.map((l) => l.x));
-    const y0 = vp ? vp.top + 110 : Math.min(...loose.map((l) => l.y));
+    let x0 = vp ? vp.left + 80 : Math.min(...loose.map((l) => l.x));
+    let y0 = vp ? vp.top + 110 : Math.min(...loose.map((l) => l.y));
     const cols = Math.ceil(Math.sqrt(loose.length));
     const cw = Math.max(...loose.map((l) => l.w)) + 32;
     const ch = Math.max(...loose.map((l) => l.h)) + 32;
+    // Don't bury existing groups: while the grid area intersects a frame,
+    // slide the anchor below it (few frames in practice — one pass suffices).
+    const rows0 = Math.ceil(loose.length / cols);
+    for (const r of [...rects].sort((a, b) => a.y - b.y)) {
+      const gx1 = x0 - 26, gy1 = y0 - 46, gx2 = x0 + cols * cw + 12, gy2 = y0 + rows0 * ch + 56;
+      const overlap = gx1 < r.x + r.w! && gx2 > r.x && gy1 < r.y + r.h! && gy2 > r.y;
+      if (overlap) y0 = r.y + r.h! + 64;
+    }
     loose.forEach((l, i) =>
       l.move(l.id, x0 + (i % cols) * cw, y0 + Math.floor(i / cols) * ch),
     );
@@ -2265,7 +2281,7 @@ export const useBoard = create<BoardState>((set, get) => ({
       x0 - 26, y0 - 46, cols * cw + 12, rows * ch + 56,
     );
     const frameId = Object.keys(get().shapes[activeBoard] ?? {}).find((k) => !beforeIds.has(k)) ?? "";
-    set({ lastGather: { items: snapshotItems, frameId } });
+    set({ lastGather: { board: activeBoard, items: snapshotItems, frameId } });
     get().notify(`gathered ${loose.length} into ${n} — "undo gather" puts them back`);
     get().requestView();
   },
@@ -2275,6 +2291,9 @@ export const useBoard = create<BoardState>((set, get) => ({
       get().notify("nothing to undo — no recent gather");
       return;
     }
+    // The movers write to the ACTIVE board — jump back to the board the
+    // gather happened on so positions land where the cards actually are.
+    if (get().activeBoard !== g.board) get().setActiveBoard(g.board);
     for (const item of g.items) {
       if (item.kind === "panel") get().movePanelNode(item.id, item.x, item.y);
       else if (item.kind === "term") get().moveTermNode(item.id, item.x, item.y);
