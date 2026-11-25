@@ -249,8 +249,8 @@ export class TauriCanvasClient {
     void invoke("memory_write", { nodeId, text }).catch(console.error);
   }
 
-  createAccount(cli: string, label: string) {
-    void invoke("create_account", { cli, label }).catch(console.error);
+  createAccount(cli: string, label: string, env?: string) {
+    void invoke("create_account", { cli, label, env: env || null }).catch(console.error);
   }
 
   deleteAccount(accountId: string) {

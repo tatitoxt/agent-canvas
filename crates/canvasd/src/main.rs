@@ -380,11 +380,13 @@ fn spawn_agent(
     // of the same agent coexist (e.g. two Codex accounts side by side).
     let pty_env: Vec<(String, String)> = account_id
         .and_then(|a| state.store.account_record(a).ok().flatten())
-        .and_then(|(cli, _label, dir)| {
+        .and_then(|(cli, _label, dir, env)| {
             let abs = state.repo_root.join(&dir);
             let _ = std::fs::create_dir_all(&abs);
-            canvasd::agent::account_env_key(&cli)
-                .map(|k| vec![(k.to_string(), abs.to_string_lossy().to_string())])
+            // An account may name its own env var (e.g. MYCLI_HOME) —
+            // otherwise fall back to the CLI's known config-dir key.
+            let key = env.or_else(|| canvasd::agent::account_env_key(&cli).map(str::to_string));
+            key.map(|k| vec![(k, abs.to_string_lossy().to_string())])
         })
         .unwrap_or_default();
     // Workspace (or board) memory — the agent reads/appends shared notes.
@@ -474,7 +476,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                     .accounts_snapshot()
                     .unwrap_or_default()
                     .into_iter()
-                    .map(|(id, _cli, label)| (id, label))
+                    .map(|(id, _cli, label, _env)| (id, label))
                     .collect();
                 agents
                     .into_iter()
@@ -557,7 +559,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .accounts_snapshot()
                 .unwrap_or_default()
                 .into_iter()
-                .map(|(account_id, cli, label)| protocol::SnapshotAccount { account_id, cli, label })
+                .map(|(account_id, cli, label, env)| protocol::SnapshotAccount { account_id, cli, label, env })
                 .collect(),
             notes: state
                 .store
@@ -938,14 +940,14 @@ fn handle_client_msg(
                 warn!(error = %e, "failed to save node position");
             }
         }
-        ClientMsg::CreateAccount { cli, label } => {
+        ClientMsg::CreateAccount { cli, label, env } => {
             let account_id = format!("acct-{}", &uuid_like()[..8]);
             let dir = format!(".canvas/accounts/{account_id}");
             if let Err(e) = std::fs::create_dir_all(state.repo_root.join(&dir)) {
                 warn!(error = %e, "failed to create account dir");
             }
-            match state.store.account_created(&account_id, &cli, &label, &dir) {
-                Ok(()) => send_control(ServerMsg::AccountCreated { account_id, cli, label }),
+            match state.store.account_created(&account_id, &cli, &label, &dir, env.as_deref()) {
+                Ok(()) => send_control(ServerMsg::AccountCreated { account_id, cli, label, env }),
                 Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
             }
         }

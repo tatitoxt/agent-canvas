@@ -108,11 +108,12 @@ fn spawn_wired(
     // same CLI coexist.
     let pty_env: Vec<(String, String)> = account_id
         .and_then(|a| state.store.account_record(a).ok().flatten())
-        .and_then(|(cli, _label, dir)| {
+        .and_then(|(cli, _label, dir, env)| {
             let abs = state.repo_root.join(&dir);
             let _ = std::fs::create_dir_all(&abs);
-            canvasd::agent::account_env_key(&cli)
-                .map(|k| vec![(k.to_string(), abs.to_string_lossy().to_string())])
+            // Account-level env override, else the CLI's known config-dir key.
+            let key = env.or_else(|| canvasd::agent::account_env_key(&cli).map(str::to_string));
+            key.map(|k| vec![(k, abs.to_string_lossy().to_string())])
         })
         .unwrap_or_default();
     // Workspace (or board) memory — injected as CANVAS_MEMORY.
@@ -203,15 +204,16 @@ fn create_account(
     state: State<'_, CanvasState>,
     cli: String,
     label: String,
+    env: Option<String>,
 ) -> Result<String, String> {
     let account_id = format!("acct-{}", &uuid_v4ish()[..8]);
     let dir = format!(".canvas/accounts/{account_id}");
     let _ = std::fs::create_dir_all(state.repo_root.join(&dir));
     state
         .store
-        .account_created(&account_id, &cli, &label, &dir)
+        .account_created(&account_id, &cli, &label, &dir, env.as_deref())
         .map_err(|e| e.to_string())?;
-    emit_control(&app, &ServerMsg::AccountCreated { account_id: account_id.clone(), cli, label });
+    emit_control(&app, &ServerMsg::AccountCreated { account_id: account_id.clone(), cli, label, env });
     Ok(account_id)
 }
 
@@ -1373,7 +1375,7 @@ fn snapshot(
         .accounts_snapshot()
         .unwrap_or_default()
         .into_iter()
-        .map(|(id, _cli, label)| (id, label))
+        .map(|(id, _cli, label, _env)| (id, label))
         .collect();
     let agents: Vec<SnapshotAgent> = state
         .store
@@ -1436,7 +1438,7 @@ fn snapshot(
         .accounts_snapshot()
         .unwrap_or_default()
         .into_iter()
-        .map(|(account_id, cli, label)| canvasd::protocol::SnapshotAccount { account_id, cli, label })
+        .map(|(account_id, cli, label, env)| canvasd::protocol::SnapshotAccount { account_id, cli, label, env })
         .collect();
     let layout = state.store.layout_map().unwrap_or_default();
     // Same remote normalization as canvasd's Snapshot::repo_url.

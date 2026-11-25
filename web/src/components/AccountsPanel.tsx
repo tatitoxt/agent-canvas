@@ -1,11 +1,8 @@
 import { useState } from "react";
 import { panelRoot } from "./panelChrome";
-import { useBoard } from "../store/board";
+import { useBoard, acctKey, DEFAULT_WEEK_CAP_KB } from "../store/board";
 
 const CLIS = [
-  { cmd: "claude", label: "◆ Claude Code" },
-  { cmd: "codex", label: "◈ Codex" },
-  { cmd: "gemini", label: "✦ Gemini CLI" },
   { cmd: "claude", label: "◆ Claude Code" },
   { cmd: "codex", label: "◈ Codex" },
   { cmd: "gemini", label: "✦ Gemini CLI" },
@@ -35,18 +32,64 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
 };
 
+const fmtBytes = (n: number) =>
+  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : n >= 1000 ? `${(n / 1000).toFixed(1)} KB` : `${n} B`;
+
+/** Weekly-cap editor for one usage key — inline KB input, empty = default. */
+function CapEditor({ usageKey, capKb }: { usageKey: string; capKb: number }) {
+  const setAcctCap = useBoard((s) => s.setAcctCap);
+  const custom = useBoard((s) => s.acctLedger.caps[usageKey]);
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState("");
+  if (!editing) {
+    return (
+      <button
+        title="edit this account's weekly cap"
+        style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: 9.5, padding: 0 }}
+        onClick={() => { setVal(custom != null ? String(custom) : ""); setEditing(true); }}
+      >
+        {custom != null ? `cap ${fmtBytes(capKb * 1024)}` : "cap"}
+      </button>
+    );
+  }
+  return (
+    <input
+      autoFocus
+      style={{ ...inputStyle, width: 72, padding: "2px 8px", fontSize: 10 }}
+      placeholder={`${DEFAULT_WEEK_CAP_KB / 1024} MB`}
+      title="weekly cap in KB — Enter to save, empty = default"
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          const kb = parseFloat(val);
+          setAcctCap(usageKey, Number.isFinite(kb) && kb > 0 ? kb : null);
+          setEditing(false);
+        }
+        if (e.key === "Escape") setEditing(false);
+      }}
+      onBlur={() => setEditing(false)}
+    />
+  );
+}
+
 /** Named sign-ins per CLI — "one agent, three accounts, all at work":
  * each account owns an isolated config dir so e.g. two Codex logins run
- * side by side and every node shows which account is doing the work. */
+ * side by side and every node shows which account is doing the work.
+ * Rows group by CLI and carry their week's metered volume + cap. */
 export function AccountsPanel() {
   const accounts = useBoard((s) => s.accounts);
   const agents = useBoard((s) => s.agents);
+  const sessionUse = useBoard((s) => s.sessionUse);
+  const ledger = useBoard((s) => s.acctLedger);
   const createAccount = useBoard((s) => s.createAccount);
   const deleteAccount = useBoard((s) => s.deleteAccount);
+  const spawn = useBoard((s) => s.spawn);
 
   const [creating, setCreating] = useState(false);
   const [cli, setCli] = useState("codex");
   const [label, setLabel] = useState("");
+  const [env, setEnv] = useState("");
 
   const list = Object.values(accounts);
   const inUse = new Set(
@@ -54,17 +97,15 @@ export function AccountsPanel() {
       .map((a) => a.account_label)
       .filter((l): l is string => !!l),
   );
-  // Usage per account: agents run under it and their PTY output bytes.
-  const usage = new Map<string, { agents: number; bytes: number }>();
-  for (const a of Object.values(agents)) {
-    if (!a.account_label) continue;
-    const u = usage.get(a.account_label) ?? { agents: 0, bytes: 0 };
-    u.agents += 1;
-    u.bytes += a.output_bytes ?? 0;
-    usage.set(a.account_label, u);
+  // Group accounts by CLI so a multi-login CLI shows its rows together.
+  const byCli = new Map<string, typeof list>();
+  for (const a of list) {
+    const g = byCli.get(a.cli) ?? [];
+    g.push(a);
+    byCli.set(a.cli, g);
   }
-  const fmtBytes = (n: number) =>
-    n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : n >= 1000 ? `${(n / 1000).toFixed(1)} KB` : `${n} B`;
+  const cliGroups = [...byCli.entries()].sort(([a], [b]) => a.localeCompare(b));
+
   const totalBytes = Object.values(agents).reduce((t, a) => t + (a.output_bytes ?? 0), 0);
 
   return (
@@ -122,6 +163,13 @@ export function AccountsPanel() {
               onChange={(e) => setLabel(e.target.value)}
               autoFocus
             />
+            <input
+              style={inputStyle}
+              placeholder="auth env var — optional (e.g. MYCLI_HOME)"
+              title="Env var that points this CLI at the account's config dir. Leave empty to use the CLI's known key (CODEX_HOME, CLAUDE_CONFIG_DIR, GEMINI_CLI_HOME)."
+              value={env}
+              onChange={(e) => setEnv(e.target.value)}
+            />
             <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", padding: "0 2px" }}>
               Each account gets its own config dir — sign in inside the
               agent's terminal and the login stays scoped to @{label.trim() || "label"}.
@@ -131,8 +179,9 @@ export function AccountsPanel() {
               style={{ fontSize: 11.5, fontWeight: 600, padding: "6px 14px", cursor: "pointer", border: "none", color: "var(--cv-accent)", opacity: label.trim() ? 1 : 0.45, alignSelf: "flex-start" }}
               disabled={!label.trim()}
               onClick={() => {
-                createAccount(cli, label.trim());
+                createAccount(cli, label.trim(), env.trim() || undefined);
                 setLabel("");
+                setEnv("");
                 setCreating(false);
               }}
             >
@@ -150,42 +199,93 @@ export function AccountsPanel() {
             all agents · {fmtBytes(totalBytes)} output
           </div>
         )}
-        {list.map((a) => (
-          <div
-            key={a.account_id}
-            style={{
-              margin: "0 4px 6px",
-              padding: "9px 12px",
-              borderRadius: 14,
-              background: "var(--cv-glass-hi)",
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-            }}
-          >
-            <span style={{ fontSize: 12, color: "var(--cv-accent)", flex: "none" }}>
-              {CLIS.find((c) => c.cmd === a.cli)?.label.split(" ")[0] ?? "▢"}
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--cv-ink)" }}>
-                @{a.label}
-              </div>
-              <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)" }}>
-                {a.cli}
-                {usage.has(a.label) && (
-                  <span style={{ color: "var(--cv-accent)", opacity: 0.85 }}>
-                    {" "}· {usage.get(a.label)!.agents} agent{usage.get(a.label)!.agents === 1 ? "" : "s"} · {fmtBytes(usage.get(a.label)!.bytes)}
-                  </span>
-                )}
-              </div>
-            </div>
-            <button
-              title={inUse.has(a.label) ? "in use by an agent" : "delete account"}
-              style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: 13 }}
-              onClick={() => deleteAccount(a.account_id)}
+        {cliGroups.map(([groupCli, rows]) => (
+          <div key={groupCli}>
+            <div
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 0.8,
+                textTransform: "uppercase",
+                color: "var(--cv-ink-faint)",
+                padding: "6px 12px 3px",
+              }}
             >
-              ×
-            </button>
+              {CLIS.find((c) => c.cmd === groupCli)?.label ?? groupCli}
+            </div>
+            {rows.map((a) => {
+              const key = acctKey(a.cli, a.label);
+              const week = ledger.bytes[key] ?? 0;
+              const capKb = ledger.caps[key] ?? DEFAULT_WEEK_CAP_KB;
+              const pct = Math.min(100, (week / 1024 / capKb) * 100);
+              const sess = sessionUse[key] ?? 0;
+              return (
+                <div
+                  key={a.account_id}
+                  style={{
+                    margin: "0 4px 6px",
+                    padding: "9px 12px",
+                    borderRadius: 14,
+                    background: "var(--cv-glass-hi)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 12, color: "var(--cv-accent)", flex: "none" }}>
+                      {CLIS.find((c) => c.cmd === a.cli)?.label.split(" ")[0] ?? "▢"}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--cv-ink)" }}>
+                        @{a.label}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)" }}>
+                        {a.cli}
+                        {(sess > 0 || week > 0) && (
+                          <span style={{ color: "var(--cv-accent)", opacity: 0.85 }}>
+                            {" "}· {fmtBytes(sess)} session · {fmtBytes(week)} week
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <CapEditor usageKey={key} capKb={capKb} />
+                    <button
+                      title={`spawn a ${a.cli} agent as @${a.label}`}
+                      style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-accent)", fontSize: 14, fontWeight: 700, padding: "0 2px" }}
+                      onClick={() => spawn(a.cli, a.cli, undefined, undefined, a.account_id)}
+                    >
+                      +
+                    </button>
+                    <button
+                      title={inUse.has(a.label) ? "in use by an agent" : "delete account"}
+                      style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: 13 }}
+                      onClick={() => deleteAccount(a.account_id)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  {/* weekly-cap meter — matches the Juice panel */}
+                  <div
+                    title={`${Math.round(pct)}% of the ${fmtBytes(capKb * 1024)} weekly cap`}
+                    style={{
+                      marginTop: 6,
+                      height: 3,
+                      borderRadius: 99,
+                      background: "var(--cv-glass-edge)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${pct}%`,
+                        height: "100%",
+                        borderRadius: 99,
+                        background: pct >= 75 ? "var(--cv-blocked)" : pct >= 50 ? "var(--cv-waiting)" : "var(--cv-accent)",
+                        transition: "width .4s ease",
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>

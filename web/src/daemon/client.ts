@@ -39,6 +39,9 @@ export type SnapshotAccount = {
   account_id: string;
   cli: string;
   label: string;
+  /** Optional env var that points the CLI at the account's config dir
+   * (overrides the built-in key — for CLIs `account_env_key` doesn't know). */
+  env?: string | null;
 };
 
 export type ServerMsg =
@@ -63,7 +66,7 @@ export type ServerMsg =
   | { type: "automation_deleted"; automation_id: string }
   | { type: "loop_saved"; l: LoopDef }
   | { type: "loop_deleted"; loop_id: string }
-  | { type: "account_created"; account_id: string; cli: string; label: string }
+  | { type: "account_created"; account_id: string; cli: string; label: string; env?: string | null }
   | { type: "account_deleted"; account_id: string }
   | { type: "memory"; node_id: string; text: string }
   | { type: "session_digest"; text: string }
@@ -291,8 +294,8 @@ export class CanvasClient {
     this.send({ cmd: "memory_write", node_id: nodeId, text });
   }
 
-  createAccount(cli: string, label: string) {
-    this.send({ cmd: "create_account", cli, label });
+  createAccount(cli: string, label: string, env?: string) {
+    this.send({ cmd: "create_account", cli, label, env: env || null });
   }
 
   deleteAccount(accountId: string) {
