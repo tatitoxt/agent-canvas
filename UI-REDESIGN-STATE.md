@@ -112,7 +112,8 @@ Estado reconciliado con las implementaciones y pruebas posteriores:
 - [x] Gather fix verificado — era mismatch 360 vs 460 de card size
 - [x] Topbar fusion: cluster derecho se fusiona en una bubble glass on hover (.cv-fuse en index.css)
 - [x] MissionStrip eliminado del centro + botón Mission Map muerto eliminado (data vive en topbar live count + Inbox)
-- [ ] Próximo: transcript rows estilo Deska (verb bold + detalle) en cards, per-window color tint, input steering inline (esperando research hija), edge routing
+- [ ] Pendiente: transcript rows estilo Deska (verb bold + detalle) en cards, per-window color tint e input steering inline (research pendiente).
+- [x] Edge routing: cables y etiquetas de delegación esquivan tarjetas; las posiciones anidadas usan coordenadas absolutas y tienen regresiones unitarias.
 
 ## Performance pass (2026-11-24 late, after "anda re mal la web local")
 Committed:
