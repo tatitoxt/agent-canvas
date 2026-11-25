@@ -51,6 +51,19 @@ test("Add Obsidian to canvas closes Tools and mounts the live vault explorer", a
   expect(vault).toContain("canvas-e2e-vault-");
 });
 
+test("Add Artifacts to canvas closes Tools and mounts the interactive artifact library", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await expect(dock).toBeVisible();
+  await dock.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  await expect(dock).toBeHidden();
+  const artifacts = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
+  await expect(artifacts).toBeVisible();
+  await expect(artifacts.getByText("Artifacts", { exact: true }).first()).toBeVisible();
+  await expect(artifacts.getByRole("button", { name: "+ new" })).toBeVisible();
+});
+
 test("Add to canvas closes Tools even when the dock is pinned", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();

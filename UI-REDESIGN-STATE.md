@@ -135,4 +135,5 @@ REMAINING LEVERS if still slow:
 - [x] Terminal drawer: resize con persistencia y redimensionado de xterm/PTY; estilo sólido oscuro en vez de glass. Commit `04a3955` en PR #47.
 - [x] Título de terminal por rol: `reviewer-1` → `Review 1`, `builder_2` → `Builder 2`, `tester-4` → `Test 4`; mantiene nombres custom y numeración para `Terminal` genérico. En validación local: 8 unit tests, 6 E2E terminal, typecheck y build.
 - [x] Add to Board de Obsidian verificado en E2E: cierra Tools y monta Vault Explorer en vivo como ventana del canvas. Add Inbox también tiene cobertura de cierre + montaje.
-- [ ] Próximo orden sugerido: revisar Add to Board de artifacts y el file explorer flotante; después seguir con los pendientes visuales de topbar y chrome. Mantener cada lote pequeño y verificable en PR #47, sin merge.
+- [x] Add to Board de Artifacts verificado en E2E: cierra Tools y monta la biblioteca con su control `+ new` activo.
+- [ ] Próximo orden sugerido: revisar el file explorer flotante; después seguir con los pendientes visuales de topbar y chrome. Mantener cada lote pequeño y verificable en PR #47, sin merge.
