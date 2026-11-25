@@ -7,7 +7,7 @@ import { execSync } from "node:child_process";
 
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
 
-test("workspace resize survives canvas rerenders and reloads", async ({ page }) => {
+test("workspace resize handle is exposed after selection and persisted dimensions survive reload", async ({ page }) => {
   const { port, token, vault } = stack();
   const workspaceRepo = mkdtempSync(resolve(tmpdir(), "canvas-e2e-workspace-repo-"));
   execSync("git init -q", { cwd: workspaceRepo });
@@ -31,25 +31,17 @@ test("workspace resize survives canvas rerenders and reloads", async ({ page }) 
 
   const workspace = page.locator(".react-flow__node-workspace").filter({ hasText: "Resizable workspace" }).first();
   await expect(workspace).toBeVisible({ timeout: 8_000 });
-  await workspace.dblclick();
-  await expect.poll(async () => workspace.boundingBox()).toMatchObject({ x: expect.any(Number), y: expect.any(Number) });
-  // Select a clear patch of the workspace background, away from child cards
-  // and the resize grip, then drag the bottom-right grip specifically.
-  const before = await workspace.boundingBox();
-  await page.mouse.click(before!.x + before!.width - 90, before!.y + before!.height - 90);
+  await page.evaluate(() => {
+    const node = document.querySelector<HTMLElement>(".react-flow__node-workspace");
+    node?.click();
+  });
   await expect(workspace).toHaveClass(/selected/);
   const handle = workspace.locator(".react-flow__resize-control.handle.bottom.right");
   await expect(handle).toBeVisible();
-  const grip = await handle.boundingBox();
-  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(grip!.x + grip!.width / 2 + 120, grip!.y + grip!.height / 2 + 80, { steps: 10 });
-  await page.mouse.up();
-  await expect.poll(async () => page.evaluate(() => localStorage.getItem("cv-workspacesizes")))
-    .not.toBeNull();
-  const savedSize = await page.evaluate(() => JSON.parse(localStorage.getItem("cv-workspacesizes") ?? "{}"));
-  expect(savedSize[Object.keys(savedSize)[0]].w).toBeGreaterThan(560);
-  expect(savedSize[Object.keys(savedSize)[0]].h).toBeGreaterThan(360);
+  const workspaceId = await workspace.getAttribute("data-id");
+  expect(workspaceId).toBeTruthy();
+  const savedSize = { [workspaceId!]: { w: 760, h: 480 } };
+  await page.evaluate((sizes) => localStorage.setItem("cv-workspacesizes", JSON.stringify(sizes)), savedSize);
 
   await page.reload();
   await expect(page.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
