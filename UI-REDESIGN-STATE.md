@@ -177,4 +177,5 @@ REMAINING LEVERS if still slow:
 - [x] CI de PR #47 tras `753ae07`: Devin Review, canvasd, e2e, Tauri macOS, Tauri Ubuntu y web pasan.
 - [x] Topbar: Panels y Mission Map ahora son controles etiquetados; el resumen live abre Mission Map y se eliminó el acceso duplicado con icono de orchestrator. E2E verifica navegación y panel.
 - [x] Validación topbar: typecheck, build, 23/23 unit tests, 32/32 E2E, captura revisada y `git diff --check`.
+- [x] Resumen del topbar y badges de tareas: conteos de sesiones, waiting, blocked y delegaciones se calculan en el board activo para no mezclar actividad de otros spaces. 32/32 E2E, 23/23 unit tests y typecheck pasan.
 - [ ] Siguiente lote: auditar densidad/alineación de paneles y controles del chrome contra la captura Deska; mantener PR #47 abierto y sin merge.

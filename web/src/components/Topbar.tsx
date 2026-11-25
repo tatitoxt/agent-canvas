@@ -84,15 +84,20 @@ export function Topbar({
   const agents = useBoard((s) => s.agents);
   const edges = useBoard((s) => s.edges);
   const approvals = useBoard((s) => s.approvals);
+  const activeBoard = useBoard((s) => s.activeBoard);
 
   const wsList = Object.values(workspaces);
-  const liveAgents = Object.values(agents).filter((a) => a.status !== "exited");
-  const delegated = Object.values(edges).filter((e) => e.state === "delegated").length;
-  const waiting = Object.values(agents).filter((a) => a.status === "waiting").length;
-  const blockedN = Object.values(agents).filter((a) => a.status === "blocked").length;
+  const liveAgents = Object.values(agents).filter(
+    (a) => a.status !== "exited" && (a.board_id ?? "main") === activeBoard,
+  );
+  const boardEdges = Object.values(edges).filter((e) =>
+    (agents[e.from]?.board_id ?? agents[e.to]?.board_id ?? "main") === activeBoard,
+  );
+  const delegated = boardEdges.filter((e) => e.state === "delegated").length;
+  const waiting = liveAgents.filter((a) => a.status === "waiting").length;
+  const blockedN = liveAgents.filter((a) => a.status === "blocked").length;
   const notifCount = Object.keys(approvals).length + waiting + blockedN;
 
-  const activeBoard = useBoard((s) => s.activeBoard);
   const shapes = useBoard((s) => s.shapes);
   const positions = useBoard((s) => s.positions);
   const panelNodes = useBoard((s) => s.panelNodes);
