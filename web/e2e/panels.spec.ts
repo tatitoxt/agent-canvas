@@ -241,6 +241,11 @@ test("topbar labels Panels and opens Mission Map from its live summary", async (
   const panel = page.locator(".react-flow__node-panel").filter({ hasText: "Mission Map" }).first();
   await expect(panel).toBeVisible();
   await expect(panel.getByText(/terminals · .*active/)).toBeVisible();
+  await expect(page.locator("button[title='Automations']")).toContainText("Automations");
+  await expect(page.locator("button[title^='Notifications']")).toContainText("Inbox");
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await expect(page.locator(".cv-topbar-control-label").first()).toBeHidden();
+  await expect(page.locator("button[title='Automations']")).toHaveCSS("width", "34px");
 });
 
 test("Tools Add shape opens its choices and creates a canvas shape", async ({ page }) => {

@@ -29,6 +29,7 @@
 - [x] Settings clear control now says “clear exited agents,” matching the daemon’s `forget` semantics and avoiding implication that live `done` sessions are removed. Empty result is covered in E2E.
 - [x] Fixed reconnect usage accounting for PTY scrollback: the snapshot reports the full transcript byte count, while reconnect replays only the latest 64 KiB. The client now excludes only bytes that can actually be replayed, so new output after reconnect is charged immediately. Unit coverage handles short, truncated, missing, and invalid lengths.
 - [x] This PTY accounting change passes 37/37 unit tests, 46/46 E2E, typecheck, production build, and `git diff --check`. The previous head `2172c1f` had web, canvasd, E2E, and Tauri Ubuntu CI green; this change still needs its own CI run.
+- [x] Topbar visual pass: Automations and Inbox now show their names beside the icons at desktop widths, matching the Deska reference; labels collapse back to compact icon controls below 1050px. Focused E2E checks the visible labels and navigation context. Visual capture: `/tmp/canvas-design/topbar-labeled.png`.
 - [ ] Next visual pass: inspect resized-card body and overall panel/chrome density in desktop app, then continue remaining Deska/Symvibe feature gaps. Keep PR #47 open and do not merge.
 
 ## Feedback de Fausto (mensaje dictado, prioridad literal) — checklist

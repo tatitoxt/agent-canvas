@@ -580,20 +580,22 @@ export function Topbar({
           <Icon name="search" size={15} color="var(--cv-ink-dim)" />
         </button>
         <button
-          className="glass-pill"
-          style={{ ...iconBtn(nav === "automations"), background: "transparent", border: "none" }}
+          className="glass-pill cv-topbar-labeled-control"
+          style={{ ...iconBtn(nav === "automations"), width: "auto", padding: "0 10px", display: "flex", gap: 7, background: "transparent", border: "none" }}
           title="Automations"
           onClick={() => onNav("automations")}
         >
           <Icon name="automations" size={15} color={nav === "automations" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <span className="cv-topbar-control-label">Automations</span>
         </button>
         <button
-          className="glass-pill"
-          style={{ ...iconBtn(nav === "inbox"), background: "transparent", border: "none" }}
+          className="glass-pill cv-topbar-labeled-control"
+          style={{ ...iconBtn(nav === "inbox"), width: "auto", padding: "0 10px", display: "flex", gap: 7, background: "transparent", border: "none" }}
           title="Notifications — approvals and agents that need you"
           onClick={() => onNav("inbox")}
         >
           <Icon name="bell" size={15} color={nav === "inbox" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <span className="cv-topbar-control-label">Inbox</span>
           {notifCount > 0 && (
             <span
               style={{
