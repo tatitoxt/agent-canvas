@@ -102,6 +102,26 @@ test("terminal font preference restores after reload", async ({ page }) => {
   await expect(settings.getByRole("status", { name: "Terminal font 17 pixels" })).toBeVisible();
 });
 
+test("card summary preference hides live previews and restores after reload", async ({ page }) => {
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
+  const card = page.locator(".agent-card").first();
+  await expect(card.getByTestId("agent-card-task")).toBeVisible();
+  await page.locator("button[title='Settings']").click();
+  const settings = page.locator(".react-flow__node-panel [data-panel='settings']").first();
+  await settings.getByRole("button", { name: "Card summaries on" }).click();
+  await expect(settings.getByRole("button", { name: "Card summaries off" })).toBeVisible();
+  await expect(card.getByTestId("agent-card-task")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("cv-panel-summaries"))).toBe("false");
+  await page.reload();
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
+  await page.locator("button[title='Settings']").click();
+  const restored = page.locator(".react-flow__node-panel [data-panel='settings']").first();
+  await expect(restored.getByRole("button", { name: "Card summaries off" })).toBeVisible();
+  await expect(page.locator(".agent-card").first().getByTestId("agent-card-task")).toHaveCount(0);
+});
+
 test("board settings import rejects malformed data without partial writes", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("cv-theme", "obsidian"));
   const { port } = stack();

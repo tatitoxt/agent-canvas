@@ -2373,9 +2373,11 @@ export const useBoard = create<BoardState>((set, get) => ({
   requestNav: (key) => set((s) => ({ navRequest: { key, n: (s.navRequest?.n ?? 0) + 1 } })),
   edgeDetail: null,
   setEdgeDetail: (id) => set({ edgeDetail: id }),
-  panelSummaries: true,
+  panelSummaries: localStorage.getItem("cv-panel-summaries") !== "false",
   togglePanelSummaries: () => {
-    set((s) => ({ panelSummaries: !s.panelSummaries }));
+    const panelSummaries = !get().panelSummaries;
+    localStorage.setItem("cv-panel-summaries", String(panelSummaries));
+    set({ panelSummaries });
     get().notify(get().panelSummaries ? "card summaries on" : "card summaries off");
   },
   spawnOpen: false,

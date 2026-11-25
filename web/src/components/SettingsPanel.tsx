@@ -100,6 +100,7 @@ export function SettingsPanel() {
       <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ flex: 1, fontSize: 10.5, color: "var(--cv-ink-dim)" }}>card summaries under titles</span>
         <button
+          aria-label={`Card summaries ${panelSummaries ? "on" : "off"}`}
           className="glass"
           style={{ ...rowBtn, flex: 0, padding: "7px 12px", outline: panelSummaries ? "1.5px solid var(--cv-accent)" : "none" }}
           onClick={() => togglePanelSummaries()}
