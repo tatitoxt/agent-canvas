@@ -47,6 +47,9 @@ struct AppState {
     shares: ShareMap,
 }
 
+/// Published artifacts: share id → (title, mime, bytes).
+type ShareMap = Arc<std::sync::Mutex<std::collections::HashMap<String, (String, String, Vec<u8>)>>>;
+
 /// Write PTY input honoring the supervised-input gate: `supervised`
 /// agents hold destructive-looking input until the operator approves.
 /// Returns true when the payload was written (or held) without error.
