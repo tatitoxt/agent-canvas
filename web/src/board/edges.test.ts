@@ -53,4 +53,27 @@ describe("detourPath", () => {
     expect(result.lx).toBe(150);
     expect(result.ly).toBe(90);
   });
+
+  it("places a delegation label in a clear gap between crowded cards", () => {
+    const obstacles = [
+      { x: 120, y: 35, w: 120, h: 130 },
+      { x: 260, y: 35, w: 120, h: 130 },
+    ];
+    const labelWidth = 180;
+    const result = detourPath(0, 100, 500, 100, obstacles, labelWidth);
+    const label = { x: result.lx - labelWidth / 2, y: result.ly - 13, w: labelWidth, h: 26 };
+    for (const obstacle of obstacles) {
+      const overlaps = label.x < obstacle.x + obstacle.w + 4 && label.x + label.w > obstacle.x - 4 &&
+        label.y < obstacle.y + obstacle.h + 4 && label.y + label.h > obstacle.y - 4;
+      expect(overlaps, "the label chip must not cover a card").toBe(false);
+    }
+    expectClear(result.path, obstacles);
+  });
+
+  it("keeps the label chip off the source and target cards", () => {
+    const endpointCards = [{ x: 320, y: 60, w: 140, h: 100 }];
+    const result = detourPath(0, 100, 500, 100, [], 180, endpointCards);
+    const label = { x: result.lx - 90, y: result.ly - 13, w: 180, h: 26 };
+    expect(label.x < 464 && label.x + label.w > 316 && label.y < 164 && label.y + label.h > 56).toBe(false);
+  });
 });

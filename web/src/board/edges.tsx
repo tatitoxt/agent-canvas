@@ -20,6 +20,18 @@ const STATE_STYLE = {
 } as const;
 
 type Rect = { x: number; y: number; w: number; h: number };
+type FlowNode = ReturnType<ReturnType<typeof useReactFlow>["getNodes"]>[number];
+
+function absolutePosition(node: FlowNode, nodesById: Map<string, FlowNode>, seen = new Set<string>()): Point {
+  const internal = (node as { internals?: { positionAbsolute?: Point } }).internals?.positionAbsolute;
+  if (internal) return internal;
+  if (!node.parentId || seen.has(node.id)) return node.position;
+  seen.add(node.id);
+  const parent = nodesById.get(node.parentId);
+  if (!parent) return node.position;
+  const parentPosition = absolutePosition(parent, nodesById, seen);
+  return { x: parentPosition.x + node.position.x, y: parentPosition.y + node.position.y };
+}
 
 /** Cards the cable must not cross — agents (redesign size), panels, terms.
  * Cheap obstacle set for the re-router; positions come from the board store. */
@@ -83,10 +95,36 @@ function pathLength(points: Point[]): number {
 /** Route around every intervening card. Try compact horizontal and vertical
  * lanes first, then outer lanes around the complete obstacle bounds. */
 export function detourPath(
-  sx: number, sy: number, tx: number, ty: number, obstacles: Rect[],
+  sx: number, sy: number, tx: number, ty: number, obstacles: Rect[], labelWidth = 0,
+  labelObstacles: Rect[] = obstacles,
 ): { path: string; lx: number; ly: number } {
   const start = { x: sx, y: sy }, end = { x: tx, y: ty };
   const mx = (sx + tx) / 2, my = (sy + ty) / 2;
+  const labelFits = (x: number, y: number) => {
+    if (labelWidth <= 0) return true;
+    const label = { x: x - labelWidth / 2, y: y - 13, w: labelWidth, h: 26 };
+    return labelObstacles.every((r) =>
+      label.x + label.w < r.x - 4 || label.x > r.x + r.w + 4 ||
+      label.y + label.h < r.y - 4 || label.y > r.y + r.h + 4,
+    );
+  };
+  const routeLabel = (points: Point[]) => {
+    const choices = points.slice(1).flatMap((to, i) => {
+      const from = points[i];
+      const length = Math.hypot(to.x - from.x, to.y - from.y);
+      const horizontal = Math.abs(to.y - from.y) < 0.01;
+      const offsets = [0, -22, 22, -44, 44];
+      return [0.1, 0.25, 0.5, 0.75, 0.9].flatMap((t) => offsets.map((offset) => ({
+        x: from.x + (to.x - from.x) * t + (horizontal ? 0 : offset),
+        y: from.y + (to.y - from.y) * t + (horizontal ? offset : 0),
+        length,
+        horizontal,
+        rank: Number(horizontal) * 1000 + Math.min(length, Math.max(labelWidth, 1) * 2) * 2 -
+          Math.abs(offset) * 3 - Math.abs(t - 0.5) * 20,
+      })));
+    }).filter((point) => labelFits(point.x, point.y));
+    return choices.sort((a, b) => b.rank - a.rank)[0];
+  };
   const cubicHit = obstacles.some((r) => {
     let prev = start;
     for (let i = 1; i <= 48; i++) {
@@ -101,6 +139,18 @@ export function detourPath(
     return false;
   });
   if (!cubicHit) {
+    if (labelWidth > 0) {
+      const choices = [0.5, 0.38, 0.62].map((t) => {
+        const u = 1 - t;
+        return {
+          x: u ** 3 * sx + 3 * u ** 2 * t * mx + 3 * u * t ** 2 * mx + t ** 3 * tx,
+          y: u ** 3 * sy + 3 * u ** 2 * t * sy + 3 * u * t ** 2 * ty + t ** 3 * ty,
+          t,
+        };
+      });
+      const point = choices.find((p) => labelFits(p.x, p.y)) ?? choices[0];
+      return { path: `M ${sx},${sy} C ${mx},${sy} ${mx},${ty} ${tx},${ty}`, lx: point.x, ly: point.y };
+    }
     return { path: `M ${sx},${sy} C ${mx},${sy} ${mx},${ty} ${tx},${ty}`, lx: mx, ly: my };
   }
 
@@ -120,9 +170,11 @@ export function detourPath(
   const candidates: Point[][] = [];
   for (const y of yLanes) candidates.push([start, { x: sx, y }, { x: tx, y }, end]);
   for (const x of xLanes) candidates.push([start, { x, y: sy }, { x, y: ty }, end]);
-  const route = candidates
+  const routes = candidates
     .filter((points) => pathClear(points, obstacles))
-    .sort((a, b) => pathLength(a) - pathLength(b))[0];
+    .map((points) => points.filter((p, i) => i === 0 || p.x !== points[i - 1].x || p.y !== points[i - 1].y))
+    .sort((a, b) => pathLength(a) - pathLength(b));
+  const route = routes.find((points) => routeLabel(points)) ?? routes[0];
 
   if (!route) {
     // A final broad lane encloses the whole obstacle field. In normal boards
@@ -130,12 +182,13 @@ export function detourPath(
     const y = Math.abs(my - minY) < Math.abs(my - maxY) ? minY - clearance : maxY + clearance;
     return { path: `M ${sx},${sy} L ${sx},${y} L ${tx},${y} L ${tx},${ty}`, lx: mx, ly: y };
   }
-  const compact = route.filter((p, i) => i === 0 || p.x !== route[i - 1].x || p.y !== route[i - 1].y);
-  const path = compact.map((p, i) => `${i ? "L" : "M"} ${p.x},${p.y}`).join(" ");
-  const horizontal = compact.find((p, i) => i > 0 && Math.abs(p.y - compact[i - 1].y) < 0.01 && Math.abs(p.x - compact[i - 1].x) > 1);
-  const labelIndex = horizontal ? compact.indexOf(horizontal) : 1;
-  const labelFrom = compact[Math.max(0, labelIndex - 1)];
-  const labelTo = compact[Math.min(compact.length - 1, labelIndex)];
+  const path = route.map((p, i) => `${i ? "L" : "M"} ${p.x},${p.y}`).join(" ");
+  const labelPoint = routeLabel(route);
+  if (labelPoint) return { path, lx: labelPoint.x, ly: labelPoint.y };
+  const horizontal = route.find((p, i) => i > 0 && Math.abs(p.y - route[i - 1].y) < 0.01 && Math.abs(p.x - route[i - 1].x) > 1);
+  const labelIndex = horizontal ? route.indexOf(horizontal) : 1;
+  const labelFrom = route[Math.max(0, labelIndex - 1)];
+  const labelTo = route[Math.min(route.length - 1, labelIndex)];
   return { path, lx: (labelFrom.x + labelTo.x) / 2, ly: (labelFrom.y + labelTo.y) / 2 };
 }
 
@@ -155,19 +208,41 @@ export function DelegationEdge({
   // Orthogonal routing with node avoidance from main, enhanced with the
   // recent detour router so paths can clear multiple intervening nodes.
   const { getNodes } = useReactFlow();
-  const nodeObstacles = getNodes()
-    .filter((n) => n.id !== source && n.id !== target && n.type !== "workspace")
-    .map((n) => {
-      const p = ((n as { internals?: { positionAbsolute?: { x: number; y: number } } }).internals?.positionAbsolute ?? n.position) as { x: number; y: number };
-      const w = n.measured?.width ?? (n.width as number) ?? 380;
-      const h = n.measured?.height ?? (n.height as number) ?? 200;
-      return { x: p.x - 8, y: p.y - 8, w: w + 16, h: h + 16 };
-    });
+  const nodes = getNodes();
+  const nodesById = new Map(nodes.map((n) => [n.id, n]));
+  const otherNodes = nodes.filter((n) => n.type !== "workspace");
+  const nodeRect = (n: (typeof otherNodes)[number]) => {
+    const p = absolutePosition(n, nodesById);
+    const w = n.measured?.width ?? (n.width as number) ?? 380;
+    const h = n.measured?.height ?? (n.height as number) ?? 200;
+    return { x: p.x - 8, y: p.y - 8, w: w + 16, h: h + 16 };
+  };
+  const nodeObstacles = otherNodes
+    .filter((n) => n.id !== source && n.id !== target)
+    .map(nodeRect);
   const obstacles = obstacleRects([source, target]);
-  const routed = detourPath(sourceX, sourceY, targetX, targetY, [...obstacles, ...nodeObstacles]);
-  const [path, labelX, labelY] = obstacles.length || nodeObstacles.length
-    ? [routed.path, routed.lx, routed.ly]
-    : getBezierPath({
+  // Labels must avoid endpoints too. Compute parent-relative workspace cards
+  // in absolute flow coordinates so chips do not land on their own terminal.
+  const labelObstacles = otherNodes.map((n) => {
+    const p = absolutePosition(n, nodesById);
+    return {
+      x: p.x - 8,
+      y: p.y - 8,
+      w: n.measured?.width ?? (n.width as number) ?? 380,
+      h: n.measured?.height ?? (n.height as number) ?? 200,
+    };
+  });
+  const label =
+    data?.state === "returned"
+      ? `${data.result ?? ""}${data.files ? ` · ${data.files} file${data.files === 1 ? "" : "s"}` : ""}`
+      : data?.task;
+  const labelWidth = Math.min(208, Math.max(96, (label?.length ?? 0) * 6.1 + 44));
+  const routed = detourPath(
+    sourceX, sourceY, targetX, targetY,
+    [...obstacles, ...nodeObstacles], labelWidth,
+    labelObstacles,
+  );
+  const [bezierPath] = getBezierPath({
         sourceX,
         sourceY,
         sourcePosition,
@@ -175,11 +250,10 @@ export function DelegationEdge({
         targetY,
         targetPosition,
       });
+  const path = obstacles.length || nodeObstacles.length ? routed.path : bezierPath;
+  const labelX = routed.lx;
+  const labelY = routed.ly;
   const style = STATE_STYLE[data?.state ?? "delegated"];
-  const label =
-    data?.state === "returned"
-      ? `${data.result ?? ""}${data.files ? ` · ${data.files} file${data.files === 1 ? "" : "s"}` : ""}`
-      : data?.task;
 
   return (
     <>

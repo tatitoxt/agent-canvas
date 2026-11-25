@@ -190,3 +190,5 @@ REMAINING LEVERS if still slow:
 - [x] Se añadió una regresión E2E que observa explícitamente errores `Maximum update depth exceeded` en demo offline. Suite actual: 26/26 unit tests, 33/33 E2E, typecheck, build y `git diff --check`.
 - [ ] Repetir visual audit después de los próximos cambios y completar una sesión manual con un CLI de IA real en el PTY.
 - [ ] Siguiente lote: seguir auditando densidad y alineación de paneles/chrome contra la referencia Deska; mantener PR #47 abierto y sin merge.
+- [x] Etiquetas de delegación: el ruteador busca tramos despejados y evita también las tarjetas de origen/destino. Las posiciones de nodos anidados se convierten a coordenadas absolutas antes de comprobar colisiones; la etiqueta usa el punto calculado incluso cuando el cable conserva el Bézier directo. Captura revisada en `/tmp/canvas-design/delegation-parent-offset.png` sin errores de consola.
+- [x] Validación tras corregir las etiquetas: typecheck, 28/28 unit tests, 33/33 E2E, build de producción y `git diff --check` pasan. Las pruebas E2E incluyen shell/PTy y terminal flotante interactiva.
