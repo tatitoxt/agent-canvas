@@ -299,12 +299,13 @@ type BoardState = {
   /** Tool panels living ON the canvas as nodes (Deska "Add to board") —
    * each renders the live panel UI inside a card: movable, resizable,
    * closable. Keyed per board; node id is `panel-<key>`. */
-  panelNodes: Record<string, Record<string, { panel: string; x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number; locked?: boolean }>>;
+  panelNodes: Record<string, Record<string, { panel: string; x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number; locked?: boolean; maximized?: boolean; prevRect?: { x: number; y: number; w: number; h: number } }>>;
   openPanelNode: (panel: string, pos?: { x: number; y: number }, size?: { w: number; h: number }) => void;
   closePanelNode: (id: string) => void;
   movePanelNode: (id: string, x: number, y: number) => void;
   resizePanelNode: (id: string, w: number, h: number) => void;
   collapsePanelNode: (id: string) => void;
+  maximizePanelNode: (id: string, viewRect?: { x: number; y: number; w: number; h: number }) => void;
   /** Live terminals living ON the canvas as cards — `term-<agentId>` per
    * board. Popped out of the bottom drawer; movable/resizable/closable. */
   termNodes: Record<string, Record<string, { x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number; locked?: boolean }>>;
@@ -1175,6 +1176,19 @@ export const useBoard = create<BoardState>((set, get) => ({
     const m = n.collapsed
       ? { ...n, collapsed: false, h: n.expandH ?? n.h }
       : { ...n, collapsed: true, expandH: n.h, h: 34 };
+    const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: m } };
+    localStorage.setItem("cv-panelnodes", JSON.stringify(next));
+    set({ panelNodes: next });
+  },
+  maximizePanelNode: (id, viewRect) => {
+    const board = get().activeBoard;
+    const n = get().panelNodes[board]?.[id];
+    if (!n) return;
+    // Deska's maximize: fill the viewport; click again and the card goes
+    // back to exactly the rect it floated at before.
+    const m = n.maximized
+      ? { ...n, maximized: false, ...(n.prevRect ?? {}) }
+      : { ...n, maximized: true, collapsed: false, prevRect: { x: n.x, y: n.y, w: n.w, h: n.h }, ...(viewRect ?? {}) };
     const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: m } };
     localStorage.setItem("cv-panelnodes", JSON.stringify(next));
     set({ panelNodes: next });

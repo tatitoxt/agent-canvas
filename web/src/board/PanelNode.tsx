@@ -102,6 +102,33 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
         </button>
         <button
           className="nodrag"
+          title={n.maximized ? "Restore size" : "Maximize — fill the view"}
+          onClick={() => {
+            if (n.maximized) {
+              useBoard.getState().maximizePanelNode(id);
+            } else {
+              const tl = rf.screenToFlowPosition({ x: 12, y: 12 });
+              const br = rf.screenToFlowPosition({ x: window.innerWidth - 12, y: window.innerHeight - 12 });
+              useBoard.getState().maximizePanelNode(id, { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y });
+            }
+          }}
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: 6,
+            border: "none",
+            background: "transparent",
+            color: "var(--cv-ink-faint)",
+            fontSize: 11,
+            cursor: "pointer",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          {n.maximized ? "❐" : "▢"}
+        </button>
+        <button
+          className="nodrag"
           title="Close panel"
           onClick={() => {
             useBoard.getState().closePanelNode(id);
