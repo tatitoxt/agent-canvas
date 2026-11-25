@@ -132,10 +132,10 @@ export function StatusBars({ color }: { color: string }) {
   );
 }
 
-export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
+export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>) {
   const meta = cliMeta(data.cli);
   const summaries = useBoard((s) => s.panelSummaries);
-  const customSize = useBoard((s) => (data.id ? s.agentSizes[data.id] : undefined));
+  const customSize = useBoard((s) => s.agentSizes[data.id ?? id]);
   const [collapsed, setCollapsed] = useState(false);
   const statusColor = STATUS_COLOR[data.status];
   const launchTerminal = () => {
@@ -213,6 +213,9 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         width: customSize?.w ?? 460,
         height: customSize?.h,
         overflow: customSize?.h ? "hidden" : undefined,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
         padding: 0,
         // Fausto's spec: a light trail orbits the border in the state color
         // (card-ring reads --cv-ring). Selection is a DIFFERENT outline —
@@ -228,21 +231,24 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       }}
     >
       <NodeResizer
+        nodeId={id}
+        onResizeStart={() => useBoard.getState().markAgentResizing(id, true)}
         isVisible={selected}
         minWidth={320}
         minHeight={120}
         handleClassName="cv-node-resize-handle"
         lineClassName="cv-node-resize-line"
         onResize={(_, p) => {
-          if (data.id) useBoard.getState().resizeAgentCard(data.id, Math.round(p.width), Math.round(p.height), false, { x: p.x, y: p.y });
+          useBoard.getState().resizeAgentCard(data.id ?? id, Math.round(p.width), Math.round(p.height), false, { x: p.x, y: p.y });
         }}
         onResizeEnd={(_, p) => {
-          if (data.id) useBoard.getState().resizeAgentCard(data.id, Math.round(p.width), Math.round(p.height), true, { x: p.x, y: p.y });
+          useBoard.getState().resizeAgentCard(data.id ?? id, Math.round(p.width), Math.round(p.height), true, { x: p.x, y: p.y });
+          useBoard.getState().markAgentResizing(id, false);
         }}
       />
       <Handle type="target" position={Position.Left} />
       {/* Two-tier titlebar keeps identity readable at the default card width. */}
-      <div data-testid="agent-card-header" style={{ display: "grid", gap: 7, minWidth: 0, padding: "10px 12px 9px" }}>
+      <div data-testid="agent-card-header" style={{ display: "grid", gap: 7, minWidth: 0, padding: "10px 12px 9px", flex: "none" }}>
         <div data-testid="agent-card-identity" style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
           <span
             title="Terminal"
@@ -339,10 +345,21 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       </div>
       {/* Full-width section separator — Deska splits header from body
           edge to edge, not inside the padding. */}
-      <div style={{ height: 1, background: "var(--cv-glass-edge)" }} />
+      <div style={{ height: 1, background: "var(--cv-glass-edge)", flex: "none" }} />
 
       {!collapsed && (
-      <div style={{ padding: "10px 13px 11px" }}>
+      <div
+        data-testid="agent-card-body"
+        style={{
+          padding: "10px 13px 11px",
+          flex: customSize?.h ? "1 1 auto" : undefined,
+          minHeight: 0,
+          overflowY: customSize?.h ? "auto" : undefined,
+          overflowX: "hidden",
+          scrollbarWidth: "thin",
+          scrollbarColor: "var(--cv-glass-edge) transparent",
+        }}
+      >
       {/* Meta row — files / account / permission. */}
       {(data.files || data.permission) && (
         <div

@@ -34,6 +34,26 @@ test("agent card terminal control is keyboard-operable", async ({ page }) => {
   await expect(page.locator(".terminal-drawer .xterm").first()).toBeVisible({ timeout: 5_000 });
 });
 
+test("agent cards resize from their canvas handles", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  const card = page.locator(".react-flow__node").filter({ has: page.locator("[data-testid='agent-card-header']") }).first();
+  await expect(card).toBeVisible({ timeout: 5_000 });
+  const before = await card.boundingBox();
+  await card.locator("[data-testid='agent-card-header']").click();
+  const handle = card.locator(".react-flow__resize-control.handle.bottom.right");
+  await expect(handle).toBeVisible({ timeout: 5_000 });
+  const grip = await handle.boundingBox();
+  expect(before).not.toBeNull();
+  expect(grip).not.toBeNull();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + grip!.width / 2 + 70, grip!.y + grip!.height / 2 + 55, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await card.boundingBox())?.width ?? 0).toBeGreaterThan(before!.width + 25);
+  await expect.poll(async () => (await card.boundingBox())?.height ?? 0).toBeGreaterThan(before!.height + 25);
+});
+
 test("pop out creates a canvas term card; put back returns it to the drawer", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);

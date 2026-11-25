@@ -6,6 +6,12 @@
 - Dev server: `cd web && npm run dev` → localhost:5173 (vite proxea /api y /ws al daemon :4242)
 - Screenshot tool: `cd /tmp/canvas-design && node shot.mjs http://localhost:5173 previewN.png` (playwright)
 
+## Roadmap continuation — 2026-11-25
+- [x] Agent card resize inside workspaces: preserve React Flow's transient dimensions while the resize gesture is active, then persist the final width, height, and relative position. Fixes controlled-node reconciliation overwriting the resize; both nested and loose-card E2E interactions pass.
+- [x] Resized agent card body uses a flex column with a scrollable content region, so a user-chosen short height does not clip terminal details. E2E verifies the scroll region with overflowing content.
+- [x] Validation for this batch: typecheck, 30/30 unit tests, 36/36 E2E, production build, and `git diff --check` pass.
+- [ ] Next visual pass: inspect resized-card body and overall panel/chrome density in desktop app, then continue remaining Deska/Symvibe feature gaps. Keep PR #47 open and do not merge.
+
 ## Feedback de Fausto (mensaje dictado, prioridad literal) — checklist
 1. [x] Outline de card en color de ESTADO (running=verde, waiting=ambar, blocked=rojo) + texto de estado en mismo color — HECHO (commit design: state-colored outlines)
 2. [x] Naming: "Terminal N" primario + rol secundario + estado + logo CLI y nombre CLI en brand color — HECHO. OJO: numeración real viene del daemon; el mock parsea `rol-N`. Verificar que el daemon asigna nombres únicos incrementales.

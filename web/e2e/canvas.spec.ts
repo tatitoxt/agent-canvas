@@ -26,6 +26,51 @@ test("offline demo does not loop while React Flow reports selection", async ({ p
   expect(updateDepthErrors, "selection updates must settle without a React render loop").toEqual([]);
 });
 
+test("agent cards resize when nested inside a workspace", async ({ page }) => {
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  const card = page.locator(".agent-card").first();
+  await expect(card).toBeVisible({ timeout: 10_000 });
+  const before = await card.boundingBox();
+  await card.locator("[data-testid='agent-card-header']").click();
+  const handle = card.locator(".react-flow__resize-control.handle.bottom.right");
+  await expect(handle).toBeVisible({ timeout: 5_000 });
+  const grip = await handle.boundingBox();
+  expect(before).not.toBeNull();
+  expect(grip).not.toBeNull();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + grip!.width / 2 + 55, grip!.y + grip!.height / 2 + 45, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await card.boundingBox())?.width ?? 0).toBeGreaterThan(before!.width + 20);
+  await expect.poll(async () => (await card.boundingBox())?.height ?? 0).toBeGreaterThan(before!.height + 20);
+});
+
+test("resized agent card keeps its body scrollable", async ({ page }) => {
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  const card = page.locator(".agent-card").first();
+  await expect(card).toBeVisible({ timeout: 10_000 });
+  await card.locator("[data-testid='agent-card-header']").click();
+  const handle = card.locator(".react-flow__resize-control.handle.bottom.right");
+  const grip = await handle.boundingBox();
+  expect(grip).not.toBeNull();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + grip!.width / 2 - 90, grip!.y + grip!.height / 2 - 90, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await card.boundingBox())?.height ?? 0).toBeLessThan(220);
+  const body = card.locator("[data-testid='agent-card-body']");
+  await expect(body).toBeVisible();
+  expect(await body.evaluate((element) => getComputedStyle(element).overflowY)).toBe("auto");
+  await body.evaluate((element) => {
+    const filler = document.createElement("div");
+    filler.style.height = "600px";
+    element.appendChild(filler);
+  });
+  expect(await body.evaluate((element) => element.scrollHeight)).toBeGreaterThan(await body.evaluate((element) => element.clientHeight));
+});
+
 test("app boots connected against a live daemon", async ({ page }) => {
   await boot(page);
   // Connected boards render the rail chrome and the bottom dock.

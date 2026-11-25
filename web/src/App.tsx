@@ -155,6 +155,7 @@ function Board() {
   const workspaces = useBoard((s) => s.workspaces);
   const workspaceSizes = useBoard((s) => s.workspaceSizes);
   const agentSizes = useBoard((s) => s.agentSizes);
+  const resizingAgents = useBoard((s) => s.resizingAgents);
   const positions = useBoard((s) => s.positions);
   const moveNode = useBoard((s) => s.moveNode);
   const connected = useBoard((s) => s.connected);
@@ -667,7 +668,7 @@ function Board() {
         // store-derived node. A maximize/restore can update the store before
         // React Flow has flushed its measured position and size; blindly
         // reusing that stale object leaves restored cards at viewport size.
-        const hasControlledCardGeometry = /^(panel|term)-/.test(b.id);
+        const hasControlledCardGeometry = /^(panel|term)-/.test(b.id) || (b.type === "agent" && !resizingAgents[b.id]);
         const geometryMatches = !hasControlledCardGeometry || (
           p.position.x === base.position.x &&
           p.position.y === base.position.y &&
@@ -683,7 +684,7 @@ function Board() {
       }
       return out;
     });
-  }, [baseNodes, setRfNodes]);
+  }, [baseNodes, resizingAgents, setRfNodes]);
   const onNodesChange = useCallback(
     (changes: NodeChange<Node<BoardNodeData>>[]) =>
       setRfNodes((ns) => applyNodeChanges(changes, ns)),

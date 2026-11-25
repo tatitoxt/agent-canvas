@@ -457,6 +457,9 @@ type BoardState = {
   positions: Record<string, { x: number; y: number }>;
   /** Per-agent size overrides for cards resized on the canvas. */
   agentSizes: Record<string, { w: number; h?: number }>;
+  /** React Flow is the source of transient geometry while a resize gesture is active. */
+  resizingAgents: Record<string, boolean>;
+  markAgentResizing: (id: string, resizing: boolean) => void;
   resizeAgentCard: (id: string, w: number, h?: number, persist?: boolean, pos?: { x: number; y: number }) => void;
   /** Workspace frame dimensions are local UI state, keyed by workspace ID. */
   workspaceSizes: Record<string, { w: number; h: number }>;
@@ -766,6 +769,13 @@ export const useBoard = create<BoardState>((set, get) => ({
   agentSizes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-agentsizes") ?? "{}"); } catch { return {}; }
   })(),
+  resizingAgents: {},
+  markAgentResizing: (id, resizing) => set((s) => {
+    if (resizing) return { resizingAgents: { ...s.resizingAgents, [id]: true } };
+    const next = { ...s.resizingAgents };
+    delete next[id];
+    return { resizingAgents: next };
+  }),
   resizeAgentCard: (id, w, h, persist = true, pos) => {
     const next = { ...get().agentSizes, [id]: { w, h } };
     if (persist) localStorage.setItem("cv-agentsizes", JSON.stringify(next));
