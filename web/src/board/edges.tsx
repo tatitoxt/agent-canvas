@@ -45,41 +45,98 @@ function obstacleRects(exclude: string[]): Rect[] {
 }
 
 const pad = 14;
-function hits(r: Rect, x: number, y: number) {
-  return x >= r.x - pad && x <= r.x + r.w + pad && y >= r.y - pad && y <= r.y + r.h + pad;
+type Point = { x: number; y: number };
+
+function segmentHitsRect(a: Point, b: Point, r: Rect): boolean {
+  const left = r.x - pad, right = r.x + r.w + pad;
+  const top = r.y - pad, bottom = r.y + r.h + pad;
+  if (Math.abs(a.x - b.x) < 0.01) {
+    return a.x >= left && a.x <= right && Math.max(Math.min(a.y, b.y), top) <= Math.min(Math.max(a.y, b.y), bottom);
+  }
+  if (Math.abs(a.y - b.y) < 0.01) {
+    return a.y >= top && a.y <= bottom && Math.max(Math.min(a.x, b.x), left) <= Math.min(Math.max(a.x, b.x), right);
+  }
+  // Cubic clear-path check; sample at a density based on its length so a
+  // narrow crossing cannot slip between fixed, widely spaced samples.
+  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  const steps = Math.max(24, Math.ceil(length / 8));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const x = a.x + (b.x - a.x) * t;
+    const y = a.y + (b.y - a.y) * t;
+    if (x >= left && x <= right && y >= top && y <= bottom) return true;
+  }
+  return false;
 }
 
-/** Sample the straight segment; when it crosses a card, insert a two-point
- * detour around the offending obstacle — the cable bends below (or above)
- * the card instead of slicing through it. */
-function detourPath(
+function pathClear(points: Point[], obstacles: Rect[]): boolean {
+  for (let i = 1; i < points.length; i++) {
+    if (obstacles.some((r) => segmentHitsRect(points[i - 1], points[i], r))) return false;
+  }
+  return true;
+}
+
+function pathLength(points: Point[]): number {
+  return points.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - points[i].x, p.y - points[i].y), 0);
+}
+
+/** Route around every intervening card. Try compact horizontal and vertical
+ * lanes first, then outer lanes around the complete obstacle bounds. */
+export function detourPath(
   sx: number, sy: number, tx: number, ty: number, obstacles: Rect[],
 ): { path: string; lx: number; ly: number } {
-  const samples = 24;
-  let hitRect: Rect | null = null;
-  for (let i = 1; i < samples; i++) {
-    const t = i / samples;
-    const x = sx + (tx - sx) * t;
-    const y = sy + (ty - sy) * t;
-    for (const r of obstacles) {
-      if (hits(r, x, y)) { hitRect = r; break; }
+  const start = { x: sx, y: sy }, end = { x: tx, y: ty };
+  const mx = (sx + tx) / 2, my = (sy + ty) / 2;
+  const cubicHit = obstacles.some((r) => {
+    let prev = start;
+    for (let i = 1; i <= 48; i++) {
+      const t = i / 48, u = 1 - t;
+      const p = {
+        x: u ** 3 * sx + 3 * u ** 2 * t * mx + 3 * u * t ** 2 * mx + t ** 3 * tx,
+        y: u ** 3 * sy + 3 * u ** 2 * t * sy + 3 * u * t ** 2 * ty + t ** 3 * ty,
+      };
+      if (segmentHitsRect(prev, p, r)) return true;
+      prev = p;
     }
-    if (hitRect) break;
+    return false;
+  });
+  if (!cubicHit) {
+    return { path: `M ${sx},${sy} C ${mx},${sy} ${mx},${ty} ${tx},${ty}`, lx: mx, ly: my };
   }
-  if (!hitRect) {
-    // clear — gentle single curve
-    const mx = (sx + tx) / 2;
-    return { path: `M ${sx},${sy} C ${mx},${sy} ${mx},${ty} ${tx},${ty}`, lx: (sx + tx) / 2, ly: (sy + ty) / 2 };
+
+  const clearance = pad + 22;
+  const minY = Math.min(sy, ty, ...obstacles.map((r) => r.y - clearance));
+  const maxY = Math.max(sy, ty, ...obstacles.map((r) => r.y + r.h + clearance));
+  const minX = Math.min(sx, tx, ...obstacles.map((r) => r.x - clearance));
+  const maxX = Math.max(sx, tx, ...obstacles.map((r) => r.x + r.w + clearance));
+  const yLanes = [...new Set([
+    my, minY, maxY,
+    ...obstacles.flatMap((r) => [r.y - clearance, r.y + r.h + clearance]),
+  ])];
+  const xLanes = [...new Set([
+    mx, minX, maxX,
+    ...obstacles.flatMap((r) => [r.x - clearance, r.x + r.w + clearance]),
+  ])];
+  const candidates: Point[][] = [];
+  for (const y of yLanes) candidates.push([start, { x: sx, y }, { x: tx, y }, end]);
+  for (const x of xLanes) candidates.push([start, { x, y: sy }, { x, y: ty }, end]);
+  const route = candidates
+    .filter((points) => pathClear(points, obstacles))
+    .sort((a, b) => pathLength(a) - pathLength(b))[0];
+
+  if (!route) {
+    // A final broad lane encloses the whole obstacle field. In normal boards
+    // one of the compact candidates above succeeds; this is a defensive path.
+    const y = Math.abs(my - minY) < Math.abs(my - maxY) ? minY - clearance : maxY + clearance;
+    return { path: `M ${sx},${sy} L ${sx},${y} L ${tx},${y} L ${tx},${ty}`, lx: mx, ly: y };
   }
-  // detour below or above the obstacle — pick whichever edge is nearer the line
-  const midY = (sy + ty) / 2;
-  const below = hitRect.y + hitRect.h + 34;
-  const above = hitRect.y - 34;
-  const dy = Math.abs(midY - below) <= Math.abs(midY - above) ? below : above;
-  const x1 = Math.min(sx, tx) + Math.abs(tx - sx) * 0.25;
-  const x2 = Math.min(sx, tx) + Math.abs(tx - sx) * 0.75;
-  const path = `M ${sx},${sy} C ${x1},${sy} ${x1},${dy} ${x1},${dy} L ${x2},${dy} C ${x2},${dy} ${x2},${ty} ${tx},${ty}`;
-  return { path, lx: (x1 + x2) / 2, ly: dy };
+  const compact = route.filter((p, i) => i === 0 || p.x !== route[i - 1].x || p.y !== route[i - 1].y);
+  const path = compact.map((p, i) => `${i ? "L" : "M"} ${p.x},${p.y}`).join(" ");
+  const horizontal = compact.find((p, i) => i > 0 && Math.abs(p.y - compact[i - 1].y) < 0.01 && Math.abs(p.x - compact[i - 1].x) > 1);
+  const labelIndex = horizontal ? compact.indexOf(horizontal) : 1;
+  const labelFrom = compact[Math.max(0, labelIndex - 1)];
+  const labelTo = compact[Math.min(compact.length - 1, labelIndex)];
+  return { path, lx: (labelFrom.x + labelTo.x) / 2, ly: (labelFrom.y + labelTo.y) / 2 };
 }
 
 export function DelegationEdge({

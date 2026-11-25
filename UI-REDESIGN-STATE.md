@@ -140,4 +140,6 @@ REMAINING LEVERS if still slow:
 - [x] Explorer: el E2E crea un workspace, agrega la ventana al canvas, lista y abre README.md. La prueba corre al final porque crea estado compartido en el daemon del harness.
 - [x] Explorer resize: el E2E agranda el panel y verifica que ancho/alto persisten en el estado del board.
 - [x] Suite E2E robustecida: selectores de terminal apuntan a nodos agente, selección evita controles del header, doble clic busca una zona despejada y el resize apunta al grip bottom-right. 25/25 E2E pasan localmente.
-- [ ] Próximo orden sugerido: revisar el file explorer flotante; después seguir con los pendientes visuales de topbar y chrome. Mantener cada lote pequeño y verificable en PR #47, sin merge.
+- [x] Edge routing: los cables detectan colisiones con múltiples tarjetas y prueban rutas ortogonales compactas antes de rodear el campo completo. Unit tests cubren obstáculos múltiples, conexiones verticales en ambas direcciones y trayectos despejados.
+- [x] Validación integral tras el router: typecheck, build, 23 unit tests y 25/25 E2E pasan localmente; `git diff --check` limpio.
+- [ ] Próximo orden sugerido: revisar el file explorer flotante y su consistencia visual; después seguir con los pendientes visuales de topbar y chrome. Mantener cada lote pequeño y verificable en PR #47, sin merge.
