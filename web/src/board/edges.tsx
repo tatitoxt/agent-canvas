@@ -1,7 +1,7 @@
 import {
   BaseEdge,
   EdgeLabelRenderer,
-  getBezierPath,
+  getSmoothStepPath,
   type Edge,
   type EdgeProps,
 } from "@xyflow/react";
@@ -29,13 +29,16 @@ export function DelegationEdge({
   data,
   markerEnd,
 }: EdgeProps<Edge<DelegationEdgeData>>) {
-  const [path, labelX, labelY] = getBezierPath({
+  // Orthogonal routing: right-angle cables read cleaner than beziers
+  // slashing diagonally across the board (and through glass cards).
+  const [path, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     sourcePosition,
     targetX,
     targetY,
     targetPosition,
+    borderRadius: 14,
   });
   const style = STATE_STYLE[data?.state ?? "delegated"];
   const label =
@@ -54,8 +57,8 @@ export function DelegationEdge({
       {label && (
         <EdgeLabelRenderer>
           <div
-            className="glass-pill nodrag nopan pointer-events-auto absolute max-w-52 -translate-x-1/2 -translate-y-1/2 cursor-pointer px-2.5 py-1 text-[10.5px] leading-snug"
-            style={{ left: labelX, top: labelY }}
+            className="nodrag nopan pointer-events-auto absolute max-w-52 -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full border border-white/10 px-2.5 py-1 text-[10.5px] leading-snug"
+            style={{ left: labelX, top: labelY, background: "rgba(20,17,13,0.94)", zIndex: 10 }}
             title="Open this delegation's full record"
             onClick={() => useBoard.getState().setEdgeDetail(id)}
           >
