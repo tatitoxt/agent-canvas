@@ -16,6 +16,26 @@ test("offline demo mounts without a React update loop", async ({ page }) => {
   await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(900);
   expect(depthErrors).toEqual([]);
+  const card = page.locator('.react-flow__node[data-id="a1"]');
+  await expect(card.getByTestId("agent-card-title")).toHaveText("Terminal 1");
+  await expect(card.getByTestId("agent-card-status")).toContainText("running");
+  await expect(card.getByTestId("agent-card-cli")).toContainText("Claude Code");
+  const identity = await card.getByTestId("agent-card-identity").boundingBox();
+  const meta = await card.getByTestId("agent-card-meta").boundingBox();
+  expect(meta!.y).toBeGreaterThan(identity!.y + identity!.height - 1);
+  const cards = await page.locator(".react-flow__node-agent").evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const r = node.getBoundingClientRect();
+      return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+    }),
+  );
+  for (let i = 0; i < cards.length; i++) {
+    for (let j = i + 1; j < cards.length; j++) {
+      const overlapX = Math.min(cards[i].right, cards[j].right) - Math.max(cards[i].left, cards[j].left);
+      const overlapY = Math.min(cards[i].bottom, cards[j].bottom) - Math.max(cards[i].top, cards[j].top);
+      expect(overlapX > 1 && overlapY > 1, `demo cards ${i + 1} and ${j + 1} should not overlap`).toBe(false);
+    }
+  }
 });
 
 async function boot(page: import("@playwright/test").Page) {

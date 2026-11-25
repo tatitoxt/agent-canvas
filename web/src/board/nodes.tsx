@@ -241,111 +241,38 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         }}
       />
       <Handle type="target" position={Position.Left} />
-      {/* Deska header: [mark] title-in-cli-color  ▮▮▮ running  [logo] Cli  (chrome on hover) */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 9,
-          minWidth: 0,
-          padding: "9px 12px 8px",
-        }}
-      >
-        <span
-          title={meta.label}
-          style={{
-            flex: "none",
-            width: 22,
-            height: 22,
-            borderRadius: 6,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: `color-mix(in srgb, ${meta.color} 14%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${meta.color} 30%, transparent)`,
-            fontSize: 11,
-            fontWeight: 700,
-            fontFamily: "var(--cv-font-mono)",
-            color: "var(--cv-ink)",
-            lineHeight: 1,
-          }}
-        >
-          ›_
-        </span>
-        <div
-          style={{
-            fontSize: 13.5,
-            fontWeight: 600,
-            letterSpacing: -0.1,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            minWidth: 0,
-            color: "var(--cv-ink)",
-          }}
-          title={data.name}
-        >
-          {termTitle}
-        </div>
-        {roleLabel && (
+      {/* Two-tier titlebar keeps identity readable at the default card width. */}
+      <div data-testid="agent-card-header" style={{ display: "grid", gap: 7, minWidth: 0, padding: "10px 12px 9px" }}>
+        <div data-testid="agent-card-identity" style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
           <span
+            title="Terminal"
             style={{
-              fontSize: 11,
-              fontWeight: 500,
-              color: "var(--cv-ink-faint)",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              maxWidth: 110,
-              flex: "none",
+              flex: "none", width: 24, height: 24, borderRadius: 7,
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              background: `color-mix(in srgb, ${meta.color} 14%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${meta.color} 30%, transparent)`,
             }}
-            title={data.name}
           >
-            {roleLabel}
+            <Icon name="terminal" size={13} color={meta.color} />
           </span>
-        )}
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 5,
-            fontSize: 11,
-            fontWeight: 600,
-            color: statusColor,
-            flex: "none",
-            whiteSpace: "nowrap",
-          }}
-        >
-          <StatusBars color={statusColor} />
-          {STATUS_LABEL[data.status]}
-        </span>
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 5.5,
-            marginLeft: "auto",
-            fontSize: 11.5,
-            fontWeight: 600,
-            flex: "none",
-            whiteSpace: "nowrap",
-          }}
-        >
-          <CliMark cli={data.cli} color={meta.color} size={12} />
-          <span style={{ color: meta.color }}>{meta.label}</span>
-        </span>
-        <span
-          className="nodrag card-chrome"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 7,
-            flex: "none",
-            color: "var(--cv-ink)",
-            fontSize: 12,
-            opacity: selected ? 1 : undefined,
-          }}
-        >
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flex: 1, minWidth: 0 }}>
+            <div
+              data-testid="agent-card-title"
+              style={{ fontSize: 14, fontWeight: 650, letterSpacing: -0.12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, color: "var(--cv-ink)" }}
+              title={data.name}
+            >
+              {termTitle}
+            </div>
+            {roleLabel && (
+              <span style={{ fontSize: 11.5, fontWeight: 500, color: "var(--cv-ink-faint)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140 }} title={data.name}>
+                {roleLabel}
+              </span>
+            )}
+          </div>
+          <span
+            className="nodrag card-chrome"
+            style={{ display: "inline-flex", alignItems: "center", gap: 9, flex: "none", color: "var(--cv-ink)", fontSize: 12, opacity: selected ? 1 : undefined }}
+          >
           <button
             type="button"
             className="nodrag"
@@ -385,7 +312,30 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           >
             <Icon name="ph-x" size={13} color="var(--cv-ink)" />
           </button>
-        </span>
+          </span>
+        </div>
+        <div data-testid="agent-card-meta" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, paddingLeft: 33 }}>
+          <span
+            data-testid="agent-card-status"
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 650, color: statusColor, whiteSpace: "nowrap" }}
+          >
+            <StatusBars color={statusColor} />
+            {STATUS_LABEL[data.status]}
+          </span>
+          {data.accountLabel && (
+            <span title="account" style={{ maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderLeft: "1px solid var(--cv-glass-edge)", paddingLeft: 8, fontSize: 10.5, color: "var(--cv-ink-dim)" }}>
+              @{data.accountLabel}
+            </span>
+          )}
+          <span
+            data-testid="agent-card-cli"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: "auto", minWidth: 0, fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}
+            title={meta.label}
+          >
+            <CliMark cli={data.cli} color={meta.color} size={13} />
+            <span style={{ color: meta.color, overflow: "hidden", textOverflow: "ellipsis" }}>{meta.label}</span>
+          </span>
+        </div>
       </div>
       {/* Full-width section separator — Deska splits header from body
           edge to edge, not inside the padding. */}
@@ -394,7 +344,7 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
       {!collapsed && (
       <div style={{ padding: "10px 13px 11px" }}>
       {/* Meta row — files / account / permission. */}
-      {(data.files || data.accountLabel || data.permission) && (
+      {(data.files || data.permission) && (
         <div
           style={{
             display: "flex",
@@ -408,11 +358,6 @@ export function AgentNode({ data, selected }: NodeProps<Node<AgentNodeData>>) {
           {data.files != null && data.files > 0 && (
             <span title={data.paths?.length ? data.paths.join("\n") : "uncommitted changes in worktree"}>
               {data.files} file{data.files === 1 ? "" : "s"}
-            </span>
-          )}
-          {data.accountLabel && (
-            <span style={{ color: "var(--cv-accent)" }} title="account">
-              @{data.accountLabel}
             </span>
           )}
           {data.permission && (

@@ -10,7 +10,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
     id: "ws-1",
     type: "workspace",
     position: { x: 0, y: 0 },
-    style: { width: 1060, height: 560 },
+    style: { width: 1260, height: 560 },
     data: { kind: "workspace", name: "cartfull", repo: "~/repos/cartfull" },
   },
   {
@@ -24,7 +24,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
   {
     id: "a1",
     type: "agent",
-    position: { x: 400, y: 60 },
+    position: { x: 250, y: 60 },
     parentId: "ws-1",
     extent: "parent",
     data: {
@@ -52,7 +52,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
   {
     id: "a5",
     type: "agent",
-    position: { x: 910, y: 40 },
+    position: { x: 770, y: 40 },
     parentId: "ws-1",
     extent: "parent",
     data: {
@@ -80,7 +80,7 @@ export const initialNodes: Node<BoardNodeData>[] = [
   {
     id: "ws-2",
     type: "workspace",
-    position: { x: 1140, y: 60 },
+    position: { x: 1380, y: 60 },
     style: { width: 400, height: 300 },
     data: { kind: "workspace", name: "notes-app", repo: "~/repos/notes" },
   },

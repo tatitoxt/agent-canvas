@@ -178,4 +178,6 @@ REMAINING LEVERS if still slow:
 - [x] Topbar: Panels y Mission Map ahora son controles etiquetados; el resumen live abre Mission Map y se eliminó el acceso duplicado con icono de orchestrator. E2E verifica navegación y panel.
 - [x] Validación topbar: typecheck, build, 23/23 unit tests, 32/32 E2E, captura revisada y `git diff --check`.
 - [x] Resumen del topbar y badges de tareas: conteos de sesiones, waiting, blocked y delegaciones se calculan en el board activo para no mezclar actividad de otros spaces. 32/32 E2E, 23/23 unit tests y typecheck pasan.
+- [x] Tarjetas de agentes: cabecera en dos filas para separar Terminal/rol/acciones de estado/CLI, con icono de terminal y marcas de modelo legibles. El demo ajusta tamaño/posición de workspaces para que React Flow no recorte tarjetas ni las apile en el borde.
+- [x] Validación visual y automatizada de tarjetas: captura revisada; E2E comprueba nombre, estado, CLI, jerarquía de la cabecera y ausencia de solapamientos; build, typecheck, 23/23 unit tests, 32/32 E2E y `git diff --check` pasan.
 - [ ] Siguiente lote: auditar densidad/alineación de paneles y controles del chrome contra la captura Deska; mantener PR #47 abierto y sin merge.
