@@ -228,7 +228,10 @@ export function ToolsMenu({
               <button
                 title={`Add ${it.label} to canvas`}
                 aria-label={`Add ${it.label} to canvas`}
-                onClick={() => { actions.onAddToBoard?.(it.key); dismiss(); }}
+                onClick={() => {
+                  actions.onAddToBoard?.(it.key);
+                  setOpen(false);
+                }}
                 style={{ border: "none", background: "transparent", color: "var(--cv-ink-faint)", borderRadius: 7, cursor: "pointer", padding: "5px 7px", fontSize: 12 }}
               >+</button>
             </div>

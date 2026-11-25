@@ -37,6 +37,16 @@ test("Add to canvas closes Tools and mounts a live Inbox panel", async ({ page }
   await expect(page.locator(".react-flow__node-panel [data-panel='inbox']").first()).toBeVisible();
 });
 
+test("Add to canvas closes Tools even when the dock is pinned", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Pin Tools panel" }).click();
+  await dock.getByRole("button", { name: "Add Automations to canvas" }).click();
+  await expect(dock).toBeHidden();
+  await expect(page.locator(".react-flow__node-panel [data-panel='automations']").first()).toBeVisible();
+});
+
 test("bottom Files opens Obsidian and Code Editor opens the repo explorer", async ({ page }) => {
   await boot(page);
   const filesButton = page.locator("button[title='Files — open your Obsidian vault']");
