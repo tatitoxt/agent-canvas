@@ -6,7 +6,7 @@ import { Terminal } from "@xterm/headless/lib-headless/xterm-headless.mjs";
 /** Per-agent headless terminal: a real screen model so card previews show
  * the TUI's actual screen (cursor addressing, repaints, alt-screen) rather
  * than a raw byte tail. Fed from the same ptyBuffers the panels use. */
-const SCREENS = new Map<string, { term: Terminal; fed: number; pendingWrites: number; flushCallbacks: Array<() => void> }>();
+const SCREENS = new Map<string, { term: Terminal; fed: number; pendingWrites: number; flushCallbacks: Array<() => void>; generation: number }>();
 const MAX_SCREENS = 48;
 const COLS = 96;
 const ROWS = 40;
@@ -24,10 +24,22 @@ function screen(agentId: string) {
       fed: 0,
       pendingWrites: 0,
       flushCallbacks: [],
+      generation: 0,
     };
     SCREENS.set(agentId, s);
   }
   return s;
+}
+
+/** Clear the cached screen before the daemon replays a reconnect scrollback. */
+export function resetScreen(agentId: string) {
+  const s = SCREENS.get(agentId);
+  if (!s) return;
+  s.generation += 1;
+  s.term.reset();
+  s.fed = 0;
+  s.pendingWrites = 0;
+  s.flushCallbacks.length = 0;
 }
 
 const BASIC16 = [
@@ -58,7 +70,9 @@ export function screenLines(agentId: string, buf: Uint8Array | undefined, onWrit
   if (buf && buf.length > s.fed) {
     if (onWrite) s.flushCallbacks.push(onWrite);
     s.pendingWrites += 1;
+    const generation = s.generation;
     s.term.write(buf.slice(s.fed), () => {
+      if (generation !== s.generation) return;
       s.pendingWrites -= 1;
       if (s.pendingWrites === 0) {
         const callbacks = s.flushCallbacks.splice(0);

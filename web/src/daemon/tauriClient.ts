@@ -18,21 +18,36 @@ const b64decode = (s: string) =>
 export class TauriCanvasClient {
   private unlistens: UnlistenFn[] = [];
   private handlers: Handlers;
+  private snapshotReady = false;
+  private pendingPty: Array<{ agentId: string; bytes: Uint8Array }> = [];
 
   constructor(handlers: Handlers) {
     this.handlers = handlers;
-    void listen<{ agent_id: string; data: string }>("canvas://pty", (ev) => {
-      handlers.onPty(ev.payload.agent_id, b64decode(ev.payload.data));
+    // Install both event listeners before requesting the snapshot. The
+    // snapshot command emits PTY scrollback while it builds that response;
+    // queue those bytes until the store has reset existing live terminals.
+    const ptyReady = listen<{ agent_id: string; data: string }>("canvas://pty", (ev) => {
+      const item = { agentId: ev.payload.agent_id, bytes: b64decode(ev.payload.data) };
+      if (this.snapshotReady) handlers.onPty(item.agentId, item.bytes);
+      else this.pendingPty.push(item);
     }).then((u) => this.unlistens.push(u));
 
-    void listen<unknown>("canvas://control", (ev) => {
+    const controlReady = listen<unknown>("canvas://control", (ev) => {
       handlers.onControl(ev.payload as Parameters<Handlers["onControl"]>[0]);
     }).then((u) => this.unlistens.push(u));
 
-    // Snapshot arrives via command, not an event, in Tauri mode.
-    void invoke<unknown>("snapshot").then((snap) => {
-      handlers.onControl(snap as Parameters<Handlers["onControl"]>[0]);
-    });
+    void Promise.all([ptyReady, controlReady])
+      .then(() => invoke<unknown>("snapshot"))
+      .then((snap) => {
+        handlers.onControl(snap as Parameters<Handlers["onControl"]>[0]);
+        this.snapshotReady = true;
+        this.pendingPty.splice(0).forEach(({ agentId, bytes }) => handlers.onPty(agentId, bytes));
+      })
+      .catch((error) => {
+        this.snapshotReady = true;
+        this.pendingPty.splice(0).forEach(({ agentId, bytes }) => handlers.onPty(agentId, bytes));
+        console.error(error);
+      });
   }
 
   whenOpen(): Promise<void> {

@@ -184,3 +184,34 @@ test("terminal drawer resizes and keeps its PTY interactive", async ({ page }) =
   await page.keyboard.press("Enter");
   await expect(page.locator(".xterm-rows")).toContainText("resized-terminal-e2e-ok", { timeout: 8_000 });
 });
+
+test("reconnecting rebuilds a live terminal from scrollback without duplicate history", async ({ page }) => {
+  await page.addInitScript(() => {
+    const NativeWebSocket = window.WebSocket;
+    const sockets: WebSocket[] = [];
+    Object.defineProperty(window, "__canvasSockets", { value: sockets });
+    window.WebSocket = new Proxy(NativeWebSocket, {
+      construct(target, args) {
+        const socket = Reflect.construct(target, args) as WebSocket;
+        sockets.push(socket);
+        return socket;
+      },
+    });
+  });
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const terminal = page.locator(".terminal-drawer .xterm").first();
+  await terminal.click();
+  await page.keyboard.type("printf 'reconnect-history-once\\n'");
+  await page.keyboard.press("Enter");
+  const rows = page.locator(".terminal-drawer .xterm-rows");
+  const markerCount = () => rows.evaluate((el) => (el.textContent?.match(/reconnect-history-once/g) ?? []).length);
+  await expect.poll(markerCount).toBeGreaterThan(0);
+  const beforeReconnect = await markerCount();
+
+  await page.evaluate(() => (window as any).__canvasSockets[0].close());
+  await page.waitForFunction(() => (window as any).__canvasSockets.length >= 2, { timeout: 12_000 });
+  await expect(page.locator("[data-testid='daemon-status']")).toHaveAttribute("aria-label", "Canvas daemon connected", { timeout: 12_000 });
+  await expect.poll(markerCount).toBe(beforeReconnect);
+});

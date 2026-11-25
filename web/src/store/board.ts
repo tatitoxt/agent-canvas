@@ -4,6 +4,7 @@ import { isTauri, TauriCanvasClient } from "../daemon/tauriClient";
 import type { AgentStatus } from "../board/types";
 import { PANEL_META } from "../components/panelMeta";
 import { replayedPtyBytes } from "../board/ptyAccounting";
+import { resetScreen } from "../board/ptyScreen";
 
 export type LiveAgent = {
   id: string;
@@ -482,7 +483,8 @@ type BoardState = {
   loops: Record<string, LoopDef>;
   /** agent_id → latest automation guardrail alert (hang / denied policy). */
   attention: Record<string, string>;
-  ptyListeners: Record<string, Set<(bytes: Uint8Array) => void>>;
+  /** `null` marks the beginning of a daemon scrollback replay after reconnect. */
+  ptyListeners: Record<string, Set<(bytes: Uint8Array | null) => void>>;
   /** Rolling PTY scrollback per agent (~64KB) — transcript shown when a
    * terminal opens, and rebuilt from the daemon's replay on reconnect. */
   ptyBuffers: Record<string, Uint8Array>;
@@ -613,9 +615,9 @@ type BoardState = {
   /** Clear returned delegation rows from the inbox. */
   clearReturned: () => void;
   moveNode: (agentId: string, x: number, y: number) => void;
-  attachPty: (agentId: string, cb: (bytes: Uint8Array) => void) => void;
+  attachPty: (agentId: string, cb: (bytes: Uint8Array | null) => void) => void;
   ptyBuffer: (agentId: string) => Uint8Array | undefined;
-  detachPty: (agentId: string, cb?: (bytes: Uint8Array) => void) => void;
+  detachPty: (agentId: string, cb?: (bytes: Uint8Array | null) => void) => void;
   sendInput: (agentId: string, bytes: Uint8Array) => void;
   resizePty: (agentId: string, cols: number, rows: number) => void;
   /** Ask the daemon to replay an exited agent's saved transcript. */
@@ -1215,8 +1217,20 @@ export const useBoard = create<BoardState>((set, get) => ({
               }
             }
             if (tnTouched) localStorage.setItem("cv-termnodes", JSON.stringify(termNodes));
+            // A reconnect replays each live PTY's rolling tail. Clear that
+            // session's old xterm and preview first so the replay rebuilds
+            // them once instead of appending duplicate history. Exited-agent
+            // transcripts are requested separately when their view mounts.
+            const ptyBuffers = { ...get().ptyBuffers };
+            for (const a of msg.agents) {
+              if (a.status === "exited") continue;
+              delete ptyBuffers[a.agent_id];
+              resetScreen(a.agent_id);
+              get().ptyListeners[a.agent_id]?.forEach((cb) => cb(null));
+            }
             set({
               agents,
+              ptyBuffers,
               // Scrollback replayed on (re)connect isn't new output —
               // meterOutput skips up to each agent's transcript size.
               ptySkip: Object.fromEntries(

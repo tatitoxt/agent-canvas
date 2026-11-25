@@ -79,7 +79,13 @@ export function TermHost({ agentId }: { agentId: string }) {
       term.write("\x1b[2m\x1b[3m--- restored session ---\x1b[0m\r\n");
       term.write(history);
     }
-    const onBytes = (bytes: Uint8Array) => term.write(bytes);
+    const onBytes = (bytes: Uint8Array | null) => {
+      if (bytes === null) {
+        term.reset();
+        return;
+      }
+      term.write(bytes);
+    };
     attachPty(agentId, onBytes);
     if (useBoard.getState().agents[agentId]?.status === "exited") {
       requestTranscript(agentId);
