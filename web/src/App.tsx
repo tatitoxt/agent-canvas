@@ -610,7 +610,7 @@ function Board() {
         else nodeSigCache.current.set(b.id, { sig, node: b });
         const p = byId.get(b.id);
         if (!p) return base;
-        if (p.dragging) {
+        if (p.dragging && activeDrags.current.has(b.id)) {
           return { ...base, selected: p.selected, dragging: true, position: p.position };
         }
         // Unchanged base + no drag in flight → the previous object already
@@ -626,6 +626,37 @@ function Board() {
       return out;
     });
   }, [baseNodes, setRfNodes]);
+  // Drag lifecycle we track ourselves: React Flow's `dragging` flag can
+  // get stuck when the window loses focus mid-drag (alt-tab, mouse
+  // released outside the window) — the mouseup never reaches it and the
+  // flag never clears, after which the store→RF sync above would ignore
+  // every store position for that node forever (dock, gather, undo and
+  // spawn placement silently no-op on it). The sync trusts in-flight
+  // positions only for ids in this set; a blur rescue commits whatever
+  // position the card is at and clears both the set and the flags.
+  const activeDrags = useRef(new Set<string>());
+  useEffect(() => {
+    const rescue = () => {
+      if (!activeDrags.current.size) return;
+      const ids = new Set(activeDrags.current);
+      activeDrags.current.clear();
+      setRfNodes((ns) => {
+        const st = useBoard.getState();
+        for (const n of ns) {
+          if (!ids.has(n.id)) continue;
+          const { x, y } = n.position;
+          if (n.id.startsWith("shape-")) st.moveShape(n.id, x, y);
+          else if (n.id.startsWith("panel-")) st.movePanelNode(n.id, x, y);
+          else if (n.id.startsWith("term-")) st.moveTermNode(n.id, x, y);
+          else st.moveNode(n.id, x, y);
+        }
+        return ns.map((n) => (ids.has(n.id) ? { ...n, dragging: false } : n));
+      });
+    };
+    window.addEventListener("blur", rescue);
+    return () => window.removeEventListener("blur", rescue);
+  }, [setRfNodes]);
+
   const onNodesChange = useCallback(
     (changes: NodeChange<Node<BoardNodeData>>[]) =>
       setRfNodes((ns) => applyNodeChanges(changes, ns)),
@@ -795,7 +826,12 @@ function Board() {
   }, [screenToFlowPosition]);
 
 
+  const onNodeDragStart: OnNodeDrag = (_, node) => {
+    activeDrags.current.add(node.id);
+  };
+
   const onNodeDragStop: OnNodeDrag = (event, node) => {
+    activeDrags.current.delete(node.id);
     // Deska-style: dropping a card on a board tab moves it there.
     setDragGhost(null);
     const pt =
@@ -1030,6 +1066,7 @@ function Board() {
         onNodesChange={onNodesChange}
         onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
+        onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onDrop={onCanvasDrop}
