@@ -44,6 +44,10 @@ test("Add Explorer to canvas mounts a live repository file browser", async ({ pa
   });
   expect(persistedHeight).toBeGreaterThan(480);
   await explorerNode.locator("select").selectOption(repo);
+  const filter = explorerNode.getByRole("searchbox", { name: "Filter repository files" });
+  await filter.fill("does-not-exist");
+  await expect(explorerNode.getByText("No files match “does-not-exist”.")).toBeVisible();
+  await filter.fill("README");
   const readme = explorerNode.getByRole("button", { name: "README.md" });
   await expect(readme).toBeVisible({ timeout: 8_000 });
   await readme.click();

@@ -19,6 +19,7 @@ export function RepoExplorerPanel() {
     if (explorerDir) setDir(explorerDir);
   }, [explorerDir]);
   const [sel, setSel] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
 
   useEffect(() => {
     if (!dir && repos.length) setDir(repos[0]);
@@ -42,6 +43,7 @@ export function RepoExplorerPanel() {
 
   const depth = (p: string) => p.split("/").length - 1;
   const base = (p: string) => p.split("/").pop() ?? p;
+  const visibleEntries = entries.filter((p) => p.toLowerCase().includes(filter.trim().toLowerCase()));
 
   return (
     <div style={{ ...panelRoot, flexDirection: "row", minHeight: 0 }}>
@@ -55,13 +57,31 @@ export function RepoExplorerPanel() {
             <option key={r} value={r}>{r}</option>
           ))}
         </select>
+        <div style={{ position: "relative", margin: "0 6px 7px" }}>
+          <input
+            type="search"
+            aria-label="Filter repository files"
+            placeholder="Filter files…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            style={{
+              width: "100%", boxSizing: "border-box", height: 28, padding: "0 9px",
+              background: "var(--cv-glass-hi)", color: "var(--cv-ink)",
+              border: "1px solid var(--cv-glass-edge)", borderRadius: 7,
+              fontSize: 10.5, fontFamily: "inherit", outline: "none",
+            }}
+          />
+        </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "0 4px 8px" }}>
           {entries.length === 0 && (
             <div style={{ padding: 10, fontSize: 11, color: "var(--cv-ink-faint)" }}>
               {notice?.includes("access denied") ? notice : "loading…"}
             </div>
           )}
-          {entries.map((p) => (
+          {entries.length > 0 && visibleEntries.length === 0 && (
+            <div style={{ padding: 10, fontSize: 11, color: "var(--cv-ink-faint)" }}>No files match “{filter}”.</div>
+          )}
+          {visibleEntries.map((p) => (
             <button
               key={p}
               onClick={() => { setSel(p); repoRead(dir, p); }}
