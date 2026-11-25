@@ -106,3 +106,10 @@ Pendiente ronda 3:
 - [ ] Gather sigue roto (no investigado aún) — main ordena en grid, branch apila: buscar la regresión en la acción gather del store comparando con main
 - [ ] Topbar bubble-fusion on hover — pendiente
 - [ ] deska.dev web crawl — las notas 10/12 del vault ya cubren casi todo; fetch pendiente solo si hace falta algo específico
+
+## Ronda 5 (2026-11-24 ~23:00)
+- [x] Resize v2 LIVE: nodes llevan style width/height en construcción (App.tsx), memo rebuild con agentSizes en deps, onResize stream durante drag. Falta: height layout interno flex (minHeight aplicado).
+- [x] Gather fix verificado — era mismatch 360 vs 460 de card size
+- [x] Topbar fusion: cluster derecho se fusiona en una bubble glass on hover (.cv-fuse en index.css)
+- [x] MissionStrip eliminado del centro + botón Mission Map muerto eliminado (data vive en topbar live count + Inbox)
+- [ ] Próximo: transcript rows estilo Deska (verb bold + detalle) en cards, per-window color tint, input steering inline (esperando research hija), edge routing
