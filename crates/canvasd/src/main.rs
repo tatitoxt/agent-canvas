@@ -543,14 +543,23 @@ fn spawn_agent(
                         Some(fb.remaining.clone()),
                     ) {
                         if let Some(text) = fb.initial_input.clone() {
-                            let agents = state_fb.agents.clone();
+                            let st4 = state_fb.clone();
                             let target = new_id.clone();
                             tokio::spawn(async move {
                                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                                // gated_write, not raw input: a supervised
+                                // automation that falls back keeps its
+                                // approval gate on the replacement too.
                                 let mut data = text.into_bytes();
                                 data.push(b'\r');
-                                let _ = agents.write(&target, &data);
+                                gated_write(&st4, &target, &data);
                             });
+                        }
+                        // A delegation awaiting this child's result moves to
+                        // the replacement — otherwise the original exit marks
+                        // the ticket failed and the parent's result is lost.
+                        if let Some(edge) = state_fb.pending_results.lock().unwrap().remove(&id) {
+                            state_fb.pending_results.lock().unwrap().insert(new_id.clone(), edge);
                         }
                         let _ = state_fb.events.send(Event::Control(ServerMsg::Spawned {
                             agent_id: new_id,
@@ -1085,11 +1094,17 @@ fn handle_client_msg(
                     if let Some(text) = initial_input {
                         let agents = state.agents.clone();
                         let target = id.clone();
+                        let pf = state.pending_fallbacks.clone();
                         tokio::spawn(async move {
                             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                             let mut data = text.into_bytes();
                             data.push(b'\r');
                             let _ = agents.write(&target, &data);
+                            // Delivered to the original — a later fallback
+                            // must not run the task a second time.
+                            if let Some(fb) = pf.lock().unwrap().get_mut(&target) {
+                                fb.initial_input = None;
+                            }
                         });
                     }
                     send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None });
@@ -1119,11 +1134,17 @@ fn handle_client_msg(
                     if let Some(text) = initial_input {
                         let agents = state.agents.clone();
                         let target = id.clone();
+                        let pf = state.pending_fallbacks.clone();
                         tokio::spawn(async move {
                             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                             let mut data = text.into_bytes();
                             data.push(b'\r');
                             let _ = agents.write(&target, &data);
+                            // Delivered to the original — a later fallback
+                            // must not run the task a second time.
+                            if let Some(fb) = pf.lock().unwrap().get_mut(&target) {
+                                fb.initial_input = None;
+                            }
                         });
                     }
                     send_control(ServerMsg::Spawned {
@@ -2158,6 +2179,11 @@ fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
                 tokio::time::sleep(std::time::Duration::from_millis(800)).await;
                 gated_write(&st, &agent_id2, prompt.as_bytes());
                 gated_write(&st, &agent_id2, b"\n");
+                // Delivered to the original — a later fallback must not
+                // run the automation a second time.
+                if let Some(fb) = st.pending_fallbacks.lock().unwrap().get_mut(&agent_id2) {
+                    fb.initial_input = None;
+                }
             });
         }
         Err(e) => {
