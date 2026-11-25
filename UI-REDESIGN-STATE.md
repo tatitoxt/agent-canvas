@@ -7,6 +7,7 @@
 - Screenshot tool: `cd /tmp/canvas-design && node shot.mjs http://localhost:5173 previewN.png` (playwright)
 
 ## Roadmap continuation — 2026-11-25
+- [x] “Add to Board” de una nota ya fijada ahora enfoca la ventana existente en el board activo en vez de crear duplicados. Regresión E2E pinnea la nota, vuelve a abrir Vault y pinnea de nuevo; se mantiene una sola ventana viva. Validación: build de producción, 49/49 E2E, 39/39 unit tests y `git diff --check` pasan.
 - [x] Agent card resize inside workspaces: preserve React Flow's transient dimensions while the resize gesture is active, then persist the final width, height, and relative position. Fixes controlled-node reconciliation overwriting the resize; both nested and loose-card E2E interactions pass.
 - [x] Resized agent card body uses a flex column with a scrollable content region, so a user-chosen short height does not clip terminal details. E2E verifies the scroll region with overflowing content.
 - [x] Validation for this batch: typecheck, 30/30 unit tests, 36/36 E2E, production build, and `git diff --check` pass.

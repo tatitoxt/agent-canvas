@@ -1866,6 +1866,11 @@ export const useBoard = create<BoardState>((set, get) => ({
   })(),
   mdNodeAdd: (path, anchor, at) => {
     const board = get().activeBoard;
+    const existing = Object.entries(get().mdNodes[board] ?? {}).find(([, notePath]) => notePath === path)?.[0];
+    if (existing) {
+      get().requestFocus(existing);
+      return;
+    }
     const id = `md-${Math.random().toString(16).slice(2, 10)}`;
     const next = { ...get().mdNodes, [board]: { ...(get().mdNodes[board] ?? {}), [id]: path } };
     localStorage.setItem("cv-mdnodes", JSON.stringify(next));

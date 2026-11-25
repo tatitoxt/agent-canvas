@@ -133,6 +133,12 @@ test("Add to Board pins the active Obsidian note as a live canvas window", async
   const noteWindow = page.locator(".react-flow__node-md").filter({ hasText: name });
   await expect(noteWindow.locator("strong", { hasText: "Live formatted note" })).toBeVisible();
   await expect(noteWindow.locator('a[title="Missing target (not created yet)"]')).toBeVisible();
+
+  // Pinning the same note again focuses its existing canvas window instead
+  // of creating duplicate live views of one vault file.
+  await page.locator("button[title*='your real vault']").first().click();
+  await page.locator("button", { hasText: "Add to Board" }).first().click();
+  await expect(page.locator(".react-flow__node-md").filter({ hasText: name })).toHaveCount(1);
 });
 
 test("panels mount as canvas nodes and close again", async ({ page }) => {
