@@ -35,6 +35,7 @@ test("Paper theme switches the canvas to a readable warm light palette and persi
   expect(await page.locator("html").evaluate((el) => getComputedStyle(el).getPropertyValue("--cv-shadow-card"))).toContain("#3f2f19");
   expect(await page.locator("html").evaluate((el) => getComputedStyle(el).getPropertyValue("--cv-minimap-mask"))).toContain("#3f2f19");
   expect(await page.locator(".react-flow").evaluate((el) => getComputedStyle(el, "::after").opacity)).toBe("0.12");
+  await expect.poll(() => page.locator(".react-flow__minimap-mask").evaluate((el) => getComputedStyle(el).fill)).toBe("rgba(63, 47, 25, 0.12)");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "paper");
 });

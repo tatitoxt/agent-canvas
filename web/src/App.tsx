@@ -1144,12 +1144,16 @@ function Board() {
           position="bottom-right"
           pannable
           zoomable
-          style={{ width: mmSize.w, height: mmSize.h, marginRight: 184 }}
+          style={{
+            width: mmSize.w,
+            height: mmSize.h,
+            marginRight: 184,
+            "--xy-minimap-mask-background-color": "var(--cv-minimap-mask)",
+            "--xy-minimap-mask-stroke-color": "var(--cv-accent)",
+            "--xy-minimap-node-stroke-color": "var(--cv-minimap-node-stroke)",
+          } as React.CSSProperties}
           className="!bg-[var(--cv-base)]"
-          maskColor="var(--cv-minimap-mask)"
-          maskStrokeColor="var(--cv-accent)"
           maskStrokeWidth={1.5}
-          nodeStrokeColor="var(--cv-minimap-node-stroke)"
           nodeStrokeWidth={1}
           nodeColor={(n) => {
             const data = n.data as Partial<BoardNodeData>;

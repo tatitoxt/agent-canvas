@@ -170,6 +170,9 @@ REMAINING LEVERS if still slow:
 
 ## Tema Paper y estado del roadmap (2026-11-25)
 - [x] Tema Paper: sombras cálidas suaves, viñeta reducida y minimapa con máscara clara; el lienzo, controles y tarjetas dejan de heredar sombras y overlay negros del tema dark.
+- [x] Corrección visual del minimapa: sus variables de máscara, borde y trazo ahora se aplican en el estilo del SVG de React Flow; E2E valida el color realmente renderizado y persistencia del tema.
 - [x] E2E cambia a Paper, verifica fondo/sombra/máscara y confirma persistencia tras recargar.
 - [x] Roadmap reconciliado con evidencia actual: Library sin flyout y routing que esquiva tarjetas están completados; PTY interactiva queda validada para shell, pero falta una pasada manual con CLIs de IA reales.
 - [x] Validación tras el tema Paper: 23/23 unit tests, 31/31 E2E, typecheck, build y `git diff --check`.
+- [x] CI de PR #47 tras `753ae07`: Devin Review, canvasd, e2e, Tauri macOS, Tauri Ubuntu y web pasan.
+- [ ] Siguiente lote: auditar el chrome restante y densidad/alineación de paneles contra la captura Deska; mantener PR #47 abierto y sin merge.
