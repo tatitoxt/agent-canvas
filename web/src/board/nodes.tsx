@@ -1190,8 +1190,8 @@ export function WebNode({
         minHeight={220}
         handleClassName="cv-node-resize-handle"
         lineClassName="cv-node-resize-line"
-        onResize={(_, p) => resizeWebNode(id, Math.round(p.width), Math.round(p.height), false)}
-        onResizeEnd={(_, p) => resizeWebNode(id, Math.round(p.width), Math.round(p.height))}
+        onResize={(_, p) => resizeWebNode(id, Math.round(p.width), Math.round(p.height), false, undefined, { x: p.x, y: p.y })}
+        onResizeEnd={(_, p) => resizeWebNode(id, Math.round(p.width), Math.round(p.height), true, undefined, { x: p.x, y: p.y })}
       />
       <div
         style={{

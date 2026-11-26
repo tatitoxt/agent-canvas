@@ -53,7 +53,7 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
         handleClassName="cv-node-resize-handle"
         lineClassName="cv-node-resize-line"
         onResizeEnd={(_, p) =>
-          useBoard.getState().resizePanelNode(id, Math.round(p.width), Math.round(p.height))
+          useBoard.getState().resizePanelNode(id, Math.round(p.width), Math.round(p.height), { x: p.x, y: p.y })
         }
       />
       <div

@@ -50,8 +50,8 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
   return (
     <div className="glass-panel" style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 12, border: "1px solid var(--cv-glass-edge)" }}>
       <NodeResizer isVisible={selected} minWidth={260} minHeight={180} handleClassName="cv-node-resize-handle" lineClassName="cv-node-resize-line"
-        onResize={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), false, boardId)}
-        onResizeEnd={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), true, boardId)} />
+        onResize={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), false, boardId, { x: p.x, y: p.y })}
+        onResizeEnd={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), true, boardId, { x: p.x, y: p.y })} />
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--cv-glass-edge)", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
         <img src="/obsidian.svg" alt="" width={12} height={12} />
         <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{basename}</span>

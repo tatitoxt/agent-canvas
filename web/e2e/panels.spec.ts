@@ -688,3 +688,47 @@ test("gather pulls loose cards into a group", async ({ page }) => {
   const count = await page.locator(".react-flow__node").count();
   expect(count).toBeGreaterThanOrEqual(before);
 });
+
+test("panel card resizing from the top-left keeps the resized origin instead of snapping back", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title='Files — open your Obsidian vault']").click();
+  const panelNode = page.locator(".react-flow__node-panel").first();
+  await expect(panelNode).toBeVisible({ timeout: 8_000 });
+  const panelId = await panelNode.getAttribute("data-id");
+  expect(panelId).toBeTruthy();
+  const beforeStore = await page.evaluate((id) => JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}").main?.[id], panelId);
+  expect(beforeStore).toBeTruthy();
+
+  // Select the card first — resize affordances are intentionally hidden until then.
+  await panelNode.click({ position: { x: 90, y: 18 }, force: true });
+  const grip = panelNode.locator(".react-flow__resize-control.handle.top.left");
+  await expect(grip).toBeAttached();
+  let stableSamples = 0;
+  let previousRect = "";
+  await expect.poll(async () => {
+    const rect = await panelNode.boundingBox();
+    const current = rect ? `${rect.x.toFixed(1)}:${rect.y.toFixed(1)}:${rect.width.toFixed(1)}:${rect.height.toFixed(1)}` : "";
+    stableSamples = current && current === previousRect ? stableSamples + 1 : 0;
+    previousRect = current;
+    return stableSamples;
+  }, { intervals: [100, 100, 100, 100, 100, 100], timeout: 3_000 }).toBeGreaterThanOrEqual(4);
+  const beforeRect = await panelNode.boundingBox();
+  const handle = await grip.boundingBox();
+  expect(beforeRect).not.toBeNull();
+  expect(handle).not.toBeNull();
+  await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle!.x + handle!.width / 2 - 70, handle!.y + handle!.height / 2 - 45, { steps: 8 });
+  await page.mouse.up();
+
+  // The origin reported by xyflow must survive the store round-trip. Before
+  // the fix the width/height changed but x/y stayed at the pre-resize value,
+  // so the card visually snapped back and grew toward the bottom/right.
+  await expect.poll(async () => page.evaluate((id) => JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}").main?.[id]?.x ?? 999999, panelId)).toBeLessThan(beforeStore.x - 20);
+  await expect.poll(async () => page.evaluate((id) => JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}").main?.[id]?.y ?? 999999, panelId)).toBeLessThan(beforeStore.y - 12);
+  await expect.poll(async () => page.evaluate((id) => JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}").main?.[id]?.w ?? 0, panelId)).toBeGreaterThan(beforeStore.w + 20);
+  const afterRect = await panelNode.boundingBox();
+  expect(afterRect).not.toBeNull();
+  expect(afterRect!.x).toBeLessThan(beforeRect!.x - 20);
+  expect(afterRect!.y).toBeLessThan(beforeRect!.y - 12);
+});

@@ -50,7 +50,7 @@ export const TermNode = memo(function TermNode({ id, selected, width }: NodeProp
         handleClassName="cv-node-resize-handle"
         lineClassName="cv-node-resize-line"
         onResizeEnd={(_, p) =>
-          useBoard.getState().resizeTermNode(id, Math.round(p.width), Math.round(p.height))
+          useBoard.getState().resizeTermNode(id, Math.round(p.width), Math.round(p.height), { x: p.x, y: p.y })
         }
       />
       <div

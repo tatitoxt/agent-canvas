@@ -458,7 +458,7 @@ type BoardState = {
   webNodes: Record<string, Record<string, string>>;
   /** Per-page canvas window dimensions, keyed by board and web node id. */
   webNodeSizes: Record<string, { w: number; h: number }>;
-  resizeWebNode: (id: string, w: number, h: number, persist?: boolean, boardId?: string) => void;
+  resizeWebNode: (id: string, w: number, h: number, persist?: boolean, boardId?: string, pos?: { x: number; y: number }) => void;
   /** UI theme — swaps the seed tokens; glass derives via color-mix. */
   theme: string;
   setTheme: (t: string) => void;
@@ -558,7 +558,7 @@ type BoardState = {
   mdNodes: Record<string, Record<string, string>>;
   /** Per-note canvas card dimensions, keyed by Markdown node ID. */
   mdNodeSizes: Record<string, { w: number; h: number }>;
-  resizeMdNode: (id: string, w: number, h: number, persist?: boolean, boardId?: string) => void;
+  resizeMdNode: (id: string, w: number, h: number, persist?: boolean, boardId?: string, pos?: { x: number; y: number }) => void;
   mdContents: Record<string, string>;
   /** Binary vault assets (images) as data URLs — filled by vault_asset. */
   vaultAssets: Record<string, string>;
@@ -571,7 +571,7 @@ type BoardState = {
   openPanelNode: (panel: string, pos?: { x: number; y: number }, size?: { w: number; h: number }) => void;
   closePanelNode: (id: string) => void;
   movePanelNode: (id: string, x: number, y: number) => void;
-  resizePanelNode: (id: string, w: number, h: number) => void;
+  resizePanelNode: (id: string, w: number, h: number, pos?: { x: number; y: number }) => void;
   collapsePanelNode: (id: string) => void;
   maximizePanelNode: (id: string, viewRect?: { x: number; y: number; w: number; h: number }) => void;
   /** Live terminals living ON the canvas as cards — `term-<agentId>` per
@@ -605,7 +605,7 @@ type BoardState = {
   moveTermNode: (id: string, x: number, y: number) => void;
   /** Move any client-side card (term-/panel-/shape-/md-/web-/orch-) to another board. */
   moveCardToBoard: (id: string, boardId: string) => void;
-  resizeTermNode: (id: string, w: number, h: number) => void;
+  resizeTermNode: (id: string, w: number, h: number, pos?: { x: number; y: number }) => void;
   collapseTermNode: (id: string) => void;
   maximizeTermNode: (id: string, viewRect?: { x: number; y: number; w: number; h: number }) => void;
   studioDocNow: () => void;
@@ -835,10 +835,11 @@ export const useBoard = create<BoardState>((set, get) => ({
   webNodeSizes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-webnodesizes") ?? "{}"); } catch { return {}; }
   })(),
-  resizeWebNode: (id, w, h, persist = true, boardId = get().activeBoard) => {
+  resizeWebNode: (id, w, h, persist = true, boardId = get().activeBoard, pos) => {
     const next = { ...get().webNodeSizes, [`${boardId}:${id}`]: { w: Math.max(320, w), h: Math.max(220, h) } };
     if (persist) localStorage.setItem("cv-webnodesizes", JSON.stringify(next));
-    set({ webNodeSizes: next });
+    set({ webNodeSizes: next, ...(pos ? { positions: { ...get().positions, [id]: pos } } : {}) });
+    if (persist && pos) client?.moveNode(id, pos.x, pos.y);
   },
   notes: {},
   artifacts: {},
@@ -1710,10 +1711,11 @@ export const useBoard = create<BoardState>((set, get) => ({
   mdNodeSizes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-mdnodesizes") ?? "{}"); } catch { return {}; }
   })(),
-  resizeMdNode: (id, w, h, persist = true, boardId = get().activeBoard) => {
+  resizeMdNode: (id, w, h, persist = true, boardId = get().activeBoard, pos) => {
     const next = { ...get().mdNodeSizes, [`${boardId}:${id}`]: { w: Math.max(260, w), h: Math.max(180, h) } };
     if (persist) localStorage.setItem("cv-mdnodesizes", JSON.stringify(next));
-    set({ mdNodeSizes: next });
+    set({ mdNodeSizes: next, ...(pos ? { positions: { ...get().positions, [id]: pos } } : {}) });
+    if (persist && pos) client?.moveNode(id, pos.x, pos.y);
   },
   panelNodes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}"); } catch { return {}; }
@@ -1747,7 +1749,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     localStorage.setItem("cv-panelnodes", JSON.stringify(next));
     set({ panelNodes: next });
   },
-  resizePanelNode: (id, w, h) => {
+  resizePanelNode: (id, w, h, pos) => {
     const board = get().activeBoard;
     const n = get().panelNodes[board]?.[id];
     if (!n) return;
@@ -1756,7 +1758,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     const meta = PANEL_META[n.panel];
     const cw = Math.max(w, meta?.minW ?? 0);
     const ch = Math.max(h, meta?.minH ?? 0);
-    const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: { ...n, w: cw, h: ch } } };
+    const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: { ...n, ...(pos ?? {}), w: cw, h: ch } } };
     localStorage.setItem("cv-panelnodes", JSON.stringify(next));
     set({ panelNodes: next });
   },
@@ -1853,11 +1855,11 @@ export const useBoard = create<BoardState>((set, get) => ({
     localStorage.setItem("cv-termnodes", JSON.stringify(next));
     set({ termNodes: next });
   },
-  resizeTermNode: (id, w, h) => {
+  resizeTermNode: (id, w, h, pos) => {
     const board = get().activeBoard;
     const n = get().termNodes[board]?.[id];
     if (!n) return;
-    const next = { ...get().termNodes, [board]: { ...get().termNodes[board], [id]: { ...n, w, h } } };
+    const next = { ...get().termNodes, [board]: { ...get().termNodes[board], [id]: { ...n, ...(pos ?? {}), w, h } } };
     localStorage.setItem("cv-termnodes", JSON.stringify(next));
     set({ termNodes: next });
   },
