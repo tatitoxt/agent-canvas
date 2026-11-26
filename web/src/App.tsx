@@ -829,18 +829,17 @@ function Board() {
     setMenu({ x: ev.clientX, y: ev.clientY, id });
   };
 
-  // Snap + alignment guides: a dragging card snaps when its edges/center
-  // come within 8px of another visible card's edges/center, with thin
-  // guide lines at the matched positions.
-  const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
-  const SNAP = 8;
+  // Alignment snap (opt-in, invisible): when the snapAlign mode is on, a
+  // dropped card magnetically aligns to another visible card's edge/center
+  // within 4px — weak on purpose, so any placement further away lands
+  // exactly where the pointer lets go. No guide lines are ever drawn.
+  const SNAP = 4;
   const snapFor = (node: { id: string; position: { x: number; y: number }; measured?: { width?: number; height?: number } }) => {
     const w = node.measured?.width ?? 240;
     const h = node.measured?.height ?? 120;
     const selfX = [node.position.x, node.position.x + w / 2, node.position.x + w];
     const selfY = [node.position.y, node.position.y + h / 2, node.position.y + h];
     let dx = 0, dy = 0, bestX = SNAP + 1, bestY = SNAP + 1;
-    const v: number[] = [], hh: number[] = [];
     for (const o of getNodes()) {
       if (o.id === node.id) continue;
       const ow = o.measured?.width ?? 240;
@@ -858,29 +857,9 @@ function Board() {
         }
       }
     }
-    if (bestX <= SNAP) {
-      for (const o of getNodes()) {
-        if (o.id === node.id) continue;
-        const ow = o.measured?.width ?? 240;
-        for (const tx of [o.position.x, o.position.x + ow / 2, o.position.x + ow]) {
-          for (const sx of selfX) if (Math.abs(tx - (sx + dx)) < 0.5 && !v.includes(tx)) v.push(tx);
-        }
-      }
-    }
-    if (bestY <= SNAP) {
-      for (const o of getNodes()) {
-        if (o.id === node.id) continue;
-        const oh = o.measured?.height ?? 120;
-        for (const ty of [o.position.y, o.position.y + oh / 2, o.position.y + oh]) {
-          for (const sy of selfY) if (Math.abs(ty - (sy + dy)) < 0.5 && !hh.includes(ty)) hh.push(ty);
-        }
-      }
-    }
-    return { dx: bestX <= SNAP ? dx : 0, dy: bestY <= SNAP ? dy : 0, v, h: hh };
+    return { dx: bestX <= SNAP ? dx : 0, dy: bestY <= SNAP ? dy : 0 };
   };
   const onNodeDrag: OnNodeDrag = (_, node) => {
-    const s = snapFor(node);
-    setGuides({ v: s.dx ? s.v : [], h: s.dy ? s.h : [] });
     setDragGhost({
       x: node.position.x,
       y: node.position.y,
@@ -953,7 +932,6 @@ function Board() {
     for (const n of dragged) activeDrags.current.delete(n.id);
     if (!tracked) {
       setDragGhost(null);
-      setGuides({ v: [], h: [] });
       return;
     }
     // Deska-style: dropping a card on a board tab moves it there.
@@ -993,8 +971,9 @@ function Board() {
       }
       if (movedAny) return;
     }
-    const s0 = snapFor(node);
-    setGuides({ v: [], h: [] });
+    // Snap is opt-in (settings → alignment snap, default off): when off
+    // the drop lands exactly where the pointer lets go.
+    const s0 = useBoard.getState().snapAlign ? snapFor(node) : { dx: 0, dy: 0 };
     // Every card in a multi-select drag lands with the same snap delta —
     // writing back only the primary used to lose the others' positions.
     for (const n of dragged) {
@@ -1385,14 +1364,6 @@ function Board() {
         />
         <ViewportTracker />
         <AnchorCables nav={nav} />
-              <ViewportPortal>
-          {guides.v.map((x) => (
-            <div key={`gv${x}`} style={{ position: "absolute", left: x, top: -100000, width: 0, height: 200000, borderLeft: "1px dashed var(--cv-accent)", pointerEvents: "none", opacity: 0.7 }} />
-          ))}
-          {guides.h.map((y) => (
-            <div key={`gh${y}`} style={{ position: "absolute", top: y, left: -100000, height: 0, width: 200000, borderTop: "1px dashed var(--cv-accent)", pointerEvents: "none", opacity: 0.7 }} />
-          ))}
-        </ViewportPortal>
         {dragGhost && (
           <ViewportPortal>
             <div

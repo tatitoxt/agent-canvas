@@ -50,6 +50,8 @@ export function SettingsPanel() {
   const moveHistory = useBoard((s) => s.moveHistory);
   const panelSummaries = useBoard((s) => s.panelSummaries);
   const togglePanelSummaries = useBoard((s) => s.togglePanelSummaries);
+  const snapAlign = useBoard((s) => s.snapAlign);
+  const toggleSnapAlign = useBoard((s) => s.toggleSnapAlign);
   const vaultDir = useBoard((s) => s.vaultDir);
   const supported = typeof Notification !== "undefined";
   const [perm, setPerm] = useState<NotificationPermission>(supported ? Notification.permission : "denied");
@@ -106,6 +108,18 @@ export function SettingsPanel() {
           onClick={() => togglePanelSummaries()}
         >
           {panelSummaries ? "on" : "off"}
+        </button>
+      </div>
+      <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ flex: 1, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>alignment snap when dropping cards</span>
+        <button
+          aria-label={`Alignment snap ${snapAlign ? "on" : "off"}`}
+          aria-pressed={snapAlign}
+          className="glass"
+          style={{ ...rowBtn, flex: 0, padding: "7px 12px", outline: snapAlign ? "1.5px solid var(--cv-accent)" : "none" }}
+          onClick={() => toggleSnapAlign()}
+        >
+          {snapAlign ? "on" : "off"}
         </button>
       </div>
       <div style={label}>Vault</div>

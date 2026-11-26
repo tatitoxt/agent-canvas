@@ -655,6 +655,12 @@ type BoardState = {
    * inline mini-terminal preview for a quieter board. */
   panelSummaries: boolean;
   togglePanelSummaries: () => void;
+  /** Alignment snap mode — when on, a dropped card magnetically aligns
+   * to another card's edge/center within a few px. Invisible (no guide
+   * lines) and deliberately weak. Off by default: drags land exactly
+   * where the pointer lets go. */
+  snapAlign: boolean;
+  toggleSnapAlign: () => void;
   /** Whether the spawn chooser is open (summoned by the orchestrator's
    * + or the rail's New Task — there is no permanent spawn button). */
   spawnOpen: boolean;
@@ -2539,6 +2545,13 @@ export const useBoard = create<BoardState>((set, get) => ({
     localStorage.setItem("cv-panel-summaries", String(panelSummaries));
     set({ panelSummaries });
     get().notify(get().panelSummaries ? "card summaries on" : "card summaries off");
+  },
+  snapAlign: localStorage.getItem("cv-snap-align") === "true",
+  toggleSnapAlign: () => {
+    const snapAlign = !get().snapAlign;
+    localStorage.setItem("cv-snap-align", String(snapAlign));
+    set({ snapAlign });
+    get().notify(snapAlign ? "alignment snap on — cards magnetically align when dropped close" : "alignment snap off — free drag");
   },
   spawnOpen: false,
   setSpawnOpen: (v) => set(v ? { spawnOpen: v } : { spawnOpen: v, pendingSpawnPos: null }),
