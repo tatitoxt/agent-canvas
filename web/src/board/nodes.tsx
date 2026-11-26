@@ -911,7 +911,7 @@ export function OrchestratorNode({
             width: wiring ? 46 : 28,
           }}
         >
-          {wiring ? "done" : "⚡"}
+          {wiring ? "done" : <Icon name="link" size={12} color="currentColor" />}
         </button>
       </div>
 
@@ -922,7 +922,7 @@ export function OrchestratorNode({
           </div>
         ) : roster.length === 0 ? (
           <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", marginBottom: 8 }}>
-            No agents wired — ⚡ connect to pick consoles
+            No agents wired — hit the link button to pick consoles
           </div>
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 9 }}>
