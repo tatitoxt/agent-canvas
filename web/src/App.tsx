@@ -295,26 +295,32 @@ function Board() {
   // clicking a rail/topbar icon opens or focuses its card; re-clicking
   // closes it. Non-panel keys (canvas) behave as before.
   const navToggle = (k: string) => {
-    setNav((n) => {
-      if (n === k) {
-        useBoard.getState().closePanelNode(`panel-${k}`);
-        return "canvas";
+    // The zustand writes must NOT live inside a setNav updater: React runs
+    // state updaters during Board's render (and twice in StrictMode), so a
+    // store write there notifies subscribers — BottomDock among them — in
+    // the middle of the render pass ("Cannot update a component while
+    // rendering a different component"). navToggle is rebuilt every render
+    // and only fires from event handlers, so `nav` here is always current
+    // and the updater form was never needed.
+    if (nav === k) {
+      useBoard.getState().closePanelNode(`panel-${k}`);
+      setNav("canvas");
+      return;
+    }
+    if (PANEL_DEFS[k]) {
+      // openPanelNode focuses the card only when it already exists — a new
+      // card keeps the placement we give it (inbox docks right, Deska-style).
+      const b = useBoard.getState();
+      if (!b.panelNodes[b.activeBoard]?.[`panel-${k}`]) {
+        const def = PANEL_DEFS[k];
+        const sx = k === "inbox" ? window.innerWidth - def.w - 24 : window.innerWidth * 0.42;
+        const p = screenToFlowPosition({ x: sx, y: window.innerHeight * 0.1 });
+        b.openPanelNode(k, p, { w: def.w, h: def.h });
+      } else {
+        b.requestFocus(`panel-${k}`);
       }
-      if (PANEL_DEFS[k]) {
-        // openPanelNode focuses the card only when it already exists — a new
-        // card keeps the placement we give it (inbox docks right, Deska-style).
-        const b = useBoard.getState();
-        if (!b.panelNodes[b.activeBoard]?.[`panel-${k}`]) {
-          const def = PANEL_DEFS[k];
-          const sx = k === "inbox" ? window.innerWidth - def.w - 24 : window.innerWidth * 0.42;
-          const p = screenToFlowPosition({ x: sx, y: window.innerHeight * 0.1 });
-          b.openPanelNode(k, p, { w: def.w, h: def.h });
-        } else {
-          b.requestFocus(`panel-${k}`);
-        }
-      }
-      return k;
-    });
+    }
+    setNav(k);
   };
   const addPanelToBoard = (key: string) => {
     if (!PANEL_DEFS[key]) return;
@@ -738,22 +744,25 @@ function Board() {
       if (!activeDrags.current.size) return;
       const ids = new Set(activeDrags.current);
       activeDrags.current.clear();
-      setRfNodes((ns) => {
-        const st = useBoard.getState();
-        for (const n of ns) {
-          if (!ids.has(n.id)) continue;
-          const { x, y } = n.position;
-          if (n.id.startsWith("shape-")) st.moveShape(n.id, x, y);
-          else if (n.id.startsWith("panel-")) st.movePanelNode(n.id, x, y);
-          else if (n.id.startsWith("term-")) st.moveTermNode(n.id, x, y);
-          else st.moveNode(n.id, x, y);
-        }
-        return ns.map((n) => (ids.has(n.id) ? { ...n, dragging: false } : n));
-      });
+      // Store writes stay OUT of the setRfNodes updater — updaters execute
+      // during Board's render pass, and a zustand write there mid-render is
+      // exactly the pattern React warns about. Positions are read
+      // imperatively instead; only the flag cleanup stays in the updater,
+      // and it is pure.
+      const st = useBoard.getState();
+      for (const n of getNodes()) {
+        if (!ids.has(n.id)) continue;
+        const { x, y } = n.position;
+        if (n.id.startsWith("shape-")) st.moveShape(n.id, x, y);
+        else if (n.id.startsWith("panel-")) st.movePanelNode(n.id, x, y);
+        else if (n.id.startsWith("term-")) st.moveTermNode(n.id, x, y);
+        else st.moveNode(n.id, x, y);
+      }
+      setRfNodes((ns) => ns.map((n) => (ids.has(n.id) ? { ...n, dragging: false } : n)));
     };
     window.addEventListener("blur", rescue);
     return () => window.removeEventListener("blur", rescue);
-  }, [setRfNodes]);
+  }, [setRfNodes, getNodes]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange<Node<BoardNodeData>>[]) =>
