@@ -2183,6 +2183,12 @@ fn main() {
                     if !root.join(".git").exists() {
                         let _ = std::process::Command::new("git").arg("init").arg(&root).output();
                     }
+                    // `git init` alone leaves the repo commitless — no HEAD
+                    // for `git worktree add` to branch from, so every spawn
+                    // died before its PTY existed. Bootstrap the empty
+                    // initial commit up front (also covers a ~/Canvas that
+                    // was init'ed by an older build and never committed).
+                    canvasd::agent::ensure_initial_commit(&root);
                 }
                 root
             };

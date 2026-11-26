@@ -34,4 +34,44 @@ describe("Tauri PTY startup replay", () => {
     eventHandlers["canvas://pty"]({ payload: { agent_id: "agent-a", data: "aGlzdG9yeQ==" } });
     expect(order).toEqual(["snapshot", "pty", "pty"]);
   });
+
+  it("surfaces a rejected spawn_agent invoke through onError instead of silence", async () => {
+    tauriMocks.listen.mockImplementation(async () => () => {});
+    tauriMocks.invoke.mockImplementation((cmd: string) => {
+      if (cmd === "snapshot") return Promise.resolve({ type: "snapshot" });
+      if (cmd === "spawn_agent") {
+        return Promise.reject("git worktree add failed: fatal: Needed a single revision");
+      }
+      return Promise.resolve(null);
+    });
+    const errors: string[] = [];
+    const client = new TauriCanvasClient({
+      onControl: () => {},
+      onPty: () => {},
+      onError: (message) => errors.push(message),
+    });
+
+    client.spawnAgent("Terminal", "bash");
+    await vi.waitFor(() => expect(errors).toHaveLength(1));
+    expect(errors[0]).toContain("git worktree add failed");
+  });
+
+  it("surfaces delegate rejections and formats non-string rejection reasons", async () => {
+    tauriMocks.listen.mockImplementation(async () => () => {});
+    tauriMocks.invoke.mockImplementation((cmd: string) => {
+      if (cmd === "snapshot") return Promise.resolve({ type: "snapshot" });
+      if (cmd === "delegate") return Promise.reject(new Error("pty open failed"));
+      return Promise.resolve(null);
+    });
+    const errors: string[] = [];
+    const client = new TauriCanvasClient({
+      onControl: () => {},
+      onPty: () => {},
+      onError: (message) => errors.push(message),
+    });
+
+    client.delegate("node-a", "Terminal", "bash", "do the thing");
+    await vi.waitFor(() => expect(errors).toHaveLength(1));
+    expect(errors[0]).toBe("pty open failed");
+  });
 });

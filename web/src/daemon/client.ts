@@ -164,6 +164,10 @@ export type Handlers = {
   onControl: (msg: ServerMsg) => void;
   onPty: (agentId: string, bytes: Uint8Array) => void;
   onClose?: () => void;
+  /** Transport-level failure the control channel never sees — a rejected
+   * Tauri invoke, a socket that refused the write. The board surfaces these
+   * as operator-visible notices instead of a silent console.error. */
+  onError?: (message: string) => void;
 };
 
 export class CanvasClient {

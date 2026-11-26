@@ -1446,6 +1446,13 @@ export const useBoard = create<BoardState>((set, get) => ({
       onPty: (agentId: string, bytes: Uint8Array) => {
         get().receivePty(agentId, bytes);
       },
+      // Transport-level failures (a rejected Tauri invoke — e.g. a spawn
+      // that died before its PTY existed) never arrive as control messages;
+      // without this the click appears to do nothing.
+      onError: (message: string) => {
+        const detail = message.length > 240 ? `${message.slice(0, 240)}…` : message;
+        get().notify(`error — ${detail}`);
+      },
       onClose: () => {
         client = null;
         set({ connected: false });

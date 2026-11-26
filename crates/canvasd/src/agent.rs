@@ -184,6 +184,47 @@ fn sanitize_relpath(cwd: &str) -> Result<PathBuf> {
     Ok(rel.to_path_buf())
 }
 
+/// A commitless repository has no HEAD for `git worktree add` to branch
+/// from, so every spawn dies before the PTY exists — the first-run failure
+/// of a fresh `~/Canvas`. Bootstrap one empty commit so the worktree model
+/// holds in scratch repos. Best effort: a missing git binary or a directory
+/// that is not a git repo at all falls through to the worktree error, which
+/// the caller surfaces to the operator.
+pub fn ensure_initial_commit(repo_root: &Path) {
+    let head_resolves = std::process::Command::new("git")
+        .args(["rev-parse", "--verify", "HEAD"])
+        .current_dir(repo_root)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if head_resolves {
+        return;
+    }
+    // Only bootstrap inside an existing git repository — never `git init`
+    // a plain directory as a side effect of spawning a terminal.
+    let is_repo = std::process::Command::new("git")
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .current_dir(repo_root)
+        .output()
+        .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "true")
+        .unwrap_or(false);
+    if !is_repo {
+        return;
+    }
+    // Inline identity: a fresh machine may have no user.name/user.email
+    // configured, and --no-gpg-sign keeps commit.gpgsign=true setups from
+    // blocking on a key prompt. The commit is empty — no content authorship.
+    let _ = std::process::Command::new("git")
+        .args([
+            "-c", "user.name=Canvas",
+            "-c", "user.email=canvas@localhost",
+            "commit", "--allow-empty", "--no-gpg-sign",
+            "-m", "canvas: initial commit",
+        ])
+        .current_dir(repo_root)
+        .output();
+}
+
 /// Create (or reuse) a git worktree for the agent under
 /// `<repo>/.canvas-worktrees/<agent_id>`.
 fn ensure_worktree(repo_root: &Path, agent_id: &str, branch: &str) -> Result<PathBuf> {
@@ -191,6 +232,7 @@ fn ensure_worktree(repo_root: &Path, agent_id: &str, branch: &str) -> Result<Pat
     if dir.exists() {
         return Ok(dir);
     }
+    ensure_initial_commit(repo_root);
     let status = std::process::Command::new("git")
         .args([
             "worktree",
@@ -776,6 +818,70 @@ mod tests {
         assert!(sanitize_relpath("/tmp").is_err());
         assert!(sanitize_relpath("a/../b").is_err());
         assert!(sanitize_relpath("src/lib").is_ok());
+    }
+
+    fn git_temp_root() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("canvas-agent-test-{}", uuid::Uuid::new_v4().simple()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn git(args: &[&str], cwd: &Path) -> std::process::Output {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .unwrap()
+    }
+
+    fn head_resolves(repo: &Path) -> bool {
+        git(&["rev-parse", "--verify", "HEAD"], repo).status.success()
+    }
+
+    #[test]
+    fn worktree_bootstraps_commitless_repo() {
+        // The first-run ~/Canvas failure: `git init` happened but no commit
+        // exists, so HEAD is unborn and plain `git worktree add … HEAD` dies.
+        let repo = git_temp_root();
+        assert!(git(&["init"], &repo).status.success());
+        assert!(!head_resolves(&repo));
+
+        let wt = ensure_worktree(&repo, "testagent01", "Terminal").unwrap();
+        assert!(wt.exists());
+        assert!(head_resolves(&repo));
+        // Exactly one commit — the empty bootstrap — and the worktree branch
+        // forked off it.
+        let log = git(&["log", "--oneline"], &repo);
+        assert_eq!(String::from_utf8_lossy(&log.stdout).lines().count(), 1);
+        let branch = git(&["rev-parse", "--abbrev-ref", "HEAD"], &wt);
+        assert_eq!(
+            String::from_utf8_lossy(&branch.stdout).trim(),
+            "canvas/Terminal-testagent01"
+        );
+        std::fs::remove_dir_all(&repo).unwrap();
+    }
+
+    #[test]
+    fn bootstrap_does_not_add_commits_to_a_committed_repo() {
+        let repo = git_temp_root();
+        assert!(git(&["init"], &repo).status.success());
+        ensure_initial_commit(&repo);
+        assert!(head_resolves(&repo));
+        // Second run is a no-op — one commit total, not one per spawn.
+        ensure_initial_commit(&repo);
+        let log = git(&["log", "--oneline"], &repo);
+        assert_eq!(String::from_utf8_lossy(&log.stdout).lines().count(), 1);
+        std::fs::remove_dir_all(&repo).unwrap();
+    }
+
+    #[test]
+    fn bootstrap_never_inits_a_plain_directory() {
+        let dir = git_temp_root();
+        ensure_initial_commit(&dir);
+        assert!(!dir.join(".git").exists());
+        // …and the worktree failure still surfaces rather than being hidden.
+        assert!(ensure_worktree(&dir, "testagent02", "Terminal").is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
 

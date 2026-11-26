@@ -57,6 +57,16 @@ export class TauriCanvasClient {
     return false;
   }
 
+  /** A rejected invoke never reaches the control channel — without this the
+   * click appears to do nothing (the commitless-~/Canvas spawn failure was
+   * invisible for exactly this reason). Log for the record, then surface. */
+  private reportFailure(op: string, error: unknown) {
+    console.error(`[tauri] ${op} failed:`, error);
+    const detail =
+      typeof error === "string" ? error : error instanceof Error ? error.message : String(error);
+    this.handlers.onError?.(detail);
+  }
+
   setAgentChain(_workspaceId: string, _chain: string[]) {
     // The desktop shell runs its own embedded agent host, not the canvasd
     // control socket — chain editing is a no-op here until the shell grows
@@ -65,7 +75,7 @@ export class TauriCanvasClient {
 
   spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string, accountId?: string, initialInput?: string) {
     void invoke("spawn_agent", { name, command, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null, boardId: boardId ?? null, accountId: accountId ?? null, initialInput: initialInput ?? null }).catch(
-      console.error,
+      (e) => this.reportFailure("spawn_agent", e),
     );
   }
 
@@ -175,7 +185,7 @@ export class TauriCanvasClient {
 
   delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string, accountId?: string, boardId?: string, initialInput?: string) {
     void invoke("delegate", { from, name, command, task, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null, accountId: accountId ?? null, boardId: boardId ?? null, initialInput: initialInput ?? null }).catch(
-      console.error,
+      (e) => this.reportFailure("delegate", e),
     );
   }
 
