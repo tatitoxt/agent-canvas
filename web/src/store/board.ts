@@ -432,6 +432,7 @@ type BoardState = {
   digest: string | null;
   /** Transient toast — latest info/error line shown bottom-right. */
   notice: string | null;
+  notices: { id: number; text: string }[];
   /** Obsidian-style vault browser state. */
   vaultDir: string;
   vaultEntries: string[];
@@ -521,6 +522,7 @@ type BoardState = {
   artifactCreate: (kind: string, title: string, path?: string, text?: string) => void;
   gitPush: (agentId: string) => void;
   notify: (text: string) => void;
+  dismissNotice: (id: number) => void;
   vaultList: (dir: string) => void;
   repoTree: (dir: string) => void;
   /** Directory the repo explorer opens to — set by per-agent file buttons. */
@@ -754,6 +756,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   memories: {},
   digest: null,
   notice: null,
+  notices: [],
   vaultDir: "",
   vaultEntries: [],
   repoEntries: [],
@@ -1317,7 +1320,7 @@ export const useBoard = create<BoardState>((set, get) => ({
             set({ vaultAssets: { ...get().vaultAssets, [msg.path]: `data:${msg.mime};base64,${msg.data}` } });
             break;
           case "git_pushed": {
-            set({ notice: `pushed — ${msg.output || "done"}` });
+            get().notify(`pushed — ${msg.output || "done"}`);
             break;
           }
           case "artifact_created": {
@@ -1362,7 +1365,7 @@ export const useBoard = create<BoardState>((set, get) => ({
             break;
           }
           case "error":
-            set({ notice: `error — ${msg.message}` });
+            get().notify(`error — ${msg.message}`);
             console.error("[canvasd]", msg.message);
             break;
           default:
@@ -1527,7 +1530,14 @@ export const useBoard = create<BoardState>((set, get) => ({
     if (!client) { get().notify("daemon offline"); return; }
     client.gitPush(agentId);
   },
-  notify: (text) => set({ notice: text }),
+  notify: (text) =>
+    set((s) => ({
+      notice: text,
+      notices: text
+        ? [...s.notices, { id: (s.notices[s.notices.length - 1]?.id ?? 0) + 1, text }].slice(-4)
+        : s.notices,
+    })),
+  dismissNotice: (id) => set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
   vaultList: (dir) => {
     set({ vaultDir: dir });
     try { localStorage.setItem("cv-vault-dir", dir); } catch { /* noop */ }
@@ -2138,7 +2148,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     for (const m of missing) get().spawn(m.name, m.command);
     reposition();
     if (missing.length) setTimeout(reposition, 2500); // once spawned ids land
-    set({ notice: `preset "${name}" applied${missing.length ? ` (+${missing.length} spawned)` : ""}` });
+    get().notify(`preset "${name}" applied${missing.length ? ` (+${missing.length} spawned)` : ""}`);
   },
 
   deletePreset: (name) => {

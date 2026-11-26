@@ -31,6 +31,75 @@ const actionBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 
+/** Visually hidden text — screen readers (and text-based test selectors)
+ * still find it, sighted users see only the icon. */
+const srOnly: React.CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  clipPath: "inset(50%)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
+
+/** Obsidian-style "clickable icon" — a quiet square glyph that only lights
+ * up on hover, never a text pill. The accessible label rides inside as
+ * visually-hidden text so the control still has a real name. */
+function IconBtn({ icon, label, text, onClick, active, size = 14 }: {
+  icon: string;
+  label: string;
+  /** visually-hidden text content — defaults to the label */
+  text?: string;
+  onClick: (e: React.MouseEvent) => void;
+  active?: boolean;
+  size?: number;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      onClick={onClick}
+      className="vp-iconbtn"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 24,
+        height: 22,
+        flexShrink: 0,
+        border: "none",
+        borderRadius: 5,
+        background: active ? "var(--cv-glass-hi)" : "transparent",
+        color: active ? "var(--cv-accent)" : "var(--cv-ink-dim)",
+        cursor: "pointer",
+        padding: 0,
+        position: "relative",
+      }}
+    >
+      <Icon name={icon} size={size} />
+      <span style={srOnly}>{text ?? label}</span>
+    </button>
+  );
+}
+
+/** Scoped explorer CSS — injected once with the panel; keeps hover states
+ * off the inline-style hot path. Row hover is the Obsidian sidebar feel:
+ * a faint ink wash, the active note a soft accent tint. */
+const VAULT_EXPLORER_CSS = `
+.vp-row { transition: background-color 90ms ease; }
+.vp-row:hover { background: color-mix(in srgb, var(--cv-ink) 6%, transparent) !important; }
+.vp-row.vp-active { background: color-mix(in srgb, var(--cv-accent) 13%, transparent) !important; }
+.vp-row.vp-active:hover { background: color-mix(in srgb, var(--cv-accent) 18%, transparent) !important; }
+.vp-iconbtn { transition: background-color 90ms ease, color 90ms ease; }
+.vp-iconbtn:hover { background: var(--cv-glass-hi) !important; color: var(--cv-ink) !important; }
+.vp-caret { transition: transform 110ms ease; display: inline-flex; }
+.vp-menuitem:hover { background: var(--cv-glass-hi) !important; }
+`;
+
 /** Inline markdown → Obsidian-style runs: **bold**, *italic*, `code`,
  * ==highlight==, ~~strike~~, [[wiki links]] (clickable, amber like real
  * Obsidian) and [md](url) links. */
@@ -883,7 +952,7 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
   onContext: (path: string, x: number, y: number) => void;
   depth?: number;
 }) {
-  const pad = 8 + depth * 12;
+  const pad = 4 + depth * 13;
   return (
     <>
       {sortDir(entries).map((d) => {
@@ -892,15 +961,26 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
           <div key={d.path}>
             <button
               onClick={() => toggle(d.path)}
+              className="vp-row"
               style={{
-                display: "flex", alignItems: "center", gap: 4, width: "100%",
+                display: "flex", alignItems: "center", gap: 3, width: "100%",
                 textAlign: "left", border: "none", background: "transparent",
-                color: "var(--cv-ink-dim)", fontSize: 11.5, padding: "4px 8px",
-                paddingLeft: pad, cursor: "pointer", borderRadius: 6, fontWeight: 600,
+                color: "var(--cv-ink-dim)", fontSize: 11.5, padding: "3px 6px",
+                paddingLeft: pad, cursor: "pointer", borderRadius: 5, fontWeight: 600,
               }}
             >
-              <span style={{ fontSize: 8, width: 10, color: "var(--cv-ink-faint)" }}>{isCol ? "▸" : "▾"}</span>
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</span>
+              <span
+                className="vp-caret"
+                style={{
+                  width: 12, justifyContent: "center", flexShrink: 0,
+                  transform: isCol ? "none" : "rotate(90deg)",
+                  color: "var(--cv-ink-faint)",
+                }}
+              >
+                <Icon name="ph-caret" size={8} />
+              </span>
+              <Icon name={isCol ? "ph-folder" : "ph-folder-open"} size={13} color="color-mix(in srgb, var(--cv-accent) 62%, var(--cv-ink-dim))" />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginLeft: 2 }}>{d.name}</span>
             </button>
             {!isCol && (
               <FileTree
@@ -917,18 +997,22 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
           key={e}
           onClick={() => onOpen(e)}
           onContextMenu={(ev) => { ev.preventDefault(); ev.stopPropagation(); onContext(e, ev.clientX, ev.clientY); }}
-          className="vault-file"
+          className={`vault-file vp-row${vaultFile?.path === e ? " vp-active" : ""}`}
           style={{
-            display: "flex", alignItems: "center", width: "100%",
+            display: "flex", alignItems: "center", gap: 4, width: "100%",
             textAlign: "left", border: "none",
-            background: vaultFile?.path === e ? "var(--cv-glass-hi)" : "transparent",
+            background: "transparent",
             color: vaultFile?.path === e ? "var(--cv-ink)" : "var(--cv-ink-dim)",
-            fontSize: 11.5, padding: "4px 8px", paddingLeft: pad + 10,
-            borderRadius: 6, cursor: "pointer",
+            fontSize: 11.5, padding: "3px 6px", paddingLeft: pad + 12,
+            borderRadius: 5, cursor: "pointer",
           }}
         >
-          <span style={{ color: "var(--cv-ink-faint)", marginRight: 6, fontSize: 10 }}>✎</span>
-          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <Icon
+            name="ph-file"
+            size={12}
+            color={vaultFile?.path === e ? "var(--cv-accent)" : "var(--cv-ink-faint)"}
+          />
+          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {e.split("/").pop()!.replace(/\.md$/, "")}
           </span>
           <span className="vault-file-actions" style={{ gap: 2 }}>
@@ -1097,7 +1181,6 @@ export function VaultPanel() {
   const vaultKnown = useBoard((s) => s.vaultKnown);
   const vaultDiscover = useBoard((s) => s.vaultDiscover);
   const vaultRegister = useBoard((s) => s.vaultRegister);
-  const openObsidian = useBoard((s) => s.openObsidian);
   const mdNodeAdd = useBoard((s) => s.mdNodeAdd);
   const vaultWrite = useBoard((s) => s.vaultWrite);
   const vaultDelete = useBoard((s) => s.vaultDelete);
@@ -1105,7 +1188,7 @@ export function VaultPanel() {
   const vaultGraph = useBoard((s) => s.vaultGraph);
   const vaultGraphReq = useBoard((s) => s.vaultGraphReq);
   const notify = useBoard((s) => s.notify);
-  const [dir, setDir] = useState(vaultDir || "/home/ubuntu/repos/agent-canvas");
+  const [dir, setDir] = useState(vaultDir || "");
   const [filter, setFilter] = useState("");
   const activeVault = vaultKnown.find((v) => v.path === vaultDir);
 
@@ -1180,6 +1263,13 @@ export function VaultPanel() {
   }, [vaultText]);
   const [genOpen, setGenOpen] = useState(false);
   const [newNote, setNewNote] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  // Switch-vault setup row — the path input only earns permanent space when
+  // no vault is connected; otherwise it unfolds on demand from the ··· menu.
+  const [switchOpen, setSwitchOpen] = useState(false);
+  // The path input tracks the connected vault so "switch vault" opens with
+  // the current folder pre-filled for editing.
+  useEffect(() => { if (vaultDir) setDir(vaultDir); }, [vaultDir]);
   const [newName, setNewName] = useState("");
   const [armedDel, setArmedDel] = useState<string | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ path: string; x: number; y: number } | null>(null);
