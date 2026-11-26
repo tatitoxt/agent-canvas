@@ -73,6 +73,7 @@
   --cv-working: #34c77b;
   --cv-waiting: #e5a01a;
   --cv-blocked: #e2604a;
+  --cv-danger: var(--cv-blocked);
   --cv-done: #34c77b;
   --cv-idle: #8a8f98;
   --cv-error: rgb(188, 54, 42);
@@ -498,6 +499,7 @@ button.cv-card-close:hover,
   --cv-working: #16a34a;
   --cv-waiting: #d97706;
   --cv-blocked: #dc2626;
+  --cv-danger: var(--cv-blocked);
   --cv-done: #16a34a;
   --cv-idle: #7a756c;
   color-scheme: light;
@@ -516,6 +518,7 @@ button.cv-card-close:hover,
   --cv-working: #3ddc84;
   --cv-waiting: #ffb224;
   --cv-blocked: #ff5d5d;
+  --cv-danger: var(--cv-blocked);
   --cv-done: #34d399;
   --cv-idle: #9aa0a6;
   color-scheme: dark;
@@ -568,6 +571,12 @@ button.cv-card-close:hover,
   box-shadow:
     inset 0 1px 0 var(--cv-glass-shine),
     var(--cv-shadow-popover);
+}
+.cv-menu button {
+  transition: background var(--cv-motion-fast) var(--cv-ease-out);
+}
+.cv-menu button:hover {
+  background: var(--cv-glass-hi) !important;
 }
 .cv-menu-scroll {
   scrollbar-width: thin;

@@ -257,7 +257,7 @@ export function SpawnBar() {
                   fontWeight: 700,
                   fontSize: 11.5,
                   cursor: "pointer",
-                  boxShadow: "0 0 14px rgba(245,165,36,0.35)",
+                  boxShadow: "0 0 0 1px color-mix(in srgb, var(--cv-accent) 30%, transparent)",
                   opacity: canSpawn ? 1 : 0.45,
                 }}
                 disabled={!canSpawn}

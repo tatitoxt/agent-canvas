@@ -115,7 +115,7 @@ export function TermHost({ agentId }: { agentId: string }) {
     const oscReplies: Record<number, string> = {
       10: "10;rgb:eeee/f1f1/f5f5",
       11: "11;rgb:0a0a/0b0b/0e0e",
-      12: "12;rgb:ffff/7a7a/5c5c",
+      12: "12;rgb:f5f5/a5a5/2424",
     };
     const oscHandlers = Object.entries(oscReplies).map(([ps, answer]) =>
       term.parser.registerOscHandler(Number(ps), (data) => {

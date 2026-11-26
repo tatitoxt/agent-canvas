@@ -42,7 +42,7 @@ export function PaneMenu({ x, y, onClose }: { x: number; y: number; onClose: () 
   return (
     <div
       ref={ref}
-      className="glass"
+      className="cv-menu"
       style={{
         position: "fixed",
         left: Math.min(x, window.innerWidth - 200),
