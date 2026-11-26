@@ -9,7 +9,7 @@ import { useBoard } from "../store/board";
  * canvas terminal card (TermNode): mounts the emulator, replays the
  * scrollback buffer, pipes PTY bytes both ways, answers OSC color
  * queries, and keeps the PTY size in sync with the box. */
-const DECOR = { matchBackground: "#7a5a1e", matchOverviewRuler: "#e8b25a", activeMatchBackground: "#e8b25a", activeMatchColorOverviewRuler: "#ffffff" };
+const DECOR = { matchBackground: "#6f362b", matchOverviewRuler: "#ff7a5c", activeMatchBackground: "#ff7a5c", activeMatchColorOverviewRuler: "#ffffff" };
 
 
 /** tmux-style grouped clients: several TermHosts can mirror the same PTY
@@ -66,12 +66,12 @@ export function TermHost({ agentId }: { agentId: string }) {
   useEffect(() => {
     const term = new Terminal({
       fontSize: useBoard.getState().termFont,
-      fontFamily: "\"IBM Plex Mono\", ui-monospace, Menlo, monospace",
+      fontFamily: "\"Hack\", \"JetBrains Mono\", \"SF Mono\", Menlo, Consolas, \"IBM Plex Mono\", ui-monospace, monospace",
       theme: {
-        background: "#121214",
-        foreground: "#eceae6",
-        cursor: "#f5a524",
-        selectionBackground: "rgba(255,255,255,0.12)",
+        background: "#0a0b0e",
+        foreground: "#eef1f5",
+        cursor: "#ff7a5c",
+        selectionBackground: "rgba(255,122,92,0.4)",
       },
       convertEol: true,
     });
@@ -113,9 +113,9 @@ export function TermHost({ agentId }: { agentId: string }) {
     const reply = (text: string) =>
       sendInput(agentId, new TextEncoder().encode(`\x1b]${text}\x07`));
     const oscReplies: Record<number, string> = {
-      10: "10;rgb:ecec/eaea/e6e6",
-      11: "11;rgb:1212/1212/1414",
-      12: "12;rgb:c9c9/a2a2/6b6b",
+      10: "10;rgb:eeee/f1f1/f5f5",
+      11: "11;rgb:0a0a/0b0b/0e0e",
+      12: "12;rgb:ffff/7a7a/5c5c",
     };
     const oscHandlers = Object.entries(oscReplies).map(([ps, answer]) =>
       term.parser.registerOscHandler(Number(ps), (data) => {

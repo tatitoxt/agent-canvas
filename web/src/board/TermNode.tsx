@@ -13,7 +13,7 @@ const ANSI = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[\[\]()#;?]*[0-9;]*[ -\/]*[@
 
 /** A live terminal popped out of the bottom drawer onto the canvas —
  * a real card: movable, resizable, collapsible, closable (Deska window). */
-export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
+export const TermNode = memo(function TermNode({ id, selected, width }: NodeProps) {
   const rf = useReactFlow();
   const n = useBoard((s) => s.termNodes[s.activeBoard]?.[id]);
   const agentId = id.slice(5); // term-<agentId>
@@ -24,25 +24,24 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
   const cli = (agent?.command ?? "bash").split(/\s+/)[0].toLowerCase();
   const meta = cliMeta(cli);
   const statusColor = STATUS_COLOR[status];
+  const cardWidth = typeof width === "number" && width >= 300 ? width : 560;
+  const tightHeader = cardWidth < 350;
   return (
     <div
-      className="glass"
+      className="glass-panel"
       style={{
         position: "relative",
         width: "100%",
         height: "100%",
-        borderRadius: 14,
+        borderRadius: 12,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
-        background: "color-mix(in srgb, var(--cv-base) 94%, #0d0e10)",
+        background: "var(--cv-panel-bg)",
         border: "1px solid var(--cv-glass-edge)",
-        boxShadow: selected
-          ? "0 0 0 1.5px color-mix(in srgb, var(--cv-accent) 55%, transparent), var(--cv-shadow)"
-          : "var(--cv-shadow)",
+        boxShadow: "var(--cv-card-shadow)",
       }}
     >
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: meta.color, opacity: 0.85, pointerEvents: "none", zIndex: 1 }} />
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
       <NodeResizer
         isVisible={selected}
@@ -58,8 +57,8 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 7,
-          padding: "6px 8px 6px 11px",
+          gap: tightHeader ? 5 : 7,
+          padding: tightHeader ? "6px 7px 6px 9px" : "6px 8px 6px 11px",
           borderBottom: "1px solid var(--cv-glass-edge)",
           flexShrink: 0,
           cursor: "grab",
@@ -74,8 +73,9 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
             width: 18,
             height: 18,
             borderRadius: 5,
-            border: "1px solid rgba(120,150,190,0.45)",
-            color: "#7cb9ff",
+            border: "1px solid color-mix(in srgb, #5b9dff 25%, transparent)",
+            background: "color-mix(in srgb, #5b9dff 12%, transparent)",
+            color: "#5b9dff",
             fontSize: 10,
             flex: "none",
           }}
@@ -87,10 +87,13 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
           title="Locate the agent card"
           onClick={() => useBoard.getState().requestFocus(agentId)}
           style={{
-            fontSize: 11,
-            fontWeight: 650,
-            color: "var(--cv-ink)",
+            fontSize: "var(--cv-text-sm)",
+            fontWeight: 600,
+            color: "var(--cv-text-main)",
             whiteSpace: "nowrap",
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
             border: "none",
             background: "transparent",
             padding: 0,
@@ -104,7 +107,7 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
             display: "inline-flex",
             alignItems: "center",
             gap: 4,
-            fontSize: 10,
+            fontSize: "var(--cv-text-sm)",
             fontWeight: 600,
             color: statusColor,
             whiteSpace: "nowrap",
@@ -118,16 +121,23 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
             display: "inline-flex",
             alignItems: "center",
             gap: 4,
-            fontSize: 10.5,
+            fontSize: "var(--cv-text-xs)",
             fontWeight: 600,
-            color: "var(--cv-ink-dim)",
+            lineHeight: 1,
+            color: meta.color,
             whiteSpace: "nowrap",
+            padding: tightHeader ? "2.5px 4px" : "2.5px 7px 2.5px 5px",
+            borderRadius: 999,
+            background: `color-mix(in srgb, ${meta.color} 12%, transparent)`,
+            boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${meta.color} 25%, transparent)`,
           }}
         >
           <CliMark cli={cli} color={meta.color} size={11} />
-          {meta.label}
+          {!tightHeader && meta.label}
         </span>
         <span style={{ flex: 1 }} />
+        <span className="cv-card-chrome" style={{ display: "inline-flex", alignItems: "center", gap: tightHeader ? 4 : 6 }}>
+        {!tightHeader && (
         <button
           className="nodrag"
           title="Files — open this agent's worktree in the repo explorer"
@@ -148,6 +158,8 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
         >
           ⌸
         </button>
+        )}
+        {!tightHeader && (
         <button
           className="nodrag"
           title="Copy transcript to clipboard"
@@ -173,6 +185,7 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
         >
           ⧉
         </button>
+        )}
         <button
           className="nodrag"
           title={n.maximized ? "Restore terminal card size" : "Maximize terminal card"}
@@ -201,7 +214,7 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
             placeItems: "center",
           }}
         >
-          <Icon name={n.maximized ? "ph-restore" : "ph-max"} size={12} color="var(--cv-ink)" />
+          <Icon name={n.maximized ? "ph-restore" : "ph-max"} size={12} />
         </button>
         <button
           className="nodrag"
@@ -226,7 +239,7 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
           {n.collapsed ? "▸" : "−"}
         </button>
         <button
-          className="nodrag"
+          className="nodrag cv-card-close"
           title="Put back — card closes, terminal returns to the drawer"
           aria-label="Put terminal back in drawer"
           onPointerDown={(e) => e.stopPropagation()}
@@ -251,6 +264,7 @@ export const TermNode = memo(function TermNode({ id, selected }: NodeProps) {
         >
           ×
         </button>
+        </span>
       </div>
       {!n.collapsed && (
         <div className="nodrag nowheel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>

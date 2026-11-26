@@ -1323,14 +1323,14 @@ function Board() {
           nodeStrokeWidth={1}
           nodeColor={(n) => {
             const data = n.data as Partial<BoardNodeData>;
-            if (data.kind === "orchestrator") return "#f5a524";
+            if (data.kind === "orchestrator") return "#ff7a5c";
             if (data.kind === "workspace") return "#1d1d20";
             if (data.kind === "agent" && data.status) {
               const map: Record<AgentStatus, string> = {
                 working: "#34c77b",
-                waiting: "#f5b83d",
-                blocked: "#e0695f",
-                done: "#54c48e",
+                waiting: "#e5a01a",
+                blocked: "#e2604a",
+                done: "#34c77b",
                 idle: "#55565c",
               };
               return map[data.status] ?? "#33333a";

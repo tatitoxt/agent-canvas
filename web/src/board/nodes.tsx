@@ -28,31 +28,30 @@ export const STATUS_LABEL: Record<AgentStatus, string> = {
   idle: "idle",
 };
 
-/** Official CLI identities — each keeps its brand accent (muted, never
- * neon) the way Deska colors a terminal's title and logo: Claude's clay,
- * OpenAI's green, Google's blue, Cursor's violet. */
+/** CLI identities use Deska's extracted provider tints. On cards the tint
+ * is confined to the terminal icon and agent badge — never the card chrome. */
 const CLI_META: Record<string, { mark: string; label: string; color: string }> = {
-  "claude-code": { mark: "◆", label: "Claude Code", color: "#ee7d53" },
-  claude: { mark: "◆", label: "Claude Code", color: "#ee7d53" },
-  codex: { mark: "◈", label: "Codex", color: "#35d68f" },
-  "gemini-cli": { mark: "✦", label: "Gemini CLI", color: "#4f9bf0" },
-  gemini: { mark: "✦", label: "Gemini CLI", color: "#4f9bf0" },
-  aider: { mark: "▣", label: "Aider", color: "#d4a072" },
-  cursor: { mark: "◐", label: "Cursor", color: "#a78bfa" },
-  "cursor-agent": { mark: "◐", label: "Cursor", color: "#a78bfa" },
-  opencode: { mark: "❖", label: "OpenCode", color: "#b794f4" },
-  amp: { mark: "▲", label: "Amp", color: "#ff8c5a" },
-  droid: { mark: "⬡", label: "Droid", color: "#9ccc65" },
-  goose: { mark: "◈", label: "Goose", color: "#4f9bf0" },
-  kilocode: { mark: "◈", label: "Kilocode", color: "#60a5fa" },
-  qwen: { mark: "✧", label: "Qwen Code", color: "#a855f7" },
-  hermes: { mark: "◧", label: "Hermes", color: "#f0b429" },
-  kimi: { mark: "◻", label: "Kimi Code", color: "#38bdf8" },
-  vibe: { mark: "▦", label: "Mistral Vibe", color: "#ff7a1a" },
-  pi: { mark: "▶", label: "Pi", color: "#fbbf24" },
-  antigravity: { mark: "▲", label: "Antigravity", color: "#ff7043" },
-  bash: { mark: "›_", label: "Terminal", color: "#8fb8ff" },
-  live: { mark: "›_", label: "Terminal", color: "#8fb8ff" },
+  "claude-code": { mark: "◆", label: "Claude Code", color: "#ff7a5c" },
+  claude: { mark: "◆", label: "Claude Code", color: "#ff7a5c" },
+  codex: { mark: "◈", label: "Codex", color: "#3dd68c" },
+  "gemini-cli": { mark: "✦", label: "Gemini CLI", color: "#4796e3" },
+  gemini: { mark: "✦", label: "Gemini CLI", color: "#4796e3" },
+  aider: { mark: "▣", label: "Aider", color: "#f6b73c" },
+  cursor: { mark: "◐", label: "Cursor", color: "#b48cff" },
+  "cursor-agent": { mark: "◐", label: "Cursor", color: "#b48cff" },
+  opencode: { mark: "❖", label: "OpenCode", color: "#34c77b" },
+  amp: { mark: "▲", label: "Amp", color: "#5b9dff" },
+  droid: { mark: "⬡", label: "Droid", color: "#a6e22e" },
+  goose: { mark: "◈", label: "Goose", color: "#9d7cff" },
+  kilocode: { mark: "◈", label: "Kilocode", color: "#f6b73c" },
+  qwen: { mark: "✧", label: "Qwen Code", color: "#b48cff" },
+  hermes: { mark: "◧", label: "Hermes", color: "#ff7a5c" },
+  kimi: { mark: "◻", label: "Kimi Code", color: "#5fd9c4" },
+  vibe: { mark: "▦", label: "Mistral Vibe", color: "#ff8a3d" },
+  pi: { mark: "▶", label: "Pi", color: "#e5c07b" },
+  antigravity: { mark: "▲", label: "Antigravity", color: "#5b9dff" },
+  bash: { mark: "›_", label: "Terminal", color: "#5b9dff" },
+  live: { mark: "›_", label: "Terminal", color: "#5b9dff" },
 };
 
 const PERMISSION_LABEL: Record<string, string> = {
@@ -63,7 +62,7 @@ const PERMISSION_LABEL: Record<string, string> = {
 };
 
 export function cliMeta(cli: string) {
-  return CLI_META[cli.toLowerCase()] ?? { mark: "▢", label: cli, color: "#9a968e" };
+  return CLI_META[cli.toLowerCase()] ?? { mark: "▢", label: cli, color: "#eef1f5" };
 }
 
 const ANSI_RE = /\u001b\[[0-9;?><=!$]*[a-zA-Z@]|\u001b\][^\u0007]*(?:\u0007|\u001b\\)|\u001b[()][0-9A-B]|\u001b[=>#]?[0-9]*.?/g;
@@ -110,8 +109,8 @@ function MiniTerm({ agentId }: { agentId: string }) {
         marginTop: 10,
         padding: "8px 10px",
         borderRadius: 8,
-        background: "color-mix(in srgb, var(--cv-base) 72%, transparent)",
-        border: "1px solid var(--cv-glass-edge)",
+        background: "var(--cv-surface-1)",
+        border: "1px solid var(--cv-hairline)",
         fontFamily: "var(--cv-font-mono)",
         fontSize: 10.5,
         lineHeight: 1.65,
@@ -182,19 +181,18 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
   const termNo = data.termNo ?? (roleMatch ? Number(roleMatch[2]) : undefined);
   const termTitle = termNo != null ? `Terminal ${termNo}` : data.name;
   const roleLabel = termNo != null ? (roleMatch ? roleMatch[1] : data.name) : undefined;
-  // Deska's rule: state never recolors the card. Border stays a neutral
-  // hairline — the ONLY colored outline is amber when the agent is wired
-  // to the orchestrator (Fausto's vision: "outline naranja cuando habla
-  // con Dex"). State lives in the bars glyph + label inside the header.
+  // Fausto's board language: state keeps a light colored outline, while the
+  // CLI identity is carried only by the small icon and tinted badge. State
+  // also lives in the bars glyph + label inside the header.
   const wired = data.delegating;
   const live = data.status === "working" || data.status === "waiting" || data.status === "blocked";
   const border = live
     ? `1.5px solid color-mix(in srgb, ${statusColor} ${data.status === "working" ? 85 : 95}%, transparent)`
     : `1px solid color-mix(in srgb, ${statusColor} 35%, transparent)`;
   const glow = data.status === "waiting" || data.status === "blocked"
-    ? `0 0 18px color-mix(in srgb, ${statusColor} 25%, transparent), 0 18px 44px rgba(0,0,0,0.5)`
+    ? `0 0 18px color-mix(in srgb, ${statusColor} 25%, transparent), var(--cv-card-shadow)`
     : wired
-      ? "0 0 18px color-mix(in srgb, var(--cv-accent) 22%, transparent), 0 18px 44px rgba(0,0,0,0.5)"
+      ? "0 0 18px color-mix(in srgb, var(--cv-accent) 22%, transparent), var(--cv-card-shadow)"
       : undefined;
   // The header is a single-line titlebar at every card size. As the card
   // approaches its 320px minimum, secondary metadata drops before the state
@@ -211,7 +209,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
     // Deska's collapsed terminal — glyph tile + number in a small pill.
     return (
       <div
-        className="glass"
+        className="glass-panel"
         onClick={() => setCollapsed(false)}
         title={`${data.name} — click to expand`}
         style={{
@@ -219,7 +217,8 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
           alignItems: "center",
           gap: 8,
           padding: "7px 14px 7px 9px",
-          background: "color-mix(in srgb, var(--cv-base) 68%, transparent)",
+          background: "var(--cv-panel-bg)",
+          borderRadius: 999,
           border,
           cursor: "pointer",
           fontSize: 12.5,
@@ -253,7 +252,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
   }
   return (
     <div
-      className={`glass agent-card ${live && !selected ? "card-ring" : ""} ${data.status === "waiting" ? "node-waiting" : ""}`}
+      className={`glass-panel agent-card ${live && !selected ? "card-ring" : ""} ${data.status === "waiting" ? "node-waiting" : ""}`}
       style={{
         position: "relative",
         width: cardWidth,
@@ -264,15 +263,16 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
         minHeight: 0,
         padding: 0,
         // Fausto's spec: a light trail orbits the border in the state color
-        // (card-ring reads --cv-ring). Selection is a DIFFERENT outline —
-        // solid amber, independent of state.
+        // (card-ring reads --cv-ring). Selection is a DIFFERENT accent outline,
+        // independent of state.
         ["--cv-ring" as never]: live ? `color-mix(in srgb, ${statusColor} 90%, white 10%)` : undefined,
-        outline: selected ? "2px solid var(--cv-accent)" : undefined,
-        outlineOffset: selected ? 2 : undefined,
-        border: selected ? "1.5px solid var(--cv-accent)" : border,
-        // Deska's card is near-opaque glass — the dot canvas barely bleeds.
-        background: "color-mix(in srgb, var(--cv-base) 64%, transparent)",
-        boxShadow: glow ?? "0 18px 44px rgba(0,0,0,0.5), inset 0 1px 0 var(--cv-glass-shine)",
+        // Selection owns the outline completely: the state border/orbit steps
+        // aside while React Flow draws the single accent ring on the wrapper.
+        border: selected ? "1px solid var(--cv-hairline)" : border,
+        borderRadius: 12,
+        // Deska's card is a near-opaque panel shell over the dark canvas.
+        background: "var(--cv-panel-bg)",
+        boxShadow: glow ?? "var(--cv-card-shadow)",
         cursor: "pointer",
       }}
     >
@@ -329,13 +329,13 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
         >
           <div
             data-testid="agent-card-title"
-            style={{ fontSize: 13.5, fontWeight: 650, letterSpacing: -0.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, color: "var(--cv-ink)" }}
+            style={{ fontSize: "var(--cv-text-sm)", fontWeight: 600, letterSpacing: -0.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, color: "var(--cv-text-main)" }}
             title={data.name}
           >
             {termTitle}
           </div>
-          {roleLabel && (
-            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--cv-ink-faint)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 110, minWidth: 22, flex: "0 3 auto" }} title={data.name}>
+          {roleLabel && !compactHeader && (
+            <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 400, color: "var(--cv-ink-faint)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 110, minWidth: 22, flex: "0 3 auto" }} title={data.name}>
               {roleLabel}
             </span>
           )}
@@ -346,7 +346,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
         >
           <span
             data-testid="agent-card-status"
-            style={{ display: "inline-flex", alignItems: "center", gap: 5, flex: "none", fontSize: 11, fontWeight: 650, color: statusColor, whiteSpace: "nowrap" }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, flex: "none", fontSize: "var(--cv-text-sm)", fontWeight: 600, color: statusColor, whiteSpace: "nowrap" }}
           >
             <StatusBars color={statusColor} />
             {STATUS_LABEL[data.status]}
@@ -358,16 +358,33 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
           )}
           <span
             data-testid="agent-card-cli"
-            style={{ display: "inline-flex", alignItems: "center", gap: 5.5, marginLeft: "auto", minWidth: 0, flex: "0 1 auto", overflow: "hidden", fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              marginLeft: "auto",
+              minWidth: 0,
+              flex: "0 1 auto",
+              overflow: "hidden",
+              fontSize: "var(--cv-text-xs)",
+              fontWeight: 600,
+              lineHeight: 1,
+              whiteSpace: "nowrap",
+              padding: tightHeader ? "2.5px 4px" : "2.5px 7px 2.5px 5px",
+              borderRadius: 999,
+              color: meta.color,
+              background: `color-mix(in srgb, ${meta.color} 12%, transparent)`,
+              boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${meta.color} 25%, transparent)`,
+            }}
             title={meta.label}
           >
-            <CliMark cli={data.cli} color={meta.color} size={12} />
-            <span style={{ color: meta.color, overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{meta.label}</span>
+            <CliMark cli={data.cli} color={meta.color} size={11} />
+            {!tightHeader && <span style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{meta.label}</span>}
           </span>
         </div>
         <span
           className="nodrag card-chrome"
-          style={{ display: "inline-flex", alignItems: "center", gap: tightHeader ? 7 : 8, flex: "none", color: "var(--cv-ink)", fontSize: 12, opacity: selected ? 1 : undefined }}
+          style={{ display: "inline-flex", alignItems: "center", gap: tightHeader ? 6 : 7, flex: "none", color: "var(--cv-ink-dim)", fontSize: 12 }}
         >
           <button
             type="button"
@@ -384,7 +401,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
             }}
             onClick={(e) => { e.stopPropagation(); launchTerminal(); }}
           >
-            <Icon name="terminal" size={13} color="var(--cv-ink)" />
+            <Icon name="terminal" size={12} />
           </button>
           <button
             type="button"
@@ -395,18 +412,19 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
             onKeyDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }}
           >
-            <Icon name="ph-min" size={12} color="var(--cv-ink)" />
+            <Icon name="ph-min" size={12} />
           </button>
           <button
             type="button"
             className="nodrag"
             title="kill"
-            style={{ cursor: "pointer", lineHeight: 1, fontSize: 13, border: "none", padding: 0, background: "transparent" }}
+            data-danger="true"
+            style={{ cursor: "pointer", lineHeight: 1, fontSize: 12, border: "none", padding: 0, background: "transparent" }}
             onPointerDown={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); if (data.id) useBoard.getState().kill(data.id); }}
           >
-            <Icon name="ph-x" size={13} color="var(--cv-ink)" />
+            <Icon name="ph-x" size={12} />
           </button>
         </span>
       </div>
@@ -480,7 +498,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
             gap: 9,
             marginTop: 10,
             paddingTop: 9,
-            borderTop: "1px solid rgba(255,255,255,0.06)",
+            borderTop: "1px solid var(--cv-hairline)",
           }}
         >
           <span style={{ flex: "none", fontSize: 11.5, fontWeight: 700, color: "var(--cv-accent)" }}>Task</span>
@@ -490,7 +508,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
               minWidth: 0,
               fontSize: 14,
               lineHeight: 1.45,
-              color: "var(--cv-ink)",
+              color: "var(--cv-text-main)",
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",
@@ -526,9 +544,9 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
             gap: 6,
             marginTop: 9,
             padding: 5,
-            borderRadius: 9,
-            border: "1px solid var(--cv-glass-edge)",
-            background: "color-mix(in srgb, var(--cv-base) 76%, transparent)",
+            borderRadius: 8,
+            border: "1px solid var(--cv-hairline)",
+            background: "var(--cv-surface-1)",
           }}
         >
           <textarea
@@ -563,7 +581,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
               border: 0,
               outline: 0,
               padding: "6px 7px",
-              color: "var(--cv-ink)",
+              color: "var(--cv-text-main)",
               background: "transparent",
               font: "inherit",
               fontSize: 11.5,
@@ -602,7 +620,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
           style={{
             marginTop: 10,
             paddingTop: 9,
-            borderTop: "1px solid rgba(255,255,255,0.06)",
+            borderTop: "1px solid var(--cv-hairline)",
           }}
         >
           <div
@@ -667,7 +685,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
           gap: 8,
           marginTop: 9,
           paddingTop: 8,
-          borderTop: "1px solid rgba(255,255,255,0.06)",
+          borderTop: "1px solid var(--cv-hairline)",
           fontSize: 10,
           color: "var(--cv-ink-faint)",
         }}
@@ -808,15 +826,15 @@ export function OrchestratorNode({
 
   return (
     <div
-      className="glass"
+      className="glass-panel"
       style={{
         width: 292,
         padding: 0,
         overflow: "hidden",
         borderColor: wiring ? "var(--cv-accent)" : "var(--cv-glass-edge)",
         boxShadow: wiring
-          ? "0 0 0 1px var(--cv-accent), 0 0 18px color-mix(in srgb, var(--cv-accent) 18%, transparent)"
-          : "0 14px 36px rgba(0,0,0,0.34)",
+          ? "0 0 0 1px var(--cv-accent), 0 0 18px color-mix(in srgb, var(--cv-accent) 18%, transparent), var(--cv-card-shadow)"
+          : "var(--cv-card-shadow)",
       }}
     >
       <Handle type="target" position={Position.Left} />
@@ -840,7 +858,7 @@ export function OrchestratorNode({
             background: "var(--cv-accent)",
             display: "grid",
             placeItems: "center",
-            color: "#14110d",
+            color: "var(--cv-accent-ink)",
             flexShrink: 0,
           }}
         >
@@ -849,9 +867,9 @@ export function OrchestratorNode({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
-              fontSize: 13.5,
-              fontWeight: 700,
-              color: "var(--cv-ink)",
+              fontSize: 13,
+              fontWeight: 600,
+              color: "var(--cv-text-main)",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -928,7 +946,7 @@ export function OrchestratorNode({
                     borderRadius: 999,
                     padding: "2.5px 8px 2.5px 5px",
                     fontSize: 9.5,
-                    color: "var(--cv-ink)",
+                    color: "var(--cv-text-main)",
                     fontWeight: 600,
                     cursor: "pointer",
                   }}
@@ -960,10 +978,10 @@ export function OrchestratorNode({
             }
             style={{
               flex: 1,
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: "var(--cv-surface-1)",
+              border: "1px solid var(--cv-hairline)",
               borderRadius: 8,
-              color: "var(--cv-ink)",
+              color: "var(--cv-text-main)",
               fontSize: 11,
               padding: "6px 9px",
               outline: "none",
@@ -1094,8 +1112,8 @@ export function WorkspaceNode({
         width: "100%",
         height: "100%",
         borderRadius: 14,
-        border: `1px solid ${selected ? "var(--cv-glass-shine)" : "rgba(255,255,255,0.07)"}`,
-        background: "rgba(255,255,255,0.018)",
+        border: `1px solid ${selected ? "var(--cv-hairline-strong)" : "var(--cv-hairline)"}`,
+        background: "color-mix(in srgb, var(--cv-ink) 2%, transparent)",
         position: "relative",
       }}
     >
@@ -1147,15 +1165,15 @@ export function WebNode({
   const resizeWebNode = useBoard((s) => s.resizeWebNode);
   return (
     <div
-      className="glass"
+      className="glass-panel"
       style={{
         width: "100%",
         height: "100%",
-        borderRadius: 14,
+        borderRadius: 12,
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
-        outline: selected ? "1.5px solid rgba(232,178,90,.9)" : "none",
+        boxShadow: "var(--cv-card-shadow)",
       }}
     >
       <NodeResizer
@@ -1176,26 +1194,25 @@ export function WebNode({
           fontSize: 11,
           letterSpacing: "0.01em",
           color: "var(--cv-ink-dim)",
-          borderBottom: "1px solid var(--cv-glass-edge)",
-          background: "rgba(255,255,255,0.025)",
+          borderBottom: "1px solid var(--cv-hairline)",
+          background: "var(--cv-surface-1)",
           flexShrink: 0,
         }}
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7ba3cf" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5fd9c4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
           <circle cx="12" cy="12" r="10" />
           <path d="M2 12h20" />
           <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
         </svg>
-        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--cv-ink)" }}>
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--cv-text-main)" }}>
           {data.url}
         </span>
         <span
+          className="cv-card-chrome"
           style={{
             display: "flex",
-            gap: 2,
-            opacity: selected ? 1 : 0,
-            pointerEvents: selected ? "auto" : "none",
-            transition: "opacity 160ms ease",
+            alignItems: "center",
+            gap: 6,
           }}
         >
           <button
@@ -1209,6 +1226,7 @@ export function WebNode({
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); webNodeRemove(id); }}
+            className="cv-card-close"
             style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", padding: 3, borderRadius: 6, display: "flex" }}
             title="close"
           >

@@ -13,55 +13,107 @@
    ============================================================ */
 
 :root {
-  /* base — dark warm neutral, alive (dot grid), not dead flat
-     (Deska dark-warm is #0a0b0e; ours stays a hair warmer) */
-  --cv-base: #0e0e10;
-  --cv-dot: rgba(255, 255, 255, 0.045);
+  /* Deska dark theme, extracted from the real app over CDP. */
+  --cv-base: #0a0b0e;
+  --cv-bg: var(--cv-base);
+  --cv-dot: rgba(255, 255, 255, 0.05);
 
-  /* ink — warm whites */
-  --cv-ink: #eceae6;
-  --cv-ink-dim: color-mix(in srgb, var(--cv-ink) 62%, transparent);
+  /* ink — Deska foreground #eef1f5 and its exact opacity steps */
+  --cv-ink: #eef1f5;
+  --cv-ink-dim: color-mix(in srgb, var(--cv-ink) 60%, transparent);
   --cv-ink-faint: color-mix(in srgb, var(--cv-ink) 40%, transparent);
+  --cv-ink-disabled: color-mix(in srgb, var(--cv-ink) 20%, transparent);
+  --cv-text-main: color-mix(in srgb, var(--cv-ink) 90%, transparent);
 
-  /* glass surfaces — color-mix steps of ink over base (Deska's
-     surface model: fg% mixed onto bg, themable from two tokens) */
-  --cv-glass: color-mix(in srgb, var(--cv-ink) 5%, var(--cv-base));
-  --cv-glass-hi: color-mix(in srgb, var(--cv-ink) 9%, var(--cv-base));
-  --cv-glass-edge: color-mix(in srgb, var(--cv-ink) 12%, transparent);
-  --cv-glass-shine: color-mix(in srgb, var(--cv-ink) 15%, transparent);
-  --cv-blur: 14px;
-  --cv-shadow-card: 0 12px 32px rgba(0, 0, 0, 0.35);
-  --cv-shadow-pill: 0 8px 24px rgba(0, 0, 0, 0.3);
-  --cv-shadow-popover: 0 18px 48px rgba(0, 0, 0, 0.55);
-  --cv-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.35);
+  /* Deska surface model — foreground percentages mixed onto background.
+     Cards use the nearly-opaque panel shell; floating clusters/popovers use
+     progressively lighter glass. */
+  --cv-surface-1: color-mix(in srgb, var(--cv-ink) 5%, var(--cv-base));
+  --cv-surface-2: color-mix(in srgb, var(--cv-ink) 10%, var(--cv-base));
+  --cv-surface-3: color-mix(in srgb, var(--cv-ink) 15%, var(--cv-base));
+  --cv-surface-4: color-mix(in srgb, var(--cv-ink) 20%, var(--cv-base));
+  --cv-glass: color-mix(in srgb, color-mix(in srgb, var(--cv-ink) 4%, var(--cv-base)) 85%, transparent);
+  --cv-glass-header: color-mix(in srgb, color-mix(in srgb, var(--cv-ink) 5%, var(--cv-base)) 94%, transparent);
+  --cv-glass-popover: color-mix(in srgb, color-mix(in srgb, var(--cv-ink) 6%, var(--cv-base)) 97%, transparent);
+  --cv-panel-bg: color-mix(in srgb, color-mix(in srgb, var(--cv-ink) 2%, var(--cv-base)) 97%, transparent);
+  --cv-glass-hi: var(--cv-surface-2);
+  --cv-hairline: color-mix(in srgb, var(--cv-ink) 6%, transparent);
+  --cv-hairline-strong: color-mix(in srgb, var(--cv-ink) 11%, transparent);
+  --cv-glass-edge: var(--cv-hairline);
+  --cv-glass-shine: color-mix(in srgb, var(--cv-ink) 6%, transparent);
+
+  /* Deska glass tiers — cluster 16px, popover 18px, topbar 24px + saturation. */
+  --cv-blur-cluster: 16px;
+  --cv-blur-popover: 18px;
+  --cv-blur-topbar: 24px;
+  --cv-blur: var(--cv-blur-cluster);
+
+  /* Deska shadow scale. Canvas cards use the cluster elevation rather than
+     the old cinematic 44px bloom. */
+  --cv-shadow-card: 0 10px 28px rgba(0, 0, 0, 0.4);
+  --cv-shadow-pill: 0 10px 28px rgba(0, 0, 0, 0.4);
+  --cv-shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --cv-shadow-overlay: 0 20px 48px rgba(0, 0, 0, 0.55);
+  --cv-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --cv-card-shadow: inset 0 1px 0 var(--cv-glass-shine), var(--cv-shadow-card);
+  --cv-shadow: var(--cv-card-shadow);
   --cv-vignette: rgba(0, 0, 0, 0.16);
-  --cv-control-divider: rgba(255, 255, 255, 0.06);
-  --cv-minimap-mask: rgba(14, 14, 16, 0.55);
-  --cv-minimap-node-stroke: rgba(255, 255, 255, 0.25);
+  --cv-control-divider: color-mix(in srgb, var(--cv-ink) 6%, transparent);
+  --cv-minimap-mask: rgba(10, 11, 14, 0.55);
+  --cv-minimap-node-stroke: color-mix(in srgb, var(--cv-ink) 25%, transparent);
 
-  /* one accent — warm amber, used with meaning only (CTAs, wiring) */
-  --cv-accent: #f5a524;
-  --cv-accent-dim: rgba(245, 165, 36, 0.16);
-
-  /* statuses — Deska as Fausto observed it: working is ORANGE, needs-you
-     amber, blocked salmon, done a calm green, idle neutral grey. State
-     lives in the small glyph + label — never recolors the whole card. */
+  /* Deska accent and state palette. */
+  --cv-accent: #ff7a5c;
+  --cv-accent-ink: var(--cv-base);
+  --cv-accent-dim: color-mix(in srgb, var(--cv-accent) 16%, transparent);
+  --cv-accent-overlay-1: color-mix(in srgb, var(--cv-accent) 10%, transparent);
+  --cv-accent-overlay-2: color-mix(in srgb, var(--cv-accent) 25%, transparent);
+  --cv-accent-overlay-3: color-mix(in srgb, var(--cv-accent) 40%, transparent);
+  --cv-accent-overlay-4: color-mix(in srgb, var(--cv-accent) 60%, transparent);
   --cv-working: #34c77b;
-  --cv-waiting: #f5b83d;
-  --cv-blocked: #e0695f;
-  --cv-done: #54c48e;
+  --cv-waiting: #e5a01a;
+  --cv-blocked: #e2604a;
+  --cv-done: #34c77b;
   --cv-idle: #8a8f98;
+  --cv-error: rgb(188, 54, 42);
+  --cv-error-overlay: rgba(188, 54, 42, 0.1);
 
-  /* permission/identity secondary — Deska's "accept edits on" violet */
-  --cv-perm: #b39dff;
+  /* permission/identity secondary — Deska's editor violet */
+  --cv-perm: #b48cff;
 
-  /* radii — Deska panel 12 / cluster 14 / pill 999 */
+  /* radii — Deska sm 4 / md 6 / lg 8 / panel 12 / cluster 14 / popover 15 */
+  --cv-radius-sm: 4px;
+  --cv-radius-md: 6px;
+  --cv-radius-lg: 8px;
   --cv-radius: 12px;
+  --cv-radius-panel: 12px;
   --cv-radius-region: 14px;
+  --cv-radius-popover: 15px;
   --cv-radius-pill: 999px;
 
-  /* type — Plex mono for terminals, data, branch names */
-  --cv-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Deska motion — fast/base/slow with its precise ease-out curve. */
+  --cv-motion-fast: 120ms;
+  --cv-motion-base: 180ms;
+  --cv-motion-slow: 250ms;
+  --cv-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --cv-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Deska type/spacing scales (default step). */
+  --cv-text-xs: 12px;
+  --cv-text-sm: 13px;
+  --cv-text-md: 14px;
+  --cv-text-lg: 15px;
+  --cv-text-xl: 16px;
+  --cv-space-1: 4px;
+  --cv-space-2: 8px;
+  --cv-space-3: 12px;
+  --cv-space-4: 16px;
+  --cv-space-5: 20px;
+  --cv-space-6: 24px;
+
+  /* type — Deska's UI/mono stacks, with platform fonts as safe fallbacks */
+  --cv-font-ui: "Segoe UI", "Roboto", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif;
+  --cv-font-mono: "Hack", "JetBrains Mono", "SF Mono", Menlo, Consolas, "IBM Plex Mono", ui-monospace, monospace;
 
   color-scheme: dark;
 }
@@ -72,35 +124,60 @@ body,
   height: 100%;
   margin: 0;
   background: var(--cv-base);
-  color: var(--cv-ink);
-  font-family:
-    "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
-    sans-serif;
+  color: var(--cv-text-main);
+  font-family: var(--cv-font-ui);
   -webkit-font-smoothing: antialiased;
 }
 
-/* ---------- glass primitive ---------- */
+/* ---------- glass primitives — Deska's three elevations ---------- */
 
 .glass {
   background: var(--cv-glass);
-  backdrop-filter: blur(var(--cv-blur)) saturate(1.15);
-  -webkit-backdrop-filter: blur(var(--cv-blur)) saturate(1.15);
+  backdrop-filter: blur(var(--cv-blur-cluster));
+  -webkit-backdrop-filter: blur(var(--cv-blur-cluster));
   border: 1px solid var(--cv-glass-edge);
-  border-radius: var(--cv-radius);
-  box-shadow:
-    inset 0 1px 0 var(--cv-glass-shine),
-    var(--cv-shadow-card);
+  border-radius: var(--cv-radius-panel);
+  box-shadow: var(--cv-card-shadow);
+  transition:
+    background var(--cv-motion-fast) var(--cv-ease-out),
+    border-color var(--cv-motion-fast) var(--cv-ease-out),
+    box-shadow var(--cv-motion-base) var(--cv-ease-out);
+}
+
+/* Board cards are panel shells in Deska: almost opaque, no backdrop filter,
+   a 6% hairline and the compact cluster elevation. */
+.glass-panel {
+  background: var(--cv-panel-bg);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--cv-glass-edge);
+  border-radius: var(--cv-radius-panel);
+  box-shadow: var(--cv-card-shadow);
+  transition:
+    background var(--cv-motion-fast) var(--cv-ease-out),
+    border-color var(--cv-motion-fast) var(--cv-ease-out),
+    box-shadow var(--cv-motion-base) var(--cv-ease-out),
+    transform var(--cv-motion-fast) var(--cv-ease-out);
+}
+
+/* Deska's card hover lift: one physical pixel, fast ease-out. It applies to
+   the card surface only while the node is stationary; drag transforms belong
+   exclusively to React Flow's wrapper. */
+.react-flow__node:not(.dragging) > .glass-panel:hover {
+  transform: translateY(-1px);
 }
 
 .glass-pill {
-  background: var(--cv-glass);
-  backdrop-filter: blur(var(--cv-blur)) saturate(1.15);
-  -webkit-backdrop-filter: blur(var(--cv-blur)) saturate(1.15);
+  background: var(--cv-glass-header);
+  backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
+  -webkit-backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
   border: 1px solid var(--cv-glass-edge);
   border-radius: var(--cv-radius-pill);
-  box-shadow:
-    inset 0 1px 0 var(--cv-glass-shine),
-    var(--cv-shadow-pill);
+  box-shadow: var(--cv-card-shadow);
+  transition:
+    background var(--cv-motion-fast) var(--cv-ease-out),
+    border-color var(--cv-motion-fast) var(--cv-ease-out),
+    box-shadow var(--cv-motion-base) var(--cv-ease-out);
 }
 
 /* ---------- react flow base ---------- */
@@ -164,7 +241,7 @@ body,
   background: var(--cv-ink-faint);
   border: none;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--cv-motion-fast) var(--cv-ease-out);
 }
 .react-flow__node:hover .react-flow__handle {
   opacity: 0.7;
@@ -178,25 +255,18 @@ body,
 /* Deska marquee — dashed accent selection rectangle with a light fill. */
 .react-flow__selection {
   border: 1.5px dashed var(--cv-accent);
-  background: rgba(201, 162, 107, 0.07);
+  background: color-mix(in srgb, var(--cv-accent) 7%, transparent);
   border-radius: 6px;
-}
-
-/* Selected cards get a dashed preview outline, same accent. */
-.react-flow__node.selected {
-  outline: 1.5px dashed var(--cv-accent);
-  outline-offset: 4px;
-  border-radius: 14px;
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: rgba(255, 255, 255, 0.4);
 }
-/* Selected cards get a clear amber ring — works for single clicks and the
+/* Selected cards get Deska's active accent ring — works for single clicks and the
  * ghost multi-select alike (React Flow adds .selected to every picked node). */
 .react-flow__node.selected {
-  outline: 2px solid var(--cv-accent);
-  outline-offset: 2px;
+  outline: 1.5px solid var(--cv-accent) !important;
+  outline-offset: 0;
   border-radius: 12px;
   /* Put the selected node's resize handles above floating canvas rails.
      A local handle z-index cannot escape the node's React Flow stacking
@@ -273,15 +343,59 @@ body,
   border-radius: 999px;
 }
 
-/* panel chrome buttons — hidden until hover, the way Deska keeps panel
-   titlebars monochrome and quiet until you reach for them */
-.agent-card .card-chrome {
+/* Panel chrome — Deska's 16px controls. They stay fully hidden until the
+   card is active/selected (Fausto's model), then fade in with Deska's fast
+   120ms ease-out timing. Close is the only destructive red hover. */
+.agent-card .card-chrome,
+.cv-card-chrome {
   opacity: 0;
-  transition: opacity 0.15s ease;
+  pointer-events: none;
+  transition: opacity var(--cv-motion-fast) var(--cv-ease-out);
 }
-.agent-card:hover .card-chrome,
-.react-flow__node.selected .card-chrome {
+.react-flow__node.selected .card-chrome,
+.react-flow__node.selected .cv-card-chrome {
   opacity: 1 !important;
+  pointer-events: auto;
+}
+.agent-card .card-chrome button,
+.cv-card-chrome button,
+.cv-card-btn {
+  box-sizing: border-box;
+  width: 16px !important;
+  height: 16px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: var(--cv-radius-sm) !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  color: var(--cv-ink-dim) !important;
+  cursor: pointer;
+  flex: none;
+  transition:
+    opacity var(--cv-motion-fast) var(--cv-ease-out),
+    background var(--cv-motion-fast) var(--cv-ease-out),
+    color var(--cv-motion-fast) var(--cv-ease-out),
+    transform var(--cv-motion-fast) var(--cv-ease-out);
+}
+.agent-card .card-chrome button:hover,
+.cv-card-chrome button:hover,
+.cv-card-btn:hover {
+  background: color-mix(in srgb, var(--cv-ink) 5%, transparent) !important;
+  color: var(--cv-text-main) !important;
+}
+.agent-card .card-chrome button[data-danger="true"]:hover,
+.cv-card-chrome button.cv-card-close:hover,
+button.cv-card-close:hover,
+.cv-card-close:hover {
+  background: var(--cv-error-overlay) !important;
+  color: var(--cv-error) !important;
+}
+.agent-card .card-chrome button:active,
+.cv-card-chrome button:active,
+.cv-card-btn:active {
+  transform: scale(0.94);
 }
 
 /* ---------- status dot (the ONLY status indicator) ---------- */
@@ -299,14 +413,14 @@ body,
   100% {
     box-shadow:
       inset 0 1px 0 var(--cv-glass-shine),
-      0 12px 32px rgba(0, 0, 0, 0.35),
-      0 0 0 0 rgba(255, 178, 36, 0);
+      var(--cv-shadow-card),
+      0 0 0 0 color-mix(in srgb, var(--cv-waiting) 0%, transparent);
   }
   50% {
     box-shadow:
       inset 0 1px 0 var(--cv-glass-shine),
-      0 12px 32px rgba(0, 0, 0, 0.35),
-      0 0 0 5px rgba(255, 178, 36, 0.12);
+      var(--cv-shadow-card),
+      0 0 0 5px color-mix(in srgb, var(--cv-waiting) 12%, transparent);
   }
 }
 .node-waiting {
@@ -411,11 +525,11 @@ body,
 
 /* ---------- Apple-style dropdown menu (opaque, rounded rows, thin scroll) ---------- */
 .cv-menu {
-  background: color-mix(in srgb, var(--cv-base) 92%, transparent);
-  backdrop-filter: blur(28px) saturate(1.5);
-  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  background: var(--cv-glass-popover);
+  backdrop-filter: blur(var(--cv-blur-popover));
+  -webkit-backdrop-filter: blur(var(--cv-blur-popover));
   border: 1px solid var(--cv-glass-edge);
-  border-radius: 16px;
+  border-radius: var(--cv-radius-popover);
   box-shadow:
     inset 0 1px 0 var(--cv-glass-shine),
     var(--cv-shadow-popover);
@@ -446,7 +560,7 @@ body,
 .vault-board-action {
   border-color: color-mix(in srgb, var(--cv-accent) 40%, var(--cv-glass-edge)) !important;
   background: color-mix(in srgb, var(--cv-accent) 11%, var(--cv-glass-hi)) !important;
-  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+  transition: background var(--cv-motion-fast) var(--cv-ease-out), border-color var(--cv-motion-fast) var(--cv-ease-out), transform var(--cv-motion-fast) var(--cv-ease-out);
 }
 .vault-board-action:hover {
   border-color: color-mix(in srgb, var(--cv-accent) 76%, var(--cv-glass-edge)) !important;
@@ -479,7 +593,7 @@ body,
   box-shadow:
     inset 0 1px 0 var(--cv-glass-shine),
     var(--cv-shadow-pill);
-  transition: background 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  transition: background var(--cv-motion-base) var(--cv-ease-out), box-shadow var(--cv-motion-base) var(--cv-ease-out), border-color var(--cv-motion-base) var(--cv-ease-out);
 }
 /* Inside the single bubble the items are segments, not pills — no rings,
    and they fade in/out smoothly when the strip fusion dissolves them. */
@@ -488,7 +602,7 @@ body,
   box-shadow: none !important;
   border-color: transparent !important;
   background: transparent !important;
-  transition: background 0.18s ease, box-shadow 0.18s ease;
+  transition: background var(--cv-motion-base) var(--cv-ease-out), box-shadow var(--cv-motion-base) var(--cv-ease-out);
 }
 .cv-fuse button:hover {
   background: var(--cv-glass-hi) !important;
@@ -511,7 +625,7 @@ body,
   justify-content: center;
   gap: 0;
   overflow: hidden;
-  transition: width 160ms ease, padding 160ms ease, background 160ms ease;
+  transition: width var(--cv-motion-base) var(--cv-ease-out), padding var(--cv-motion-base) var(--cv-ease-out), background var(--cv-motion-fast) var(--cv-ease-out);
 }
 .cv-bottom-dock-label {
   max-width: 0;
@@ -520,7 +634,7 @@ body,
   white-space: nowrap;
   font-size: 11px;
   font-weight: 550;
-  transition: max-width 160ms ease, opacity 120ms ease;
+  transition: max-width var(--cv-motion-base) var(--cv-ease-out), opacity var(--cv-motion-fast) var(--cv-ease-out);
 }
 .cv-bottom-dock-actions > button:hover,
 .cv-bottom-dock-actions > button:focus-visible {
@@ -536,13 +650,13 @@ body,
 }
 .cv-topbar-fuse {
   border-radius: 999px;
-  transition: background 0.22s ease, box-shadow 0.22s ease, gap 0.22s ease;
+  transition: background var(--cv-motion-base) var(--cv-ease-out), box-shadow var(--cv-motion-base) var(--cv-ease-out), gap var(--cv-motion-base) var(--cv-ease-out);
 }
 .cv-topbar-fuse:hover {
   gap: 4px !important;
   background: color-mix(in srgb, var(--cv-ink) 7%, color-mix(in srgb, var(--cv-base) 82%, transparent));
-  backdrop-filter: blur(20px) saturate(1.15);
-  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
+  -webkit-backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
   box-shadow: inset 0 0 0 1px var(--cv-glass-edge), var(--cv-shadow-hover);
 }
 .cv-topbar-fuse:hover .glass-pill,
@@ -574,5 +688,5 @@ body,
   to { opacity: 1; transform: translateX(0); }
 }
 .cv-toast-in {
-  animation: cv-toast-in-kf 220ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  animation: cv-toast-in-kf var(--cv-motion-slow) var(--cv-ease-out);
 }

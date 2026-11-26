@@ -77,10 +77,10 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
             width: s.w,
             height: s.h,
             borderRadius: 12,
-            background: "color-mix(in srgb, var(--cv-bg, #101014) 72%, transparent)",
-            backdropFilter: "blur(18px) saturate(1.2)",
-            border: `1.5px solid ${s.anchor ? `${s.color}55` : "var(--cv-glass-edge)"}`,
-            boxShadow: "0 8px 28px rgba(0,0,0,0.4)",
+            background: "var(--cv-glass)",
+            backdropFilter: "blur(var(--cv-blur-popover))",
+            border: `1px solid ${s.anchor ? `${s.color}55` : "var(--cv-hairline)"}`,
+            boxShadow: "var(--cv-shadow-card)",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
@@ -133,21 +133,14 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
         />
         {selected && (
           <button
-            className="nodrag"
+            className="nodrag cv-card-btn cv-card-close"
             onClick={() => deleteShape(id)}
             title="remove card"
             style={{
               position: "absolute",
               top: 6,
               right: 6,
-              background: "var(--cv-glass)",
-              border: "1px solid var(--cv-glass-edge)",
-              borderRadius: 999,
-              color: "var(--cv-ink-dim)",
-              cursor: "pointer",
               fontSize: 11,
-              width: 18,
-              height: 18,
               lineHeight: 1,
             }}
           >

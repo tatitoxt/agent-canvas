@@ -70,8 +70,8 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
             <button className="nodrag" aria-label={`Edit ${basename}`} title="Edit this vault note" onClick={() => { setDraft(text ?? ""); editBase.current = text ?? ""; dirty.current = false; setConflict(false); setEditing(true); }} style={toolButton}>Edit</button>
           </>
         )}
-        <button className="nodrag" aria-label={`Remove ${basename} from board`} title="Remove from board" onClick={() => mdNodeRemove(id)}
-          style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", display: "flex", padding: 2, opacity: selected ? 1 : 0, pointerEvents: selected ? "auto" : "none", transition: "opacity 160ms ease" }}><Icon name="ph-x" size={12} /></button>
+        <button className="nodrag cv-card-btn cv-card-close" aria-label={`Remove ${basename} from board`} title="Remove from board" onClick={() => mdNodeRemove(id)}
+          style={{ opacity: selected ? 1 : 0, pointerEvents: selected ? "auto" : "none" }}><Icon name="ph-x" size={12} /></button>
       </div>
       {text == null ? <div style={{ padding: 12, color: "var(--cv-ink-faint)", fontSize: 11 }}>Loading note…</div> : editing ? (
         <textarea
@@ -81,7 +81,7 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
           spellCheck={false}
           onChange={(event) => { setDraft(event.target.value); dirty.current = true; }}
           onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "s") { event.preventDefault(); if (!conflict) { vaultWrite(data.path, draft); dirty.current = false; setEditing(false); } } if (event.key === "Escape") { setDraft(text); editBase.current = text ?? ""; dirty.current = false; setEditing(false); setConflict(false); } }}
-          style={{ flex: 1, minHeight: 0, width: "100%", boxSizing: "border-box", resize: "none", border: 0, outline: 0, padding: "14px 16px", background: "var(--cv-bg)", color: "var(--cv-ink)", font: "13px/1.65 var(--cv-font-mono, ui-monospace, monospace)" }}
+          style={{ flex: 1, minHeight: 0, width: "100%", boxSizing: "border-box", resize: "none", border: 0, outline: 0, padding: "14px 16px", background: "var(--cv-bg)", color: "var(--cv-text-main)", font: "13px/1.65 var(--cv-font-mono, ui-monospace, monospace)" }}
         />
       ) : (
         <ReadingView text={text} entries={entries} onLink={openLinkedNote}
@@ -96,6 +96,6 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
 
 const toolButton: React.CSSProperties = {
   border: "1px solid var(--cv-glass-edge)", borderRadius: 6, padding: "3px 7px",
-  background: "var(--cv-glass-hi)", color: "var(--cv-ink)", fontSize: 10,
+  background: "var(--cv-glass-hi)", color: "var(--cv-text-main)", fontSize: 10,
   cursor: "pointer", whiteSpace: "nowrap",
 };

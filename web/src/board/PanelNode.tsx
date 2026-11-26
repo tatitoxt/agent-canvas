@@ -15,7 +15,7 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
   if (!def) return null;
   return (
     <div
-      className="glass"
+      className="glass-panel"
       data-panel={n.panel}
       onClickCapture={(e) => {
         // Panel content sits inside `nodrag`, so React Flow never selects
@@ -39,13 +39,11 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
       style={{
         width: "100%",
         height: "100%",
-        borderRadius: 14,
+        borderRadius: 12,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
-        boxShadow: selected
-          ? "0 0 0 1.5px color-mix(in srgb, var(--cv-accent) 55%, transparent), var(--cv-shadow)"
-          : "var(--cv-shadow)",
+        boxShadow: "var(--cv-card-shadow)",
       }}
     >
       <NodeResizer
@@ -78,16 +76,14 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
         ) : (
           <Icon name={def.icon ?? "panels"} size={13} color="var(--cv-ink-dim)" />
         )}
-        <span style={{ fontSize: 11, fontWeight: 650, color: "var(--cv-ink)" }}>{def.title}</span>
+        <span style={{ fontSize: "var(--cv-text-sm)", fontWeight: 600, color: "var(--cv-text-main)" }}>{def.title}</span>
         <span style={{ flex: 1 }} />
         <span
+          className="cv-card-chrome"
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 2,
-            opacity: selected ? 1 : 0,
-            pointerEvents: selected ? "auto" : "none",
-            transition: "opacity 160ms ease",
+            gap: 6,
           }}
         >
         <button
@@ -103,14 +99,14 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
             borderRadius: 6,
             border: "none",
             background: "transparent",
-            color: "var(--cv-ink)",
+            color: "var(--cv-text-main)",
             fontSize: 12,
             cursor: "pointer",
             display: "grid",
             placeItems: "center",
           }}
         >
-          <Icon name={n.collapsed ? "ph-max" : "ph-min"} size={12} color="var(--cv-ink)" />
+          <Icon name={n.collapsed ? "ph-max" : "ph-min"} size={12} />
         </button>
         <button
           className="nodrag"
@@ -136,17 +132,17 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
             borderRadius: 6,
             border: "none",
             background: "transparent",
-            color: "var(--cv-ink)",
+            color: "var(--cv-text-main)",
             fontSize: 11,
             cursor: "pointer",
             display: "grid",
             placeItems: "center",
           }}
         >
-          <Icon name={n.maximized ? "ph-restore" : "ph-max"} size={12} color="var(--cv-ink)" />
+          <Icon name={n.maximized ? "ph-restore" : "ph-max"} size={12} />
         </button>
         <button
-          className="nodrag"
+          className="nodrag cv-card-close"
           title="Close panel"
           aria-label="Close panel"
           onPointerDown={(e) => e.stopPropagation()}
@@ -162,14 +158,14 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
             borderRadius: 6,
             border: "none",
             background: "transparent",
-            color: "var(--cv-ink)",
+            color: "var(--cv-text-main)",
             fontSize: 13,
             cursor: "pointer",
             display: "grid",
             placeItems: "center",
           }}
         >
-          <Icon name="ph-x" size={13} color="var(--cv-ink)" />
+          <Icon name="ph-x" size={13} />
         </button>
         </span>
       </div>
