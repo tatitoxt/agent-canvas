@@ -1445,38 +1445,63 @@ export function VaultPanel() {
           borderRight: "1px solid var(--cv-glass-edge)",
         }}
       >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px 8px" }}>
-        <span style={{ fontSize: 12.5, fontWeight: 650, color: "var(--cv-ink)", display: "flex", alignItems: "center", gap: 6 }}>
-          <img src="/obsidian.svg" alt="" width={13} height={13} /> Vault
+      <style>{VAULT_EXPLORER_CSS}</style>
+      {/* Explorer header — the vault's name plus one compact row of icon
+          actions, Obsidian-style. The actions group is a single flex item
+          inside a wrapping row: when the column gets too narrow the whole
+          group drops to a second row — buttons never overlap the name. */}
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 2, rowGap: 3, padding: "0 4px 7px" }}>
+        <span
+          title={vaultDir ? vaultDir : undefined}
+          style={{
+            flex: "1 1 40px", minWidth: 0,
+            fontSize: 12, fontWeight: 700, letterSpacing: 0.2,
+            color: "var(--cv-ink)",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            padding: "2px 2px",
+          }}
+        >
+          {vaultDir ? vaultName : "Vault"}
         </span>
-        <div style={{ position: "relative", display: "flex", gap: 4 }}>
-          {vaultDir && (
-            <button
-              style={actionBtn}
-              title={activeVault ? `Open ${activeVault.name} in the installed Obsidian app` : "Open this vault in Obsidian — register it first if Obsidian has not opened it before"}
-              onClick={() => void openObsidian(vaultFile?.path ?? "")}
-            >
-              <img src="/obsidian.svg" alt="" width={11} height={11} /> app
-            </button>
-          )}
-          {vaultDir && !activeVault && (
-            <button style={actionBtn} title="Add this folder to Obsidian's vault list" onClick={() => vaultRegister(vaultDir)}>
-              register
-            </button>
+        <div style={{ position: "relative", flex: "0 0 auto", marginLeft: "auto", display: "flex", alignItems: "center", gap: 1 }}>
+          {(genOpen || newNote || moreOpen) && (
+            <div
+              style={{ position: "fixed", inset: 0, zIndex: 45 }}
+              onClick={() => { setGenOpen(false); setNewNote(false); setMoreOpen(false); }}
+              onContextMenu={(e) => e.preventDefault()}
+            />
           )}
           {vaultDir && (
-            <button style={actionBtn} title="open today's daily note (creates Daily/YYYY-MM-DD.md)" onClick={openDaily}>
-              today
-            </button>
+            <IconBtn icon="ph-calendar" label="open today's daily note (creates Daily/YYYY-MM-DD.md)" text="today" size={13} onClick={openDaily} />
           )}
           {vaultDir && (
-            <button style={actionBtn} title="new note in this vault" onClick={() => { setNewNote((o) => !o); setGenOpen(false); }}>
-              + note
-            </button>
+            <IconBtn
+              icon="ph-file-plus"
+              label="new note in this vault"
+              text="+ note"
+              size={14}
+              active={newNote}
+              onClick={() => { setNewNote((o) => !o); setGenOpen(false); setMoreOpen(false); }}
+            />
           )}
-          <button style={actionBtn} title="Generate a PDF document from the board" onClick={() => { setGenOpen((o) => !o); setNewNote(false); }}>
-            <Icon name="shot" size={11} /> PDF
-          </button>
+          <IconBtn
+            icon="ph-file-pdf"
+            label="Generate a PDF document from the board"
+            text="PDF"
+            size={14}
+            active={genOpen}
+            onClick={() => { setGenOpen((o) => !o); setNewNote(false); setMoreOpen(false); }}
+          />
+          {vaultDir && (
+            <IconBtn
+              icon="ph-dots"
+              label="vault menu — switch vault, more actions"
+              text="···"
+              size={14}
+              active={moreOpen}
+              onClick={() => { setMoreOpen((o) => !o); setGenOpen(false); setNewNote(false); }}
+            />
+          )}
           {genOpen && (
             <div className="cv-menu" style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: 240, padding: 8, zIndex: 50 }}>
               <GeneratePdfMenu onPick={generate} onAsk={askAnything} />
@@ -1498,40 +1523,74 @@ export function VaultPanel() {
               <button type="submit" style={{ fontSize: 10.5, color: "var(--cv-accent)", background: "none", border: "none", cursor: "pointer" }}>create</button>
             </form>
           )}
+          {moreOpen && (
+            <div className="cv-menu" style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: 210, padding: 5, zIndex: 50 }}>
+              {[
+                {
+                  label: switchOpen ? "Close vault switcher" : "Switch vault…",
+                  fn: () => { setSwitchOpen((o) => !o); setMoreOpen(false); },
+                },
+                ...(vaultDir && !activeVault
+                  ? [{ label: "Register in Obsidian's vault list", fn: () => { vaultRegister(vaultDir); notify("registered in Obsidian's vault list"); setMoreOpen(false); } }]
+                  : []),
+                {
+                  label: "Detect vaults on this machine",
+                  fn: () => { vaultDiscover(); setSwitchOpen(true); setMoreOpen(false); },
+                },
+              ].map((it) => (
+                <button
+                  key={it.label}
+                  onClick={it.fn}
+                  className="vp-menuitem"
+                  style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", color: "var(--cv-ink)", fontSize: 11.5, padding: "6px 10px", borderRadius: 8, cursor: "pointer" }}
+                >
+                  {it.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-      <form
-        style={{ display: "flex", gap: 6, margin: "0 4px 8px" }}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (dir.trim()) vaultList(dir.trim());
-        }}
-      >
-        <input
-          value={dir}
-          onChange={(e) => setDir(e.target.value)}
-          placeholder="/path/to/vault"
-          style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "6px 12px", fontSize: 11, color: "var(--cv-ink)", outline: "none", fontFamily: "var(--cv-font-mono)" }}
-        />
-        <button className="glass-pill" style={{ fontSize: 10.5, padding: "5px 12px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }} type="submit">
-          open
-        </button>
-        <button
-          type="button"
-          title="detect vaults the real Obsidian app registered on this machine"
-          onClick={vaultDiscover}
-          style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", cursor: "pointer", fontSize: 12 }}
+      {/* Vault setup — the path bar only earns permanent space while no
+          vault is connected. With a live vault it unfolds on demand from
+          the ··· menu's "Switch vault…". */}
+      {(!vaultDir || switchOpen) && (
+        <form
+          style={{ display: "flex", alignItems: "center", gap: 5, margin: "0 2px 7px" }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (dir.trim()) {
+              vaultList(dir.trim());
+              setSwitchOpen(false);
+            }
+          }}
         >
-          ↻
-        </button>
-      </form>
-      {vaultKnown.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: "0 4px 8px" }}>
+          <input
+            value={dir}
+            onChange={(e) => setDir(e.target.value)}
+            placeholder="/path/to/vault"
+            style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 11px", fontSize: 10.5, color: "var(--cv-ink)", outline: "none", fontFamily: "var(--cv-font-mono)" }}
+          />
+          <button className="glass-pill" style={{ fontSize: 10.5, padding: "4px 11px", cursor: "pointer", border: "none", color: "var(--cv-accent)", flexShrink: 0 }} type="submit">
+            open
+          </button>
+          <button
+            type="button"
+            title="detect vaults the real Obsidian app registered on this machine"
+            onClick={vaultDiscover}
+            style={{ display: "inline-flex", alignItems: "center", background: "none", border: "none", color: "var(--cv-ink-faint)", cursor: "pointer", padding: 2, flexShrink: 0 }}
+          >
+            <Icon name="ph-refresh" size={13} />
+          </button>
+        </form>
+      )}
+      {vaultKnown.length > 0 && (!vaultDir || switchOpen) && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: "0 2px 7px" }}>
           {vaultKnown.map((v) => (
             <button
               key={v.path}
               title={`${v.path} — registered Obsidian vault`}
-              onClick={() => { setDir(v.path); vaultList(v.path); }}
+              onClick={() => { setDir(v.path); vaultList(v.path); setSwitchOpen(false); }}
               style={{
                 display: "inline-flex", alignItems: "center", gap: 4,
                 background: v.path === vaultDir ? "color-mix(in srgb, var(--cv-accent) 22%, transparent)" : "var(--cv-glass-hi)",
@@ -1545,12 +1604,17 @@ export function VaultPanel() {
         </div>
       )}
       {vaultEntries.length > 0 && (
-        <input
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder={`${vaultEntries.length} notes — filter or search inside…`}
-          style={{ margin: "0 4px 8px", background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 12px", fontSize: 11, color: "var(--cv-ink)", outline: "none" }}
-        />
+        <div style={{ position: "relative", margin: "0 2px 7px" }}>
+          <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "var(--cv-ink-faint)", pointerEvents: "none", display: "inline-flex" }}>
+            <Icon name="ph-search" size={11} />
+          </span>
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder={`${vaultEntries.length} notes — filter or search inside…`}
+            style={{ width: "100%", boxSizing: "border-box", background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 12px 5px 26px", fontSize: 11, color: "var(--cv-ink)", outline: "none" }}
+          />
+        </div>
       )}
       <div
         onDragOver={(e) => {
@@ -1592,31 +1656,32 @@ export function VaultPanel() {
       >
         {bookmarks.size > 0 && !filter && (
           <>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "2px 10px 4px" }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "2px 8px 4px" }}>
               Bookmarks
             </div>
             {[...bookmarks].filter((b) => vaultEntries.includes(b)).map((e) => (
               <button
                 key={`bm-${e}`}
                 onClick={() => vaultRead(e)}
+                className={`vp-row${vaultFile?.path === e ? " vp-active" : ""}`}
                 style={{
-                  display: "flex", alignItems: "center", width: "100%",
+                  display: "flex", alignItems: "center", gap: 4, width: "100%",
                   textAlign: "left", border: "none",
-                  background: vaultFile?.path === e ? "var(--cv-glass-hi)" : "transparent",
+                  background: "transparent",
                   color: vaultFile?.path === e ? "var(--cv-ink)" : "var(--cv-ink-dim)",
-                  fontSize: 11.5, padding: "4px 8px", borderRadius: 6, cursor: "pointer",
+                  fontSize: 11.5, padding: "3px 6px", paddingLeft: 16, borderRadius: 5, cursor: "pointer",
                 }}
               >
-                <span style={{ color: "var(--cv-accent)", marginRight: 6, fontSize: 10 }}>★</span>
-                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <Icon name="ph-file" size={12} color={vaultFile?.path === e ? "var(--cv-accent)" : "var(--cv-ink-faint)"} />
+                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {e.split("/").pop()!.replace(/\.md$/, "")}
                 </span>
                 <span
                   role="button" title="unbookmark"
                   onClick={(ev) => { ev.stopPropagation(); toggleBookmark(e); }}
-                  style={{ color: "var(--cv-ink-faint)", cursor: "pointer", fontSize: 11 }}
+                  style={{ color: "var(--cv-accent)", cursor: "pointer", fontSize: 11 }}
                 >
-                  ×
+                  ★
                 </span>
               </button>
             ))}
@@ -1624,23 +1689,24 @@ export function VaultPanel() {
         )}
         {recent.length > 0 && !filter && (
           <>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "2px 10px 4px" }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "2px 8px 4px" }}>
               Recent
             </div>
             {recent.filter((r) => vaultEntries.includes(r) && !bookmarks.has(r)).slice(0, 5).map((e) => (
               <button
                 key={`rc-${e}`}
                 onClick={() => vaultRead(e)}
+                className={`vp-row${vaultFile?.path === e ? " vp-active" : ""}`}
                 style={{
-                  display: "flex", alignItems: "center", width: "100%",
+                  display: "flex", alignItems: "center", gap: 4, width: "100%",
                   textAlign: "left", border: "none",
-                  background: vaultFile?.path === e ? "var(--cv-glass-hi)" : "transparent",
+                  background: "transparent",
                   color: vaultFile?.path === e ? "var(--cv-ink)" : "var(--cv-ink-dim)",
-                  fontSize: 11.5, padding: "4px 8px", borderRadius: 6, cursor: "pointer",
+                  fontSize: 11.5, padding: "3px 6px", paddingLeft: 16, borderRadius: 5, cursor: "pointer",
                 }}
               >
-                <span style={{ color: "var(--cv-ink-faint)", marginRight: 6, fontSize: 10 }}>◷</span>
-                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <Icon name="ph-file" size={12} color={vaultFile?.path === e ? "var(--cv-accent)" : "var(--cv-ink-faint)"} />
+                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {e.split("/").pop()!.replace(/\.md$/, "")}
                 </span>
               </button>
@@ -1699,20 +1765,16 @@ export function VaultPanel() {
           armedDel={armedDel}
           bookmarks={bookmarks}
         />
-        {shown.length === 0 && (
+        {shown.length === 0 && vaultDir && (
           <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", padding: "8px 12px" }}>
             No notes match — try fewer letters.
           </div>
         )}
-      </div>
-      <div style={{
-        borderTop: "1px solid var(--cv-glass-edge)",
-        padding: "6px 12px 0", marginTop: 4,
-        display: "flex", alignItems: "center", gap: 6,
-        fontSize: 10.5, color: "var(--cv-ink-faint)",
-      }}>
-        <img src="/obsidian.svg" alt="" width={11} height={11} style={{ opacity: 0.7 }} />
-        {vaultName}
+        {!vaultDir && (
+          <div style={{ padding: "18px 14px", fontSize: 11, lineHeight: 1.6, color: "var(--cv-ink-faint)" }}>
+            Point the explorer at a folder of markdown notes — your vault mounts live: read, edit, link and pin notes without leaving the board.
+          </div>
+        )}
       </div>
       </div>
       {vaultFile ? (
@@ -1775,16 +1837,7 @@ export function VaultPanel() {
                 ▶ task
               </button>
               <button style={actionBtn} title="Export as PDF (saved to artifacts)" onClick={exportFile}>
-                <Icon name="shot" size={11} /> Export PDF
-              </button>
-              <button
-                style={actionBtn}
-                title="Open in Obsidian — jumps to this note in the real app"
-                onClick={() => {
-                  void openObsidian(vaultFile.path);
-                }}
-              >
-                <img src="/obsidian.svg" alt="" width={11} height={11} /> Obsidian
+                <Icon name="ph-export" size={11} /> Export PDF
               </button>
               <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 14 }} onClick={closeVaultFile}>
                 ×
@@ -1994,8 +2047,6 @@ export function VaultPanel() {
               } },
               { label: bookmarks.has(ctxMenu.path) ? "Remove bookmark" : "Bookmark", fn: () => toggleBookmark(ctxMenu.path) },
               { label: "Copy wikilink", fn: () => { const n = ctxMenu.path.replace(/\.md$/, "").split("/").pop()!; void navigator.clipboard?.writeText(`[[${n}]]`).catch(() => {}); notify(`[[${n}]] copied`); } },
-              { label: "Open in Obsidian", fn: () => { void openObsidian(ctxMenu.path); } },
-              { label: "Register vault in Obsidian", fn: () => { vaultRegister(vaultDir); notify("registered in Obsidian's vault list"); } },
             ].map((it) => (
               <button
                 key={it.label}

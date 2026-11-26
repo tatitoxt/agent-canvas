@@ -452,6 +452,29 @@ body,
 .cv-fuse {
   border-radius: 999px;
   padding: 3px 5px;
+  /* The right cluster reads as ONE bubble permanently — the loose-circles
+     look read as scattered widgets. The strip hover-fusion rule below
+     still dissolves it into the end-to-end bar (higher specificity). */
+  background: var(--cv-glass);
+  backdrop-filter: blur(var(--cv-blur)) saturate(1.15);
+  -webkit-backdrop-filter: blur(var(--cv-blur)) saturate(1.15);
+  border: 1px solid var(--cv-glass-edge);
+  box-shadow:
+    inset 0 1px 0 var(--cv-glass-shine),
+    var(--cv-shadow-pill);
+  transition: background 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+/* Inside the single bubble the items are segments, not pills — no rings,
+   and they fade in/out smoothly when the strip fusion dissolves them. */
+.cv-fuse .glass-pill,
+.cv-fuse button {
+  box-shadow: none !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  transition: background 0.18s ease, box-shadow 0.18s ease;
+}
+.cv-fuse button:hover {
+  background: var(--cv-glass-hi) !important;
 }
 .cv-topbar-labeled-control {
   white-space: nowrap;
@@ -496,7 +519,7 @@ body,
 }
 .cv-topbar-fuse {
   border-radius: 999px;
-  transition: background 0.18s ease, box-shadow 0.18s ease, gap 0.18s ease;
+  transition: background 0.22s ease, box-shadow 0.22s ease, gap 0.22s ease;
 }
 .cv-topbar-fuse:hover {
   gap: 4px !important;

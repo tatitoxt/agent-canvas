@@ -444,7 +444,7 @@ export function Topbar({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 7,
+          gap: 2,
           pointerEvents: "auto",
         }}
       >
