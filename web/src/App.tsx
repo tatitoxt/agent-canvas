@@ -157,6 +157,7 @@ function Board() {
   const agentSizes = useBoard((s) => s.agentSizes);
   const resizingAgents = useBoard((s) => s.resizingAgents);
   const positions = useBoard((s) => s.positions);
+  const gatherMotion = useBoard((s) => s.gatherMotion);
   const moveNode = useBoard((s) => s.moveNode);
   const connected = useBoard((s) => s.connected);
   const activeBoard = useBoard((s) => s.activeBoard);
@@ -238,7 +239,15 @@ function Board() {
   }, [getNodes, composeShot]);
   const viewCmdN = useBoard((s) => s.viewCmdN);
   useEffect(() => {
-    if (viewCmdN > 0) fitView({ padding: 0.18, maxZoom: 1.1, duration: 250 });
+    if (viewCmdN > 0) {
+      // Undo-gather keeps its outgoing region mounted for a short dissolve.
+      // It is visual debris, not layout content — never let it participate
+      // in the overview bounds or the camera zooms out to empty canvas.
+      const leaving = useBoard.getState().leavingShapes;
+      const nodes = getNodes().filter((n) => !leaving[n.id]);
+      fitView({ ...(nodes.length ? { nodes } : {}), padding: 0.18, maxZoom: 1.1, duration: 180 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getNodes reads the current RF store when the command fires
   }, [viewCmdN, fitView]);
 
   const zoomN = useBoard((s) => s.zoomN);
@@ -445,7 +454,12 @@ function Board() {
         const t = e.target as HTMLElement;
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
         e.preventDefault();
-        useBoard.getState().undoMove();
+        const st = useBoard.getState();
+        // Gather is one atomic layout operation even though it moves many
+        // cards. Cmd+Z should reverse the grouping first, not minesweep the
+        // user's older one-card move history.
+        if (st.lastGather) st.undoGather();
+        else st.undoMove();
       } else if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) {
         e.preventDefault();
         const st = useBoard.getState();
@@ -481,6 +495,7 @@ function Board() {
     return () => window.removeEventListener("keydown", onKey);
   }, [pencil, shotMode]);
 
+  const motionClassFor = (id: string) => gatherMotion?.ids.includes(id) ? " cv-gather-motion" : "";
   const baseNodes = useMemo<Node<BoardNodeData>[]>(() => {
     const fallbackWorkspaceAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard && a.workspace_id && !positions[a.id]);
     const wsFallbackCount = new Map<string, number>();
@@ -543,6 +558,7 @@ function Board() {
         position,
         ...(csz ? { style: { width: csz.w, ...(csz.h ? { height: csz.h } : {}) } } : {}),
         ...(ws ? { parentId: ws.id, extent: "parent" as const } : {}),
+        className: motionClassFor(a.id).trim() || undefined,
         data: {
           kind: "agent" as const,
           id: a.id,
@@ -576,6 +592,7 @@ function Board() {
         position: positions[id] ?? { x: 600, y: 120 },
         style: { width: webNodeSizes[`${activeBoard}:${id}`]?.w ?? 520, height: webNodeSizes[`${activeBoard}:${id}`]?.h ?? 340 },
         zIndex: cardZ[id] ?? 0,
+        className: motionClassFor(id).trim() || undefined,
         data: { kind: "web" as const, url },
       }),
     );
@@ -587,6 +604,7 @@ function Board() {
         type: "orchestrator" as const,
       deletable: false,
         position: positions[id] ?? { x: 420, y: 80 },
+        className: motionClassFor(id).trim() || undefined,
         data: {
           kind: "orchestrator" as const,
           id,
@@ -613,6 +631,7 @@ function Board() {
         position: positions[id] ?? { x: 640, y: 160 },
         style: { width: (mdNodeSizes[`${activeBoard}:${id}`] ?? mdNodeSizes[id])?.w ?? 340, height: (mdNodeSizes[`${activeBoard}:${id}`] ?? mdNodeSizes[id])?.h ?? 260 },
         zIndex: cardZ[id] ?? 0,
+        className: motionClassFor(id).trim() || undefined,
         data: { kind: "md" as const, id, path },
       }),
     );
@@ -625,6 +644,7 @@ function Board() {
         style: { width: n.w, height: n.h },
         draggable: !n.locked,
         zIndex: cardZ[id] ?? 0,
+        className: motionClassFor(id).trim() || undefined,
         data: { kind: "panel" as const, id },
       }),
     );
@@ -636,6 +656,7 @@ function Board() {
         style: { width: n.w, height: n.h },
         draggable: !n.locked,
         zIndex: cardZ[id] ?? 0,
+        className: motionClassFor(id).trim() || undefined,
         data: { kind: "term" as const, id },
       }),
     );
@@ -645,7 +666,7 @@ function Board() {
     return useMock
       ? [...initialNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs]
       : [...wsNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs];
-  }, [agents, positions, connected, workspaces, workspaceSizes, approvals, attention, activeBoard, webNodes, webNodeSizes, orchestrators, liveEdges, shapes, mdNodes, mdNodeSizes, panelNodes, termNodes, cardZ, agentSizes]);
+  }, [agents, positions, connected, workspaces, workspaceSizes, approvals, attention, activeBoard, webNodes, webNodeSizes, orchestrators, liveEdges, shapes, mdNodes, mdNodeSizes, panelNodes, termNodes, cardZ, agentSizes, gatherMotion]);
 
   // Controlled React Flow needs change application for selection and drag to
   // stick. rfNodes is the rendered array: baseNodes is re-derived from the
@@ -656,13 +677,18 @@ function Board() {
   // write (activity flushes every 400ms while agents output), which made
   // React Flow re-render the whole canvas. Reuse the previous object when
   // the node's defining inputs are unchanged so unchanged cards don't
-  // re-render.
+  // re-render. React Flow also adds runtime fields (`measured`, selection and
+  // drag flags); strip those before comparing input signatures.
+  const nodeInputSig = (n: Node<BoardNodeData>) => {
+    const { selected: _selected, dragging: _dragging, measured: _measured, ...input } = n;
+    return JSON.stringify(input);
+  };
   const nodeSigCache = useRef(new Map<string, { sig: string; node: Node<BoardNodeData> }>());
   useEffect(() => {
     setRfNodes((prev) => {
       const byId = new Map(prev.map((n) => [n.id, n]));
       const out = baseNodes.map((b) => {
-        const sig = JSON.stringify(b);
+        const sig = nodeInputSig(b);
         const cached = nodeSigCache.current.get(b.id);
         let base = b;
         if (cached?.sig === sig) base = cached.node;
@@ -683,7 +709,12 @@ function Board() {
           p.style?.width === base.style?.width &&
           p.style?.height === base.style?.height
         );
-        if (cached?.sig === sig && geometryMatches) return p;
+        // A sig match alone is not enough: React can run this functional
+        // update twice before the first result commits (StrictMode/batched
+        // store writes), with `p` still being the previous render's node.
+        // Verify the previous node's own inputs too, otherwise class-only
+        // updates (gather motion cleanup) can be swallowed indefinitely.
+        if (cached?.sig === sig && geometryMatches && nodeInputSig(p) === sig) return p;
         return { ...base, selected: p.selected, dragging: p.dragging };
       });
       const alive = new Set(baseNodes.map((n) => n.id));
@@ -1255,7 +1286,7 @@ function Board() {
         panOnDrag={[1, 2]}
         panOnScroll
         zoomOnScroll={false}
-        onlyRenderVisibleElements
+        onlyRenderVisibleElements={!gatherMotion}
         selectionKeyCode={null}
         multiSelectionKeyCode="Shift"
         deleteKeyCode={["Backspace", "Delete"]}

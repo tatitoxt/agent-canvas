@@ -5,6 +5,8 @@ import type { AgentStatus } from "../board/types";
 import { PANEL_META } from "../components/panelMeta";
 import { replayedPtyBytes } from "../board/ptyAccounting";
 import { resetScreen } from "../board/ptyScreen";
+import { initialNodes } from "../board/mockData";
+import { planGatherLayout, type GatherRect } from "./gatherLayout";
 
 export type LiveAgent = {
   id: string;
@@ -621,7 +623,7 @@ type BoardState = {
   dismissAlert: (agentId: string) => void;
   /** Clear returned delegation rows from the inbox. */
   clearReturned: () => void;
-  moveNode: (agentId: string, x: number, y: number) => void;
+  moveNode: (agentId: string, x: number, y: number, recordHistory?: boolean) => void;
   attachPty: (agentId: string, cb: (bytes: Uint8Array | null) => void) => void;
   ptyBuffer: (agentId: string) => Uint8Array | undefined;
   detachPty: (agentId: string, cb?: (bytes: Uint8Array | null) => void) => void;
@@ -660,6 +662,11 @@ type BoardState = {
   /** Snapshot of the last gather for undo — positions before the moves
    * plus the frame it created. */
   lastGather: { board: string; items: { id: string; kind: "agent" | "panel" | "term" | "md" | "web"; x: number; y: number }[]; frameId: string } | null;
+  /** Cards currently flying because gather/undo moved them — the canvas adds
+   * a temporary transform-transition class only to these nodes. */
+  gatherMotion: { ids: string[]; token: number } | null;
+  /** Group frames fading out before they are removed (undo gather). */
+  leavingShapes: Record<string, true>;
   undoGather: () => void;
   /** Frame a board rect as a "Group N" region; returns its label. */
   frameNodes: (x: number, y: number, w: number, h: number) => string;
@@ -1719,6 +1726,8 @@ export const useBoard = create<BoardState>((set, get) => ({
   setPendingTermPos: (p) => set({ pendingTermPos: p }),
   viewportRect: null,
   lastGather: null,
+  gatherMotion: null,
+  leavingShapes: {},
   pendingSpawnPos: null,
   setPendingSpawnPos: (p) => set({ pendingSpawnPos: p }),
   pendingSpawnPositions: {},
@@ -2025,10 +2034,12 @@ export const useBoard = create<BoardState>((set, get) => ({
     set({ edges });
   },
 
-  moveNode: (agentId, x, y) => {
+  moveNode: (agentId, x, y, recordHistory = true) => {
     set((s) => ({
       positions: { ...s.positions, [agentId]: { x, y } },
-      moveHistory: [...s.moveHistory.slice(-49), { id: agentId, prev: s.positions[agentId] }],
+      // Gather/undo reposition many cards as one atomic operation; only a
+      // deliberate manual move belongs in Cmd+Z card-move history.
+      ...(recordHistory ? { moveHistory: [...s.moveHistory.slice(-49), { id: agentId, prev: s.positions[agentId] }] } : {}),
     }));
     client?.moveNode(agentId, x, y);
   },
@@ -2166,7 +2177,10 @@ export const useBoard = create<BoardState>((set, get) => ({
       // migrate old pinned stickies to glass pin cards — first pins were
       // stickies with an anchor, the very first had the "card-" id prefix
       for (const board of Object.values(raw)) {
-        for (const [id, sh] of Object.entries(board as Record<string, { kind: string; anchor?: string; title?: string; text: string; color: string }>)) {
+        for (const [id, sh] of Object.entries(board as Record<string, { kind: string; anchor?: string; title?: string; text: string; color: string; group?: boolean }>)) {
+          // Frames created before the structural-region treatment did not
+          // carry the marker; their generated labels make the intent clear.
+          if (sh.kind === "rect" && /^Group \d+$/.test(sh.text ?? "")) sh.group = true;
           if (sh.kind === "sticky" && (sh.anchor || id.startsWith("card-"))) {
             sh.kind = "pin";
             const lines = sh.text.split("\n");
@@ -2357,7 +2371,13 @@ export const useBoard = create<BoardState>((set, get) => ({
       get().undoGather();
       return "gather undone";
     }
-    if (/undo|deshacer/.test(t)) return undoMove() ? "undid last move" : "nothing to undo";
+    if (/undo|deshacer/.test(t)) {
+      if (get().lastGather) {
+        get().undoGather();
+        return "gather undone";
+      }
+      return undoMove() ? "undid last move" : "nothing to undo";
+    }
     if (/fit|reset view|zoom|overview/.test(t)) {
       requestView();
       return "fitted view";
@@ -2440,7 +2460,23 @@ export const useBoard = create<BoardState>((set, get) => ({
   setSpawnOpen: (v) => set(v ? { spawnOpen: v } : { spawnOpen: v, pendingSpawnPos: null }),
   focusSpawn: () => set({ spawnOpen: true }),
   gatherLoose: () => {
-    const { agents, edges, positions, agentSizes, activeBoard, shapes, panelNodes, termNodes, mdNodes, webNodes, viewportRect } = get();
+    const {
+      agents,
+      edges,
+      positions,
+      agentSizes,
+      activeBoard,
+      shapes,
+      panelNodes,
+      termNodes,
+      mdNodes,
+      webNodes,
+      viewportRect,
+      connected,
+      workspaces,
+      workspaceSizes,
+      orchestrators,
+    } = get();
     const wired = new Set(Object.values(edges).flatMap((e) => [e.from, e.to]));
     // A card is "loose" when its center isn't already inside a group frame.
     const rects = Object.values(shapes[activeBoard] ?? {}).filter(
@@ -2449,6 +2485,23 @@ export const useBoard = create<BoardState>((set, get) => ({
     const inside = (x: number, y: number) =>
       rects.some((r) => x >= r.x && x <= r.x + r.w! && y >= r.y && y <= r.y + r.h!);
     const loose: Array<{ id: string; x: number; y: number; w: number; h: number; move: (id: string, x: number, y: number) => void }> = [];
+
+    // React Flow scales the viewport with a CSS transform, so offsetWidth/
+    // offsetHeight remain untransformed flow units. Measuring the live node
+    // is the difference between a tight terminal grid and huge phantom gaps
+    // (agent cards are auto-height; 240px was only a rough guess).
+    const measureNode = (id: string, fallbackW: number, fallbackH: number) => {
+      if (typeof document === "undefined") return { w: fallbackW, h: fallbackH };
+      const el = document.querySelector<HTMLElement>(`.react-flow__node[data-id="${id}"]`);
+      const xy = el?.style.transform.match(/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/);
+      return {
+        x: xy ? Number(xy[1]) : undefined,
+        y: xy ? Number(xy[2]) : undefined,
+        w: el?.offsetWidth && el.offsetWidth > 40 ? el.offsetWidth : fallbackW,
+        h: el?.offsetHeight && el.offsetHeight > 24 ? el.offsetHeight : fallbackH,
+      };
+    };
+
     // Agents never dragged have no positions entry — snapshot the same
     // visible fallback layout used by the canvas instead of an offscreen grid.
     const boardAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard);
@@ -2462,46 +2515,60 @@ export const useBoard = create<BoardState>((set, get) => ({
       explicitLoose.map((a) => ({ ...positions[a.id], w: agentSizes[a.id]?.w ?? 460, h: agentSizes[a.id]?.h ?? 260 })),
     );
     const fallbackById = new Map(missingLoose.map((a, index) => [a.id, fallbackLoose[index]]));
-    let workspaceIndex = 0;
+    // Workspace children use positions RELATIVE to their parent. Replicate
+    // the canvas's per-workspace fallback stack; absolute conversion happens
+    // below when those stationary cards become obstacles.
+    const workspaceOffsets = new Map<string, number>();
     for (const a of boardAgents) {
-      fallbackPos.set(a.id, a.workspace_id
-        ? { x: 24 + (workspaceIndex++ % 2) * 484, y: 64 + Math.floor((workspaceIndex - 1) / 2) * 284 }
-        : positions[a.id] ?? fallbackById.get(a.id) ?? { x: 24, y: 64 });
+      if (positions[a.id]) {
+        fallbackPos.set(a.id, positions[a.id]);
+      } else if (a.workspace_id) {
+        const offset = workspaceOffsets.get(a.workspace_id) ?? 0;
+        workspaceOffsets.set(a.workspace_id, offset + 1);
+        fallbackPos.set(a.id, { x: 24, y: 64 + offset * 284 });
+      } else {
+        fallbackPos.set(a.id, fallbackById.get(a.id) ?? { x: 24, y: 64 });
+      }
     }
+
     for (const a of boardAgents) {
       const p = positions[a.id] ?? fallbackPos.get(a.id);
-      if (
-        a.status !== "exited" &&
-        !a.workspace_id &&
-        !wired.has(a.id) &&
-        !(p && positions[a.id] && inside(p.x + 180, p.y + 110))
-      ) {
-        const size = agentSizes[a.id];
-        loose.push({ id: a.id, x: p?.x ?? 0, y: p?.y ?? 0, w: size?.w ?? 460, h: size?.h ?? 240, move: (id, x, y) => get().moveNode(id, x, y) });
+      if (!p || a.status === "exited" || a.workspace_id || wired.has(a.id)) continue;
+      const size = agentSizes[a.id];
+      const measured = measureNode(a.id, size?.w ?? 460, size?.h ?? 220);
+      const cx = p.x + measured.w / 2;
+      const cy = p.y + measured.h / 2;
+      if (!inside(cx, cy)) {
+        loose.push({ id: a.id, x: p.x, y: p.y, w: measured.w, h: measured.h, move: (id, x, y) => get().moveNode(id, x, y, false) });
       }
     }
     for (const [id, n] of Object.entries(panelNodes[activeBoard] ?? {})) {
-      if (!inside(n.x + (n.w ?? 320) / 2, n.y + (n.h ?? 420) / 2))
+      // Position lock and maximize are explicit user states. Gather respects
+      // them; the card remains in place and becomes an obstacle for the layout.
+      if (!n.locked && !n.maximized && !inside(n.x + (n.w ?? 320) / 2, n.y + (n.h ?? 420) / 2))
         loose.push({ id, x: n.x, y: n.y, w: n.w ?? 320, h: n.h ?? 420, move: (i, x, y) => get().movePanelNode(i, x, y) });
     }
     for (const [id, n] of Object.entries(termNodes[activeBoard] ?? {})) {
-      if (!inside(n.x + (n.w ?? 560) / 2, n.y + (n.h ?? 320) / 2))
+      if (!n.locked && !n.maximized && !inside(n.x + (n.w ?? 560) / 2, n.y + (n.h ?? 320) / 2))
         loose.push({ id, x: n.x, y: n.y, w: n.w ?? 560, h: n.h ?? 320, move: (i, x, y) => get().moveTermNode(i, x, y) });
     }
     for (const [id] of Object.entries(mdNodes[activeBoard] ?? {})) {
       const p = positions[id] ?? { x: 640, y: 160 };
-      if (!inside(p.x + 170, p.y + 130))
-        loose.push({ id, ...p, w: 340, h: 260, move: (i, x, y) => get().moveNode(i, x, y) });
+      const measured = measureNode(id, 340, 260);
+      if (!inside(p.x + measured.w / 2, p.y + measured.h / 2))
+        loose.push({ id, ...p, w: measured.w, h: measured.h, move: (i, x, y) => get().moveNode(i, x, y, false) });
     }
     for (const [id] of Object.entries(webNodes[activeBoard] ?? {})) {
       const p = positions[id] ?? { x: 600, y: 120 };
-      if (!inside(p.x + 260, p.y + 180))
-        loose.push({ id, ...p, w: 520, h: 360, move: (i, x, y) => get().moveNode(i, x, y) });
+      const measured = measureNode(id, 520, 360);
+      if (!inside(p.x + measured.w / 2, p.y + measured.h / 2))
+        loose.push({ id, ...p, w: measured.w, h: measured.h, move: (i, x, y) => get().moveNode(i, x, y, false) });
     }
     if (!loose.length) {
       get().notify("gather — no loose windows");
       return;
     }
+
     // Snapshot every loose position before moving a single card — undo
     // grouping puts them all back (Deska "put windows back").
     const snapshotItems = loose.map((l) => ({
@@ -2510,39 +2577,110 @@ export const useBoard = create<BoardState>((set, get) => ({
       x: l.x,
       y: l.y,
     }));
-    // Anchor the grid inside the current viewport — scattered cards must
-    // come INTO view, not pile up where the leftmost one happened to be.
-    const vp = get().viewportRect;
-    let x0 = vp ? vp.left + 80 : Math.min(...loose.map((l) => l.x));
-    let y0 = vp ? vp.top + 110 : Math.min(...loose.map((l) => l.y));
-    const cols = Math.ceil(Math.sqrt(loose.length));
-    const cw = Math.max(...loose.map((l) => l.w)) + 32;
-    const ch = Math.max(...loose.map((l) => l.h)) + 32;
-    // Don't bury existing groups: while the grid area intersects a frame,
-    // slide the anchor below it (few frames in practice — one pass suffices).
-    const rows0 = Math.ceil(loose.length / cols);
-    // Frame rect exactly as drawn: origin (x0-26, y0-46), size (cols*cw+12,
-    // rows*ch+56) — anything looser flags clear space as a collision.
-    for (const r of [...rects].sort((a, b) => a.y - b.y)) {
-      const gx1 = x0 - 26, gy1 = y0 - 46;
-      const gx2 = gx1 + cols * cw + 12, gy2 = gy1 + rows0 * ch + 56;
-      const overlap = gx1 < r.x + r.w! && gx2 > r.x && gy1 < r.y + r.h! && gy2 > r.y;
-      if (overlap) y0 = r.y + r.h! + 110;
+
+    // Stationary content is sacred: group frames, workspaces, wired/parented
+    // agents, orchestrators, locked cards and already-grouped cards all shape
+    // the placement search. The old gather only avoided other shape rects,
+    // so a fresh frame could swallow an entire workspace visually.
+    const looseIds = new Set(loose.map((l) => l.id));
+    const obstacles: GatherRect[] = [];
+    const addObstacle = (x: number, y: number, w: number, h: number) => {
+      if ([x, y, w, h].every(Number.isFinite) && w > 0 && h > 0) obstacles.push({ x, y, w, h });
+    };
+    for (const s of Object.values(shapes[activeBoard] ?? {})) addObstacle(s.x, s.y, s.w, s.h);
+    for (const w of Object.values(workspaces)) {
+      if ((w.board_id ?? "main") !== activeBoard) continue;
+      const p = positions[w.id] ?? { x: 60, y: 60 };
+      const sz = workspaceSizes[w.id] ?? { w: 900, h: 540 };
+      addObstacle(p.x, p.y, sz.w, sz.h);
     }
-    loose.forEach((l, i) =>
-      l.move(l.id, x0 + (i % cols) * cw, y0 + Math.floor(i / cols) * ch),
-    );
-    const rows = Math.ceil(loose.length / cols);
+    // Demo mode renders fixture workspaces outside the store. Treat those
+    // visible fixtures as obstacles too; otherwise gather passes its offline
+    // visual smoke test geometrically while visibly swallowing the mock board.
+    if (!connected && Object.keys(agents).length === 0) {
+      for (const n of initialNodes) {
+        if (n.parentId) continue; // parent fixtures already cover their children
+        const fallbackW = n.type === "workspace" ? 900 : n.type === "orchestrator" ? 292 : 460;
+        const fallbackH = n.type === "workspace" ? 540 : n.type === "orchestrator" ? 190 : 220;
+        const styleW = typeof n.style?.width === "number" ? n.style.width : undefined;
+        const styleH = typeof n.style?.height === "number" ? n.style.height : undefined;
+        const measured = measureNode(n.id, styleW ?? fallbackW, styleH ?? fallbackH);
+        addObstacle(measured.x ?? n.position.x, measured.y ?? n.position.y, measured.w, measured.h);
+      }
+    }
+    for (const a of boardAgents) {
+      if (looseIds.has(a.id)) continue;
+      const rel = positions[a.id] ?? fallbackPos.get(a.id) ?? { x: 24, y: 64 };
+      const ws = a.workspace_id ? workspaces[a.workspace_id] : undefined;
+      const base = ws ? (positions[ws.id] ?? { x: 60, y: 60 }) : { x: 0, y: 0 };
+      const size = agentSizes[a.id];
+      const measured = measureNode(a.id, size?.w ?? 460, size?.h ?? 220);
+      addObstacle(base.x + rel.x, base.y + rel.y, measured.w, measured.h);
+    }
+    for (const [id, o] of Object.entries(orchestrators)) {
+      if (o.board !== activeBoard) continue;
+      const p = positions[id] ?? { x: 420, y: 80 };
+      const measured = measureNode(id, 292, 190);
+      addObstacle(p.x, p.y, measured.w, measured.h);
+    }
+    for (const [id, n] of Object.entries(panelNodes[activeBoard] ?? {})) {
+      if (!looseIds.has(id)) addObstacle(n.x, n.y, n.w ?? 320, n.h ?? 420);
+    }
+    for (const [id, n] of Object.entries(termNodes[activeBoard] ?? {})) {
+      if (!looseIds.has(id)) addObstacle(n.x, n.y, n.w ?? 560, n.h ?? 320);
+    }
+    for (const [id] of Object.entries(mdNodes[activeBoard] ?? {})) {
+      if (looseIds.has(id)) continue;
+      const p = positions[id] ?? { x: 640, y: 160 };
+      const measured = measureNode(id, 340, 260);
+      addObstacle(p.x, p.y, measured.w, measured.h);
+    }
+    for (const [id] of Object.entries(webNodes[activeBoard] ?? {})) {
+      if (looseIds.has(id)) continue;
+      const p = positions[id] ?? { x: 600, y: 120 };
+      const measured = measureNode(id, 520, 360);
+      addObstacle(p.x, p.y, measured.w, measured.h);
+    }
+
+    // viewportRect is in flow units, but rails/topbar/dock occupy SCREEN px.
+    // Recover the zoom from the viewport width and convert those margins so
+    // the group never slides underneath floating chrome at low zoom (or wastes
+    // excessive space at high zoom).
+    const zoomGuess = viewportRect && typeof window !== "undefined"
+      ? Math.min(2, Math.max(0.2, window.innerWidth / Math.max(1, viewportRect.right - viewportRect.left)))
+      : 1;
+    const px = (screenPx: number) => screenPx / zoomGuess;
+    const plan = planGatherLayout(loose, viewportRect, obstacles, {
+      left: px(64),
+      top: px(84),
+      right: px(56),
+      bottom: px(76),
+    });
+    if (!plan) {
+      get().notify("gather — no loose windows");
+      return;
+    }
+
+    const token = Date.now() + Math.random();
+    set({ gatherMotion: { ids: loose.map((l) => l.id), token } });
+    const movers = new Map(loose.map((l) => [l.id, l.move]));
+    for (const p of plan.placements) movers.get(p.id)?.(p.id, p.x, p.y);
+
     // The frame needs its id for undo — frameNodes returns the label, so
     // capture the newest frame id from the shapes map right after.
     const beforeIds = new Set(Object.keys(get().shapes[activeBoard] ?? {}));
-    const n = get().frameNodes(
-      x0 - 26, y0 - 46, cols * cw + 12, rows * ch + 56,
-    );
+    const n = get().frameNodes(plan.frame.x, plan.frame.y, plan.frame.w, plan.frame.h);
     const frameId = Object.keys(get().shapes[activeBoard] ?? {}).find((k) => !beforeIds.has(k)) ?? "";
     set({ lastGather: { board: activeBoard, items: snapshotItems, frameId } });
-    get().notify(`gathered ${loose.length} into ${n} — "undo gather" puts them back`);
-    get().requestView();
+    get().notify(`gathered ${loose.length} window${loose.length === 1 ? "" : "s"} into ${n}`);
+
+    // Choreography: windows and camera travel together. The focus effect's
+    // first retry naturally starts a frame after the node mount, so the region
+    // materializes for one beat before the camera settles on it.
+    if (frameId) get().requestFocus(frameId);
+    setTimeout(() => {
+      if (get().gatherMotion?.token === token) set({ gatherMotion: null });
+    }, 330);
   },
   undoGather: () => {
     const g = get().lastGather;
@@ -2560,23 +2698,38 @@ export const useBoard = create<BoardState>((set, get) => ({
       return;
     }
     if (get().activeBoard !== g.board) get().setActiveBoard(g.board);
+    const token = Date.now() + Math.random();
+    set({ gatherMotion: { ids: g.items.map((item) => item.id), token } });
     for (const item of g.items) {
       if (item.kind === "panel") get().movePanelNode(item.id, item.x, item.y);
       else if (item.kind === "term") get().moveTermNode(item.id, item.x, item.y);
-      else get().moveNode(item.id, item.x, item.y);
+      else get().moveNode(item.id, item.x, item.y, false);
     }
-    // Drop the frame the gather created.
+    // Let the outgoing region dissolve while the windows fly back; deleting
+    // it in the same frame made undo feel like a hard cut.
     if (g.frameId) {
-      const board = get().activeBoard;
-      const m = { ...(get().shapes[board] ?? {}) };
-      delete m[g.frameId];
-      const next = { ...get().shapes, [board]: m };
-      localStorage.setItem("cv-shapes", JSON.stringify(next));
-      set({ shapes: next });
+      set((s) => ({ leavingShapes: { ...s.leavingShapes, [g.frameId]: true } }));
+      setTimeout(() => {
+        const boardShapes = { ...(get().shapes[g.board] ?? {}) };
+        delete boardShapes[g.frameId];
+        const next = { ...get().shapes, [g.board]: boardShapes };
+        localStorage.setItem("cv-shapes", JSON.stringify(next));
+        set((s) => {
+          const leavingShapes = { ...s.leavingShapes };
+          delete leavingShapes[g.frameId];
+          return { shapes: next, leavingShapes };
+        });
+      }, 180);
     }
     set({ lastGather: null });
     get().notify("gather undone — windows back where they were");
-    get().requestView();
+    // Join the reverse flight immediately. App-level fitView ignores the
+    // dissolving frame, so the camera can follow the windows home instead of
+    // waiting for the region to vanish and missing half the motion.
+    setTimeout(() => get().requestView(), 20);
+    setTimeout(() => {
+      if (get().gatherMotion?.token === token) set({ gatherMotion: null });
+    }, 330);
   },
   /** Drop a translucent "Group N" rect behind a region of the board —
    * shared by gatherLoose and the selection pill. Returns the label. */
@@ -2585,7 +2738,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     const n = Object.keys(shapes[activeBoard] ?? {}).filter(
       (k) => shapes[activeBoard][k].text?.startsWith("Group")).length + 1;
     const id = `shape-${Math.random().toString(36).slice(2, 10)}`;
-    const def = { id, kind: "rect" as const, x, y, w, h, color: "#e8b25a", text: `Group ${n}` };
+    const def = { id, kind: "rect" as const, x, y, w, h, color: "#e8b25a", text: `Group ${n}`, group: true };
     const next = { ...shapes, [activeBoard]: { ...(shapes[activeBoard] ?? {}), [id]: def } };
     localStorage.setItem("cv-shapes", JSON.stringify(next));
     set({ shapes: next });

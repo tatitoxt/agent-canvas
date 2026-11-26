@@ -215,6 +215,20 @@ body,
   font-family: inherit;
 }
 
+/* Gather/undo flight — scoped to store-moved cards only. Manual drags must
+ * stay 1:1 with the pointer, so React Flow's .dragging state always wins. */
+.react-flow__node.cv-gather-motion:not(.dragging) {
+  transition: transform var(--cv-motion-slow) var(--cv-ease-out);
+  /* Let the camera lead by a beat when the destination is outside the
+   * current viewport — the windows remain visually continuous instead of
+   * sprinting off-canvas ahead of it. */
+  transition-delay: 45ms;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__node.cv-gather-motion:not(.dragging) { transition: none; }
+}
+
 /* Resize through invisible hit areas around the whole selected card. The
    four corners plus four edge lines remain draggable without drawing the
    usual corner dots, handles or resize outline over the content. */
@@ -427,7 +441,28 @@ button.cv-card-close:hover,
   animation: halo-breathe 3.2s ease-in-out infinite;
 }
 
+/* Gather region entrance/exit — quiet structural chrome, not a popover. */
+@keyframes cv-group-in {
+  from { opacity: 0; transform: scale(0.985); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes cv-group-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.985); }
+}
+.cv-group-frame {
+  transform-origin: center;
+  animation: cv-group-in var(--cv-motion-slow) var(--cv-ease-out) both;
+}
+.cv-group-frame-out {
+  animation: cv-group-out 180ms ease-in both;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .cv-group-frame,
+  .cv-group-frame-out {
+    animation: none;
+  }
   .node-waiting,
   .edge-delegated .react-flow__edge-path {
     animation: none;
