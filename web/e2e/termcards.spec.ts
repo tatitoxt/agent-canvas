@@ -163,18 +163,46 @@ test("shift+click multi-select selects two nodes", async ({ page }) => {
   await page.waitForTimeout(1500);
   const nodes = page.locator(".react-flow__node").filter({ has: page.locator("[title='Open terminal']") });
   expect(await nodes.count()).toBeGreaterThanOrEqual(2);
-  // Slow CI runners: nodes settle late and selection state lags the click.
-  // Re-measure right before clicking and let the assertion retry.
-  // Click well inside the card body, not the top strip: freshly spawned
-  // cards can land flush against the fused topbar overlay (it spans the
-  // viewport's top ~64px), which legitimately eats clicks over its strip —
-  // users grab the card lower, so the test does the same.
-  const clickY = (box: { y: number; height: number }) => box.y + Math.min(90, box.height - 30);
+  // Three layout facts make a blind click flaky here:
+  //  1. Spawn positions carry a random offset, so the two cards can overlap —
+  //     and shift+click TOGGLES selection, so two clicks on the same topmost
+  //     card select then deselect it and the count never reaches 2.
+  //  2. The steering form inside the card body stopPropagation()s clicks, so
+  //     a point landing on it never selects the node. Where exactly it sits
+  //     depends on the platform's font metrics.
+  //  3. The fused topbar overlay legitimately eats clicks in the viewport's
+  //     top ~64px strip.
+  // So scan each card in-page for a point whose real hit target is inside
+  // THAT card but outside any interactive control — the same strip a user
+  // would grab — and click exactly there.
+  const pickPoint = (elHandle: import("@playwright/test").ElementHandle) =>
+    elHandle.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      const nodeId = node.getAttribute("data-id");
+      for (const fy of [0.06, 0.12, 0.3, 0.5, 0.7, 0.9]) {
+        const y = rect.y + rect.height * fy;
+        if (y < 72) continue; // fused topbar strip — clicks never reach the canvas there
+        for (const fx of [0.1, 0.25, 0.4, 0.55, 0.7, 0.85]) {
+          const x = rect.x + rect.width * fx;
+          const hit = document.elementFromPoint(x, y);
+          if (!hit) continue;
+          const hitNode = hit.closest(".react-flow__node");
+          if (hitNode?.getAttribute("data-id") !== nodeId) continue; // overlapped by the other card or a panel
+          if (hit.closest("button, a, input, select, textarea, form, [contenteditable]")) continue;
+          return { x, y };
+        }
+      }
+      return null;
+    });
+  const h0 = await nodes.nth(0).elementHandle();
+  const h1 = await nodes.nth(1).elementHandle();
+  const p0 = await pickPoint(h0!);
+  const p1 = await pickPoint(h1!);
+  expect(p0, "a grabbable strip of the first card").toBeTruthy();
+  expect(p1, "a grabbable strip of the second card").toBeTruthy();
   await page.keyboard.down("Shift");
-  const c0 = await nodes.nth(0).boundingBox();
-  await page.mouse.click(c0!.x + Math.min(72, c0!.width - 20), clickY(c0!));
-  const c1 = await nodes.nth(1).boundingBox();
-  await page.mouse.click(c1!.x + Math.min(72, c1!.width - 20), clickY(c1!));
+  await page.mouse.click(p0!.x, p0!.y);
+  await page.mouse.click(p1!.x, p1!.y);
   await page.keyboard.up("Shift");
   await expect(page.locator(".react-flow__node.selected")).toHaveCount(2, { timeout: 6_000 });
 });

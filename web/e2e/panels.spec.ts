@@ -315,16 +315,28 @@ test("Add Obsidian to canvas closes Tools and mounts the live vault explorer", a
 
 test("pinned Obsidian note edits and saves back to the real vault", async ({ page }) => {
   const { vault } = await boot(page);
+  // The vault is shared by the whole run (one daemon) — a retry of this test
+  // would otherwise read the half-saved content the previous attempt left
+  // behind. Re-seed the note so every attempt starts from the same bytes.
+  writeFileSync(resolve(vault, "Canvas E2E note.md"), "# Canvas E2E note\n\nOriginal vault text.\n");
   await page.locator("button[title='Files — open your Obsidian vault']").click();
   const explorer = page.locator(".react-flow__node-panel [data-panel='vault']").first();
   await expect(explorer).toBeVisible();
-  await explorer.locator("button.vault-file").filter({ hasText: "Canvas E2E note" }).click();
+  // The pre-seeded vault file arrives over a daemon scan roundtrip — assert
+  // it listed before clicking so a scan failure surfaces HERE (with the
+  // panel state in the error context) instead of as an opaque test timeout
+  // inside a bare click().
+  const fileRow = explorer.locator("button.vault-file").filter({ hasText: "Canvas E2E note" });
+  await expect(fileRow).toBeVisible({ timeout: 10_000 });
+  await fileRow.click();
   const reader = page.locator(".react-flow__node-panel [data-panel='vault']").filter({ hasText: "Canvas E2E note" }).last();
   await expect(reader.getByRole("button", { name: "Add to Board" })).toBeVisible();
   await reader.getByRole("button", { name: "Add to Board" }).click();
   const note = page.locator(".react-flow__node[data-id^='md-']");
   await expect(note).toBeVisible();
-  await note.getByRole("button", { name: "Edit Canvas E2E note.md" }).click();
+  const editButton = note.getByRole("button", { name: "Edit Canvas E2E note.md" });
+  await expect(editButton).toBeVisible();
+  await editButton.click();
   const editor = note.getByRole("textbox", { name: "Edit Canvas E2E note.md" });
   await expect(editor).toContainText("Original vault text.");
   await editor.fill("# Local draft\n\nThis draft must not overwrite Obsidian.\n");
@@ -356,7 +368,15 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await artifacts.getByPlaceholder("title").fill(title);
   await artifacts.getByPlaceholder("contents (optional)").fill(body);
   await artifacts.getByRole("button", { name: "create" }).click();
-  await artifacts.locator("button[title^='Add to Board']").click();
+  // The artifact library is daemon-backed and shared across the whole e2e
+  // run — retries of this test leave their created rows behind. An unscoped
+  // "Add to Board" click then violates strict mode (or worse, silently pins
+  // a previous attempt's artifact). Filter the library down to exactly this
+  // artifact through the panel's own search before clicking its row action.
+  await artifacts.getByPlaceholder("Search artifacts or ask Dex").fill(title);
+  const addToBoard = artifacts.locator("button[title^='Add to Board']");
+  await expect(addToBoard).toHaveCount(1);
+  await addToBoard.click();
 
   await expect(page.locator(".react-flow__node-panel [data-panel='artifacts']")).toHaveCount(0);
   const card = page.locator(".react-flow__node-shape").filter({ hasText: title });

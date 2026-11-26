@@ -320,6 +320,21 @@ body,
 .react-flow__resize-control.line.cv-node-resize-line.right { transform: translate(-90%, 0) !important; }
 .react-flow__resize-control.line.cv-node-resize-line.left { transform: translate(-10%, 0) !important; }
 
+/* The invisible resize zones overlap the trailing header chrome by a few
+   pixels by design: the top-right corner handle (18px square, biased
+   inward) reaches over the close/collapse buttons that live flush against
+   the card's top-right corner. A click there must operate the button —
+   never start a resize — so the interactive chrome stacks above the
+   hit zones (handles z-12, lines z-11). The overlap is tiny, so the
+   resize zone stays grabbable all around the button. This is hit-testing
+   order only: neither the zones nor the buttons move a pixel. */
+.cv-card-chrome,
+.agent-card .card-chrome,
+.cv-card-btn {
+  position: relative;
+  z-index: 13;
+}
+
 .react-flow__handle {
   width: 7px;
   height: 7px;
