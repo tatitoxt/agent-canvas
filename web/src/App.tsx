@@ -262,12 +262,12 @@ function Board() {
   const [openTerms, setOpenTerms] = useState<Array<{ id: string; name: string }>>([]);
   // Re-opening an already-open terminal raises it to the front instead of
   // doing nothing (later entries render on top).
-  const openTerm = (t: { id: string; name: string }) =>
+  const openTerm = useCallback((t: { id: string; name: string }) =>
     setOpenTerms((ts) => {
       const rest = ts.filter((x) => x.id !== t.id);
       return rest.length === ts.length ? [...ts, t] : [...rest, t];
-    });
-  const closeTerm = (id: string) => setOpenTerms((ts) => ts.filter((x) => x.id !== id));
+    }), []);
+  const closeTerm = useCallback((id: string) => setOpenTerms((ts) => ts.filter((x) => x.id !== id)), []);
   const termRequest = useBoard((s) => s.termRequest);
   useEffect(() => {
     if (termRequest) openTerm({ id: termRequest.id, name: termRequest.name });
@@ -294,14 +294,13 @@ function Board() {
   // Tool panels live on the canvas as nodes (Deska "Add to board"):
   // clicking a rail/topbar icon opens or focuses its card; re-clicking
   // closes it. Non-panel keys (canvas) behave as before.
-  const navToggle = (k: string) => {
+  const navToggle = useCallback((k: string) => {
     // The zustand writes must NOT live inside a setNav updater: React runs
     // state updaters during Board's render (and twice in StrictMode), so a
     // store write there notifies subscribers — BottomDock among them — in
     // the middle of the render pass ("Cannot update a component while
-    // rendering a different component"). navToggle is rebuilt every render
-    // and only fires from event handlers, so `nav` here is always current
-    // and the updater form was never needed.
+    // rendering a different component"). navToggle is memoized for render
+    // cost but keyed on `nav`, so event handlers still see the current value.
     if (nav === k) {
       useBoard.getState().closePanelNode(`panel-${k}`);
       setNav("canvas");
@@ -321,14 +320,14 @@ function Board() {
       }
     }
     setNav(k);
-  };
-  const addPanelToBoard = (key: string) => {
+  }, [nav, screenToFlowPosition]);
+  const addPanelToBoard = useCallback((key: string) => {
     if (!PANEL_DEFS[key]) return;
     const def = PANEL_DEFS[key];
     const p = screenToFlowPosition({ x: Math.max(24, window.innerWidth * 0.38), y: Math.max(72, window.innerHeight * 0.22) });
     useBoard.getState().openPanelNode(key, p, { w: def.w, h: def.h });
     setNav("canvas");
-  };
+  }, [screenToFlowPosition]);
   const [palette, setPalette] = useState(false);
   const edgeDetail = useBoard((s) => s.edgeDetail);
   const setEdgeDetail = useBoard((s) => s.setEdgeDetail);
@@ -1072,8 +1071,20 @@ function Board() {
     return [...delegEdges, ...wireEdges, ...termOwnEdges];
   }, [connected, liveEdges, agents, activeBoard, orchestrators, termNodes]);
 
+  const panelActions = useMemo(() => ({ openTerm, openEdgeDetail: setEdgeDetail }), [openTerm, setEdgeDetail]);
+  const topbarTools = useMemo(() => ({
+    onDigest: () => useBoard.getState().digestNow(),
+    onShot: () => void shotCanvas(),
+    onStudio: () => useBoard.getState().studioDocNow(),
+    onDraw: () => setPencil((m) => !m),
+    onRegion: () => setShotMode((m) => !m),
+    onAddToBoard: addPanelToBoard,
+    drawOn: pencil,
+    regionOn: shotMode,
+  }), [shotCanvas, addPanelToBoard, pencil, shotMode]);
+
   return (
-    <PanelActionsCtx.Provider value={{ openTerm, openEdgeDetail: setEdgeDetail }}>
+    <PanelActionsCtx.Provider value={panelActions}>
     <div className="relative h-full w-full">
       {!chromeHidden && (
         <>
@@ -1089,16 +1100,7 @@ function Board() {
           <Topbar
             nav={nav}
             onNav={navToggle}
-            tools={{
-              onDigest: () => useBoard.getState().digestNow(),
-              onShot: () => void shotCanvas(),
-              onStudio: () => useBoard.getState().studioDocNow(),
-              onDraw: () => setPencil((m) => !m),
-              onRegion: () => setShotMode((m) => !m),
-              onAddToBoard: addPanelToBoard,
-              drawOn: pencil,
-              regionOn: shotMode,
-            }}
+            tools={topbarTools}
           />
         </>
       )}
@@ -1525,7 +1527,7 @@ function Board() {
           agentId={t.id}
           name={t.name}
           index={i}
-          onClose={() => closeTerm(t.id)}
+          onClose={closeTerm}
         />
       ))}
       {search && (

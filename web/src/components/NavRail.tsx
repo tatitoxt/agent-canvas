@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useBoard } from "../store/board";
 import { Icon } from "./icons";
 
@@ -293,7 +293,7 @@ function ExtrasBubble({ side, onSelect }: { side: "left" | "right"; onSelect: (k
 
 /** Left rail — the code bubble up top (source control, explorer,
  * dev ticket, daemon status), Extras parked at the bottom. */
-export function NavRail({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
+export const NavRail = memo(function NavRail({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
   const repoUrl = useBoard((s) => s.repoUrl);
   const agents = useBoard((s) => s.agents);
   const activeBoard = useBoard((s) => s.activeBoard);
@@ -451,7 +451,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
       </div>
     </div>
   );
-}
+});
 
 function OrchestratorsBubble() {
   const orchestrators = useBoard((s) => s.orchestrators);
@@ -535,7 +535,7 @@ function OrchestratorsBubble() {
  * gather, hide, summaries) parked at the bottom-right edge, right
  * of the minimap. */
 
-export function RightRail() {
+export const RightRail = memo(function RightRail() {
   const summaries = useBoard((s) => s.panelSummaries);
   const zoomPct = useBoard((s) => s.zoomPct);
 
@@ -578,12 +578,12 @@ export function RightRail() {
       </nav>
     </div>
   );
-}
+});
 
 /** Bottom dock — the wide Dex pill sits dead-center at the bottom of
  * the screen. A 3-column grid keeps it exactly on the 50% axis:
  * create on its left, the small round inbox on its right. */
-export function BottomDock({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
+export const BottomDock = memo(function BottomDock({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
   const activeBoard = useBoard((s) => s.activeBoard);
   const agents = useBoard((s) => s.agents);
   const panelNodes = useBoard((s) => s.panelNodes);
@@ -758,4 +758,4 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
       {/* inbox lives in ONE place: the topbar bell — no bottom bubble. */}
     </div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 
 import { TermHost } from "./TermHost";
 import { useBoard } from "../store/board";
@@ -25,9 +25,9 @@ export function terminalTitle(name: string, termNo: number): string {
   return name || `Terminal ${termNo > 0 ? termNo : ""}`.trim();
 }
 
-type Props = { agentId: string; name: string; index?: number; onClose: () => void };
+type Props = { agentId: string; name: string; index?: number; onClose: (agentId: string) => void };
 
-export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
+export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   const [confirmingKill, setConfirmingKill] = useState(false);
   const kill = useBoard((s) => s.kill);
   const [pos, setPos] = useState(DEFAULT_POS);
@@ -324,7 +324,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             title="pop out onto the canvas as a card"
             onClick={() => {
               useBoard.getState().openTermNode(agentId);
-              onClose();
+              onClose(agentId);
             }}
             style={{
               border: "none",
@@ -433,7 +433,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
                 onClick={() => {
                   kill(agentId);
                   setConfirmingKill(false);
-                  onClose();
+                  onClose(agentId);
                 }}
               >
                 kill
@@ -453,7 +453,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
               kill
             </button>
           )}
-          <button className="text-xs text-[var(--cv-ink-dim)]" onClick={onClose}>
+          <button className="text-xs text-[var(--cv-ink-dim)]" onClick={() => onClose(agentId)}>
             ✕
           </button>
         </div>
@@ -549,4 +549,4 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
       )}
     </div>
   );
-}
+});

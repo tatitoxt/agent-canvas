@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { getAgentSpawnPositions, useBoard } from "../store/board";
 import { isTauri } from "../daemon/tauriClient";
 import { Icon } from "./icons";
@@ -64,7 +64,7 @@ const miniInput: React.CSSProperties = {
 /** Deska-style topbar. Left: machine (This Mac / cloud / phone), workspaces,
  * worktrees, tasks. Right, icon-only: mission map, search, automations,
  * notifications, tools, settings. Everything iconified with tooltips. */
-export function Topbar({
+export const Topbar = memo(function Topbar({
   nav,
   onNav,
   tools,
@@ -646,4 +646,4 @@ export function Topbar({
       </div>
     </div>
   );
-}
+});
