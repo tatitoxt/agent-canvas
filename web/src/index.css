@@ -203,6 +203,23 @@ body,
      context, so the selected node itself must win hit testing. */
   z-index: 30 !important;
 }
+
+/* Drag ghost — the card contents fade to a blueprint transparency while
+   React Flow's node wrapper keeps a full-strength dashed amber outline at
+   the exact target rect. Do NOT put opacity on the wrapper: the outline is
+   the part that must remain visible. Applies uniformly to agent terminals,
+   panels, vault/windows, web embeds, workspaces and shapes. */
+.react-flow__node.dragging {
+  outline: 1.5px dashed var(--cv-accent) !important;
+  /* Sit on the card edge rather than drawing a second selection-style halo
+     outside the drop rect. */
+  outline-offset: -1.5px;
+  border-radius: 14px;
+  z-index: 40 !important;
+}
+.react-flow__node.dragging > * {
+  opacity: 0.2 !important;
+}
 .edge-delegated .react-flow__edge-path {
   stroke-dasharray: 5 5;
   animation: edge-flow 1.6s linear infinite;

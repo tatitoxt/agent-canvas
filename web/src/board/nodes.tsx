@@ -159,7 +159,7 @@ export function StatusBars({ color }: { color: string }) {
   );
 }
 
-export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>) {
+export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNodeData>>) {
   const meta = cliMeta(data.cli);
   const summaries = useBoard((s) => s.panelSummaries);
   const customSize = useBoard((s) => s.agentSizes[data.id ?? id]);
@@ -196,6 +196,17 @@ export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>
     : wired
       ? "0 0 18px color-mix(in srgb, var(--cv-accent) 22%, transparent), 0 18px 44px rgba(0,0,0,0.5)"
       : undefined;
+  // The header is a single-line titlebar at every card size. As the card
+  // approaches its 320px minimum, secondary metadata drops before the state
+  // or the window controls do — Deska keeps the status inline even when the
+  // title collapses to "T…".
+  // React Flow reports width=0 before the first measurement, and the
+  // collapsed pill measures well below the card minimum. Both are sentinel
+  // cases, not real card widths; valid expanded cards are >= minWidth 320.
+  const nodeWidth = typeof width === "number" && width >= 300 ? width : undefined;
+  const cardWidth = customSize?.w ?? nodeWidth ?? 460;
+  const compactHeader = cardWidth < 410;
+  const tightHeader = cardWidth < 350;
   if (collapsed) {
     // Deska's collapsed terminal — glyph tile + number in a small pill.
     return (
@@ -245,7 +256,7 @@ export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>
       className={`glass agent-card ${live && !selected ? "card-ring" : ""} ${data.status === "waiting" ? "node-waiting" : ""}`}
       style={{
         position: "relative",
-        width: customSize?.w ?? 460,
+        width: cardWidth,
         height: customSize?.h,
         overflow: customSize?.h ? "hidden" : undefined,
         display: "flex",
@@ -282,38 +293,82 @@ export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>
         }}
       />
       <Handle type="target" position={Position.Left} />
-      {/* Two-tier titlebar keeps identity readable at the default card width. */}
-      <div data-testid="agent-card-header" style={{ display: "grid", gap: 7, minWidth: 0, padding: "10px 12px 9px", flex: "none" }}>
-        <div data-testid="agent-card-identity" style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-          <span
-            title="Terminal"
-            style={{
-              flex: "none", width: 24, height: 24, borderRadius: 7,
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              background: `color-mix(in srgb, ${meta.color} 14%, transparent)`,
-              border: `1px solid color-mix(in srgb, ${meta.color} 30%, transparent)`,
-            }}
+      {/* Deska titlebar: identity, live state, CLI identity and chrome all
+          share ONE row. Narrow cards truncate/drop secondary text in-place;
+          they never wrap into a second header line. */}
+      <div
+        data-testid="agent-card-header"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: tightHeader ? 7 : 8,
+          minWidth: 0,
+          padding: tightHeader ? "8px 10px 7px" : "9px 12px 8px",
+          flex: "none",
+        }}
+      >
+        <span
+          title="Terminal"
+          style={{
+            flex: "none",
+            width: tightHeader ? 20 : 22,
+            height: tightHeader ? 20 : 22,
+            borderRadius: 6,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: `color-mix(in srgb, ${meta.color} 14%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${meta.color} 30%, transparent)`,
+          }}
+        >
+          <Icon name="terminal" size={tightHeader ? 12 : 13} color={meta.color} />
+        </span>
+        <div
+          data-testid="agent-card-identity"
+          style={{ display: "flex", alignItems: "baseline", gap: 7, flex: "0 1 auto", minWidth: 0 }}
+        >
+          <div
+            data-testid="agent-card-title"
+            style={{ fontSize: 13.5, fontWeight: 650, letterSpacing: -0.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, color: "var(--cv-ink)" }}
+            title={data.name}
           >
-            <Icon name="terminal" size={13} color={meta.color} />
-          </span>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flex: 1, minWidth: 0 }}>
-            <div
-              data-testid="agent-card-title"
-              style={{ fontSize: 15, fontWeight: 650, letterSpacing: -0.12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, color: "var(--cv-ink)" }}
-              title={data.name}
-            >
-              {termTitle}
-            </div>
-            {roleLabel && (
-              <span style={{ fontSize: 11.5, fontWeight: 500, color: "var(--cv-ink-faint)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140 }} title={data.name}>
-                {roleLabel}
-              </span>
-            )}
+            {termTitle}
           </div>
+          {roleLabel && (
+            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--cv-ink-faint)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 110, minWidth: 22, flex: "0 3 auto" }} title={data.name}>
+              {roleLabel}
+            </span>
+          )}
+        </div>
+        <div
+          data-testid="agent-card-meta"
+          style={{ display: "flex", alignItems: "center", gap: tightHeader ? 6 : 7, flex: "1 0 auto", minWidth: 0, overflow: "hidden" }}
+        >
           <span
-            className="nodrag card-chrome"
-            style={{ display: "inline-flex", alignItems: "center", gap: 9, flex: "none", color: "var(--cv-ink)", fontSize: 12, opacity: selected ? 1 : undefined }}
+            data-testid="agent-card-status"
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, flex: "none", fontSize: 11, fontWeight: 650, color: statusColor, whiteSpace: "nowrap" }}
           >
+            <StatusBars color={statusColor} />
+            {STATUS_LABEL[data.status]}
+          </span>
+          {data.accountLabel && !compactHeader && (
+            <span title="account" style={{ maxWidth: 104, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderLeft: "1px solid var(--cv-glass-edge)", paddingLeft: 7, fontSize: 10, color: "var(--cv-ink-dim)", flex: "0 1 auto", minWidth: 0 }}>
+              @{data.accountLabel}
+            </span>
+          )}
+          <span
+            data-testid="agent-card-cli"
+            style={{ display: "inline-flex", alignItems: "center", gap: 5.5, marginLeft: "auto", minWidth: 0, flex: "0 1 auto", overflow: "hidden", fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}
+            title={meta.label}
+          >
+            <CliMark cli={data.cli} color={meta.color} size={12} />
+            <span style={{ color: meta.color, overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{meta.label}</span>
+          </span>
+        </div>
+        <span
+          className="nodrag card-chrome"
+          style={{ display: "inline-flex", alignItems: "center", gap: tightHeader ? 7 : 8, flex: "none", color: "var(--cv-ink)", fontSize: 12, opacity: selected ? 1 : undefined }}
+        >
           <button
             type="button"
             className="nodrag"
@@ -353,30 +408,7 @@ export function AgentNode({ id, data, selected }: NodeProps<Node<AgentNodeData>>
           >
             <Icon name="ph-x" size={13} color="var(--cv-ink)" />
           </button>
-          </span>
-        </div>
-        <div data-testid="agent-card-meta" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, paddingLeft: 33 }}>
-          <span
-            data-testid="agent-card-status"
-            style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 650, color: statusColor, whiteSpace: "nowrap" }}
-          >
-            <StatusBars color={statusColor} />
-            {STATUS_LABEL[data.status]}
-          </span>
-          {data.accountLabel && (
-            <span title="account" style={{ maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderLeft: "1px solid var(--cv-glass-edge)", paddingLeft: 8, fontSize: 10.5, color: "var(--cv-ink-dim)" }}>
-              @{data.accountLabel}
-            </span>
-          )}
-          <span
-            data-testid="agent-card-cli"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: "auto", minWidth: 0, fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}
-            title={meta.label}
-          >
-            <CliMark cli={data.cli} color={meta.color} size={13} />
-            <span style={{ color: meta.color, overflow: "hidden", textOverflow: "ellipsis" }}>{meta.label}</span>
-          </span>
-        </div>
+        </span>
       </div>
       {/* Full-width section separator — Deska splits header from body
           edge to edge, not inside the padding. */}

@@ -23,7 +23,9 @@ test("offline demo mounts without a React update loop", async ({ page }) => {
   await expect(card.getByTestId("agent-steering-input")).toHaveCount(0);
   const identity = await card.getByTestId("agent-card-identity").boundingBox();
   const meta = await card.getByTestId("agent-card-meta").boundingBox();
-  expect(meta!.y).toBeGreaterThan(identity!.y + identity!.height - 1);
+  // Single-line header: title, role, status and cli share one row — meta must
+  // sit on the SAME line as identity, not below it.
+  expect(Math.abs(meta!.y - identity!.y)).toBeLessThan(6);
   const cards = await page.locator(".react-flow__node-agent").evaluateAll((nodes) =>
     nodes.map((node) => {
       const r = node.getBoundingClientRect();
