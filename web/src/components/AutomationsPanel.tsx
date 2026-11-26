@@ -128,7 +128,7 @@ export function AutomationsPanel() {
           ⚙
         </button>
         <button
-          className="glass-pill"
+          className="glass-pill cv-canvas-jump"
           title="Show this live Automations window on the canvas"
           style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 8px", cursor: "pointer", border: "none", color: "var(--cv-ink-dim)" }}
           onClick={() => {

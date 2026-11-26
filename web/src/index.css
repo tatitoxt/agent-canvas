@@ -521,3 +521,9 @@ body,
     justify-content: center;
   }
 }
+
+/* The "Open on canvas" jump button is meaningless inside the board card
+   itself — the card IS on the canvas. It only belongs in the overlay. */
+.react-flow__node-panel .cv-canvas-jump {
+  display: none;
+}
