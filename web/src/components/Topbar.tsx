@@ -274,7 +274,10 @@ export const Topbar = memo(function Topbar({
         // clickable while they own the canvas pointer.
         zIndex: 31,
         display: "flex",
-        alignItems: "flex-start",
+        // Stretch, not flex-start: both cluster bubbles share the strip's
+        // full height, so the two fusion bubbles are the same size and the
+        // joined bar is one uniform surface end to end.
+        alignItems: "stretch",
         gap: 8,
         padding: 3,
         pointerEvents: "auto",
@@ -433,7 +436,10 @@ export const Topbar = memo(function Topbar({
         />
       </div>
 
-      <div style={{ flex: 1 }} />
+      {/* The spacer doubles as the fusion stage: its ::before/::after are
+          the two glass masses that extrude from each bubble's inner edge
+          and meet in the middle of the gap (see .cv-fuse-gap in index.css). */}
+      <div className="cv-fuse-gap" style={{ flex: 1 }} />
 
       {/* ── right: loose round glass buttons that fuse into one bubble on
           hover — Deska's topbar trick ── */}

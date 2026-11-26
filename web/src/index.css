@@ -810,70 +810,152 @@ button.cv-card-close:hover,
 }
 /* ---------- topbar fusion — Deska-style convergence choreography.
    Invariants:
-   - ZERO layout shift: gap/padding/margins never change on hover. Click
-     targets stay pixel-fixed; the fusion is purely visual (fills, rings,
-     shadows and a clip reveal).
-   - The continuous bar is a ::before wash that wipes open from the center
-     outward — the bubbles visually meet in the middle and the bar blooms
-     from there — instead of popping in at full width.
-   - The two bubbles dissolve with a slight left-to-right stagger so the
-     merge reads as a sweep, not a simultaneous dissolve.
-   The whole choreography fits inside --cv-motion-slow (250ms) on Deska's
-   ease-out curve. ---------- */
+   - ZERO layout shift: gap/padding/margins/box sizes never change on
+     hover. Click targets stay pixel-fixed; the fusion is purely visual
+     (pseudo-element fills, hairlines and shadows).
+   - The merge is GEOGRAPHIC, not a wash blooming from the center: a glass
+     mass extrudes from the inner edge of each bubble and the two fronts
+     advance through the gap until they meet in its middle — left front
+     grows rightward, right front grows leftward.
+   - Bubble regions unify in place: each cluster cross-fades onto a
+     pre-shaped flat-inner-edge bar segment (::before revealed as the
+     bubble's own fill dissolves), so the finished bar is one continuous
+     surface — same height, same tone, no seams.
+   The front travel is 100% visible and runs 300ms on Deska's ease-out
+   curve — fast off the bubble's edge, decelerating gently into the join.
+   ---------- */
 .cv-topbar-fuse {
   border-radius: 999px;
-  /* The element itself only carries the ambient drop shadow, cross-faded.
-     The fill + hairline ring live in the ::before wash so they can wipe
-     open geographically instead of fading in uniformly. */
-  transition: box-shadow var(--cv-motion-slow) var(--cv-ease-out);
-}
-.cv-topbar-fuse::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--cv-ink) 7%, color-mix(in srgb, var(--cv-base) 82%, transparent));
-  backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
-  -webkit-backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
-  box-shadow: inset 0 0 0 1px var(--cv-glass-edge);
-  pointer-events: none;
-  z-index: -1;
-  opacity: 0;
-  /* Fully clipped at rest: the reveal grows symmetrically from the strip's
-     center toward both ends — the "they meet in the middle" read. */
-  clip-path: inset(0 50% 0 50% round 999px);
-  transition:
-    clip-path var(--cv-motion-slow) var(--cv-ease-out),
-    opacity var(--cv-motion-base) var(--cv-ease-out);
+  --cv-fuse-fill: color-mix(in srgb, var(--cv-ink) 7%, color-mix(in srgb, var(--cv-base) 82%, transparent));
+  /* Only the ambient drop shadow lives on the strip itself. Hover-out
+     (this base timing) lets it fall immediately so the split reads clean;
+     hover-in overrides with a delay so it blooms as the fronts meet. */
+  transition: box-shadow 140ms var(--cv-ease-out);
 }
 .cv-topbar-fuse:hover {
   box-shadow: var(--cv-shadow-hover);
+  transition: box-shadow var(--cv-motion-base) var(--cv-ease-out) 110ms;
 }
-.cv-topbar-fuse:hover::before {
-  opacity: 1;
-  clip-path: inset(0 0 0 0 round 999px);
+/* The advancing fronts live in the flex spacer so their geometry IS the
+   true gap. Each one is anchored past the flex gutter (-8px) flush against
+   its bubble's edge — where the extrusion visually attaches — and grows to
+   cover exactly half the gap, so the two noses meet in the middle. The
+   nose travels rounded (organic, liquid) and flattens as it arrives so the
+   meeting seam vanishes. These are absolutely positioned pseudo-elements:
+   animating their width never touches layout. */
+.cv-fuse-gap {
+  position: relative;
 }
-/* Staggered bubble dissolution — scoped strictly to the two topbar cluster
-   bubbles (other .glass-pill uses keep their snappy default). The left
-   bubble leads, the right cluster follows ~40ms later: a left-to-right
-   sweep. The delay lives in the base rule so hover-out mirrors the same
-   gentle stagger instead of snapping back all at once. backdrop-filter
-   interpolates blur→0 instead of popping off. */
-.cv-topbar-fuse > .glass-pill {
+.cv-fuse-gap::before,
+.cv-fuse-gap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: var(--cv-fuse-fill);
+  backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
+  -webkit-backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
+  /* The bar's top/bottom hairlines ride along with the front. */
+  box-shadow:
+    inset 0 1px 0 0 var(--cv-glass-edge),
+    inset 0 -1px 0 0 var(--cv-glass-edge);
+  pointer-events: none;
   transition:
-    background var(--cv-motion-base) var(--cv-ease-out) 20ms,
-    border-color var(--cv-motion-base) var(--cv-ease-out) 20ms,
-    box-shadow var(--cv-motion-base) var(--cv-ease-out) 20ms,
-    backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 20ms,
-    -webkit-backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 20ms;
+    width 300ms var(--cv-ease-out),
+    border-radius 300ms var(--cv-ease-out);
 }
+.cv-fuse-gap::before {
+  left: -8px;
+  border-radius: 0 999px 999px 0;
+}
+.cv-fuse-gap::after {
+  right: -8px;
+  border-radius: 999px 0 0 999px;
+}
+.cv-topbar-fuse:hover .cv-fuse-gap::before {
+  /* half the gap + the gutter + a half-pixel past center so no sub-pixel
+     crack can open where the fronts join */
+  width: calc(50% + 8.5px);
+  border-radius: 0;
+}
+.cv-topbar-fuse:hover .cv-fuse-gap::after {
+  width: calc(50% + 8px);
+  border-radius: 0;
+}
+/* The bar segments — each cluster bubble carries a ::before pre-shaped as
+   its final bar segment: the fill, blur and perimeter hairlines of the
+   continuous bar with the inner edge already flat. It sits underneath the
+   bubble's own fill (negative z-index inside the strip's stacking context)
+   fully formed; as the bubble dissolves, the segment is simply revealed —
+   a monotone cross-fade with no tonal dip and no double-fill. */
+.cv-topbar-fuse > .glass-pill,
 .cv-topbar-fuse > .cv-fuse {
+  position: relative;
+  /* Symmetric dissolution — both bubbles fade fill, ring, shadow and blur
+     together, with no directional stagger: the merge is a mirror-symmetric
+     convergence, not a sweep. Timing is direction-aware: this base rule
+     drives hover-OUT, where the bubbles must not re-materialize until the
+     retreating mass is back — a 120ms delay lands the reformation exactly
+     as the fronts finish retracting (300ms), so the receding fill never
+     reads as a detached sliver mid-gap. The :hover override below drives
+     hover-IN with the earlier 60ms start. */
+  transition:
+    background var(--cv-motion-base) var(--cv-ease-out) 120ms,
+    border-color var(--cv-motion-base) var(--cv-ease-out) 120ms,
+    box-shadow var(--cv-motion-base) var(--cv-ease-out) 120ms,
+    backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 120ms,
+    -webkit-backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 120ms;
+}
+.cv-topbar-fuse:hover > .glass-pill,
+.cv-topbar-fuse:hover > .cv-fuse {
   transition:
     background var(--cv-motion-base) var(--cv-ease-out) 60ms,
     border-color var(--cv-motion-base) var(--cv-ease-out) 60ms,
     box-shadow var(--cv-motion-base) var(--cv-ease-out) 60ms,
     backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 60ms,
     -webkit-backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 60ms;
+}
+.cv-topbar-fuse > .glass-pill::before,
+.cv-topbar-fuse > .cv-fuse::before {
+  content: "";
+  position: absolute;
+  /* inset -1px covers the border-box exactly (the anchor is the padding
+     box), so the segment's hairlines land where the bubble's ring was. */
+  inset: -1px;
+  background: var(--cv-fuse-fill);
+  backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
+  -webkit-backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  /* Same direction-aware timing as the bubble dissolution above: the
+     segment lingers into hover-out (120ms) so the bar surface never opens
+     a hole while the mass is still retracting, and fades in early (60ms)
+     on hover-in. */
+  transition: opacity var(--cv-motion-base) var(--cv-ease-out) 120ms;
+}
+.cv-topbar-fuse:hover > .glass-pill::before,
+.cv-topbar-fuse:hover > .cv-fuse::before {
+  transition: opacity var(--cv-motion-base) var(--cv-ease-out) 60ms;
+}
+.cv-topbar-fuse > .glass-pill::before {
+  border-radius: 999px 0 0 999px;
+  box-shadow:
+    inset 0 1px 0 0 var(--cv-glass-edge),
+    inset 0 -1px 0 0 var(--cv-glass-edge),
+    inset 1px 0 0 0 var(--cv-glass-edge);
+}
+.cv-topbar-fuse > .cv-fuse::before {
+  border-radius: 0 999px 999px 0;
+  box-shadow:
+    inset 0 1px 0 0 var(--cv-glass-edge),
+    inset 0 -1px 0 0 var(--cv-glass-edge),
+    inset -1px 0 0 0 var(--cv-glass-edge);
+}
+.cv-topbar-fuse:hover > .glass-pill::before,
+.cv-topbar-fuse:hover > .cv-fuse::before {
+  opacity: 1;
 }
 .cv-topbar-fuse:hover .glass-pill,
 .cv-topbar-fuse:hover .cv-fuse {
@@ -886,13 +968,16 @@ button.cv-card-close:hover,
   -webkit-backdrop-filter: blur(0px) saturate(1);
 }
 /* Reduced motion: the fusion end states are identical, but every step is
-   instant — no wipe, no stagger, no cross-fade. This block must sit AFTER
-   the fusion rules above: equal specificity means source order decides. */
+   instant — no travel, no cross-fade. This block must sit AFTER the fusion
+   rules above: equal specificity means source order decides. */
 @media (prefers-reduced-motion: reduce) {
   .cv-topbar-fuse,
-  .cv-topbar-fuse::before,
+  .cv-fuse-gap::before,
+  .cv-fuse-gap::after,
   .cv-topbar-fuse > .glass-pill,
-  .cv-topbar-fuse > .cv-fuse {
+  .cv-topbar-fuse > .cv-fuse,
+  .cv-topbar-fuse > .glass-pill::before,
+  .cv-topbar-fuse > .cv-fuse::before {
     transition: none;
   }
 }
