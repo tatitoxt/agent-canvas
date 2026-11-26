@@ -413,11 +413,17 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   const cornerBox = await corner.boundingBox();
   expect(afterRightEdge).not.toBeNull();
   expect(cornerBox).not.toBeNull();
-  const cornerIsHitTarget = await page.evaluate(({ x, y }) => {
-    const target = document.elementFromPoint(x, y);
+  // Measure and hit-test in ONE evaluate: splitting them lets a React
+  // re-render commit between the two CDP roundtrips and the point lands
+  // where the corner zone was a frame ago — a pure measurement race.
+  await expect.poll(async () => page.evaluate((id) => {
+    const node = document.querySelector(`.react-flow__node-shape[data-id="${id}"]`);
+    const zone = node?.querySelector(".react-flow__resize-control.handle.bottom.right");
+    if (!zone) return false;
+    const r = zone.getBoundingClientRect();
+    const target = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
     return !!target?.closest(".react-flow__resize-control.handle.bottom.right");
-  }, { x: cornerBox!.x + cornerBox!.width / 2, y: cornerBox!.y + cornerBox!.height / 2 });
-  expect(cornerIsHitTarget, "the invisible bottom-right corner zone must win over both edge zones").toBe(true);
+  }, shapeId), { timeout: 4_000, message: "the invisible bottom-right corner zone must win over both edge zones" }).toBe(true);
   await page.mouse.move(cornerBox!.x + cornerBox!.width / 2, cornerBox!.y + cornerBox!.height / 2);
   await page.mouse.down();
   await page.mouse.move(cornerBox!.x + cornerBox!.width / 2 + 55, cornerBox!.y + cornerBox!.height / 2 + 45, { steps: 8 });
