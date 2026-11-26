@@ -63,7 +63,7 @@
   --cv-minimap-node-stroke: color-mix(in srgb, var(--cv-ink) 25%, transparent);
 
   /* Deska accent and state palette. */
-  --cv-accent: #ff7a5c;
+  --cv-accent: #f5a524;
   --cv-accent-ink: var(--cv-base);
   --cv-accent-dim: color-mix(in srgb, var(--cv-accent) 16%, transparent);
   --cv-accent-overlay-1: color-mix(in srgb, var(--cv-accent) 10%, transparent);

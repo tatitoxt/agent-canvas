@@ -9,7 +9,7 @@ import { useBoard } from "../store/board";
  * canvas terminal card (TermNode): mounts the emulator, replays the
  * scrollback buffer, pipes PTY bytes both ways, answers OSC color
  * queries, and keeps the PTY size in sync with the box. */
-const DECOR = { matchBackground: "#6f362b", matchOverviewRuler: "#ff7a5c", activeMatchBackground: "#ff7a5c", activeMatchColorOverviewRuler: "#ffffff" };
+const DECOR = { matchBackground: "#5c4316", matchOverviewRuler: "#f5a524", activeMatchBackground: "#f5a524", activeMatchColorOverviewRuler: "#ffffff" };
 
 
 /** tmux-style grouped clients: several TermHosts can mirror the same PTY
@@ -70,8 +70,8 @@ export function TermHost({ agentId }: { agentId: string }) {
       theme: {
         background: "#0a0b0e",
         foreground: "#eef1f5",
-        cursor: "#ff7a5c",
-        selectionBackground: "rgba(255,122,92,0.4)",
+        cursor: "#f5a524",
+        selectionBackground: "rgba(245,165,36,0.4)",
       },
       convertEol: true,
     });
