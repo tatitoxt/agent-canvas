@@ -32,11 +32,13 @@ jobs:
         run: npm install -g @tauri-apps/cli@^2
 
       - name: sync version with tag
-        run: sed -i '' 's/"version": "[^"]*"/"version": "${GITHUB_REF_NAME#v}"/' src-tauri/tauri.conf.json && grep '"version"' src-tauri/tauri.conf.json | head -1
+        run: |
+          sed -i '' 's/"version": "[^"]*"/"version": "${GITHUB_REF_NAME#v}"/' src-tauri/tauri.conf.json && grep '"version"' src-tauri/tauri.conf.json | head -1
 
       - name: unsigned build fallback (no signing keys configured)
         if: ${{ env.SIGNING_PRIVATE_KEY == '' }}
-        run: sed -i '' 's/"createUpdaterArtifacts": true/"createUpdaterArtifacts": false/' src-tauri/tauri.conf.json
+        run: |
+          sed -i '' 's/"createUpdaterArtifacts": true/"createUpdaterArtifacts": false/' src-tauri/tauri.conf.json
 
       - name: build the app
         working-directory: src-tauri
@@ -108,7 +110,8 @@ jobs:
 
       - name: sync version with tag
         # GNU sed on Git Bash — no backup-suffix argument needed
-        run: sed -i 's/"version": "[^"]*"/"version": "${GITHUB_REF_NAME#v}"/' src-tauri/tauri.conf.json && grep '"version"' src-tauri/tauri.conf.json | head -1
+        run: |
+          sed -i 's/"version": "[^"]*"/"version": "${GITHUB_REF_NAME#v}"/' src-tauri/tauri.conf.json && grep '"version"' src-tauri/tauri.conf.json | head -1
 
       - name: build the app
         working-directory: src-tauri
