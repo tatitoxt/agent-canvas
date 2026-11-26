@@ -715,24 +715,93 @@ button.cv-card-close:hover,
   max-width: 84px;
   opacity: 1;
 }
+/* ---------- topbar fusion — Deska-style convergence choreography.
+   Invariants:
+   - ZERO layout shift: gap/padding/margins never change on hover. Click
+     targets stay pixel-fixed; the fusion is purely visual (fills, rings,
+     shadows and a clip reveal).
+   - The continuous bar is a ::before wash that wipes open from the center
+     outward — the bubbles visually meet in the middle and the bar blooms
+     from there — instead of popping in at full width.
+   - The two bubbles dissolve with a slight left-to-right stagger so the
+     merge reads as a sweep, not a simultaneous dissolve.
+   The whole choreography fits inside --cv-motion-slow (250ms) on Deska's
+   ease-out curve. ---------- */
 .cv-topbar-fuse {
   border-radius: 999px;
-  transition: background var(--cv-motion-base) var(--cv-ease-out), box-shadow var(--cv-motion-base) var(--cv-ease-out), gap var(--cv-motion-base) var(--cv-ease-out);
+  /* The element itself only carries the ambient drop shadow, cross-faded.
+     The fill + hairline ring live in the ::before wash so they can wipe
+     open geographically instead of fading in uniformly. */
+  transition: box-shadow var(--cv-motion-slow) var(--cv-ease-out);
 }
-.cv-topbar-fuse:hover {
-  gap: 4px !important;
+.cv-topbar-fuse::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
   background: color-mix(in srgb, var(--cv-ink) 7%, color-mix(in srgb, var(--cv-base) 82%, transparent));
   backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
   -webkit-backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
-  box-shadow: inset 0 0 0 1px var(--cv-glass-edge), var(--cv-shadow-hover);
+  box-shadow: inset 0 0 0 1px var(--cv-glass-edge);
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  /* Fully clipped at rest: the reveal grows symmetrically from the strip's
+     center toward both ends — the "they meet in the middle" read. */
+  clip-path: inset(0 50% 0 50% round 999px);
+  transition:
+    clip-path var(--cv-motion-slow) var(--cv-ease-out),
+    opacity var(--cv-motion-base) var(--cv-ease-out);
+}
+.cv-topbar-fuse:hover {
+  box-shadow: var(--cv-shadow-hover);
+}
+.cv-topbar-fuse:hover::before {
+  opacity: 1;
+  clip-path: inset(0 0 0 0 round 999px);
+}
+/* Staggered bubble dissolution — scoped strictly to the two topbar cluster
+   bubbles (other .glass-pill uses keep their snappy default). The left
+   bubble leads, the right cluster follows ~40ms later: a left-to-right
+   sweep. The delay lives in the base rule so hover-out mirrors the same
+   gentle stagger instead of snapping back all at once. backdrop-filter
+   interpolates blur→0 instead of popping off. */
+.cv-topbar-fuse > .glass-pill {
+  transition:
+    background var(--cv-motion-base) var(--cv-ease-out) 20ms,
+    border-color var(--cv-motion-base) var(--cv-ease-out) 20ms,
+    box-shadow var(--cv-motion-base) var(--cv-ease-out) 20ms,
+    backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 20ms,
+    -webkit-backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 20ms;
+}
+.cv-topbar-fuse > .cv-fuse {
+  transition:
+    background var(--cv-motion-base) var(--cv-ease-out) 60ms,
+    border-color var(--cv-motion-base) var(--cv-ease-out) 60ms,
+    box-shadow var(--cv-motion-base) var(--cv-ease-out) 60ms,
+    backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 60ms,
+    -webkit-backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 60ms;
 }
 .cv-topbar-fuse:hover .glass-pill,
 .cv-topbar-fuse:hover .cv-fuse {
   background: transparent;
   box-shadow: none;
   border-color: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  /* blur(0) rather than none keeps the filter interpolable — the bubbles'
+     blur dissolves with their fill instead of popping off in one frame. */
+  backdrop-filter: blur(0px) saturate(1);
+  -webkit-backdrop-filter: blur(0px) saturate(1);
+}
+/* Reduced motion: the fusion end states are identical, but every step is
+   instant — no wipe, no stagger, no cross-fade. This block must sit AFTER
+   the fusion rules above: equal specificity means source order decides. */
+@media (prefers-reduced-motion: reduce) {
+  .cv-topbar-fuse,
+  .cv-topbar-fuse::before,
+  .cv-topbar-fuse > .glass-pill,
+  .cv-topbar-fuse > .cv-fuse {
+    transition: none;
+  }
 }
 @media (max-width: 1050px) {
   .cv-topbar-control-label { display: none; }
