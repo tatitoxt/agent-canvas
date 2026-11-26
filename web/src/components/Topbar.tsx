@@ -6,8 +6,8 @@ import { ToolsMenu, type ToolsMenuActions } from "./ToolsRail";
 import { PANEL_META } from "./panelMeta";
 
 const pill: React.CSSProperties = {
-  padding: "5px 10px",
-  fontSize: 11.5,
+  padding: "6px 11px",
+  fontSize: 12,
   fontWeight: 600,
   color: "var(--cv-ink)",
   display: "flex",
@@ -20,8 +20,8 @@ const pill: React.CSSProperties = {
 const iconBtn = (active: boolean): React.CSSProperties => ({
   display: "grid",
   placeItems: "center",
-  width: 34,
-  height: 34,
+  width: 38,
+  height: 38,
   borderRadius: 999,
   color: active ? "var(--cv-accent)" : "var(--cv-ink)",
   cursor: "pointer",
@@ -553,7 +553,7 @@ export function Topbar({
           title="Mission Map — agents, terminals, models and accounts"
           onClick={() => onNav("usage")}
         >
-          <Icon name="mission-map" size={15} color={nav === "usage" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <Icon name="mission-map" size={16} color={nav === "usage" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
           <span>Mission Map</span>
           <span style={{
             display: "inline-flex",
@@ -577,7 +577,7 @@ export function Topbar({
           title="Search — find on the board (⌘F)"
           onClick={openSearch}
         >
-          <Icon name="search" size={15} color="var(--cv-ink-dim)" />
+          <Icon name="search" size={16} color="var(--cv-ink-dim)" />
         </button>
         <button
           className="glass-pill cv-topbar-labeled-control"
@@ -585,7 +585,7 @@ export function Topbar({
           title="Automations"
           onClick={() => onNav("automations")}
         >
-          <Icon name="automations" size={15} color={nav === "automations" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <Icon name="automations" size={16} color={nav === "automations" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
           <span className="cv-topbar-control-label">Automations</span>
         </button>
         <button
@@ -594,7 +594,7 @@ export function Topbar({
           title="Notifications — approvals and agents that need you"
           onClick={() => onNav("inbox")}
         >
-          <Icon name="bell" size={15} color={nav === "inbox" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <Icon name="bell" size={16} color={nav === "inbox" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
           <span className="cv-topbar-control-label">Inbox</span>
           {notifCount > 0 && (
             <span
@@ -624,7 +624,7 @@ export function Topbar({
           title="Gather — group loose windows into a frame"
           onClick={() => useBoard.getState().gatherLoose()}
         >
-          <Icon name="gather" size={15} color="var(--cv-ink-dim)" />
+          <Icon name="gather" size={16} color="var(--cv-ink-dim)" />
         </button>
         {lastGather && (
           <button
@@ -633,7 +633,7 @@ export function Topbar({
             title="Undo grouping — put windows back where they were"
             onClick={() => useBoard.getState().undoGather()}
           >
-            <Icon name="history" size={15} color="var(--cv-accent)" />
+            <Icon name="history" size={16} color="var(--cv-accent)" />
           </button>
         )}
         <ToolsMenu active={nav} onSelect={onNav} actions={tools} />
@@ -643,7 +643,7 @@ export function Topbar({
           title="Settings"
           onClick={() => onNav("settings")}
         >
-          <Icon name="settings" size={15} color={nav === "settings" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <Icon name="settings" size={16} color={nav === "settings" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
         </button>
       </div>
     </div>

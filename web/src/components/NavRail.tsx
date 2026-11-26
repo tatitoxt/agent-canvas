@@ -79,11 +79,11 @@ const menuRow: React.CSSProperties = {
   alignItems: "center",
   gap: 9,
   width: "100%",
-  padding: "6px 10px",
+  padding: "7px 10px",
   border: "none",
   background: "transparent",
   color: "var(--cv-ink)",
-  fontSize: 11.5,
+  fontSize: 12,
   fontWeight: 550,
   textAlign: "left",
   cursor: "pointer",
@@ -339,7 +339,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         {t.img ? (
           <img src={t.img} alt="" width={14} height={14} />
         ) : (
-          <Icon name={t.icon!} size={14} color={t.color ?? (t.key && active === t.key ? "var(--cv-accent)" : "var(--cv-ink-dim)")} />
+          <Icon name={t.icon!} size={15} color={t.color ?? (t.key && active === t.key ? "var(--cv-accent)" : "var(--cv-ink-dim)")} />
         )}
         <span style={{ flex: 1 }}>{t.label}</span>
         {t.fact && <span style={{ fontSize: 9, color: "var(--cv-ink-dim)", fontWeight: 600 }}>{t.fact}</span>}
