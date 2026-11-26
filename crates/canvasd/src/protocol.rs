@@ -231,8 +231,9 @@ pub enum ClientMsg {
     SetLoopEnabled { loop_id: String, enabled: bool },
     /// Fire a loop's instruction immediately, regardless of its schedule.
     RunLoop { loop_id: String },
-    /// SIGSTOP/SIGCONT every live agent on a board — Symvibe's
-    /// "pause all": PTYs freeze mid-task, output buffers in the kernel.
+    /// Pause/resume every live agent on a board — Symvibe's "pause all".
+    /// Unix uses SIGSTOP/SIGCONT so output buffers in the kernel; Windows v1
+    /// has no suspension primitive and reports zero signalled agents.
     PauseAll { board_id: Option<String> },
     ResumeAll { board_id: Option<String> },
     /// Stream an agent's saved transcript back as PtyOutput frames — for

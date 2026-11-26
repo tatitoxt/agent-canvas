@@ -111,6 +111,7 @@ impl Agent {
 
     /// SIGSTOP/SIGCONT the PTY child — Symvibe's "pause all": output
     /// queues in the kernel PTY buffer and the process resumes mid-line.
+    #[cfg(unix)]
     fn signal(&self, sig: i32) -> bool {
         self.child
             .lock()
@@ -120,12 +121,28 @@ impl Agent {
             .unwrap_or(false)
     }
 
+    #[cfg(unix)]
     pub fn suspend(&self) -> bool {
         self.signal(libc::SIGSTOP)
     }
 
+    #[cfg(unix)]
     pub fn resume(&self) -> bool {
         self.signal(libc::SIGCONT)
+    }
+
+    /// Windows v1 has no agent pause/resume: SIGSTOP/SIGCONT do not exist
+    /// and portable-pty exposes no process suspension primitive. Return
+    /// false so pause-all reports zero signalled agents instead of
+    /// pretending the freeze happened.
+    #[cfg(not(unix))]
+    pub fn suspend(&self) -> bool {
+        false
+    }
+
+    #[cfg(not(unix))]
+    pub fn resume(&self) -> bool {
+        false
     }
 
     #[allow(dead_code)]
@@ -175,10 +192,18 @@ fn append_transcript(path: &Path, chunk: &[u8]) {
     let _ = f.write_all(chunk);
 }
 
-/// Ensure `cwd` stays inside `repo_root`: reject absolute paths and `..`.
+/// Ensure `cwd` stays inside `repo_root`: reject absolute paths, Windows
+/// drive/UNC prefixes, and `..` using the platform's path-component parser
+/// (so `..\x` is rejected on Windows as well as `../x` everywhere).
 fn sanitize_relpath(cwd: &str) -> Result<PathBuf> {
+    use std::path::Component;
     let rel = Path::new(cwd);
-    if rel.is_absolute() || cwd.split('/').any(|seg| seg == "..") {
+    if rel.components().any(|component| {
+        matches!(
+            component,
+            Component::Prefix(_) | Component::RootDir | Component::ParentDir
+        )
+    }) {
         anyhow::bail!("cwd must be a repo-relative path without '..'");
     }
     Ok(rel.to_path_buf())
@@ -254,6 +279,51 @@ fn ensure_worktree(repo_root: &Path, agent_id: &str, branch: &str) -> Result<Pat
     Ok(dir)
 }
 
+/// Build the platform shell used to launch an agent command inside the PTY.
+///
+/// Unix needs a bash shim because the slave PTY starts in ECHO+ICANON mode:
+/// query replies sent before the child CLI configures termios would otherwise
+/// be echoed into the scrollback and line-buffered away from the child. The
+/// shim disables both, then `exec`s the requested command so the shell does
+/// not remain as an extra process.
+#[cfg(unix)]
+fn shell_command(command: &str) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("/bin/bash");
+    cmd.arg("-lc");
+    cmd.arg(format!(
+        "stty -echo -icanon 2>/dev/null; exec {}",
+        command
+    ));
+    cmd
+}
+
+/// Windows uses ConPTY rather than Unix termios, so there is no `stty` race
+/// to work around. `cmd /C` preserves the existing command-line shape: agent
+/// commands may include flags or cmd shell syntax, and the interactive child
+/// still runs attached to the ConPTY.
+#[cfg(windows)]
+fn shell_command(command: &str) -> CommandBuilder {
+    let shell = std::env::var_os("ComSpec").unwrap_or_else(|| "cmd.exe".into());
+    let mut cmd = CommandBuilder::new(shell);
+    cmd.arg("/C");
+    cmd.arg(command);
+    cmd
+}
+
+/// Prepend the directory holding this binary to PATH so `canvasctl` is
+/// reachable inside every PTY, using the host platform's PATH separator.
+fn path_with_exe_dir() -> Option<std::ffi::OsString> {
+    let exe_dir = std::env::current_exe()
+        .ok()?
+        .parent()
+        .map(|dir| dir.to_path_buf())?;
+    let mut entries = vec![exe_dir];
+    if let Some(path) = std::env::var_os("PATH") {
+        entries.extend(std::env::split_paths(&path));
+    }
+    std::env::join_paths(entries).ok()
+}
+
 impl Default for AgentManager {
     fn default() -> Self {
         Self::new()
@@ -319,22 +389,18 @@ impl AgentManager {
         })?;
 
         // Allowlisted env: the PTY does not inherit arbitrary session env.
-        let mut cmd = CommandBuilder::new("/bin/bash");
-        cmd.arg("-lc");
-        // The slave spawns with ECHO+ICANON until the child CLI configures
-        // its own termios — and bash -lc never does. Query replies sent in
-        // that window (cursor reports, OSC answers) get echoed back into
-        // the scrollback as `^[[1;1R` garbage AND line-buffered (the CLI
-        // never receives them until a newline). Disable both up front;
-        // interactive children (bash itself, TUIs) set their own modes.
-        cmd.arg(format!(
-            "stty -echo -icanon 2>/dev/null; exec {}",
-            command
-        ));
+        let mut cmd = shell_command(command);
         cmd.cwd(&spawn_dir);
         cmd.env("TERM", "xterm-256color");
         cmd.env("CANVAS_AGENT_ID", &id);
+        #[cfg(unix)]
         cmd.env("HOME", std::env::var("HOME").unwrap_or_else(|_| "/".into()));
+        // Many agent CLIs read HOME even on Windows. Populate it from the
+        // real user profile instead of the Unix-only `/` fallback.
+        #[cfg(windows)]
+        if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+            cmd.env("HOME", home);
+        }
         for (k, v) in self.extra_env.lock().unwrap().iter() {
             cmd.env(k, v);
         }
@@ -342,14 +408,11 @@ impl AgentManager {
             cmd.env(k, v);
         }
         // Put the directory holding this binary (canvasd / the app) first
-        // on PATH so `canvasctl` is reachable inside every PTY.
-        let path = std::env::var("PATH").unwrap_or_default();
-        let path = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.to_path_buf()))
-            .map(|d| format!("{}:{path}", d.display()))
-            .unwrap_or(path);
-        cmd.env("PATH", path);
+        // on PATH so `canvasctl` is reachable inside every PTY. If the exe
+        // path is unavailable, CommandBuilder still inherits the ambient PATH.
+        if let Some(path) = path_with_exe_dir() {
+            cmd.env("PATH", path);
+        }
 
         let child = pair.slave.spawn_command(cmd)?;
         drop(pair.slave);
