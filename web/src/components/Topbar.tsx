@@ -100,7 +100,11 @@ export const Topbar = memo(function Topbar({
   const positions = useBoard((s) => s.positions);
   const workspaceSizes = useBoard((s) => s.workspaceSizes);
   const agentSizes = useBoard((s) => s.agentSizes);
-  const viewportRect = useBoard((s) => s.viewportRect);
+  // Read viewport geometry imperatively: it changes on every pan frame, while
+  // the switcher only needs a snapshot when its menu/render is already open.
+  // Subscribing here makes the whole topbar/tools tree rerender continuously
+  // during canvas panning.
+  const viewportRect = useBoard.getState().viewportRect;
   const panelNodes = useBoard((s) => s.panelNodes);
   const termNodes = useBoard((s) => s.termNodes);
   const mdNodes = useBoard((s) => s.mdNodes);

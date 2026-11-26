@@ -2,11 +2,12 @@
 // the ESM bundle directly instead.
 // @ts-expect-error untyped internal path
 import { Terminal } from "@xterm/headless/lib-headless/xterm-headless.mjs";
+import { ptyBufferWindow } from "./ptyBufferMeta";
 
 /** Per-agent headless terminal: a real screen model so card previews show
  * the TUI's actual screen (cursor addressing, repaints, alt-screen) rather
  * than a raw byte tail. Fed from the same ptyBuffers the panels use. */
-const SCREENS = new Map<string, { term: Terminal; fed: number; pendingWrites: number; flushCallbacks: Array<() => void>; generation: number }>();
+const SCREENS = new Map<string, { term: Terminal; fed: number; fedEnd: number; pendingWrites: number; flushCallbacks: Array<() => void>; generation: number }>();
 const MAX_SCREENS = 48;
 const COLS = 96;
 const ROWS = 40;
@@ -22,6 +23,7 @@ function screen(agentId: string) {
     s = {
       term: new Terminal({ cols: COLS, rows: ROWS, scrollback: 400, allowProposedApi: true }),
       fed: 0,
+      fedEnd: 0,
       pendingWrites: 0,
       flushCallbacks: [],
       generation: 0,
@@ -38,6 +40,7 @@ export function resetScreen(agentId: string) {
   s.generation += 1;
   s.term.reset();
   s.fed = 0;
+  s.fedEnd = 0;
   s.pendingWrites = 0;
   s.flushCallbacks.length = 0;
 }
@@ -67,11 +70,34 @@ export type CellSpan = { text: string; color?: string; bold?: boolean };
  * spans — one entry per terminal row, trimmed of empty tail rows. */
 export function screenLines(agentId: string, buf: Uint8Array | undefined, onWrite?: () => void): CellSpan[][] {
   const s = screen(agentId);
-  if (buf && buf.length > s.fed) {
+  let chunk: Uint8Array | undefined;
+  if (buf) {
+    const window = ptyBufferWindow(buf);
+    if (window) {
+      // Buffers are rolling windows, not append-only arrays: once they hit
+      // the store cap their length stops growing even though new PTY bytes
+      // keep arriving. Absolute stream positions let a visibility-paused
+      // preview resume at the right byte instead of freezing at the cap.
+      if (window.end > s.fedEnd) {
+        const offset = s.fedEnd <= window.start ? 0 : s.fedEnd - window.start;
+        chunk = buf.slice(offset);
+        s.fed = buf.length;
+        s.fedEnd = window.end;
+      }
+    } else if (buf.length > s.fed) {
+      // Direct unit-test / synthetic buffers have no store metadata; keep
+      // the original append-only behavior for them.
+      chunk = buf.slice(s.fed);
+      s.fed = buf.length;
+      s.fedEnd = buf.length;
+    }
+  }
+
+  if (chunk?.length) {
     if (onWrite) s.flushCallbacks.push(onWrite);
     s.pendingWrites += 1;
     const generation = s.generation;
-    s.term.write(buf.slice(s.fed), () => {
+    s.term.write(chunk, () => {
       if (generation !== s.generation) return;
       s.pendingWrites -= 1;
       if (s.pendingWrites === 0) {
@@ -79,7 +105,6 @@ export function screenLines(agentId: string, buf: Uint8Array | undefined, onWrit
         callbacks.forEach((callback) => callback());
       }
     });
-    s.fed = buf.length;
   } else if (onWrite) {
     if (s.pendingWrites > 0) s.flushCallbacks.push(onWrite);
     else onWrite();

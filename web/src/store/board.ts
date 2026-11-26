@@ -4,6 +4,7 @@ import { isTauri, TauriCanvasClient } from "../daemon/tauriClient";
 import type { AgentStatus } from "../board/types";
 import { PANEL_META } from "../components/panelMeta";
 import { replayedPtyBytes } from "../board/ptyAccounting";
+import { recordPtyBuffer, resetPtyBufferWindow } from "../board/ptyBufferMeta";
 import { resetScreen } from "../board/ptyScreen";
 import { initialNodes } from "../board/mockData";
 import { planGatherLayout, type GatherRect } from "./gatherLayout";
@@ -787,7 +788,10 @@ function flushPendingPtyState(get: () => BoardState, apply: (patch: Partial<Boar
   if (pendingPtyChunks.size === 0) return;
   const ptyBuffers = { ...get().ptyBuffers };
   for (const [agentId, chunks] of pendingPtyChunks) {
-    ptyBuffers[agentId] = mergedPtyBytes(ptyBuffers[agentId], chunks);
+    const prev = ptyBuffers[agentId];
+    const merged = mergedPtyBytes(prev, chunks);
+    recordPtyBuffer(agentId, prev, chunks, merged);
+    ptyBuffers[agentId] = merged;
   }
   pendingPtyChunks.clear();
   apply({ ptyBuffers });
@@ -1319,6 +1323,7 @@ export const useBoard = create<BoardState>((set, get) => ({
               if (a.status === "exited") continue;
               pendingPtyChunks.delete(a.agent_id);
               delete ptyBuffers[a.agent_id];
+              resetPtyBufferWindow(a.agent_id);
               resetScreen(a.agent_id);
               get().ptyListeners[a.agent_id]?.forEach((cb) => cb(null));
             }

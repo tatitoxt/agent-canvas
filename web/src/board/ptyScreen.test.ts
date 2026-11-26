@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { recordPtyBuffer } from "./ptyBufferMeta";
 import { resetScreen, screenLines } from "./ptyScreen";
 
 describe("pty screen preview", () => {
@@ -33,5 +34,30 @@ describe("pty screen preview", () => {
     const visible = screenLines(agentId, undefined).flat().map((span) => span.text).join("");
     expect(visible).toContain("after-reconnect");
     expect(visible).not.toContain("before-reconnect");
+  });
+
+  it("resumes at the correct byte when a rolling buffer window has truncated", async () => {
+    const agentId = `screen-window-${crypto.randomUUID()}`;
+    const encode = (value: string) => new TextEncoder().encode(value);
+    const first = encode("0123456789");
+    recordPtyBuffer(agentId, undefined, [first], first);
+    let flushFirst!: () => void;
+    const firstParsed = new Promise<void>((resolve) => { flushFirst = resolve; });
+    screenLines(agentId, first, flushFirst);
+    await firstParsed;
+
+    // Conceptual stream: 0123456789abcde. The retained window is only its
+    // last eight bytes (789abcde), so absolute positions must skip forward to
+    // stream offset 10 before feeding the headless screen.
+    const appended = encode("abcde");
+    const second = encode("789abcde");
+    recordPtyBuffer(agentId, first, [appended], second);
+    let flushSecond!: () => void;
+    const secondParsed = new Promise<void>((resolve) => { flushSecond = resolve; });
+    screenLines(agentId, second, flushSecond);
+    await secondParsed;
+
+    const visible = screenLines(agentId, undefined).flat().map((span) => span.text).join("");
+    expect(visible).toContain("0123456789abcde");
   });
 });

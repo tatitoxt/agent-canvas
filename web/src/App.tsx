@@ -1276,7 +1276,10 @@ function Board() {
         panOnDrag={[1, 2]}
         panOnScroll
         zoomOnScroll={false}
-        onlyRenderVisibleElements={!gatherMotion}
+        // Keep nodes mounted across panning. Terminal cards in particular are
+        // expensive to recreate (xterm measure/open/replay); visibility-aware
+        // write gates inside the cards pause their offscreen work instead.
+        onlyRenderVisibleElements={false}
         selectionKeyCode={null}
         multiSelectionKeyCode="Shift"
         deleteKeyCode={["Backspace", "Delete"]}

@@ -4,6 +4,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
 import { useBoard } from "../store/board";
+import { PtyWriteBuffer } from "../board/ptyWriteBuffer";
+import { observeNearViewport } from "../lib/nearViewport";
 
 /** The xterm core shared by the bottom drawer (TerminalPanel) and the
  * canvas terminal card (TermNode): mounts the emulator, replays the
@@ -86,20 +88,33 @@ export function TermHost({ agentId }: { agentId: string }) {
     mirrors.get(agentId)!.add(mirror);
     syncMirroredSize(agentId);
 
+    // Panning must never destroy this xterm, but an offscreen xterm should
+    // not spend CPU parsing/painting either. Bytes are coalesced while the
+    // terminal is outside the viewport halo and flushed in order when it
+    // returns. PtyWriteBuffer's high-water fallback keeps the no-loss
+    // guarantee bounded in memory even for pathological output streams.
+    const writeBuffer = new PtyWriteBuffer((bytes) => term.write(bytes));
+    const stopObservingVisibility = observeNearViewport(hostRef.current!, (near) => {
+      writeBuffer.setActive(near);
+    });
+
     const { attachPty, detachPty, sendInput, ptyBuffer, requestTranscript } = useBoard.getState();
     const history = ptyBuffer(agentId);
     if (history?.length) {
       // Replaying scrollback means this card is a restore, not a fresh
       // shell — mark it the way Deska does so the timeline stays honest.
-      term.write("\x1b[2m\x1b[3m--- restored session ---\x1b[0m\r\n");
-      term.write(history);
+      writeBuffer.push(new TextEncoder().encode("\x1b[2m\x1b[3m--- restored session ---\x1b[0m\r\n"));
+      writeBuffer.push(history);
     }
     const onBytes = (bytes: Uint8Array | null) => {
       if (bytes === null) {
+        // A daemon reconnect replays the scrollback from byte zero. Clear the
+        // queue with the old stream so replay bytes cannot interleave with it.
+        writeBuffer.reset();
         term.reset();
         return;
       }
-      term.write(bytes);
+      writeBuffer.push(bytes);
     };
     attachPty(agentId, onBytes);
     if (useBoard.getState().agents[agentId]?.status === "exited") {
@@ -129,6 +144,7 @@ export function TermHost({ agentId }: { agentId: string }) {
     termRef.current = term;
 
     return () => {
+      stopObservingVisibility();
       sub.dispose();
       oscHandlers.forEach((h) => h.dispose());
       detachPty(agentId, onBytes);

@@ -3,6 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { CliMark } from "../components/CliMark";
 import { Icon } from "../components/icons";
 import { useBoard } from "../store/board";
+import { useNearViewport } from "../lib/nearViewport";
 import { screenLines } from "./ptyScreen";
 import type {
   AgentNodeData,
@@ -82,10 +83,15 @@ export function announcedModel(buf?: Uint8Array): string | undefined {
   return undefined;
 }
 
-function MiniTerm({ agentId }: { agentId: string }) {
-  const buf = useBoard((s) => s.ptyBuffers[agentId]);
+function MiniTerm({ agentId, active }: { agentId: string; active: boolean }) {
+  // While the card is outside the viewport halo, do not even subscribe to the
+  // rolling PTY object: store flushes would otherwise re-render every offscreen
+  // card a few times per second. The headless screen keeps its stream cursor,
+  // so the first active effect reparses only the bytes accumulated while away.
+  const buf = useBoard((s) => (active ? s.ptyBuffers[agentId] : undefined));
   const [screenRevision, setScreenRevision] = useState(0);
   useEffect(() => {
+    if (!active) return;
     let alive = true;
     // xterm parses PTY bytes asynchronously. Trigger a second render after its
     // screen model has consumed them so the canvas preview doesn't lag behind
@@ -94,7 +100,7 @@ function MiniTerm({ agentId }: { agentId: string }) {
       if (alive) setScreenRevision((revision) => revision + 1);
     });
     return () => { alive = false; };
-  }, [agentId, buf]);
+  }, [agentId, buf, active]);
   const lines = useMemo(() => {
     // Real screen model — cursor addressing and TUI repaints resolve to the
     // screen the CLI actually shows (banner, boxes, status bar, input line).
@@ -195,6 +201,7 @@ function AgentTaskLine({ agentId, status, staticTask }: { agentId?: string; stat
 
 export const AgentNode = memo(function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNodeData>>) {
   const meta = cliMeta(data.cli);
+  const { ref: cardRef, near: nearViewport } = useNearViewport<HTMLDivElement>();
   const summaries = useBoard((s) => s.panelSummaries);
   const customSize = useBoard((s) => s.agentSizes[data.id ?? id]);
   const [collapsed, setCollapsed] = useState(false);
@@ -244,6 +251,7 @@ export const AgentNode = memo(function AgentNode({ id, data, selected, width }: 
     // Deska's collapsed terminal — glyph tile + number in a small pill.
     return (
       <div
+        ref={cardRef}
         className="glass-panel"
         onClick={() => setCollapsed(false)}
         title={`${data.name} — click to expand`}
@@ -287,6 +295,8 @@ export const AgentNode = memo(function AgentNode({ id, data, selected, width }: 
   }
   return (
     <div
+      ref={cardRef}
+      data-near-viewport={nearViewport ? "true" : "false"}
       className={`glass-panel agent-card ${live && !selected ? "card-ring" : ""} ${data.status === "waiting" ? "node-waiting" : ""}`}
       style={{
         position: "relative",
@@ -527,7 +537,7 @@ export const AgentNode = memo(function AgentNode({ id, data, selected, width }: 
       {summaries && (data.task || data.id) && (
         <AgentTaskLine agentId={data.id} status={data.status} staticTask={data.task} />
       )}
-      {summaries && data.id && <MiniTerm agentId={data.id} />}
+      {summaries && data.id && <MiniTerm agentId={data.id} active={nearViewport} />}
       {data.id && (
         <form
           data-testid="agent-steering"

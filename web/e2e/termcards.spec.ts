@@ -271,6 +271,93 @@ test("popped-out terminal keeps accepting shell input", async ({ page }) => {
   await expect(page.locator(".react-flow__node-term .xterm-rows")).toContainText("canvas-terminal-e2e-ok", { timeout: 8_000 });
 });
 
+test("offscreen terminal stays mounted, suspends writes, and flushes output on return", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  await page.locator("button[title='pop out onto the canvas as a card']").first().click();
+  const cardTerminal = page.locator(".react-flow__node-term .xterm").first();
+  await expect(cardTerminal).toBeVisible({ timeout: 5_000 });
+  await cardTerminal.evaluate((el) => { el.setAttribute("data-mount-probe", "original"); });
+
+  const suffix = String(Date.now());
+  const marker = `offscreen-flush-${suffix}`;
+
+  const panBy = async (dx: number, dy: number, steps: number) => {
+    // Drive the real pane wheel handler directly. This is exactly reversible
+    // (React Flow applies -delta * panOnScrollSpeed) and does not depend on
+    // whether spawn layout put a nopan card under the mouse cursor. Retry the
+    // first step until the transform moves: immediately after popping out a
+    // terminal, xterm replay can occasionally delay React Flow's wheel listener
+    // attachment long enough to swallow one otherwise-valid burst.
+    const dispatch = (count: number) => page.evaluate(({ dx, dy, steps, count }) => {
+      const pane = document.querySelector(".react-flow__pane");
+      if (!pane) throw new Error("react-flow pane missing");
+      for (let i = 0; i < count; i++) {
+        pane.dispatchEvent(new WheelEvent("wheel", {
+          deltaX: (-dx * 2) / steps,
+          deltaY: (-dy * 2) / steps,
+          bubbles: true,
+          cancelable: true,
+        }));
+      }
+    }, { dx, dy, steps, count });
+    const transform = () => page.evaluate(() =>
+      document.querySelector(".react-flow__viewport")?.getAttribute("style") ?? "");
+    const before = await transform();
+    let started = false;
+    for (let attempt = 0; attempt < 6 && !started; attempt++) {
+      await dispatch(1);
+      await page.waitForTimeout(70);
+      started = (await transform()) !== before;
+    }
+    if (!started) throw new Error("canvas pane ignored the pan wheel input");
+    await dispatch(steps - 1);
+    await page.waitForTimeout(120);
+  };
+
+  // Move the canvas far enough that even the 240px activation halo is gone.
+  await panBy(2600, 800, 20);
+  await expect.poll(async () => page.evaluate(() => {
+    const far = (rect: DOMRect) =>
+      rect.right < -240 || rect.left > window.innerWidth + 240 || rect.bottom < -240 || rect.top > window.innerHeight + 240;
+    const term = document.querySelector(".react-flow__node-term")?.getBoundingClientRect();
+    const agent = document.querySelector(".agent-card")?.getBoundingClientRect();
+    return !!term && !!agent && far(term) && far(agent);
+  })).toBe(true);
+
+  await expect.poll(async () => page.locator(".agent-card").first().getAttribute("data-near-viewport")).toBe("false");
+
+  // PTY input does not depend on xterm visibility. Focus the still-mounted
+  // helper textarea programmatically (it is far offscreen, so a mouse click is
+  // meaningless) and only then schedule output. The marker therefore cannot
+  // exist in either terminal model before the card is outside the halo.
+  await cardTerminal.locator("textarea.xterm-helper-textarea").evaluate((el: HTMLTextAreaElement) => el.focus());
+  // Encode the marker as printf hex escapes so shell line-editing/echo can
+  // never render the contiguous plaintext marker before the delayed output.
+  const encodedMarker = [...marker].map((ch) => `\\x${ch.charCodeAt(0).toString(16)}`).join("");
+  await page.keyboard.type(`sh -c 'sleep 0.5; printf "${encodedMarker}\\n"'`);
+  await page.keyboard.press("Enter");
+
+  // The shell emits after the card is offscreen. Neither the interactive
+  // xterm nor the card's headless-screen preview may parse/paint it yet —
+  // but both must retain enough state to catch up losslessly on return.
+  await page.waitForTimeout(900);
+  const rows = page.locator(".react-flow__node-term .xterm-rows");
+  const preview = page.locator(".agent-card [data-testid='agent-terminal-preview']").first();
+  await expect(rows).not.toContainText(marker);
+  await expect(preview).not.toContainText(marker);
+  expect(await page.locator(".react-flow__node-term .xterm").count()).toBe(1);
+  expect(await cardTerminal.getAttribute("data-mount-probe")).toBe("original");
+
+  // Exact inverse pan. IntersectionObserver crosses back into the halo and
+  // the queued bytes repaint without recreating the xterm DOM element.
+  await panBy(-2600, -800, 26);
+  await expect(rows).toContainText(marker, { timeout: 8_000 });
+  await expect(preview).toContainText(marker, { timeout: 8_000 });
+  expect(await cardTerminal.getAttribute("data-mount-probe")).toBe("original");
+});
+
 test("terminal drawer resizes and keeps its PTY interactive", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
