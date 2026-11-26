@@ -65,6 +65,10 @@ test("agent card terminal preview emphasizes the latest visible row", async ({ p
   await spawnTerm(page);
   const card = page.locator(".agent-card").first();
   await expect(card).toBeVisible({ timeout: 8_000 });
+  // Card chrome (open/collapse/kill) only becomes interactive once the card
+  // is selected — select it first, like a user would.
+  await card.locator("[data-testid='agent-card-header']").click();
+  await expect(card.locator("[title='Open terminal']")).toBeVisible();
   await card.locator("[title='Open terminal']").click();
   const terminal = page.locator(".terminal-drawer .xterm").first();
   await expect(terminal).toBeVisible({ timeout: 5_000 });
@@ -143,7 +147,10 @@ test("pop out creates a canvas term card; put back returns it to the drawer", as
     const rect = await termCard.boundingBox();
     return Math.abs(rect!.width - original!.width) + Math.abs(rect!.height - original!.height);
   }).toBeLessThan(6);
-  // put back — the card closes and the terminal lives in the drawer again
+  // put back — the card closes and the terminal lives in the drawer again.
+  // Card chrome is only interactive while the card is selected; the header
+  // strip left of the title selects without triggering a control.
+  await termCard.click({ position: { x: 200, y: 15 } });
   await termCard.locator("button[title*='Put back']").first().click();
   await page.waitForTimeout(700);
   expect(await page.locator(".react-flow__node-term").count()).toBe(0);
@@ -158,11 +165,16 @@ test("shift+click multi-select selects two nodes", async ({ page }) => {
   expect(await nodes.count()).toBeGreaterThanOrEqual(2);
   // Slow CI runners: nodes settle late and selection state lags the click.
   // Re-measure right before clicking and let the assertion retry.
+  // Click well inside the card body, not the top strip: freshly spawned
+  // cards can land flush against the fused topbar overlay (it spans the
+  // viewport's top ~64px), which legitimately eats clicks over its strip —
+  // users grab the card lower, so the test does the same.
+  const clickY = (box: { y: number; height: number }) => box.y + Math.min(90, box.height - 30);
   await page.keyboard.down("Shift");
   const c0 = await nodes.nth(0).boundingBox();
-  await page.mouse.click(c0!.x + Math.min(72, c0!.width - 20), c0!.y + 20);
+  await page.mouse.click(c0!.x + Math.min(72, c0!.width - 20), clickY(c0!));
   const c1 = await nodes.nth(1).boundingBox();
-  await page.mouse.click(c1!.x + Math.min(72, c1!.width - 20), c1!.y + 20);
+  await page.mouse.click(c1!.x + Math.min(72, c1!.width - 20), clickY(c1!));
   await page.keyboard.up("Shift");
   await expect(page.locator(".react-flow__node.selected")).toHaveCount(2, { timeout: 6_000 });
 });
@@ -170,12 +182,16 @@ test("shift+click multi-select selects two nodes", async ({ page }) => {
 test("split right shows two live xterm panes in the drawer", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
+  // The split pane mirrors a SECOND agent on the board (per-test cleanup
+  // forgets agents, so there is no leftover terminal to pick) — spawn one.
+  await spawnTerm(page);
   await openDrawer(page);
   const splitBtn = page.locator("button[title*='split right']").first();
   await expect(splitBtn).toBeVisible({ timeout: 5_000 });
   await splitBtn.click();
-  await page.waitForTimeout(900);
-  expect(await page.locator(".xterm").count()).toBe(2);
+  // The second pane auto-picks the other agent on the board — both xterm
+  // panes render live inside the drawer.
+  await expect(page.locator(".terminal-drawer .xterm")).toHaveCount(2, { timeout: 6_000 });
 });
 
 test("terminal accepts shell input and renders PTY output", async ({ page }) => {

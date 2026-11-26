@@ -232,7 +232,14 @@ body,
 
 /* Resize through invisible hit areas around the whole selected card. The
    four corners plus four edge lines remain draggable without drawing the
-   usual corner dots, handles or resize outline over the content. */
+   usual corner dots, handles or resize outline over the content.
+   The library default sizes the edge lines to 1px — ungrabbable for users
+   and sub-pixel flaky for hit testing, because card containers clip
+   overflow and the 50/50 straddle leaves only a half-pixel inside. The
+   zones are invisible anyway, so make them fat (10px) and bias them
+   INWARD: the grab strip lives inside the card edge, comfortably within
+   the overflow clip, while corners keep a 16px square that still overlaps
+   both edge strips (and wins them through z-index). */
 .cv-node-resize-handle {
   width: 18px !important;
   height: 18px !important;
@@ -243,12 +250,28 @@ body,
   opacity: 0 !important;
   z-index: 12 !important;
 }
+.react-flow__resize-control.handle.cv-node-resize-handle.bottom.right { translate: -80% -80% !important; }
+.react-flow__resize-control.handle.cv-node-resize-handle.bottom.left { translate: -20% -80% !important; }
+.react-flow__resize-control.handle.cv-node-resize-handle.top.right { translate: -80% -20% !important; }
+.react-flow__resize-control.handle.cv-node-resize-handle.top.left { translate: -20% -20% !important; }
 .cv-node-resize-line {
   border-color: transparent !important;
   background: transparent !important;
   opacity: 0 !important;
   z-index: 11 !important;
 }
+.react-flow__resize-control.line.cv-node-resize-line.top,
+.react-flow__resize-control.line.cv-node-resize-line.bottom {
+  height: 10px !important;
+}
+.react-flow__resize-control.line.cv-node-resize-line.left,
+.react-flow__resize-control.line.cv-node-resize-line.right {
+  width: 10px !important;
+}
+.react-flow__resize-control.line.cv-node-resize-line.bottom { transform: translate(0, -90%) !important; }
+.react-flow__resize-control.line.cv-node-resize-line.top { transform: translate(0, -10%) !important; }
+.react-flow__resize-control.line.cv-node-resize-line.right { transform: translate(-90%, 0) !important; }
+.react-flow__resize-control.line.cv-node-resize-line.left { transform: translate(-10%, 0) !important; }
 
 .react-flow__handle {
   width: 7px;

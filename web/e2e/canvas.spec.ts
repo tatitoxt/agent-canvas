@@ -135,9 +135,25 @@ test("Add to Board pins the active Obsidian note as a live canvas window", async
   await expect(noteWindow.locator('a[title="Missing target (not created yet)"]')).toBeVisible();
 
   // Pinning the same note again focuses its existing canvas window instead
-  // of creating duplicate live views of one vault file.
+  // of creating duplicate live views of one vault file. The pin requests a
+  // fitView; reopening the vault mid-animation would plant the panel at
+  // coordinates computed against a moving viewport (and virtualized nodes
+  // unmount while offscreen), so wait for the camera to settle first.
+  let stableSamples = 0;
+  let previousRect = "";
+  await expect.poll(async () => {
+    const rect = await page.locator(".react-flow__node-md").filter({ hasText: name }).boundingBox();
+    const current = rect ? `${rect.x.toFixed(1)}:${rect.y.toFixed(1)}` : "";
+    stableSamples = current && current === previousRect ? stableSamples + 1 : 0;
+    previousRect = current;
+    return stableSamples;
+  }, { intervals: [100, 100, 100, 100, 100, 100], timeout: 4_000 }).toBeGreaterThanOrEqual(4);
   await page.locator("button[title*='your real vault']").first().click();
-  await page.locator("button", { hasText: "Add to Board" }).first().click();
+  const reopen = page.locator(".react-flow__node-panel [data-panel='vault']").first();
+  await expect(reopen).toBeVisible({ timeout: 8_000 });
+  const repin = page.locator("button", { hasText: "Add to Board" }).first();
+  await expect(repin).toBeVisible({ timeout: 8_000 });
+  await repin.click();
   await expect(page.locator(".react-flow__node-md").filter({ hasText: name })).toHaveCount(1);
 });
 

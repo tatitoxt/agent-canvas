@@ -91,6 +91,9 @@ test("terminal font setting applies to live terminals, clamps, and persists", as
   await page.locator("button[title='Terminal — spawn a plain shell']").first().click();
   const card = page.locator(".agent-card").first();
   await expect(card).toBeVisible({ timeout: 8_000 });
+  // Card chrome is only interactive once the card is selected — select first.
+  await card.locator("[data-testid='agent-card-header']").click();
+  await expect(card.locator("[title='Open terminal']")).toBeVisible();
   await card.locator("[title='Open terminal']").click();
   const terminal = page.locator(".terminal-drawer .xterm").first();
   await expect(terminal).toBeVisible({ timeout: 5_000 });
@@ -208,16 +211,27 @@ test("Library expands horizontally to labeled tools without a flyout", async ({ 
   await boot(page);
   const expand = page.getByRole("button", { name: "Expand Library" });
   await expect(expand).toHaveAttribute("aria-expanded", "false");
-  const before = await page.locator("nav.glass").filter({ has: expand }).boundingBox();
+  const library = page.locator("nav.glass").filter({ has: expand });
+  const before = await library.boundingBox();
   await expand.click();
-  await expect(page.getByRole("button", { name: "Collapse Library" })).toHaveAttribute("aria-expanded", "true");
-  const rail = page.locator("nav.cv-menu-scroll");
-  await expect(rail.getByRole("button", { name: "Source Control" })).toBeVisible();
-  await expect(rail.getByRole("button", { name: "Obsidian" })).toBeVisible();
-  await expect(rail.getByRole("button", { name: "Dex Tickets" })).toBeVisible();
+  const collapse = page.getByRole("button", { name: "Collapse Library" });
+  await expect(collapse).toHaveAttribute("aria-expanded", "true");
+  // The expanded Library is the same rail nav grown wider — a header row
+  // plus one scrollable column of labeled rows, never a separate flyout.
+  const rail = page.locator("nav.glass").filter({ has: collapse });
+  const scroll = rail.locator(".cv-menu-scroll");
+  await expect(scroll.getByRole("button", { name: "Source Control" })).toBeVisible();
+  await expect(scroll.getByRole("button", { name: "Obsidian" })).toBeVisible();
+  await expect(scroll.getByRole("button", { name: "Dex Tickets" })).toBeVisible();
   const after = await rail.boundingBox();
   expect(after!.width).toBeGreaterThan(before!.width * 2);
-  await rail.getByRole("button", { name: "Obsidian" }).click();
+  // Labels share the row with their icons — the rail expands horizontally
+  // rather than opening a popup panel beside it.
+  const label = scroll.getByRole("button", { name: "Obsidian" });
+  const labelBox = await label.boundingBox();
+  expect(labelBox!.x).toBeLessThan(after!.x + after!.width);
+  expect(labelBox!.width).toBeGreaterThan(60);
+  await scroll.getByRole("button", { name: "Obsidian" }).click();
   await expect(page.locator(".react-flow__node-panel [data-panel='vault']").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Collapse Library" })).toBeVisible();
 });
@@ -465,10 +479,27 @@ test("web preview windows resize and keep their dimensions after reload", async 
   for (const line of await edgeZones.all()) await expect(line).toHaveCSS("opacity", "0");
   const grip = web.locator(".react-flow__resize-control.line.bottom");
   await expect(grip).toBeAttached();
+  // Opening a page requests a fitView; the invisible resize zones hug the
+  // card edge, so the drag must wait for the viewport animation to settle —
+  // same stability wait the artifact resize flow uses.
+  let stableSamples = 0;
+  let previousRect = "";
+  await expect.poll(async () => {
+    const rect = await web.boundingBox();
+    const current = rect ? `${rect.x.toFixed(1)}:${rect.y.toFixed(1)}:${rect.width.toFixed(1)}:${rect.height.toFixed(1)}` : "";
+    stableSamples = current && current === previousRect ? stableSamples + 1 : 0;
+    previousRect = current;
+    return stableSamples;
+  }, { intervals: [100, 100, 100, 100, 100, 100], timeout: 3_000 }).toBeGreaterThanOrEqual(4);
   const original = await web.boundingBox();
   const handle = await grip.boundingBox();
   expect(original).not.toBeNull();
   expect(handle).not.toBeNull();
+  const bottomIsHitTarget = await page.evaluate(({ x, y }) => {
+    const target = document.elementFromPoint(x, y);
+    return !!target?.closest(".react-flow__resize-control.line.bottom");
+  }, { x: handle!.x + handle!.width / 2, y: handle!.y + handle!.height / 2 });
+  expect(bottomIsHitTarget, "the invisible bottom-edge resize zone must receive the pointer").toBe(true);
   await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2);
   await page.mouse.down();
   await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2 + 60, { steps: 8 });
