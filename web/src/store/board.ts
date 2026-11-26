@@ -1656,6 +1656,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     const next = { ...get().panelNodes, [board]: m };
     localStorage.setItem("cv-panelnodes", JSON.stringify(next));
     set({ panelNodes: next });
+    get().bringCardToFront(id);
   },
   closePanelNode: (id) => {
     const board = get().activeBoard;
@@ -1761,6 +1762,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     const next = { ...get().termNodes, [board]: m };
     localStorage.setItem("cv-termnodes", JSON.stringify(next));
     set({ termNodes: next });
+    get().bringCardToFront(id);
   },
   closeTermNode: (id) => {
     const board = get().activeBoard;
