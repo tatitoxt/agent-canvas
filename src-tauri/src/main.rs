@@ -12,7 +12,7 @@ use canvasd::agent::{canvas_result_line, dirty_diff, dirty_file_count, dirty_fil
 use canvasd::protocol::{AgentStatus, ServerMsg, SnapshotAgent, SnapshotAutomation, SnapshotDelegation};
 use canvasd::store::Store;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::mpsc;
@@ -621,7 +621,7 @@ fn repo_write(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: 
 #[cfg(test)]
 mod repo_explorer_tests {
     use super::{expand_home_path, read_repo_file, repo_tree_entries, resolve_registered_repo_dir, uri_component, write_repo_file};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
@@ -696,6 +696,35 @@ mod repo_explorer_tests {
         let home = std::env::var("HOME").unwrap();
         assert_eq!(expand_home_path("~/projects/demo"), PathBuf::from(home).join("projects/demo"));
         assert_eq!(expand_home_path("relative/worktree"), PathBuf::from("relative/worktree"));
+    }
+
+    #[test]
+    fn repo_root_prefers_canvas_repo_then_board_cwd_then_user_default() {
+        use super::pick_repo_root;
+        let home = PathBuf::from("/home/tester");
+
+        // CANVAS_REPO always wins — even over a board-looking cwd.
+        let cwd = temp_root();
+        std::fs::create_dir(cwd.join(".git")).unwrap();
+        assert_eq!(
+            pick_repo_root(Some("/elsewhere/board"), &cwd, &home),
+            PathBuf::from("/elsewhere/board")
+        );
+        // Blank values count as unset.
+        assert_eq!(pick_repo_root(Some("  "), &cwd, &home), cwd);
+
+        // A cwd with board evidence (.git or .canvas) stays the cwd, as the
+        // daemon always did for terminal launches.
+        std::fs::remove_dir_all(cwd.join(".git")).unwrap();
+        std::fs::create_dir(cwd.join(".canvas")).unwrap();
+        assert_eq!(pick_repo_root(None, &cwd, &home), cwd);
+        std::fs::remove_dir_all(cwd).unwrap();
+
+        // Finder/launchd launches (cwd is the filesystem root) and random
+        // folders fall to the per-user default — the launch crash this
+        // resolution order prevents.
+        assert_eq!(pick_repo_root(None, Path::new("/"), &home), home.join("Canvas"));
+        assert_eq!(pick_repo_root(None, Path::new("/usr/local/bin"), &home), home.join("Canvas"));
     }
 
     #[test]
@@ -2106,6 +2135,26 @@ fn chrome_bookmarks() -> Vec<ChromeBookmark> {
     out
 }
 
+/// Where the board lives when nothing points anywhere else.
+///
+/// - `CANVAS_REPO` wins (dev / power-user override).
+/// - A terminal launch inside a canvas-looking directory (one that already
+///   has `.canvas` state or is a git repo) keeps the cwd behavior the
+///   daemon always had.
+/// - Everything else — a Finder/launchd launch, whose cwd is `/` and where
+///   `Store::open` dies trying to create `/.canvas` (the launch crash), or
+///   a random folder — lands in the per-user default `~/Canvas`.
+fn pick_repo_root(canvas_repo: Option<&str>, cwd: &Path, home: &Path) -> PathBuf {
+    if let Some(dir) = canvas_repo.map(str::trim).filter(|dir| !dir.is_empty()) {
+        return PathBuf::from(dir);
+    }
+    let looks_like_board = cwd.join(".canvas").is_dir() || cwd.join(".git").exists();
+    if looks_like_board && cwd.parent().is_some() {
+        return cwd.to_path_buf();
+    }
+    home.join("Canvas")
+}
+
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -2118,9 +2167,25 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let repo_root = std::env::var("CANVAS_REPO")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| std::env::current_dir().unwrap());
+            let repo_root = {
+                let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+                let home = std::env::var("HOME")
+                    .or_else(|_| std::env::var("USERPROFILE"))
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| cwd.clone());
+                let root = pick_repo_root(std::env::var("CANVAS_REPO").ok().as_deref(), &cwd, &home);
+                if root == home.join("Canvas") {
+                    // The per-user default: create it, and make it a git
+                    // repo so the main board can spawn worktree agents out
+                    // of the box. Best effort — a missing git binary must
+                    // not stop the app.
+                    let _ = std::fs::create_dir_all(&root);
+                    if !root.join(".git").exists() {
+                        let _ = std::process::Command::new("git").arg("init").arg(&root).output();
+                    }
+                }
+                root
+            };
             let store = Arc::new(Store::open(&repo_root)?);
             store.mark_all_exited()?;
             // Update check on launch: downloads + installs when GitHub
