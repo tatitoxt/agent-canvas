@@ -35,7 +35,7 @@ const rowBtn: React.CSSProperties = {
   border: "none",
   background: "transparent",
   color: "var(--cv-ink)",
-  fontSize: 12.5,
+  fontSize: "var(--cv-text-sm)",
   fontWeight: 500,
   textAlign: "left",
   cursor: "pointer",
@@ -52,7 +52,7 @@ const miniInput: React.CSSProperties = {
   borderRadius: 8,
   height: 26,
   padding: "0 9px",
-  fontSize: 11,
+  fontSize: "var(--cv-text-xxs)",
   color: "var(--cv-ink)",
   outline: "none",
   width: "100%",
@@ -165,7 +165,7 @@ export function ToolsMenu({
           }}
         >
           <header style={{ display: "flex", flexDirection: collapsed ? "column" : "row", alignItems: "center", justifyContent: "center", gap: collapsed ? 6 : 8, minHeight: collapsed ? 112 : 48, padding: collapsed ? "8px 0" : "0 14px", borderBottom: "1px solid var(--cv-glass-edge)" }}>
-            {!collapsed && <strong style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Tools</strong>}
+            {!collapsed && <strong style={{ flex: 1, fontSize: "var(--cv-text-sm)", fontWeight: 600 }}>Tools</strong>}
             <button className="glass-pill" title={pinned ? "Unpin Tools panel" : "Pin Tools panel"} aria-label={pinned ? "Unpin Tools panel" : "Pin Tools panel"} onClick={() => { const next = !pinned; setPinned(next); localStorage.setItem("cv-tools-pinned", String(next)); }} style={{ width: 28, height: 28, display: "grid", placeItems: "center", color: pinned ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}><Icon name="pin" size={14} /></button>
             <button className="glass-pill" title={collapsed ? "Expand Tools panel" : "Collapse Tools panel"} aria-label={collapsed ? "Expand Tools panel" : "Collapse Tools panel"} onClick={() => setCollapsed((v) => !v)} style={{ width: 28, height: 28, display: "grid", placeItems: "center" }}><Icon name={collapsed ? "expand" : "collapse"} size={14} /></button>
             {!pinned && <button className="glass-pill" title="Close Tools panel" aria-label="Close Tools panel" onClick={() => setOpen(false)} style={{ width: 28, height: 28, display: "grid", placeItems: "center" }}><Icon name="x" size={14} /></button>}
@@ -183,7 +183,7 @@ export function ToolsMenu({
                   actions.onAddToBoard?.(it.key);
                   setOpen(false);
                 }}
-                style={{ border: "none", background: "transparent", color: "var(--cv-ink-faint)", borderRadius: 7, cursor: "pointer", padding: "5px 7px", fontSize: 12 }}
+                style={{ border: "none", background: "transparent", color: "var(--cv-ink-faint)", borderRadius: 7, cursor: "pointer", padding: "5px 7px", fontSize: "var(--cv-text-xs)" }}
               >+</button>
             </div>
           ))}
@@ -198,7 +198,7 @@ export function ToolsMenu({
                 <button
                   key={k}
                   className="glass-pill"
-                  style={{ ...rowBtn, width: "auto", padding: "5px 10px", justifyContent: "center", fontSize: 12 }}
+                  style={{ ...rowBtn, width: "auto", padding: "5px 10px", justifyContent: "center", fontSize: "var(--cv-text-xs)" }}
                   title={k}
                   onClick={() => { addShape(k); setSub(null); dismiss(); }}
                 >

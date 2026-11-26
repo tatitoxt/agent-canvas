@@ -177,7 +177,7 @@ export function TermHost({ agentId }: { agentId: string }) {
       }}
       style={{
         width: 130,
-        fontSize: 10.5,
+        fontSize: "var(--cv-text-xxs)",
         padding: "3px 8px",
         borderRadius: 999,
         border: "1px solid var(--cv-glass-edge)",
@@ -207,14 +207,14 @@ export function TermHost({ agentId }: { agentId: string }) {
           <button
             title="previous match (shift+enter)"
             onClick={() => searchRef.current?.findPrevious(findQ)}
-            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11, padding: "0 2px" }}
+            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: "0 2px" }}
           >
             ↑
           </button>
           <button
             title="next match (enter)"
             onClick={() => searchRef.current?.findNext(findQ)}
-            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11, padding: "0 2px" }}
+            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: "0 2px" }}
           >
             ↓
           </button>
@@ -224,7 +224,7 @@ export function TermHost({ agentId }: { agentId: string }) {
               setFindOpen(false);
               termRef.current?.focus();
             }}
-            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11, padding: "0 2px" }}
+            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: "0 2px" }}
           >
             ✕
           </button>
@@ -239,7 +239,7 @@ export function TermHost({ agentId }: { agentId: string }) {
           title="find in terminal buffer"
           aria-label="Find in terminal buffer"
           onClick={() => setFindOpen((v) => !v)}
-          style={{ background: "none", border: "none", color: findOpen ? "var(--cv-accent)" : "var(--cv-ink-dim)", cursor: "pointer", fontSize: 12, padding: "0 2px" }}
+          style={{ background: "none", border: "none", color: findOpen ? "var(--cv-accent)" : "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xs)", padding: "0 2px" }}
         >
           ⌕
         </button>

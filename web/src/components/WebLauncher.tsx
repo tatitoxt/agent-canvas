@@ -21,10 +21,9 @@ const QUICK = [
 ];
 
 const label: React.CSSProperties = {
-  fontSize: 8.5,
-  fontWeight: 700,
-  letterSpacing: 1,
-  textTransform: "uppercase",
+  fontSize: "var(--cv-text-xxs)",
+  fontWeight: 400,
+  letterSpacing: "0.02em",
   color: "var(--cv-ink-faint)",
   padding: "10px 2px 5px",
 };
@@ -132,21 +131,21 @@ export function WebLauncher({ onClose }: { onClose: () => void }) {
             borderRadius: 10,
             height: 34,
             padding: "0 12px",
-            fontSize: 12.5,
+            fontSize: "var(--cv-text-sm)",
             color: "var(--cv-ink)",
             outline: "none",
             width: "100%",
             boxSizing: "border-box",
           }}
         />
-        <div style={label}>localhost</div>
+        <div style={label}>Localhost</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {PORTS.map((p) => (
             <button
               key={p}
               className="glass-pill"
               title={`open http://localhost:${p}`}
-              style={{ border: "none", cursor: "pointer", fontSize: 11, padding: "4px 11px", color: "var(--cv-ink)" }}
+              style={{ border: "none", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: "4px 11px", color: "var(--cv-ink)" }}
               onClick={() => open(`http://localhost:${p}`)}
             >
               :{p}
@@ -155,12 +154,12 @@ export function WebLauncher({ onClose }: { onClose: () => void }) {
         </div>
         {bookmarks.length > 0 && (
           <>
-            <div style={label}>bookmarks</div>
+            <div style={label}>Bookmarks</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 170, overflowY: "auto" }}>
               {[...new Set(bookmarks.map((b) => b.folder ?? ""))].map((folder) => (
                 <div key={folder}>
                   {folder && (
-                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "5px 2px 3px" }}>
+                    <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 400, letterSpacing: "0.02em", color: "var(--cv-ink-faint)", padding: "5px 2px 3px" }}>
                       {folder}
                     </div>
                   )}
@@ -172,7 +171,7 @@ export function WebLauncher({ onClose }: { onClose: () => void }) {
                           key={b.url}
                           className="glass-pill"
                           title={b.url}
-                          style={{ border: "none", cursor: "pointer", fontSize: 11, padding: "4px 11px", color: "var(--cv-ink)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                          style={{ border: "none", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: "4px 11px", color: "var(--cv-ink)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                           onClick={() => open(b.url)}
                         >
                           {b.name || b.url}
@@ -184,7 +183,7 @@ export function WebLauncher({ onClose }: { onClose: () => void }) {
             </div>
           </>
         )}
-        <div style={label}>quick open</div>
+        <div style={label}>Quick open</div>
         <div
           style={{
             display: "grid",
@@ -218,13 +217,13 @@ export function WebLauncher({ onClose }: { onClose: () => void }) {
                   placeItems: "center",
                   background: q.color,
                   color: "#fff",
-                  fontSize: q.letter.length > 1 ? 11 : 14,
+                  fontSize: q.letter.length > 1 ? "var(--cv-text-xxs)" : "var(--cv-text-md)",
                   fontWeight: 800,
                 }}
               >
                 {q.letter}
               </span>
-              <span style={{ fontSize: 10.5, color: "var(--cv-ink)", fontWeight: 600 }}>{q.name}</span>
+              <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)", fontWeight: 600 }}>{q.name}</span>
             </button>
           ))}
         </div>

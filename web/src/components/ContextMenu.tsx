@@ -66,7 +66,7 @@ export function ContextMenu({
     border: "none",
     background: "transparent",
     color: "var(--cv-ink)",
-    fontSize: 12,
+    fontSize: "var(--cv-text-xs)",
     padding: "7px 12px",
     borderRadius: 8,
     cursor: "pointer",

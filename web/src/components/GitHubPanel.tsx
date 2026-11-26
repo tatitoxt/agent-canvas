@@ -113,7 +113,7 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
       style={{ ...panelRoot, padding: "12px 10px" }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "0 12px 8px", flexShrink: 0 }}>
-        <span style={{ fontSize: 10, color: "var(--cv-ink-dim)", paddingLeft: 8 }}>{slug ?? "no repo"}</span>
+        <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", paddingLeft: 8 }}>{slug ?? "no repo"}</span>
         <button
           title="Open on github.com — this repo in your browser"
           onClick={() => window.open(slug ? `https://github.com/${slug}` : "https://github.com", "_blank")}
@@ -124,7 +124,7 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
         <button
           title="refresh"
           onClick={() => setTick((t) => t + 1)}
-          style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 12, padding: "0 0 0 8px" }}
+          style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xs)", padding: "0 0 0 8px" }}
         >
           ↻
         </button>
@@ -150,12 +150,12 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
               color: "var(--cv-ink)",
             }}
           >
-            <div style={{ fontSize: 11.5, lineHeight: 1.35 }}>
+            <div style={{ fontSize: "var(--cv-text-xs)", lineHeight: 1.35 }}>
               <span style={{ color: "var(--cv-ink-dim)", fontFamily: "var(--cv-font-mono)" }}>#{it.number}</span>{" "}
               {it.title}
-              {it.draft && <span style={{ color: "var(--cv-ink-dim)", fontSize: 10 }}> · draft</span>}
+              {it.draft && <span style={{ color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-xxs)" }}> · draft</span>}
             </div>
-            <div style={{ display: "flex", gap: 6, marginTop: 4, fontSize: 10, color: "var(--cv-ink-dim)", alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 6, marginTop: 4, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", alignItems: "center", flexWrap: "wrap" }}>
               {it.ci && (
                 <span
                   title={`CI: ${it.ci}`}
@@ -168,7 +168,7 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
               <span>·</span>
               <span>{age(it.updated)}</span>
               {it.labels.map((l) => (
-                <span key={l} style={{ background: "var(--cv-glass-hi)", borderRadius: 999, padding: "1px 7px", fontSize: 9.5 }}>
+                <span key={l} style={{ background: "var(--cv-glass-hi)", borderRadius: 999, padding: "1px 7px", fontSize: "var(--cv-text-xxs)" }}>
                   {l}
                 </span>
               ))}
@@ -181,5 +181,5 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
 }
 
 function Hint({ text }: { text: string }) {
-  return <div style={{ padding: "18px 12px", fontSize: 11, color: "var(--cv-ink-dim)", textAlign: "center" }}>{text}</div>;
+  return <div style={{ padding: "18px 12px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", textAlign: "center" }}>{text}</div>;
 }

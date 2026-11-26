@@ -36,14 +36,14 @@ export function DigestPanel() {
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cv-ink)" }}>Session digest</span>
+          <span style={{ fontSize: "var(--cv-text-sm)", fontWeight: 600, color: "var(--cv-ink)" }}>Session digest</span>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="glass-pill" style={{ fontSize: 10.5, padding: "4px 12px", cursor: "pointer", border: "none", color: "var(--cv-ink)" }} onClick={copy}>
+            <button className="glass-pill" style={{ fontSize: "var(--cv-text-xxs)", padding: "4px 12px", cursor: "pointer", border: "none", color: "var(--cv-ink)" }} onClick={copy}>
               copy
             </button>
             <button
               className="glass-pill"
-              style={{ fontSize: 10.5, padding: "4px 12px", cursor: "pointer", border: "none", color: "var(--cv-ink)" }}
+              style={{ fontSize: "var(--cv-text-xxs)", padding: "4px 12px", cursor: "pointer", border: "none", color: "var(--cv-ink)" }}
               title="Export this digest as PDF (saved to artifacts)"
               onClick={() => {
                 downloadPdf("Session digest", digest);
@@ -52,10 +52,10 @@ export function DigestPanel() {
             >
               → PDF
             </button>
-            <button className="glass-pill" style={{ fontSize: 10.5, padding: "4px 12px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }} onClick={toMemory}>
+            <button className="glass-pill" style={{ fontSize: "var(--cv-text-xxs)", padding: "4px 12px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }} onClick={toMemory}>
               → board memory
             </button>
-            <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 14 }} onClick={closeDigest}>
+            <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-md)" }} onClick={closeDigest}>
               ×
             </button>
           </div>
@@ -70,7 +70,7 @@ export function DigestPanel() {
             border: "1px solid var(--cv-glass-edge)",
             background: "var(--cv-glass-hi)",
             color: "var(--cv-ink)",
-            fontSize: 11,
+            fontSize: "var(--cv-text-xxs)",
             fontFamily: "var(--cv-font-mono)",
             lineHeight: 1.55,
             whiteSpace: "pre-wrap",

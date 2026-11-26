@@ -16,7 +16,7 @@ const input: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 8,
   padding: "6px 10px",
-  fontSize: 11.5,
+  fontSize: "var(--cv-text-xs)",
   color: "var(--cv-ink)",
   outline: "none",
   fontFamily: "inherit",
@@ -44,7 +44,7 @@ const select: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 7,
   padding: "3px 6px",
-  fontSize: 10.5,
+  fontSize: "var(--cv-text-xxs)",
   color: "var(--cv-ink)",
   outline: "none",
   fontFamily: "inherit",
@@ -114,7 +114,7 @@ export function AutomationsPanel() {
         <button
           className="cv-mini-btn"
           title="automation guardrails — global policy for automated runs"
-          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 9px", color: guardOpen ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}
+          style={{ padding: "3px 9px", color: guardOpen ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}
           onClick={() => setGuardOpen((g) => !g)}
         >
           ⚙
@@ -122,7 +122,7 @@ export function AutomationsPanel() {
         <button
           className="cv-mini-btn cv-canvas-jump"
           title="Show this live Automations window on the canvas"
-          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 8px", color: "var(--cv-ink-dim)" }}
+          style={{ padding: "3px 8px", color: "var(--cv-ink-dim)" }}
           onClick={() => {
             if (!onBoard) useBoard.getState().openPanelNode("automations");
             useBoard.getState().requestFocus("panel-automations");
@@ -133,7 +133,7 @@ export function AutomationsPanel() {
         </button>
         <button
           className="cv-mini-btn"
-          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", color: "var(--cv-accent)" }}
+          style={{ padding: "3px 11px", color: "var(--cv-accent)" }}
           onClick={() => setCreating((c) => !c)}
         >
           {creating ? "cancel" : "+ new"}
@@ -147,7 +147,7 @@ export function AutomationsPanel() {
             </div>
             {GUARDRAIL_ROWS.map((r) => (
               <div key={r.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "3px 0" }}>
-                <span style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", flex: 1 }}>{r.label}</span>
+                <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", flex: 1 }}>{r.label}</span>
                 <select
                   style={select}
                   value={guardrails[r.key]}
@@ -210,7 +210,7 @@ export function AutomationsPanel() {
             />
             <button
               className="cv-mini-btn"
-              style={{ fontSize: 11, fontWeight: 600, padding: "5px 14px", cursor: "pointer", color: "var(--cv-done)" }}
+              style={{ padding: "5px 14px", color: "var(--cv-done)" }}
               onClick={save}
             >
               save automation
@@ -218,13 +218,13 @@ export function AutomationsPanel() {
           </div>
         )}
         {list.length === 0 && !creating && (
-          <div style={{ padding: "14px 12px", fontSize: 11.5, color: "var(--cv-ink-dim)" }}>
+          <div style={{ padding: "14px 12px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)" }}>
             <div style={{ marginBottom: 8 }}>Nothing saved yet — start from an example:</div>
             {PRESETS.map((p) => (
               <button
                 key={p.name}
                 className="cv-mini-btn"
-                style={{ display: "block", width: "100%", textAlign: "left", margin: "0 0 6px", padding: "7px 10px", fontSize: 11.5, cursor: "pointer", color: "var(--cv-ink)" }}
+                style={{ display: "block", width: "100%", textAlign: "left", margin: "0 0 6px", padding: "7px 10px", fontSize: "var(--cv-text-xs)", cursor: "pointer", color: "var(--cv-ink)" }}
                 onClick={() => {
                   setName(p.name);
                   setPrompt(p.prompt);
@@ -233,7 +233,7 @@ export function AutomationsPanel() {
                 }}
               >
                 {p.name}
-                <span style={{ display: "block", fontSize: 10, color: "var(--cv-ink-dim)", marginTop: 2 }}>{p.prompt.slice(0, 64)}…</span>
+                <span style={{ display: "block", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", marginTop: 2 }}>{p.prompt.slice(0, 64)}…</span>
               </button>
             ))}
           </div>
@@ -244,10 +244,10 @@ export function AutomationsPanel() {
             key={a.id}
             style={{ padding: "9px 12px", borderRadius: 10, marginBottom: 2 }}
           >
-            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--cv-ink)" }}>{a.name}</div>
+            <div style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600, color: "var(--cv-ink)" }}>{a.name}</div>
             <div
               style={{
-                fontSize: 11,
+                fontSize: "var(--cv-text-xxs)",
                 color: "var(--cv-ink-dim)",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -257,7 +257,7 @@ export function AutomationsPanel() {
             >
               {a.prompt}
             </div>
-            <div style={{ fontSize: 10, color: "var(--cv-ink-faint)", marginTop: 2 }}>
+            <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", marginTop: 2 }}>
               {a.command} · {a.permission} · hang {a.idle_secs}s · gated: {a.on_approval}
               {a.interval_secs ? ` · every ${Math.round(a.interval_secs / 60)}m` : ""}
               {a.last_run_at ? ` · ran ${a.last_run_at.slice(0, 16)}` : " · never ran"}
@@ -266,21 +266,21 @@ export function AutomationsPanel() {
               <button
                 className="cv-mini-btn"
                 title={guardrailOverrides[a.id] ? "this run uses its own settings, not the global guardrails" : "follows the global guardrails — click to let this run keep its own settings"}
-                style={{ fontSize: 10, fontWeight: 600, padding: "2px 10px", cursor: "pointer", color: guardrailOverrides[a.id] ? "var(--cv-accent)" : "var(--cv-ink-faint)" }}
+                style={{ padding: "2px 10px", color: guardrailOverrides[a.id] ? "var(--cv-accent)" : "var(--cv-ink-faint)" }}
                 onClick={() => setGuardrailOverride(a.id, !guardrailOverrides[a.id])}
               >
                 {guardrailOverrides[a.id] ? "override: on" : "override"}
               </button>
               <button
                 className="cv-mini-btn"
-                style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 12px", cursor: "pointer", color: "var(--cv-done)" }}
+                style={{ padding: "2px 12px", color: "var(--cv-done)" }}
                 onClick={() => runAutomation(a.id)}
               >
                 run
               </button>
               <button
                 className="cv-mini-btn"
-                style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 12px", cursor: "pointer", color: "var(--cv-blocked)" }}
+                style={{ padding: "2px 12px", color: "var(--cv-blocked)" }}
                 onClick={() => deleteAutomation(a.id)}
               >
                 delete

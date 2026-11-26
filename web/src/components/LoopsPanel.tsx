@@ -8,7 +8,7 @@ const input: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 8,
   padding: "6px 10px",
-  fontSize: 11.5,
+  fontSize: "var(--cv-text-xs)",
   color: "var(--cv-ink)",
   outline: "none",
   fontFamily: "inherit",
@@ -16,10 +16,9 @@ const input: React.CSSProperties = {
 };
 
 const label: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: 0.8,
-  textTransform: "uppercase",
+  fontSize: "var(--cv-text-xxs)",
+  fontWeight: 400,
+  letterSpacing: "0.02em",
   color: "var(--cv-ink-faint)",
   padding: "10px 12px 4px",
 };
@@ -105,7 +104,7 @@ export function LoopsPanel() {
       >
         <button
           className="cv-mini-btn"
-          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", color: "var(--cv-accent)" }}
+          style={{ padding: "3px 11px", color: "var(--cv-accent)" }}
           onClick={() => setCreating((c) => !c)}
         >
           {creating ? "cancel" : "+ new"}
@@ -114,18 +113,18 @@ export function LoopsPanel() {
       <div style={{ flex: 1, overflowY: "auto" }}>
         {!creating && (
           <>
-            <div style={{ padding: "6px 12px 2px", fontSize: 11, color: "var(--cv-ink-dim)", lineHeight: 1.5 }}>
+            <div style={{ padding: "6px 12px 2px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", lineHeight: 1.5 }}>
               A loop sends one instruction to your consoles — on a timer, when an
               agent goes idle, or the moment its output prints something you care
               about. Board: <b style={{ color: "var(--cv-ink)" }}>{boards[activeBoard] ?? activeBoard}</b>.
             </div>
-            <div style={label}>start from a template</div>
+            <div style={label}>Start from a template</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, padding: "4px 12px 8px" }}>
               {TEMPLATES.map((t) => (
                 <button
                   key={t.name}
                   className="cv-mini-btn"
-                  style={{ fontSize: 10, padding: "3px 9px", cursor: "pointer", color: "var(--cv-ink-dim)" }}
+                  style={{ padding: "3px 9px", color: "var(--cv-ink-dim)" }}
                   onClick={() => apply(t)}
                 >
                   {t.name}
@@ -133,7 +132,7 @@ export function LoopsPanel() {
               ))}
               <button
                 className="cv-mini-btn"
-                style={{ fontSize: 10, padding: "3px 9px", cursor: "pointer", color: "var(--cv-accent)" }}
+                style={{ padding: "3px 9px", color: "var(--cv-accent)" }}
                 onClick={() => { setInstruction(""); setTrigger("interval"); setCreating(true); }}
               >
                 Start from scratch
@@ -180,7 +179,7 @@ export function LoopsPanel() {
             )}
             <button
               className="cv-mini-btn"
-              style={{ fontSize: 11, fontWeight: 600, padding: "5px 14px", cursor: "pointer", color: "var(--cv-done)" }}
+              style={{ padding: "5px 14px", color: "var(--cv-done)" }}
               onClick={save}
             >
               start loop
@@ -188,16 +187,16 @@ export function LoopsPanel() {
           </div>
         )}
         {list.length === 0 && !creating && (
-          <div style={{ padding: "14px 12px", fontSize: 11.5, color: "var(--cv-ink-faint)" }}>
+          <div style={{ padding: "14px 12px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-faint)" }}>
             No loops on this board yet.
           </div>
         )}
-        {list.length > 0 && <div style={label}>running on this board</div>}
+        {list.length > 0 && <div style={label}>Running on this board</div>}
         {list.map((l) => (
           <div key={l.loop_id} style={{ padding: "9px 12px", borderRadius: 10, marginBottom: 2, opacity: l.enabled ? 1 : 0.5 }}>
             <div
               style={{
-                fontSize: 11,
+                fontSize: "var(--cv-text-xxs)",
                 color: "var(--cv-ink)",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -209,7 +208,7 @@ export function LoopsPanel() {
             >
               {l.instruction}
             </div>
-            <div style={{ fontSize: 10, color: "var(--cv-ink-faint)", marginTop: 3 }}>
+            <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", marginTop: 3 }}>
               → {agentName(l.target)} ·{" "}
               {l.trigger === "interval"
                 ? `every ${Math.round((l.interval_secs ?? 0) / 60)}m`
@@ -221,7 +220,7 @@ export function LoopsPanel() {
             <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
               <button
                 className="cv-mini-btn"
-                style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 12px", cursor: "pointer", color: l.enabled ? "var(--cv-waiting)" : "var(--cv-done)" }}
+                style={{ padding: "2px 12px", color: l.enabled ? "var(--cv-waiting)" : "var(--cv-done)" }}
                 onClick={() => setLoopEnabled(l.loop_id, !l.enabled)}
               >
                 {l.enabled ? "pause" : "resume"}
@@ -229,14 +228,14 @@ export function LoopsPanel() {
               <button
                 className="cv-mini-btn"
                 title="run it once right now"
-                style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 12px", cursor: "pointer", color: "var(--cv-accent)" }}
+                style={{ padding: "2px 12px", color: "var(--cv-accent)" }}
                 onClick={() => runLoop(l.loop_id)}
               >
                 run now
               </button>
               <button
                 className="cv-mini-btn"
-                style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 12px", cursor: "pointer", color: "var(--cv-blocked)" }}
+                style={{ padding: "2px 12px", color: "var(--cv-blocked)" }}
                 onClick={() => deleteLoop(l.loop_id)}
               >
                 delete

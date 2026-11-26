@@ -1180,12 +1180,12 @@ function Board() {
             }}
           >
             <Icon name="draw" size={13} color="var(--cv-accent)" />
-            <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--cv-ink)" }}>Pencil</span>
-            <span style={{ fontSize: 10, color: "var(--cv-ink-faint)", fontWeight: 500 }}>drag to mark up the canvas</span>
+            <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600, color: "var(--cv-ink)" }}>Pencil</span>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", fontWeight: 500 }}>drag to mark up the canvas</span>
             <span style={{ width: 1, height: 16, background: "var(--cv-glass-edge)" }} />
             <button
               title="Clear every stroke"
-              style={{ border: "none", background: "transparent", fontSize: 10.5, padding: "4px 9px", cursor: "pointer", color: strokes.length ? "var(--cv-ink-dim)" : "var(--cv-ink-faint)", borderRadius: 999, fontWeight: 500 }}
+              style={{ border: "none", background: "transparent", fontSize: "var(--cv-text-xxs)", padding: "4px 9px", cursor: "pointer", color: strokes.length ? "var(--cv-ink-dim)" : "var(--cv-ink-faint)", borderRadius: 999, fontWeight: 500 }}
               onClick={(e) => { e.stopPropagation(); setStrokes([]); }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
@@ -1197,7 +1197,7 @@ function Board() {
               style={{
                 border: "none",
                 background: "var(--cv-accent-dim)",
-                fontSize: 10.5,
+                fontSize: "var(--cv-text-xxs)",
                 padding: "4px 10px",
                 cursor: "pointer",
                 color: "var(--cv-accent)",
@@ -1210,7 +1210,7 @@ function Board() {
               onClick={(e) => { e.stopPropagation(); setDrawing(null); setPencil(false); }}
             >
               done
-              <kbd style={{ fontSize: 9, fontFamily: "inherit", opacity: 0.75, border: "1px solid color-mix(in srgb, var(--cv-accent) 45%, transparent)", borderRadius: 4, padding: "0 4px" }}>esc</kbd>
+              <kbd style={{ fontSize: "var(--cv-text-xxs)", fontFamily: "inherit", opacity: 0.75, border: "1px solid color-mix(in srgb, var(--cv-accent) 45%, transparent)", borderRadius: 4, padding: "0 4px" }}>esc</kbd>
             </button>
           </div>
         </div>
@@ -1430,7 +1430,7 @@ function Board() {
             border: "none",
             cursor: "pointer",
             color: "var(--cv-ink)",
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             fontWeight: 600,
           }}
           onClick={() => {
@@ -1488,7 +1488,7 @@ function Board() {
               style={{
                 display: "flex", alignItems: "center", gap: 9, width: "100%",
                 textAlign: "left", border: "none", background: "transparent",
-                color: "var(--cv-ink-dim)", fontSize: 12, padding: "6px 10px",
+                color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-xs)", padding: "6px 10px",
                 borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap",
               }}
             >

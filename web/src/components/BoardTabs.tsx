@@ -37,7 +37,7 @@ export function BoardTabs() {
     border: "none",
     background: "transparent",
     color: "var(--cv-ink)",
-    fontSize: 11,
+    fontSize: "var(--cv-text-xxs)",
     width: 90,
     outline: "none",
     padding: "4px 8px",
@@ -98,7 +98,7 @@ export function BoardTabs() {
                   : "transparent",
               color:
                 id === activeBoard ? "var(--cv-accent)" : "var(--cv-ink-dim)",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               fontWeight: 500,
               padding: "4px 10px",
               borderRadius: 999,
@@ -110,7 +110,7 @@ export function BoardTabs() {
               <span
                 style={{
                   marginLeft: 5,
-                  fontSize: 9,
+                  fontSize: "var(--cv-text-xxs)",
                   color: "var(--cv-ink-faint)",
                   fontWeight: 400,
                 }}
@@ -129,7 +129,7 @@ export function BoardTabs() {
                 style={{
                   marginLeft: 6,
                   color: "var(--cv-ink-faint)",
-                  fontSize: 10,
+                  fontSize: "var(--cv-text-xxs)",
                 }}
                 title="delete board (only when empty)"
               >
@@ -160,7 +160,7 @@ export function BoardTabs() {
             border: "none",
             background: "transparent",
             color: "var(--cv-ink-faint)",
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             padding: "3px 8px",
             borderRadius: 999,
             cursor: "pointer",
@@ -190,7 +190,7 @@ export function BoardTabs() {
           border: "none",
           background: "transparent",
           color: "var(--cv-ink-faint)",
-          fontSize: 11,
+          fontSize: "var(--cv-text-xxs)",
           padding: "3px 8px",
           borderRadius: 999,
           cursor: "pointer",

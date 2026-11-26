@@ -76,7 +76,7 @@ export const TermNode = memo(function TermNode({ id, selected, width }: NodeProp
             border: "1px solid color-mix(in srgb, #5b9dff 25%, transparent)",
             background: "color-mix(in srgb, #5b9dff 12%, transparent)",
             color: "#5b9dff",
-            fontSize: 10,
+            fontSize: "var(--cv-text-xxs)",
             flex: "none",
           }}
         >
@@ -152,7 +152,7 @@ export const TermNode = memo(function TermNode({ id, selected, width }: NodeProp
             background: "transparent",
             cursor: "pointer",
             color: "var(--cv-ink-dim)",
-            fontSize: 11,
+            fontSize: "var(--cv-text-xxs)",
             padding: "0 2px",
           }}
         >
@@ -177,7 +177,7 @@ export const TermNode = memo(function TermNode({ id, selected, width }: NodeProp
             border: "none",
             background: "transparent",
             color: "var(--cv-ink-faint)",
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             cursor: "pointer",
             display: "grid",
             placeItems: "center",
@@ -230,7 +230,7 @@ export const TermNode = memo(function TermNode({ id, selected, width }: NodeProp
             border: "none",
             background: "transparent",
             color: "var(--cv-ink-faint)",
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             cursor: "pointer",
             display: "grid",
             placeItems: "center",
@@ -256,7 +256,7 @@ export const TermNode = memo(function TermNode({ id, selected, width }: NodeProp
             border: "none",
             background: "transparent",
             color: "var(--cv-ink-faint)",
-            fontSize: 13,
+            fontSize: "var(--cv-text-sm)",
             cursor: "pointer",
             display: "grid",
             placeItems: "center",

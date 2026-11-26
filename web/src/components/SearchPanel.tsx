@@ -78,7 +78,7 @@ export function SearchPanel({
             border: "none",
             borderBottom: "1px solid rgba(255,255,255,0.08)",
             padding: "13px 16px",
-            fontSize: 13.5,
+            fontSize: "var(--cv-text-md)",
             color: "var(--cv-ink)",
             outline: "none",
             fontFamily: "inherit",
@@ -86,12 +86,12 @@ export function SearchPanel({
         />
         <div style={{ overflowY: "auto", padding: "6px" }}>
           {query.trim() && results.length === 0 && (
-            <div style={{ padding: "16px 14px", fontSize: 12, color: "var(--cv-ink-dim)" }}>
+            <div style={{ padding: "16px 14px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)" }}>
               no matches in live transcripts
             </div>
           )}
           {!query.trim() && (
-            <div style={{ padding: "16px 14px", fontSize: 12, color: "var(--cv-ink-dim)" }}>
+            <div style={{ padding: "16px 14px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)" }}>
               searches the last ~64KB of every agent's terminal — all local, nothing leaves this machine
             </div>
           )}
@@ -114,13 +114,13 @@ export function SearchPanel({
                 fontFamily: "inherit",
               }}
             >
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--cv-ink)" }}>
+              <div style={{ fontSize: "var(--cv-text-sm)", fontWeight: 600, color: "var(--cv-ink)" }}>
                 {r.name}
-                <span style={{ fontSize: 10, color: "var(--cv-ink-faint)", marginLeft: 8 }}>{r.status}</span>
+                <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", marginLeft: 8 }}>{r.status}</span>
               </div>
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: "var(--cv-text-xxs)",
                   color: "var(--cv-ink-dim)",
                   fontFamily: "var(--cv-font-mono)",
                   overflow: "hidden",

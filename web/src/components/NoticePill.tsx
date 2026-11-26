@@ -22,7 +22,7 @@ function Toast({ id, text }: { id: number; text: string }) {
       style={{
         maxWidth: 340,
         padding: "8px 14px",
-        fontSize: 11.5,
+        fontSize: "var(--cv-text-xs)",
         lineHeight: 1.45,
         color: "var(--cv-ink)",
         cursor: "pointer",

@@ -10,7 +10,7 @@ const tabBtn = (on: boolean): React.CSSProperties => ({
   border: "none",
   background: on ? "var(--cv-glass-hi)" : "transparent",
   color: on ? "var(--cv-accent)" : "var(--cv-ink-dim)",
-  fontSize: 10.5,
+  fontSize: "var(--cv-text-xxs)",
   fontWeight: 600,
   padding: "4px 10px",
   borderRadius: 8,
@@ -22,7 +22,7 @@ const actionBtn: React.CSSProperties = {
   alignItems: "center",
   gap: 5,
   color: "var(--cv-ink)",
-  fontSize: 10.5,
+  fontSize: "var(--cv-text-xxs)",
   fontWeight: 600,
   padding: "4px 10px",
   cursor: "pointer",
@@ -150,17 +150,17 @@ function WikiLink({ name, shown, onLink, entries: suppliedEntries }: { name: str
           style={{
             position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 70,
             width: 300, maxHeight: 240, overflow: "auto", borderRadius: 10,
-            padding: "10px 14px", fontSize: 12, lineHeight: 1.6,
+            padding: "10px 14px", fontSize: "var(--cv-text-xs)", lineHeight: 1.6,
             boxShadow: "0 12px 40px rgba(0,0,0,0.5)", cursor: "default",
           }}
         >
-          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--cv-accent)", marginBottom: 4 }}>
+          <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 700, color: "var(--cv-accent)", marginBottom: 4 }}>
             {(path ?? name).replace(/\.md$/, "")}
           </div>
           {unresolved ? (
-            <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", fontStyle: "italic" }}>note not created yet</div>
+            <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", fontStyle: "italic" }}>note not created yet</div>
           ) : text === undefined ? (
-            <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", fontStyle: "italic" }}>loading…</div>
+            <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", fontStyle: "italic" }}>loading…</div>
           ) : (
             <ReadingView text={text} depth={1} onLink={onLink} />
           )}
@@ -379,7 +379,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
           <div
             key={i}
             style={{
-              display: "flex", gap: 10, padding: "4px 12px", fontSize: 10.5,
+              display: "flex", gap: 10, padding: "4px 12px", fontSize: "var(--cv-text-xxs)",
               borderBottom: i === props.length - 1 ? "none" : "1px solid rgba(255,255,255,0.05)",
             }}
           >
@@ -397,7 +397,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
     if (/^\s*```/.test(l)) {
       if (inCode) {
         els.push(
-          <pre key={i} style={{ margin: "8px 0", padding: "10px 12px", borderRadius: 8, background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.06)", fontSize: 10.5, fontFamily: "var(--cv-font-mono)", lineHeight: 1.5, overflowX: "auto", color: "var(--cv-ink-dim)" }}>
+          <pre key={i} style={{ margin: "8px 0", padding: "10px 12px", borderRadius: 8, background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.06)", fontSize: "var(--cv-text-xxs)", fontFamily: "var(--cv-font-mono)", lineHeight: 1.5, overflowX: "auto", color: "var(--cv-ink-dim)" }}>
             {codeBuf.join("\n")}
           </pre>,
         );
@@ -424,7 +424,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
     }
     const h = l.match(/^(#{1,6})\s+(.*)/);
     if (h) {
-      const size = [19, 16, 14, 12.5, 11.5, 11][h[1].length - 1];
+      const size = [20, 16, 14, 13, 13, 13][h[1].length - 1];
       const isFolded = folded.has(i);
       els.push(
         <div key={i} id={`vh-${i}`} style={{ fontSize: size, fontWeight: 700, margin: "16px 0 6px", color: "var(--cv-accent)", letterSpacing: 0.2 }}>
@@ -451,7 +451,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
           <span
             onClick={onToggleTask ? () => onToggleTask(i, task[2] === " ") : undefined}
             title={onToggleTask ? "Toggle task — writes the change to the vault file" : undefined}
-            style={{ color: "var(--cv-accent)", fontSize: 11, cursor: onToggleTask ? "pointer" : "default" }}
+            style={{ color: "var(--cv-accent)", fontSize: "var(--cv-text-xxs)", cursor: onToggleTask ? "pointer" : "default" }}
           >
             {task[2] === " " ? "☐" : "☑"}
           </span>
@@ -497,7 +497,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
             style={{
               margin: "10px 0",
               borderCollapse: "collapse",
-              fontSize: 12,
+              fontSize: "var(--cv-text-xs)",
               width: "100%",
               maxWidth: 640,
               border: "1px solid rgba(255,255,255,0.09)",
@@ -563,7 +563,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
               borderLeft: `3px solid ${color}`, padding: "7px 12px",
             }}
           >
-            <div style={{ color, fontWeight: 700, fontSize: 11.5, marginBottom: quote.length > 1 ? 2 : 0 }}>{title}</div>
+            <div style={{ color, fontWeight: 700, fontSize: "var(--cv-text-xs)", marginBottom: quote.length > 1 ? 2 : 0 }}>{title}</div>
             {quote.slice(1).filter((q) => q.trim()).map((q, j) => (
               <div key={j} style={{ margin: "2px 0" }}>{mdInline(q, onLink, onTag, fns, fnScope, entries, onOpenExternal)}</div>
             ))}
@@ -591,7 +591,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
     els.push(
       <div key="fns" style={{ margin: "18px 0 4px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 8 }}>
         {[...fnDefs.entries()].map(([id, def]) => (
-          <div key={id} id={`${fnScope}vfn-def-${id}`} style={{ margin: "4px 0", fontSize: 11.5, color: "var(--cv-ink-dim)", display: "flex", gap: 7 }}>
+          <div key={id} id={`${fnScope}vfn-def-${id}`} style={{ margin: "4px 0", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)", display: "flex", gap: 7 }}>
             {fnReferenced.has(id) ? (
               <a
                 onClick={() => document.getElementById(`${fnScope}vfn-ref-${id}`)?.scrollIntoView({ block: "center" })}
@@ -610,7 +610,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
     );
   }
   return (
-    <div style={{ flex: 1, overflow: "auto", padding: "10px 18px", fontSize: 12.5, lineHeight: 1.7, color: "var(--cv-ink)", fontFamily: "inherit" }}>
+    <div style={{ flex: 1, overflow: "auto", padding: "10px 18px", fontSize: "var(--cv-text-sm)", lineHeight: 1.7, color: "var(--cv-ink)", fontFamily: "inherit" }}>
       {els}
     </div>
   );
@@ -661,7 +661,7 @@ function NoteEmbed({ name, section, lookup, fetchPath, onLink, onTag, assetSrc, 
   }, [hit?.path, hit?.text === undefined, src === undefined]);
   if (!hit) {
     return (
-      <div style={{ margin: "6px 0", fontSize: 11.5, color: "var(--cv-ink-faint)", fontStyle: "italic" }}>
+      <div style={{ margin: "6px 0", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-faint)", fontStyle: "italic" }}>
         ![[{name}]] — note not found
       </div>
     );
@@ -670,7 +670,7 @@ function NoteEmbed({ name, section, lookup, fetchPath, onLink, onTag, assetSrc, 
     return (
       <div style={{ margin: "10px 0", maxWidth: 640 }}>
         {src === undefined ? (
-          <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", fontStyle: "italic" }}>loading image…</div>
+          <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", fontStyle: "italic" }}>loading image…</div>
         ) : (
           <img
             src={src}
@@ -696,14 +696,14 @@ function NoteEmbed({ name, section, lookup, fetchPath, onLink, onTag, assetSrc, 
         title={`Open ${hit.path}`}
         style={{
           background: "none", border: "none", padding: 0, cursor: "pointer",
-          fontSize: 10.5, fontWeight: 700, color: "var(--cv-accent)",
+          fontSize: "var(--cv-text-xxs)", fontWeight: 700, color: "var(--cv-accent)",
           display: "block", marginBottom: 4,
         }}
       >
         {hit.path.replace(/\.md$/, "")}
       </button>
       {missing ? (
-        <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", fontStyle: "italic" }}>loading…</div>
+        <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", fontStyle: "italic" }}>loading…</div>
       ) : (
         <ReadingView text={section ? sectionSlice(hit.text!, section) : hit.text!} depth={1} onLink={onLink} onTag={onTag} entries={entries} />
       )}
@@ -742,7 +742,7 @@ function GraphView({ text, path, entries, onOpen }: {
 
   if (all.length === 0) {
     return (
-      <div style={{ flex: 1, display: "grid", placeItems: "center", fontSize: 11, color: "var(--cv-ink-faint)" }}>
+      <div style={{ flex: 1, display: "grid", placeItems: "center", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>
         no links in this note — use [[note name]] to wire them
       </div>
     );
@@ -771,7 +771,7 @@ function GraphView({ text, path, entries, onOpen }: {
             />
             <text
               x={s.x} y={s.y - 9}
-              textAnchor="middle" fontSize={9.5}
+              textAnchor="middle" fontSize={11}
               fill={hover === s.name ? "var(--cv-accent)" : "var(--cv-ink-dim)"}
             >
               {label(s.name.replace(/\.md$/, "").split("/").pop() ?? s.name, 22)}
@@ -784,7 +784,7 @@ function GraphView({ text, path, entries, onOpen }: {
           {centerName}
         </text>
       </svg>
-      <div style={{ position: "absolute", bottom: 8, left: 14, fontSize: 9.5, color: "var(--cv-ink-faint)" }}>
+      <div style={{ position: "absolute", bottom: 8, left: 14, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>
         {all.length} linked note{all.length === 1 ? "" : "s"} · hollow = not in vault yet
       </div>
     </div>
@@ -815,7 +815,7 @@ function GlobalGraph({ nodes, edges, current, onOpen }: {
     return base.length > 18 ? base.slice(0, 17) + "…" : base;
   };
   if (nodes.length === 0) {
-    return <div style={{ flex: 1, display: "grid", placeItems: "center", fontSize: 11, color: "var(--cv-ink-faint)" }}>no notes in vault</div>;
+    return <div style={{ flex: 1, display: "grid", placeItems: "center", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>no notes in vault</div>;
   }
   return (
     <div style={{ flex: 1, overflow: "auto", position: "relative", background: "radial-gradient(ellipse at center, rgba(255,255,255,0.02), transparent 65%)" }}>
@@ -838,7 +838,7 @@ function GlobalGraph({ nodes, edges, current, onOpen }: {
                 fill={isCur ? "var(--cv-accent)" : hover === n ? "var(--cv-accent)" : "#7f9e78"}
                 opacity={dim ? 0.3 : 1} />
               {isCur && <circle cx={p.x} cy={p.y} r={13} fill="none" stroke="var(--cv-accent)" strokeOpacity={0.35} />}
-              <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize={isCur ? 10.5 : 9}
+              <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize={11}
                 fontWeight={isCur ? 700 : 400}
                 fill={isCur || hover === n ? "var(--cv-accent)" : "var(--cv-ink-dim)"}
                 opacity={dim ? 0.25 : 1}>
@@ -848,7 +848,7 @@ function GlobalGraph({ nodes, edges, current, onOpen }: {
           );
         })}
       </svg>
-      <div style={{ position: "absolute", bottom: 8, left: 14, fontSize: 9.5, color: "var(--cv-ink-faint)" }}>
+      <div style={{ position: "absolute", bottom: 8, left: 14, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>
         {nodes.length} notes · {edges.length} links
       </div>
     </div>
@@ -869,7 +869,7 @@ export function GeneratePdfMenu({ onPick, onAsk }: {
   ];
   return (
     <div>
-      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "2px 6px 6px" }}>
+      <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 400, letterSpacing: "0.02em", color: "var(--cv-ink-faint)", padding: "2px 6px 6px" }}>
         Generate PDF
       </div>
       {rows.map((r) => (
@@ -879,7 +879,7 @@ export function GeneratePdfMenu({ onPick, onAsk }: {
           style={{
             display: "flex", alignItems: "center", gap: 10, width: "100%",
             padding: "8px 10px", border: "none", background: "transparent",
-            color: "var(--cv-ink)", fontSize: 12, fontWeight: 500,
+            color: "var(--cv-ink)", fontSize: "var(--cv-text-xs)", fontWeight: 500,
             borderRadius: 8, cursor: "pointer", textAlign: "left",
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
@@ -888,7 +888,7 @@ export function GeneratePdfMenu({ onPick, onAsk }: {
           <Icon name={r.icon} size={15} color="var(--cv-ink-dim)" />
           <div>
             <div>{r.label}</div>
-            <div style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>{r.hint}</div>
+            <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>{r.hint}</div>
           </div>
         </button>
       ))}
@@ -900,7 +900,7 @@ export function GeneratePdfMenu({ onPick, onAsk }: {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Ask for anything…"
-          style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 10px", fontSize: 10.5, color: "var(--cv-ink)", outline: "none" }}
+          style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 10px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)", outline: "none" }}
         />
         <button type="submit" className="cv-mini-btn" style={{ ...actionBtn, color: "var(--cv-accent)" }} title="Write a PDF about this from the board's state">→</button>
       </form>
@@ -962,7 +962,7 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
               style={{
                 display: "flex", alignItems: "center", gap: 3, width: "100%",
                 textAlign: "left", border: "none", background: "transparent",
-                color: "var(--cv-ink-dim)", fontSize: 11.5, padding: "3px 6px",
+                color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-xs)", padding: "3px 6px",
                 paddingLeft: pad, cursor: "pointer", borderRadius: 5, fontWeight: 600,
               }}
             >
@@ -1000,7 +1000,7 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
             textAlign: "left", border: "none",
             background: "transparent",
             color: vaultFile?.path === e ? "var(--cv-ink)" : "var(--cv-ink-dim)",
-            fontSize: 11.5, padding: "3px 6px", paddingLeft: pad + 15,
+            fontSize: "var(--cv-text-xs)", padding: "3px 6px", paddingLeft: pad + 15,
             borderRadius: 5, cursor: "pointer",
           }}
         >
@@ -1016,7 +1016,7 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
             <span
               role="button" title={bookmarks.has(e) ? "unbookmark" : "bookmark — pin to the top"}
               onClick={(ev) => { ev.stopPropagation(); onBookmark(e); }}
-              style={{ color: bookmarks.has(e) ? "var(--cv-accent)" : "var(--cv-ink-faint)", cursor: "pointer", padding: "0 3px", fontSize: 11 }}
+              style={{ color: bookmarks.has(e) ? "var(--cv-accent)" : "var(--cv-ink-faint)", cursor: "pointer", padding: "0 3px", fontSize: "var(--cv-text-xxs)" }}
             >
               ★
             </span>
@@ -1031,7 +1031,7 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
               role="button"
               title={armedDel === e ? "click again to delete for real" : "delete this note (removes the real file)"}
               onClick={(ev) => { ev.stopPropagation(); onDelete(e); }}
-              style={{ color: armedDel === e ? "#e07070" : "var(--cv-ink-faint)", cursor: "pointer", padding: "0 3px", fontSize: 11, fontWeight: armedDel === e ? 700 : 400 }}
+              style={{ color: armedDel === e ? "#e07070" : "var(--cv-ink-faint)", cursor: "pointer", padding: "0 3px", fontSize: "var(--cv-text-xxs)", fontWeight: armedDel === e ? 700 : 400 }}
             >
               {armedDel === e ? "×?" : "×"}
             </span>
@@ -1108,7 +1108,7 @@ function SourceEditor({ path, text, onDraft }: { path: string; text: string; onD
           padding: "10px 12px", borderRadius: 14, resize: "none",
           border: `1px solid ${dirty ? "rgba(255,196,66,.4)" : "var(--cv-glass-edge)"}`,
           background: "var(--cv-glass-hi)", color: "var(--cv-ink)",
-          fontSize: 11, fontFamily: "var(--cv-font-mono)",
+          fontSize: "var(--cv-text-xxs)", fontFamily: "var(--cv-font-mono)",
           lineHeight: 1.55, whiteSpace: "pre-wrap", outline: "none",
         }}
       />
@@ -1121,7 +1121,7 @@ function SourceEditor({ path, text, onDraft }: { path: string; text: string; onD
             boxShadow: "0 8px 30px rgba(0,0,0,0.5)",
           }}
         >
-          <div style={{ padding: "4px 10px", fontSize: 9, color: "var(--cv-ink-faint)", borderBottom: "1px solid var(--cv-glass-edge)" }}>
+          <div style={{ padding: "4px 10px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", borderBottom: "1px solid var(--cv-glass-edge)" }}>
             [[{suggest.query} — {matches.length} note{matches.length === 1 ? "" : "s"}
           </div>
           {matches.map((m, i) => (
@@ -1130,7 +1130,7 @@ function SourceEditor({ path, text, onDraft }: { path: string; text: string; onD
               onMouseDown={(e) => { e.preventDefault(); apply(m); }}
               onMouseEnter={() => setSel(i)}
               style={{
-                padding: "5px 10px", fontSize: 11, cursor: "pointer",
+                padding: "5px 10px", fontSize: "var(--cv-text-xxs)", cursor: "pointer",
                 color: i === sel ? "var(--cv-ink)" : "var(--cv-ink-dim)",
                 background: i === sel ? "color-mix(in srgb, var(--cv-accent) 18%, transparent)" : "transparent",
               }}
@@ -1145,7 +1145,7 @@ function SourceEditor({ path, text, onDraft }: { path: string; text: string; onD
           onClick={() => { vaultWrite(path, draft); setSaved(draft); notify(`saved → ${path}`); }}
           disabled={!dirty}
           style={{
-            padding: "3px 12px", borderRadius: 10, fontSize: 10, cursor: dirty ? "pointer" : "default",
+            padding: "3px 12px", borderRadius: 10, fontSize: "var(--cv-text-xxs)", cursor: dirty ? "pointer" : "default",
             border: "1px solid var(--cv-glass-edge)",
             background: dirty ? "rgba(255,196,66,.2)" : "var(--cv-glass-hi)",
             color: dirty ? "var(--cv-amber)" : "var(--cv-ink-faint)",
@@ -1153,7 +1153,7 @@ function SourceEditor({ path, text, onDraft }: { path: string; text: string; onD
         >
           {dirty ? "save to vault ⌘S" : "saved"}
         </button>
-        {dirty && <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>unsaved changes</span>}
+        {dirty && <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>unsaved changes</span>}
       </div>
     </div>
   );
@@ -1458,7 +1458,7 @@ export function VaultPanel() {
           title={vaultDir ? vaultDir : undefined}
           style={{
             flex: "1 1 56px", minWidth: 0,
-            fontSize: 12, fontWeight: 700, letterSpacing: 0.2,
+            fontSize: "var(--cv-text-xs)", fontWeight: 700, letterSpacing: 0.2,
             color: "var(--cv-ink)",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             padding: "2px 2px",
@@ -1523,9 +1523,9 @@ export function VaultPanel() {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="folder/note name"
-            style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 8, padding: "5px 9px", fontSize: 11, color: "var(--cv-ink)", outline: "none" }}
+            style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 8, padding: "5px 9px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)", outline: "none" }}
           />
-          <button type="submit" style={{ fontSize: 10.5, color: "var(--cv-accent)", background: "none", border: "none", cursor: "pointer" }}>create</button>
+          <button type="submit" style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-accent)", background: "none", border: "none", cursor: "pointer" }}>create</button>
         </form>
       )}
       {moreOpen && (
@@ -1547,7 +1547,7 @@ export function VaultPanel() {
               key={it.label}
               onClick={it.fn}
               className="vp-menuitem"
-              style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", color: "var(--cv-ink)", fontSize: 11.5, padding: "6px 10px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}
+              style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", color: "var(--cv-ink)", fontSize: "var(--cv-text-xs)", padding: "6px 10px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}
             >
               {it.label}
             </button>
@@ -1573,9 +1573,9 @@ export function VaultPanel() {
             value={dir}
             onChange={(e) => setDir(e.target.value)}
             placeholder="/path/to/vault"
-            style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 11px", fontSize: 10.5, color: "var(--cv-ink)", outline: "none", fontFamily: "var(--cv-font-mono)" }}
+            style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 11px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)", outline: "none", fontFamily: "var(--cv-font-mono)" }}
           />
-          <button className="cv-mini-btn" style={{ fontSize: 10.5, padding: "4px 11px", color: "var(--cv-accent)", flexShrink: 0 }} type="submit">
+          <button className="cv-mini-btn" style={{ padding: "4px 11px", color: "var(--cv-accent)", flexShrink: 0 }} type="submit">
             open
           </button>
           <button
@@ -1599,7 +1599,7 @@ export function VaultPanel() {
                 display: "inline-flex", alignItems: "center", gap: 4,
                 background: v.path === vaultDir ? "color-mix(in srgb, var(--cv-accent) 22%, transparent)" : "var(--cv-glass-hi)",
                 border: "1px solid var(--cv-glass-edge)", borderRadius: 999,
-                padding: "3px 9px", fontSize: 10.5, color: "var(--cv-ink)", cursor: "pointer",
+                padding: "3px 9px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)", cursor: "pointer",
               }}
             >
               <img src="/obsidian.svg" alt="" width={10} height={10} /> {v.name}
@@ -1616,7 +1616,7 @@ export function VaultPanel() {
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder={`${vaultEntries.length} notes — filter or search inside…`}
-            style={{ width: "100%", boxSizing: "border-box", background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 12px 5px 26px", fontSize: 11, color: "var(--cv-ink)", outline: "none" }}
+            style={{ width: "100%", boxSizing: "border-box", background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 12px 5px 26px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)", outline: "none" }}
           />
         </div>
       )}
@@ -1660,7 +1660,7 @@ export function VaultPanel() {
       >
         {bookmarks.size > 0 && !filter && (
           <>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "2px 8px 4px" }}>
+            <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 400, letterSpacing: "0.02em", color: "var(--cv-ink-faint)", padding: "2px 8px 4px" }}>
               Bookmarks
             </div>
             {[...bookmarks].filter((b) => vaultEntries.includes(b)).map((e) => (
@@ -1673,7 +1673,7 @@ export function VaultPanel() {
                   textAlign: "left", border: "none",
                   background: "transparent",
                   color: vaultFile?.path === e ? "var(--cv-ink)" : "var(--cv-ink-dim)",
-                  fontSize: 11.5, padding: "3px 6px", paddingLeft: 19, borderRadius: 5, cursor: "pointer",
+                  fontSize: "var(--cv-text-xs)", padding: "3px 6px", paddingLeft: 19, borderRadius: 5, cursor: "pointer",
                 }}
               >
                 <Icon name="ph-file" size={12} color={vaultFile?.path === e ? "var(--cv-accent)" : "var(--cv-ink-faint)"} />
@@ -1683,7 +1683,7 @@ export function VaultPanel() {
                 <span
                   role="button" title="unbookmark"
                   onClick={(ev) => { ev.stopPropagation(); toggleBookmark(e); }}
-                  style={{ color: "var(--cv-accent)", cursor: "pointer", fontSize: 11 }}
+                  style={{ color: "var(--cv-accent)", cursor: "pointer", fontSize: "var(--cv-text-xxs)" }}
                 >
                   ★
                 </span>
@@ -1693,7 +1693,7 @@ export function VaultPanel() {
         )}
         {recent.length > 0 && !filter && (
           <>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "2px 8px 4px" }}>
+            <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 400, letterSpacing: "0.02em", color: "var(--cv-ink-faint)", padding: "2px 8px 4px" }}>
               Recent
             </div>
             {recent.filter((r) => vaultEntries.includes(r) && !bookmarks.has(r)).slice(0, 5).map((e) => (
@@ -1706,7 +1706,7 @@ export function VaultPanel() {
                   textAlign: "left", border: "none",
                   background: "transparent",
                   color: vaultFile?.path === e ? "var(--cv-ink)" : "var(--cv-ink-dim)",
-                  fontSize: 11.5, padding: "3px 6px", paddingLeft: 19, borderRadius: 5, cursor: "pointer",
+                  fontSize: "var(--cv-text-xs)", padding: "3px 6px", paddingLeft: 19, borderRadius: 5, cursor: "pointer",
                 }}
               >
                 <Icon name="ph-file" size={12} color={vaultFile?.path === e ? "var(--cv-accent)" : "var(--cv-ink-faint)"} />
@@ -1718,14 +1718,14 @@ export function VaultPanel() {
           </>
         )}
         {(bookmarks.size > 0 || recent.length > 0) && !filter && (
-          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.9, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "8px 10px 4px" }}>
+          <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 400, letterSpacing: "0.02em", color: "var(--cv-ink-faint)", padding: "8px 10px 4px" }}>
             Files
           </div>
         )}
         {filter.trim().length >= 2 && vaultHits.length > 0 && (
           <>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "10px 12px 4px" }}>
-              content matches
+            <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 400, letterSpacing: "0.02em", color: "var(--cv-ink-faint)", padding: "10px 12px 4px" }}>
+              Content matches
             </div>
             {vaultHits.map((h, i) => (
               <button
@@ -1743,16 +1743,16 @@ export function VaultPanel() {
                 }}
                 title={`${h.path}:${h.line}`}
               >
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--cv-accent)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 600, color: "var(--cv-accent)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {h.path}:{h.line}
                 </div>
-                <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {h.text}
                 </div>
               </button>
             ))}
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "var(--cv-ink-faint)", padding: "10px 12px 4px" }}>
-              files
+            <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 400, letterSpacing: "0.02em", color: "var(--cv-ink-faint)", padding: "10px 12px 4px" }}>
+              Files
             </div>
           </>
         )}
@@ -1770,12 +1770,12 @@ export function VaultPanel() {
           bookmarks={bookmarks}
         />
         {shown.length === 0 && vaultDir && (
-          <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", padding: "8px 12px" }}>
+          <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", padding: "8px 12px" }}>
             No notes match — try fewer letters.
           </div>
         )}
         {!vaultDir && (
-          <div style={{ padding: "18px 14px", fontSize: 11, lineHeight: 1.6, color: "var(--cv-ink-faint)" }}>
+          <div style={{ padding: "18px 14px", fontSize: "var(--cv-text-xxs)", lineHeight: 1.6, color: "var(--cv-ink-faint)" }}>
             Point the explorer at a folder of markdown notes — your vault mounts live: read, edit, link and pin notes without leaving the board.
           </div>
         )}
@@ -1813,13 +1813,13 @@ export function VaultPanel() {
                   }
                 }}
                 onBlur={() => setRenaming(false)}
-                style={{ fontSize: 11, fontWeight: 500, color: "var(--cv-ink)", background: "rgba(255,255,255,.06)", border: "1px solid rgba(212,169,106,.4)", borderRadius: 5, padding: "1px 6px", outline: "none", minWidth: 140 }}
+                style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 500, color: "var(--cv-ink)", background: "rgba(255,255,255,.06)", border: "1px solid rgba(212,169,106,.4)", borderRadius: 5, padding: "1px 6px", outline: "none", minWidth: 140 }}
               />
             ) : (
               <span
                 title="click to rename / move (use folder/name)"
                 onClick={() => { setRenName(vaultFile.path.replace(/\.md$/, "")); setRenaming(true); }}
-                style={{ fontSize: 11, fontWeight: 500, color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text" }}
+                style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 500, color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text" }}
               >
                 {vaultFile.path.replace(/\.md$/, "").split("/").join(" › ")}
               </span>
@@ -1844,7 +1844,7 @@ export function VaultPanel() {
               <button className="cv-mini-btn" style={actionBtn} title="Export as PDF (saved to artifacts)" onClick={exportFile}>
                 <Icon name="ph-export" size={11} /> Export PDF
               </button>
-              <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 14 }} onClick={closeVaultFile}>
+              <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-md)" }} onClick={closeVaultFile}>
                 ×
               </button>
             </div>
@@ -1894,7 +1894,7 @@ export function VaultPanel() {
                             display: "block", width: "100%", textAlign: "left",
                             background: "none", border: "none", cursor: "pointer",
                             color: h.depth === 1 ? "var(--cv-ink)" : "var(--cv-ink-dim)",
-                            fontSize: 11, fontWeight: h.depth <= 2 ? 600 : 400,
+                            fontSize: "var(--cv-text-xxs)", fontWeight: h.depth <= 2 ? 600 : 400,
                             padding: `4px 8px 4px ${8 + (h.depth - 1) * 10}px`,
                             borderRadius: 5,
                           }}
@@ -1964,26 +1964,26 @@ export function VaultPanel() {
                 onOpen={vaultRead}
               />
             ) : (
-              <div style={{ flex: 1, display: "grid", placeItems: "center", fontSize: 11, color: "var(--cv-ink-faint)" }}>
+              <div style={{ flex: 1, display: "grid", placeItems: "center", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>
                 building graph…
               </div>
             )
           )}
           {backlinksOpen && (
             <div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px solid var(--cv-glass-edge)" }}>
-              <div style={{ fontSize: 9.5, color: "var(--cv-ink-faint)", marginBottom: 3 }}>Linked mentions</div>
-              {backlinks.length === 0 && <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", fontStyle: "italic" }}>no notes link here</div>}
+              <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", marginBottom: 3 }}>Linked mentions</div>
+              {backlinks.length === 0 && <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", fontStyle: "italic" }}>no notes link here</div>}
               {backlinks.map((b) => (
                 <button
                   key={b}
                   onClick={() => vaultRead(b)}
-                  style={{ display: "block", background: "none", border: "none", cursor: "pointer", padding: "2px 0", fontSize: 11, color: "var(--cv-accent)", textDecoration: "underline", textDecorationColor: "color-mix(in srgb, var(--cv-accent) 55%, transparent)", textUnderlineOffset: 2 }}
+                  style={{ display: "block", background: "none", border: "none", cursor: "pointer", padding: "2px 0", fontSize: "var(--cv-text-xxs)", color: "var(--cv-accent)", textDecoration: "underline", textDecorationColor: "color-mix(in srgb, var(--cv-accent) 55%, transparent)", textUnderlineOffset: 2 }}
                 >
                   {b.replace(/\.md$/, "")}
                 </button>
               ))}
-              <div style={{ fontSize: 9.5, color: "var(--cv-ink-faint)", margin: "8px 0 3px" }}>Unlinked mentions</div>
-              {unlinked.length === 0 && <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", fontStyle: "italic" }}>none</div>}
+              <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", margin: "8px 0 3px" }}>Unlinked mentions</div>
+              {unlinked.length === 0 && <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", fontStyle: "italic" }}>none</div>}
               {unlinked.map((h, i) => (
                 <button
                   key={`${h.path}:${h.line}:${i}`}
@@ -1991,17 +1991,17 @@ export function VaultPanel() {
                   title={`${h.path}:${h.line}`}
                   style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "3px 0" }}
                 >
-                  <div style={{ fontSize: 11, color: "var(--cv-accent)", textDecoration: "underline", textDecorationColor: "color-mix(in srgb, var(--cv-accent) 55%, transparent)", textUnderlineOffset: 2 }}>
+                  <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-accent)", textDecoration: "underline", textDecorationColor: "color-mix(in srgb, var(--cv-accent) 55%, transparent)", textUnderlineOffset: 2 }}>
                     {h.path.replace(/\.md$/, "")}:{h.line}
                   </div>
-                  <div style={{ fontSize: 10, color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.text}</div>
+                  <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.text}</div>
                 </button>
               ))}
             </div>
           )}
           <div style={{
             marginTop: 8, paddingTop: 6, borderTop: "1px solid var(--cv-glass-edge)",
-            display: "flex", gap: 14, fontSize: 9.5, color: "var(--cv-ink-faint)",
+            display: "flex", gap: 14, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)",
           }}>
             <span
               onClick={() => setBacklinksOpen((o) => !o)}
@@ -2016,7 +2016,7 @@ export function VaultPanel() {
           </div>
         </div>
       ) : (
-        <div style={{ flex: 1, display: "grid", placeItems: "center", color: "var(--cv-ink-faint)", fontSize: 11.5 }}>
+        <div style={{ flex: 1, display: "grid", placeItems: "center", color: "var(--cv-ink-faint)", fontSize: "var(--cv-text-xs)" }}>
           pick a note — or today for your daily
         </div>
       )}
@@ -2032,9 +2032,9 @@ export function VaultPanel() {
             zIndex: 95, minWidth: 160, padding: 4, borderRadius: 10,
             background: "var(--cv-glass-bg, rgba(24,24,30,0.92))", border: "1px solid var(--cv-glass-edge)",
             backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
-            boxShadow: "0 8px 28px rgba(0,0,0,0.45)", fontSize: 11.5,
+            boxShadow: "0 8px 28px rgba(0,0,0,0.45)", fontSize: "var(--cv-text-xs)",
           }}>
-            <div style={{ padding: "4px 10px 6px", fontSize: 9.5, color: "var(--cv-ink-faint)", borderBottom: "1px solid var(--cv-glass-edge)", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ padding: "4px 10px 6px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", borderBottom: "1px solid var(--cv-glass-edge)", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {ctxMenu.path}
             </div>
             {[
@@ -2057,7 +2057,7 @@ export function VaultPanel() {
                 key={it.label}
                 onClick={() => { it.fn(); setCtxMenu(null); }}
                 className="vault-ctx-item"
-                style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", color: "var(--cv-ink)", fontSize: 11.5, padding: "5px 10px", borderRadius: 6, cursor: "pointer" }}
+                style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", color: "var(--cv-ink)", fontSize: "var(--cv-text-xs)", padding: "5px 10px", borderRadius: 6, cursor: "pointer" }}
               >
                 {it.label}
               </button>
@@ -2065,7 +2065,7 @@ export function VaultPanel() {
             <button
               onClick={() => { onDeleteFile(ctxMenu.path); if (armedDel === ctxMenu.path) { setCtxMenu(null); setArmedDel(null); } }}
               className="vault-ctx-item"
-              style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", color: armedDel === ctxMenu.path ? "#e07070" : "var(--cv-ink-dim)", fontSize: 11.5, padding: "5px 10px", borderRadius: 6, cursor: "pointer" }}
+              style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", color: armedDel === ctxMenu.path ? "#e07070" : "var(--cv-ink-dim)", fontSize: "var(--cv-text-xs)", padding: "5px 10px", borderRadius: 6, cursor: "pointer" }}
             >
               {armedDel === ctxMenu.path ? "Confirm delete → .trash" : "Move to .trash"}
             </button>
@@ -2086,13 +2086,13 @@ export function VaultPanel() {
             style={{ maxWidth: "80vw", maxHeight: "80vh", padding: 14, borderRadius: 14, cursor: "default" }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 11, color: "var(--cv-ink-dim)" }}>{imgView}</span>
-              <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 14 }} onClick={() => setImgView(null)}>×</button>
+              <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>{imgView}</span>
+              <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-md)" }} onClick={() => setImgView(null)}>×</button>
             </div>
             {vaultAssets[imgView] ? (
               <img src={vaultAssets[imgView]} alt={imgView} style={{ maxWidth: "76vw", maxHeight: "70vh", borderRadius: 8, display: "block" }} />
             ) : (
-              <div style={{ fontSize: 11, color: "var(--cv-ink-faint)", fontStyle: "italic", padding: 20 }}>loading image…</div>
+              <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", fontStyle: "italic", padding: 20 }}>loading image…</div>
             )}
           </div>
         </div>

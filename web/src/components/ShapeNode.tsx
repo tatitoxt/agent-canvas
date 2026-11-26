@@ -96,7 +96,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
           style={{
             padding: "10px 14px 8px",
             borderBottom: "1px solid rgba(255,255,255,0.07)",
-            fontSize: 12.5,
+            fontSize: "var(--cv-text-sm)",
             fontWeight: 700,
             color: "var(--cv-ink)",
             display: "flex",
@@ -131,7 +131,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
             border: "none",
             outline: "none",
             resize: "none",
-            fontSize: 13,
+            fontSize: "var(--cv-text-sm)",
             lineHeight: 1.55,
             fontFamily: "inherit",
             color: "var(--cv-ink)",
@@ -146,7 +146,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
               position: "absolute",
               top: 6,
               right: 6,
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               lineHeight: 1,
             }}
           >
@@ -184,7 +184,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
             background: `color-mix(in srgb, ${s.color} 12%, transparent)`,
             border: `1px solid ${s.color}30`,
             outline: "none",
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             fontWeight: 700,
             fontFamily: "inherit",
             color: `color-mix(in srgb, ${s.color} 78%, var(--cv-ink))`,
@@ -197,7 +197,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
             background: "transparent",
             border: "none",
             outline: "none",
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             fontWeight: 600,
             fontFamily: "inherit",
             color: s.color,
@@ -218,7 +218,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
             border: "none",
             outline: "none",
             resize: "none",
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             fontFamily: "inherit",
             color: isSticky ? "#1a1a1c" : "var(--cv-ink)",
             textAlign: isSticky ? "left" : "center",
@@ -258,7 +258,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
           ))}
           <button
             onClick={() => deleteShape(id)}
-            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 13, marginLeft: 2 }}
+            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-sm)", marginLeft: 2 }}
           >
             ×
           </button>

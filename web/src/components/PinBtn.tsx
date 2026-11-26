@@ -121,7 +121,7 @@ export function PinBtn({ title, body, anchor }: { title: string; body: string; a
         alignItems: "center",
         gap: 4,
         padding: "2px 8px",
-        fontSize: 10,
+        fontSize: "var(--cv-text-xxs)",
         fontWeight: 600,
         flexShrink: 0,
       }}

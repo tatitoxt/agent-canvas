@@ -58,7 +58,7 @@ export function CalendarPanel() {
     >
       <div
         style={{
-          fontSize: 12.5,
+          fontSize: "var(--cv-text-sm)",
           fontWeight: 600,
           padding: "0 12px 8px",
           color: "var(--cv-ink)",
@@ -79,7 +79,7 @@ export function CalendarPanel() {
           gridTemplateColumns: "repeat(7,1fr)",
           gap: 2,
           padding: "0 8px",
-          fontSize: 9.5,
+          fontSize: "var(--cv-text-xxs)",
           color: "var(--cv-ink-dim)",
           textAlign: "center",
         }}
@@ -103,7 +103,7 @@ export function CalendarPanel() {
                 borderRadius: 6,
                 border: "none",
                 cursor: "pointer",
-                fontSize: 11,
+                fontSize: "var(--cv-text-xxs)",
                 color: isToday ? "#fff" : "var(--cv-ink)",
                 background: isToday ? "var(--cv-accent)" : "transparent",
               }}
@@ -129,12 +129,12 @@ export function CalendarPanel() {
       </div>
       {dueNotes.length > 0 && (
         <div style={{ marginTop: 10, padding: "0 12px", overflowY: "auto" }}>
-          <div style={{ fontSize: 9.5, color: "var(--cv-ink-dim)", paddingBottom: 4 }}>due</div>
+          <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", paddingBottom: 4 }}>due</div>
           {dueNotes.slice(0, 12).map((n) => (
             <div
               key={n.note_id}
               style={{
-                fontSize: 11,
+                fontSize: "var(--cv-text-xxs)",
                 color: (n.due ?? "") < today && n.col !== "done" ? "var(--cv-danger,#e66)" : "var(--cv-ink)",
                 padding: "3px 0",
                 display: "flex",
@@ -147,7 +147,7 @@ export function CalendarPanel() {
           ))}
         </div>
       )}
-      <div style={{ marginTop: "auto", padding: "8px 12px 2px", fontSize: 9.5, color: "var(--cv-ink-dim)" }}>
+      <div style={{ marginTop: "auto", padding: "8px 12px 2px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
         {vaultDir ? `${daily.size} daily notes in vault` : "no vault mounted"}
       </div>
     </div>
@@ -158,7 +158,7 @@ const navBtn: React.CSSProperties = {
   background: "none",
   border: "none",
   color: "var(--cv-accent)",
-  fontSize: 14,
+  fontSize: "var(--cv-text-md)",
   cursor: "pointer",
   padding: "0 8px",
 };

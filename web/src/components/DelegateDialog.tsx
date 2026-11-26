@@ -6,7 +6,7 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid var(--cv-glass-edge)",
   borderRadius: 8,
   padding: "7px 11px",
-  fontSize: 12,
+  fontSize: "var(--cv-text-xs)",
   color: "var(--cv-ink)",
   outline: "none",
   width: "100%",
@@ -59,7 +59,7 @@ export function DelegateDialog({
         if (e.key === "Escape") onClose();
       }}
     >
-      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--cv-ink)" }}>
+      <div style={{ fontSize: "var(--cv-text-sm)", fontWeight: 600, color: "var(--cv-ink)" }}>
         Delegate from <span style={{ color: "var(--cv-accent)" }}>{parent?.name ?? from}</span>
       </div>
       <input
@@ -94,7 +94,7 @@ export function DelegateDialog({
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button
           className="glass-pill"
-          style={{ padding: "6px 14px", fontSize: 11.5, color: "var(--cv-ink-dim)", cursor: "pointer" }}
+          style={{ padding: "6px 14px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)", cursor: "pointer" }}
           onClick={onClose}
         >
           cancel
@@ -103,7 +103,7 @@ export function DelegateDialog({
           className="glass-pill"
           style={{
             padding: "6px 14px",
-            fontSize: 11.5,
+            fontSize: "var(--cv-text-xs)",
             fontWeight: 600,
             color: "var(--cv-accent)",
             opacity: task.trim() && command.trim() ? 1 : 0.45,

@@ -100,7 +100,10 @@
   --cv-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --cv-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Deska type/spacing scales (default step). */
+  /* Deska type/spacing scales (default step). xxs is the floor — Deska's
+     mono 11 island labels, hints and dense metadata. Nothing visible
+     renders below it. */
+  --cv-text-xxs: 11px;
   --cv-text-xs: 12px;
   --cv-text-sm: 13px;
   --cv-text-md: 14px;
@@ -184,7 +187,7 @@ body,
 
 /* Deska island label — quiet metadata, not microtype shouting. */
 .cv-section-label {
-  font-size: 11px;
+  font-size: var(--cv-text-xxs);
   font-weight: 400;
   letter-spacing: 0.02em;
   line-height: 1.35;
@@ -208,7 +211,7 @@ body,
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: var(--cv-text-xxs);
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -720,7 +723,7 @@ button.cv-card-close:hover,
 }
 .cv-topbar-labeled-control {
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--cv-text-xxs);
   color: var(--cv-ink-dim);
 }
 .cv-topbar-labeled-control:hover,
@@ -743,7 +746,7 @@ button.cv-card-close:hover,
   opacity: 0;
   overflow: hidden;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--cv-text-xxs);
   font-weight: 500;
   transition: max-width var(--cv-motion-base) var(--cv-ease-out), opacity var(--cv-motion-fast) var(--cv-ease-out);
 }

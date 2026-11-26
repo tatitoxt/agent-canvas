@@ -213,7 +213,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             display: "inline-flex",
             alignItems: "center",
             gap: 8,
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             fontWeight: 600,
             minWidth: 0,
           }}
@@ -228,7 +228,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
               borderRadius: 5,
               border: "1px solid rgba(120,150,190,0.45)",
               color: "#7cb9ff",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               flex: "none",
             }}
           >
@@ -242,7 +242,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
               display: "inline-flex",
               alignItems: "center",
               gap: 5,
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               fontWeight: 600,
               color: statusColor,
               whiteSpace: "nowrap",
@@ -255,7 +255,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             <span
               data-testid="terminal-model"
               title="model announced by this CLI"
-              style={{ color: "var(--cv-ink-dim)", fontSize: 10.5, whiteSpace: "nowrap" }}
+              style={{ color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-xxs)", whiteSpace: "nowrap" }}
             >
               {model}
             </span>
@@ -266,7 +266,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
               alignItems: "center",
               gap: 5,
               marginLeft: "auto",
-              fontSize: 11.5,
+              fontSize: "var(--cv-text-xs)",
               fontWeight: 600,
               color: "var(--cv-ink-dim)",
               whiteSpace: "nowrap",
@@ -293,7 +293,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             style={{
               border: "none",
               background: "transparent",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               cursor: "pointer",
               color: split === "right" ? "var(--cv-accent)" : "var(--cv-ink-dim)",
             }}
@@ -313,7 +313,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             style={{
               border: "none",
               background: "transparent",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               cursor: "pointer",
               color: split === "down" ? "var(--cv-accent)" : "var(--cv-ink-dim)",
             }}
@@ -329,7 +329,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             style={{
               border: "none",
               background: "transparent",
-              fontSize: 12,
+              fontSize: "var(--cv-text-xs)",
               cursor: "pointer",
               color: "var(--cv-ink-dim)",
             }}
@@ -342,7 +342,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             style={{
               border: "none",
               background: "transparent",
-              fontSize: 12,
+              fontSize: "var(--cv-text-xs)",
               cursor: "pointer",
               color: "var(--cv-ink-dim)",
             }}
@@ -359,7 +359,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
               const wsRepo = a?.workspace_id ? st.workspaces[a.workspace_id]?.repo : undefined;
               st.openExplorer(a?.worktree ?? wsRepo);
             }}
-            style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: 11 }}
+            style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-xxs)" }}
           >
             ⌸
           </button>
@@ -380,7 +380,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             style={{
               border: "none",
               background: "transparent",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               cursor: "pointer",
               color: "var(--cv-ink-dim)",
             }}
@@ -401,7 +401,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
               style={{
                 border: "none",
                 background: "transparent",
-                fontSize: 10.5,
+                fontSize: "var(--cv-text-xxs)",
                 cursor: "pointer",
                 color: "var(--cv-ink-dim)",
                 fontFamily: "var(--cv-font-mono)",
@@ -417,7 +417,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             style={{
               border: "none",
               background: "transparent",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               cursor: "pointer",
               color: listening ? "var(--cv-blocked)" : "var(--cv-ink-dim)",
               animation: listening ? "pulse-dot 1.2s ease-in-out infinite" : "none",
@@ -480,7 +480,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
                 title="which agent this pane shows"
                 style={{
                   flex: 1,
-                  fontSize: 10.5,
+                  fontSize: "var(--cv-text-xxs)",
                   background: "transparent",
                   color: "var(--cv-ink)",
                   border: "none",
@@ -504,14 +504,14 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
                   setPendingNew({ name, since: Date.now() });
                   useBoard.getState().spawn(name, "bash");
                 }}
-                style={{ border: "none", background: "transparent", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11 }}
+                style={{ border: "none", background: "transparent", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xxs)" }}
               >
                 ＋
               </button>
               <button
                 title="close split"
                 onClick={() => setSplit(null)}
-                style={{ border: "none", background: "transparent", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11 }}
+                style={{ border: "none", background: "transparent", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xxs)" }}
               >
                 ✕
               </button>
@@ -519,7 +519,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             {splitAgentValid ? (
               <TermHost agentId={splitAgentValid} />
             ) : (
-              <div className="flex-1" style={{ display: "grid", placeItems: "center", fontSize: 11, color: "var(--cv-ink-faint)" }}>
+              <div className="flex-1" style={{ display: "grid", placeItems: "center", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>
                 no second agent on this board yet
               </div>
             )}

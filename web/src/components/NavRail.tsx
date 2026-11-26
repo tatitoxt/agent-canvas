@@ -78,7 +78,7 @@ const menuRow: React.CSSProperties = {
   border: "none",
   background: "transparent",
   color: "var(--cv-ink)",
-  fontSize: 12,
+  fontSize: "var(--cv-text-xs)",
   fontWeight: 500,
   textAlign: "left",
   cursor: "pointer",
@@ -94,7 +94,7 @@ const badge = (bg: string): React.CSSProperties => ({
   borderRadius: 999,
   background: bg,
   color: "var(--cv-base)",
-  fontSize: 8.5,
+  fontSize: "var(--cv-text-xxs)",
   fontWeight: 700,
   display: "grid",
   placeItems: "center",
@@ -153,7 +153,7 @@ function SpacesBubble() {
         border: "1px solid var(--cv-glass-edge)",
         background: "var(--cv-glass-hi)",
         color: "var(--cv-ink)",
-        fontSize: 11,
+        fontSize: "var(--cv-text-xxs)",
         textAlign: "center",
         outline: "none",
       }}
@@ -176,7 +176,7 @@ function SpacesBubble() {
             title={`${n} — double-click to rename${id !== "main" ? ", ⌫ deletes when empty" : ""}`}
             style={{
               ...btn(id === activeBoard),
-              fontSize: 12,
+              fontSize: "var(--cv-text-xs)",
               fontWeight: 700,
               color: id === activeBoard ? "var(--cv-accent)" : "var(--cv-ink-dim)",
             }}
@@ -200,7 +200,7 @@ function SpacesBubble() {
                   borderRadius: 999,
                   background: "var(--cv-blocked)",
                   color: "var(--cv-base)",
-                  fontSize: 9,
+                  fontSize: "var(--cv-text-xxs)",
                   display: "grid",
                   placeItems: "center",
                 }}
@@ -217,7 +217,7 @@ function SpacesBubble() {
         <button
           onClick={() => { setEditing("new"); setEditName(""); }}
           title="New board"
-          style={{ ...btn(false), fontSize: 15 }}
+          style={{ ...btn(false), fontSize: "var(--cv-text-lg)" }}
         >
           +
         </button>
@@ -281,7 +281,7 @@ function ExtrasBubble({ side, onSelect }: { side: "left" | "right"; onSelect: (k
               <Icon name={icon as string} size={14} color="var(--cv-ink-dim)" />
               <span style={{ flex: 1 }}>{label}</span>
               {hint.includes("soon") && (
-                <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>soon</span>
+                <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>soon</span>
               )}
             </button>
           ))}
@@ -336,7 +336,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
           border: "none",
           background: "transparent",
           color: t.key && active === t.key ? "var(--cv-ink)" : "color-mix(in srgb, var(--cv-ink) 78%, transparent)",
-          fontSize: 12.5,
+          fontSize: "var(--cv-text-sm)",
           fontWeight: 500,
           letterSpacing: 0.1,
           textAlign: "left",
@@ -367,11 +367,11 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
           )}
         </span>
         <span style={{ flex: 1 }}>{t.label}</span>
-        {t.fact && <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)", fontWeight: 500 }}>{t.fact}</span>}
+        {t.fact && <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", fontWeight: 500 }}>{t.fact}</span>}
         {!t.fact && !!t.badgeN && (
           <span
             style={{
-              fontSize: 9.5,
+              fontSize: "var(--cv-text-xxs)",
               fontWeight: 600,
               color: "var(--cv-ink-dim)",
               background: "var(--cv-glass-hi)",
@@ -410,7 +410,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: expanded ? "space-between" : "center", padding: expanded ? "11px 8px 9px 14px" : "2px 0", width: expanded ? "100%" : undefined }}>
-          {expanded && <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cv-ink)", letterSpacing: 0.2 }}>Library</span>}
+          {expanded && <span style={{ fontSize: "var(--cv-text-sm)", fontWeight: 600, color: "var(--cv-ink)", letterSpacing: 0.2 }}>Library</span>}
           <button
             title={expanded ? "Collapse tools — icons only" : "Library — expand for panel names"}
             aria-label={expanded ? "Collapse Library" : "Expand Library"}
@@ -512,7 +512,7 @@ function OrchestratorsBubble() {
               <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {o.name}
               </span>
-              <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>{o.wired.length} wired</span>
+              <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>{o.wired.length} wired</span>
             </button>
           ))}
           <button
@@ -554,7 +554,7 @@ export function RightRail() {
         </button>
         <span
           title="Zoom level"
-          style={{ fontSize: 9.5, color: "var(--cv-ink-dim)", fontWeight: 600, minWidth: 30, textAlign: "center" }}
+          style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", fontWeight: 600, minWidth: 30, textAlign: "center" }}
         >
           {zoomPct}%
         </span>
@@ -732,7 +732,7 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
               background: "transparent",
               outline: "none",
               color: "var(--cv-ink)",
-              fontSize: 12.5,
+              fontSize: "var(--cv-text-sm)",
               fontWeight: 500,
             }}
           />

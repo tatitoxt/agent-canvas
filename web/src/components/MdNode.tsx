@@ -52,12 +52,12 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
       <NodeResizer isVisible={selected} minWidth={260} minHeight={180} handleClassName="cv-node-resize-handle" lineClassName="cv-node-resize-line"
         onResize={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), false, boardId)}
         onResizeEnd={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), true, boardId)} />
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--cv-glass-edge)", fontSize: 11, color: "var(--cv-ink-dim)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--cv-glass-edge)", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
         <img src="/obsidian.svg" alt="" width={12} height={12} />
         <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{basename}</span>
         {editing ? (
           <>
-            <span role="status" style={{ fontSize: 9, color: conflict ? "var(--cv-blocked)" : dirty.current ? "var(--cv-waiting)" : "var(--cv-ink-faint)" }}>
+            <span role="status" style={{ fontSize: "var(--cv-text-xxs)", color: conflict ? "var(--cv-blocked)" : dirty.current ? "var(--cv-waiting)" : "var(--cv-ink-faint)" }}>
               {conflict ? "CHANGED IN OBSIDIAN" : dirty.current ? "UNSAVED" : "EDITING"}
             </span>
             {conflict && <button className="nodrag" onClick={() => { setDraft(text ?? ""); editBase.current = text ?? ""; dirty.current = false; setConflict(false); }} style={toolButton}>Reload</button>}
@@ -66,14 +66,14 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
           </>
         ) : (
           <>
-            <span style={{ fontSize: 9, color: "var(--cv-waiting)" }}>LIVE VAULT</span>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-waiting)" }}>LIVE VAULT</span>
             <button className="nodrag" aria-label={`Edit ${basename}`} title="Edit this vault note" onClick={() => { setDraft(text ?? ""); editBase.current = text ?? ""; dirty.current = false; setConflict(false); setEditing(true); }} style={toolButton}>Edit</button>
           </>
         )}
         <button className="nodrag cv-card-btn cv-card-close" aria-label={`Remove ${basename} from board`} title="Remove from board" onClick={() => mdNodeRemove(id)}
           style={{ opacity: selected ? 1 : 0, pointerEvents: selected ? "auto" : "none" }}><Icon name="ph-x" size={12} /></button>
       </div>
-      {text == null ? <div style={{ padding: 12, color: "var(--cv-ink-faint)", fontSize: 11 }}>Loading note…</div> : editing ? (
+      {text == null ? <div style={{ padding: 12, color: "var(--cv-ink-faint)", fontSize: "var(--cv-text-xxs)" }}>Loading note…</div> : editing ? (
         <textarea
           aria-label={`Edit ${basename}`}
           className="nodrag nowheel"
@@ -96,6 +96,6 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
 
 const toolButton: React.CSSProperties = {
   border: "1px solid var(--cv-glass-edge)", borderRadius: 6, padding: "3px 7px",
-  background: "var(--cv-glass-hi)", color: "var(--cv-text-main)", fontSize: 10,
+  background: "var(--cv-glass-hi)", color: "var(--cv-text-main)", fontSize: "var(--cv-text-xxs)",
   cursor: "pointer", whiteSpace: "nowrap",
 };

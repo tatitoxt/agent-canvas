@@ -104,9 +104,9 @@ export function ArtifactsPanel() {
               }
             }}
             placeholder="Search artifacts or ask Dex"
-            style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", color: "var(--cv-ink)", fontSize: 11.5 }}
+            style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", color: "var(--cv-ink)", fontSize: "var(--cv-text-xs)" }}
           />
-          <span style={{ fontSize: 9, color: "var(--cv-ink-faint)", border: "1px solid var(--cv-glass-edge)", borderRadius: 5, padding: "1px 5px" }}>⌘F</span>
+          <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", border: "1px solid var(--cv-glass-edge)", borderRadius: 5, padding: "1px 5px" }}>⌘F</span>
         </div>
       </div>
 
@@ -122,7 +122,7 @@ export function ArtifactsPanel() {
         <span style={{ display: "flex", gap: 5, position: "relative" }}>
           <button
             className="cv-mini-btn"
-            style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", color: "var(--cv-ink)" }}
+            style={{ padding: "3px 11px", color: "var(--cv-ink)" }}
             title="Generate a PDF document from the board"
             onClick={() => setGenOpen((o) => !o)}
           >
@@ -130,7 +130,7 @@ export function ArtifactsPanel() {
           </button>
           <button
             className="cv-mini-btn"
-            style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", color: "var(--cv-ink)" }}
+            style={{ padding: "3px 11px", color: "var(--cv-ink)" }}
             onClick={() => setCreating((c) => !c)}
           >
             + new
@@ -149,7 +149,7 @@ export function ArtifactsPanel() {
             <select
               value={kind}
               onChange={(e) => setKind(e.target.value)}
-              style={{ background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 10px", fontSize: 11.5, color: "var(--cv-ink)", outline: "none" }}
+              style={{ background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 10px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink)", outline: "none" }}
             >
               {Object.keys(KINDS).map((k) => (
                 <option key={k} value={k}>
@@ -161,18 +161,18 @@ export function ArtifactsPanel() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="title"
-              style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 12px", fontSize: 11.5, color: "var(--cv-ink)", outline: "none" }}
+              style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 12px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink)", outline: "none" }}
             />
           </div>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="contents (optional)"
-            style={{ width: "100%", boxSizing: "border-box", minHeight: 56, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 12, padding: "7px 10px", fontSize: 11, color: "var(--cv-ink)", outline: "none", resize: "vertical" }}
+            style={{ width: "100%", boxSizing: "border-box", minHeight: 56, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 12, padding: "7px 10px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)", outline: "none", resize: "vertical" }}
           />
           <button
             className="cv-mini-btn"
-            style={{ marginTop: 6, fontSize: 11, padding: "5px 14px", cursor: "pointer", color: "var(--cv-accent)" }}
+            style={{ marginTop: 6, padding: "5px 14px", color: "var(--cv-accent)" }}
             onClick={() => {
               if (!title.trim()) return;
               artifactCreate(kind, title.trim(), undefined, text || undefined);
@@ -202,8 +202,8 @@ export function ArtifactsPanel() {
             <Icon name="bot" size={26} color="var(--cv-ink)" />
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--cv-ink)" }}>What you make with Dex shows up here</div>
-            <div style={{ fontSize: 11, color: "var(--cv-ink-dim)", marginTop: 5, lineHeight: 1.5 }}>
+            <div style={{ fontSize: "var(--cv-text-md)", fontWeight: 700, color: "var(--cv-ink)" }}>What you make with Dex shows up here</div>
+            <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", marginTop: 5, lineHeight: 1.5 }}>
               Pages, designs, apps and documents your agents make, next to your notes. Ask for something to start.
             </div>
           </div>
@@ -221,7 +221,7 @@ export function ArtifactsPanel() {
                   border: "1px solid var(--cv-glass-edge)",
                   background: "var(--cv-glass-hi)",
                   color: "var(--cv-ink)",
-                  fontSize: 11.5,
+                  fontSize: "var(--cv-text-xs)",
                   fontWeight: 500,
                   cursor: "pointer",
                   textAlign: "left",
@@ -255,15 +255,14 @@ export function ArtifactsPanel() {
           <>
             <div
               style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: 0.8,
-                textTransform: "uppercase",
+                fontSize: "var(--cv-text-xxs)",
+                fontWeight: 400,
+                letterSpacing: "0.02em",
                 color: "var(--cv-ink-faint)",
                 padding: "12px 12px 4px",
               }}
             >
-              from earlier tasks
+              From earlier tasks
             </div>
             {earlier.map(renderRow)}
           </>
@@ -287,7 +286,7 @@ export function ArtifactsPanel() {
                   borderRadius: 7,
                   display: "grid",
                   placeItems: "center",
-                  fontSize: 12,
+                  fontSize: "var(--cv-text-xs)",
                   color: meta.color,
                   background: `color-mix(in srgb, ${meta.color} 12%, transparent)`,
                   border: `1px solid color-mix(in srgb, ${meta.color} 30%, transparent)`,
@@ -296,10 +295,10 @@ export function ArtifactsPanel() {
                 {meta.mark}
               </span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--cv-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600, color: "var(--cv-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {a.title}
                 </div>
-                <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)" }}>
+                <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
                   <span style={{ color: meta.color }}>{a.kind}</span>
                   {a.agent_name && ` · ${a.agent_name}`}
                   {a.created_at && ` · ${a.created_at.slice(5, 16)}`}
@@ -317,7 +316,7 @@ export function ArtifactsPanel() {
                   alignItems: "center",
                   gap: 4,
                   padding: "3px 8px",
-                  fontSize: 10,
+                  fontSize: "var(--cv-text-xxs)",
                   fontWeight: 600,
                   flexShrink: 0,
                 }}
@@ -382,7 +381,7 @@ export function ArtifactsPanel() {
               )}
               <button
                 title="delete artifact"
-                style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: 13 }}
+                style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-sm)" }}
                 onClick={() => artifactDelete(a.artifact_id)}
               >
                 ×

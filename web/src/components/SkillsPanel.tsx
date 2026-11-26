@@ -74,7 +74,7 @@ export function SkillsPanel() {
     <div
       style={{ ...panelRoot, padding: "12px 10px" }}
     >
-      <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", padding: "0 12px 10px" }}>
+      <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", padding: "0 12px 10px" }}>
         one click → every agent in this board reads it via memory
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
@@ -86,10 +86,10 @@ export function SkillsPanel() {
               className="glass"
               style={{ margin: "0 0 6px", padding: "9px 12px", display: "flex", gap: 10, alignItems: "flex-start" }}
             >
-              <span style={{ fontSize: 14, color: "var(--cv-accent)", flexShrink: 0, marginTop: 1 }}>{sk.glyph}</span>
+              <span style={{ fontSize: "var(--cv-text-md)", color: "var(--cv-accent)", flexShrink: 0, marginTop: 1 }}>{sk.glyph}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--cv-ink)" }}>{sk.name}</div>
-                <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", lineHeight: 1.35 }}>{sk.blurb}</div>
+                <div style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600, color: "var(--cv-ink)" }}>{sk.name}</div>
+                <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", lineHeight: 1.35 }}>{sk.blurb}</div>
               </div>
               <button
                 className="cv-mini-btn"
@@ -97,7 +97,7 @@ export function SkillsPanel() {
                 onClick={() => install(sk)}
                 style={{
                   cursor: isIn ? "default" : "pointer",
-                  fontSize: 10,
+                  fontSize: "var(--cv-text-xxs)",
                   fontWeight: 600,
                   padding: "4px 10px",
                   color: isIn ? "var(--cv-done)" : "var(--cv-accent)",

@@ -18,7 +18,7 @@ export function ThreadPanel() {
     >
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
         {log.length === 0 && (
-          <div style={{ fontSize: 11, color: "var(--cv-ink-dim)" }}>
+          <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
             Try “spawn two bash”, “pause all”, “focus Terminal 1”, “status”…
           </div>
         )}
@@ -34,7 +34,7 @@ export function ThreadPanel() {
               border: `1px solid ${m.role === "you" ? "var(--cv-glass-edge)" : "transparent"}`,
               borderRadius: 10,
               padding: "5px 10px",
-              fontSize: 11.5,
+              fontSize: "var(--cv-text-xs)",
               cursor: m.agentId ? "pointer" : "default",
               textDecoration: m.agentId ? "underline" : "none",
               textDecorationStyle: "dotted",

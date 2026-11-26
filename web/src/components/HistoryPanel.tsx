@@ -26,7 +26,7 @@ export function HistoryPanel({ onOpenEdge }: { onOpenEdge: (edgeId: string) => v
     >
       <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 10px" }}>
         {rows.length === 0 && (
-          <div style={{ padding: "12px 14px", fontSize: 11, color: "var(--cv-ink-faint)" }}>
+          <div style={{ padding: "12px 14px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>
             No delegations yet — drag from an agent's edge handle to delegate.
           </div>
         )}
@@ -48,7 +48,7 @@ export function HistoryPanel({ onOpenEdge }: { onOpenEdge: (edgeId: string) => v
               color: "var(--cv-ink)",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "var(--cv-text-xxs)" }}>
               <span style={{ fontWeight: 600 }}>
                 {nameOf(e.from)} → {nameOf(e.to)}
               </span>
@@ -68,7 +68,7 @@ export function HistoryPanel({ onOpenEdge }: { onOpenEdge: (edgeId: string) => v
             </div>
             <div
               style={{
-                fontSize: 11,
+                fontSize: "var(--cv-text-xxs)",
                 color: "var(--cv-ink-dim)",
                 whiteSpace: "nowrap",
                 overflow: "hidden",
@@ -78,7 +78,7 @@ export function HistoryPanel({ onOpenEdge }: { onOpenEdge: (edgeId: string) => v
               {e.task}
             </div>
             {(e.files ?? 0) > 0 && (
-              <div style={{ fontSize: 10, color: "var(--cv-ink-faint)" }}>
+              <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>
                 {e.files} file{e.files === 1 ? "" : "s"} changed
               </div>
             )}

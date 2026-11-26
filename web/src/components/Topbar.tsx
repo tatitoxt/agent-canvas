@@ -7,7 +7,7 @@ import { PANEL_META } from "./panelMeta";
 
 const pill: React.CSSProperties = {
   padding: "6px 11px",
-  fontSize: 12,
+  fontSize: "var(--cv-text-xs)",
   fontWeight: 600,
   color: "var(--cv-ink)",
   display: "flex",
@@ -37,7 +37,7 @@ const menuRow: React.CSSProperties = {
   border: "none",
   background: "transparent",
   color: "var(--cv-ink)",
-  fontSize: 11.5,
+  fontSize: "var(--cv-text-xs)",
   fontWeight: 500,
   textAlign: "left",
   cursor: "pointer",
@@ -54,7 +54,7 @@ const miniInput: React.CSSProperties = {
   borderRadius: 8,
   height: 24,
   padding: "0 8px",
-  fontSize: 10.5,
+  fontSize: "var(--cv-text-xxs)",
   color: "var(--cv-ink)",
   outline: "none",
   width: "100%",
@@ -251,7 +251,7 @@ export function Topbar({
     >
       <Icon name={icon} size={14} color="var(--cv-ink-dim)" />
       <span style={{ flex: 1 }}>{label}</span>
-      {dim && <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>soon</span>}
+      {dim && <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>soon</span>}
     </button>
   );
 
@@ -303,7 +303,7 @@ export function Topbar({
           >
             <Icon name="monitor" size={13} color="var(--cv-ink-dim)" />
             This Mac
-            <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>▾</span>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>▾</span>
           </button>
           {drop("machine", (
             <>
@@ -322,7 +322,7 @@ export function Topbar({
           >
             <Icon name="ws" size={13} color="var(--cv-ink-dim)" />
             {wsList.length > 0 ? `${wsList.length} ws` : "Workspaces"}
-            <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>▾</span>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>▾</span>
           </button>
           {drop("ws", (
             <>
@@ -366,7 +366,7 @@ export function Topbar({
           >
             <Icon name="worktree" size={13} color="var(--cv-ink-dim)" />
             Worktrees
-            <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>▾</span>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>▾</span>
           </button>
           {drop("wt", (
             <>
@@ -394,7 +394,7 @@ export function Topbar({
           >
             <Icon name="tasks" size={13} color="var(--cv-ink-dim)" />
             Tasks{delegated > 0 ? ` ${delegated}` : ""}
-            <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>▾</span>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>▾</span>
           </button>
           {drop("tasks", (
             <>
@@ -458,7 +458,7 @@ export function Topbar({
               gap: 7,
               background: "transparent",
               border: "none",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               color: menu === "panels" ? "var(--cv-accent)" : "var(--cv-ink-dim)",
             }}
             title="Panels on the canvas — which terminals are open"
@@ -474,7 +474,7 @@ export function Topbar({
                   borderRadius: 999,
                   background: "var(--cv-glass-hi)",
                   color: "var(--cv-ink)",
-                  fontSize: 9,
+                  fontSize: "var(--cv-text-xxs)",
                   fontWeight: 700,
                   display: "grid",
                   placeItems: "center",
@@ -501,7 +501,7 @@ export function Topbar({
                   >
                     <Icon name="region" size={14} color="var(--cv-accent)" />
                     <span style={{ flex: 1 }}>{r.shape.text ?? "Region"}</span>
-                    <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>{r.members.length}</span>
+                    <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>{r.members.length}</span>
                   </button>
                   {r.members.map((it) =>
                     <button
@@ -514,7 +514,7 @@ export function Topbar({
                     >
                       <Icon name={it.icon} size={13} color="var(--cv-ink-dim)" />
                       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{it.label}</span>
-                      {it.sub && <span style={{ fontSize: 9, color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 90 }}>{it.sub}</span>}
+                      {it.sub && <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 90 }}>{it.sub}</span>}
                     </button>,
                   )}
                 </div>
@@ -531,7 +531,7 @@ export function Topbar({
                 >
                   <Icon name={it.icon} size={13} color="var(--cv-ink-dim)" />
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{it.label}</span>
-                  {it.sub && <span style={{ fontSize: 9, color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 90 }}>{it.sub}</span>}
+                  {it.sub && <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 90 }}>{it.sub}</span>}
                 </button>,
               )}
             </>
@@ -561,7 +561,7 @@ export function Topbar({
             borderRadius: 999,
             background: "var(--cv-glass-hi)",
             color: "var(--cv-ink)",
-            fontSize: 10,
+            fontSize: "var(--cv-text-xxs)",
             fontWeight: 600,
             fontVariantNumeric: "tabular-nums",
           }}>
@@ -605,7 +605,7 @@ export function Topbar({
                 borderRadius: 999,
                 background: "var(--cv-waiting)",
                 color: "var(--cv-base)",
-                fontSize: 8.5,
+                fontSize: "var(--cv-text-xxs)",
                 fontWeight: 700,
                 display: "grid",
                 placeItems: "center",

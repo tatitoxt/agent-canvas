@@ -42,7 +42,7 @@ export function MemoryPanel() {
       >
         <button
           className="cv-mini-btn"
-          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", color: dirty ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}
+          style={{ padding: "3px 11px", color: dirty ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}
           disabled={!dirty}
           onClick={() => {
             memoryWrite(scope, draft);
@@ -64,7 +64,7 @@ export function MemoryPanel() {
           border: "1px solid var(--cv-glass-edge)",
           borderRadius: 999,
           padding: "6px 12px",
-          fontSize: 12,
+          fontSize: "var(--cv-text-xs)",
           color: "var(--cv-ink)",
           outline: "none",
           cursor: "pointer",
@@ -92,14 +92,14 @@ export function MemoryPanel() {
           border: "1px solid var(--cv-glass-edge)",
           background: "var(--cv-glass-hi)",
           color: "var(--cv-ink)",
-          fontSize: 11.5,
+          fontSize: "var(--cv-text-xs)",
           fontFamily: "var(--cv-font-mono)",
           lineHeight: 1.5,
           resize: "none",
           outline: "none",
         }}
       />
-      <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", padding: "8px 12px 0" }}>
+      <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", padding: "8px 12px 0" }}>
         Agents spawned here get CANVAS_MEMORY → this file; they can read and append to it.
       </div>
     </div>

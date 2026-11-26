@@ -112,7 +112,7 @@ function MiniTerm({ agentId }: { agentId: string }) {
         background: "var(--cv-surface-1)",
         border: "1px solid var(--cv-hairline)",
         fontFamily: "var(--cv-font-mono)",
-        fontSize: 10.5,
+        fontSize: "var(--cv-text-xxs)",
         lineHeight: 1.65,
         color: "rgba(244,242,238,0.85)",
         overflow: "hidden",
@@ -221,7 +221,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
           borderRadius: 999,
           border,
           cursor: "pointer",
-          fontSize: 12.5,
+          fontSize: "var(--cv-text-sm)",
           fontWeight: 600,
         }}
       >
@@ -238,7 +238,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
             border: "1px solid var(--cv-glass-edge)",
             fontFamily: "var(--cv-font-mono)",
             fontWeight: 700,
-            fontSize: 10.5,
+            fontSize: "var(--cv-text-xxs)",
             color: "#8fb8ff",
             lineHeight: 1,
           }}
@@ -352,7 +352,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
             {STATUS_LABEL[data.status]}
           </span>
           {data.accountLabel && !compactHeader && (
-            <span title="account" style={{ maxWidth: 104, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderLeft: "1px solid var(--cv-glass-edge)", paddingLeft: 7, fontSize: 10, color: "var(--cv-ink-dim)", flex: "0 1 auto", minWidth: 0 }}>
+            <span title="account" style={{ maxWidth: 104, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", borderLeft: "1px solid var(--cv-glass-edge)", paddingLeft: 7, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", flex: "0 1 auto", minWidth: 0 }}>
               @{data.accountLabel}
             </span>
           )}
@@ -384,7 +384,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
         </div>
         <span
           className="nodrag card-chrome"
-          style={{ display: "inline-flex", alignItems: "center", gap: tightHeader ? 6 : 7, flex: "none", color: "var(--cv-ink-dim)", fontSize: 12 }}
+          style={{ display: "inline-flex", alignItems: "center", gap: tightHeader ? 6 : 7, flex: "none", color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-xs)" }}
         >
           <button
             type="button"
@@ -419,7 +419,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
             className="nodrag"
             title="kill"
             data-danger="true"
-            style={{ cursor: "pointer", lineHeight: 1, fontSize: 12, border: "none", padding: 0, background: "transparent" }}
+            style={{ cursor: "pointer", lineHeight: 1, fontSize: "var(--cv-text-xs)", border: "none", padding: 0, background: "transparent" }}
             onPointerDown={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); if (data.id) useBoard.getState().kill(data.id); }}
@@ -453,7 +453,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
             alignItems: "center",
             gap: 8,
             marginTop: 6,
-            fontSize: 10.5,
+            fontSize: "var(--cv-text-xxs)",
             color: "var(--cv-ink-faint)",
           }}
         >
@@ -466,7 +466,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
             <button
               className="glass-pill nodrag"
               style={{
-                fontSize: 9,
+                fontSize: "var(--cv-text-xxs)",
                 padding: "1px 6px",
                 color: data.permission === "supervised" ? "var(--cv-ink-faint)" : "var(--cv-perm)",
                 cursor: "pointer",
@@ -501,12 +501,12 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
             borderTop: "1px solid var(--cv-hairline)",
           }}
         >
-          <span style={{ flex: "none", fontSize: 11.5, fontWeight: 700, color: "var(--cv-accent)" }}>Task</span>
+          <span style={{ flex: "none", fontSize: "var(--cv-text-xs)", fontWeight: 700, color: "var(--cv-accent)" }}>Task</span>
           <span
             title={data.task}
             style={{
               minWidth: 0,
-              fontSize: 14,
+              fontSize: "var(--cv-text-md)",
               lineHeight: 1.45,
               color: "var(--cv-text-main)",
               display: "-webkit-box",
@@ -584,7 +584,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
               color: "var(--cv-text-main)",
               background: "transparent",
               font: "inherit",
-              fontSize: 11.5,
+              fontSize: "var(--cv-text-xs)",
               lineHeight: 1.4,
             }}
           />
@@ -603,7 +603,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
               borderRadius: 8,
               color: "var(--cv-accent)",
               background: "color-mix(in srgb, var(--cv-accent) 10%, transparent)",
-              fontSize: 10.5,
+              fontSize: "var(--cv-text-xxs)",
               fontWeight: 600,
               cursor: canSteer && steeringText.trim() ? "pointer" : "default",
               opacity: canSteer && steeringText.trim() ? 1 : 0.48,
@@ -625,7 +625,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
         >
           <div
             style={{
-              fontSize: 10.5,
+              fontSize: "var(--cv-text-xxs)",
               color: "var(--cv-waiting)",
               fontWeight: 600,
               marginBottom: 5,
@@ -635,7 +635,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
           </div>
           <div
             style={{
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               fontFamily: "var(--cv-font-mono)",
               color: "var(--cv-ink-dim)",
               whiteSpace: "nowrap",
@@ -651,7 +651,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
             <button
               className="glass-pill"
               style={{
-                fontSize: 10.5,
+                fontSize: "var(--cv-text-xxs)",
                 fontWeight: 600,
                 padding: "3px 12px",
                 color: "var(--cv-done)",
@@ -664,7 +664,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
             <button
               className="glass-pill"
               style={{
-                fontSize: 10.5,
+                fontSize: "var(--cv-text-xxs)",
                 fontWeight: 600,
                 padding: "3px 12px",
                 color: "var(--cv-blocked)",
@@ -686,7 +686,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
           marginTop: 9,
           paddingTop: 8,
           borderTop: "1px solid var(--cv-hairline)",
-          fontSize: 10,
+          fontSize: "var(--cv-text-xxs)",
           color: "var(--cv-ink-faint)",
         }}
       >
@@ -722,7 +722,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
               borderRadius: 999,
               background: "color-mix(in srgb, var(--cv-accent) 8%, transparent)",
               color: "var(--cv-accent)",
-              fontSize: 9,
+              fontSize: "var(--cv-text-xxs)",
               fontWeight: 600,
               padding: "1px 8px",
               cursor: "pointer",
@@ -867,7 +867,7 @@ export function OrchestratorNode({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
-              fontSize: 13,
+              fontSize: "var(--cv-text-sm)",
               fontWeight: 600,
               color: "var(--cv-text-main)",
               overflow: "hidden",
@@ -879,7 +879,7 @@ export function OrchestratorNode({
           </div>
           <div
             style={{
-              fontSize: 9.5,
+              fontSize: "var(--cv-text-xxs)",
               letterSpacing: 0.2,
               color: "color-mix(in srgb, var(--cv-accent) 75%, var(--cv-ink))",
               fontWeight: 500,
@@ -906,7 +906,7 @@ export function OrchestratorNode({
             background: wiring ? "color-mix(in srgb, var(--cv-accent) 14%, transparent)" : "none",
             border: "1px solid var(--cv-accent-dim)",
             color: wiring ? "var(--cv-accent)" : "var(--cv-ink-dim)",
-            fontSize: 10,
+            fontSize: "var(--cv-text-xxs)",
             fontWeight: 700,
             width: wiring ? 46 : 28,
           }}
@@ -917,11 +917,11 @@ export function OrchestratorNode({
 
       <div style={{ padding: "9px 12px 12px" }}>
         {wiring ? (
-          <div style={{ fontSize: 10.5, color: "var(--cv-accent)", marginBottom: 8 }}>
+          <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-accent)", marginBottom: 8 }}>
             click agent cards to wire them — done when finished
           </div>
         ) : roster.length === 0 ? (
-          <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", marginBottom: 8 }}>
+          <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", marginBottom: 8 }}>
             No agents wired — hit the link button to pick consoles
           </div>
         ) : (
@@ -945,7 +945,7 @@ export function OrchestratorNode({
                     border: "1px solid var(--cv-glass-edge)",
                     borderRadius: 999,
                     padding: "2.5px 8px 2.5px 5px",
-                    fontSize: 9.5,
+                    fontSize: "var(--cv-text-xxs)",
                     color: "var(--cv-text-main)",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -982,7 +982,7 @@ export function OrchestratorNode({
               border: "1px solid var(--cv-hairline)",
               borderRadius: 8,
               color: "var(--cv-text-main)",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               padding: "6px 9px",
               outline: "none",
             }}
@@ -996,7 +996,7 @@ export function OrchestratorNode({
               border: "none",
               borderRadius: 8,
               color: "#14110d",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               fontWeight: 700,
               padding: "6px 12px",
               cursor: "pointer",
@@ -1034,7 +1034,7 @@ function ChainEditor({ workspaceId }: { workspaceId: string }) {
     <span style={{ position: "relative" }} onClick={(e) => e.stopPropagation()}>
       <button
         title="Fallback chain — order of CLIs tried when one fails at launch"
-        style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", cursor: "pointer", fontSize: 10, padding: 0 }}
+        style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: 0 }}
         onClick={() => { setOpen(!open); setDraft(chain ? [...chain] : []); }}
       >
         ⛓
@@ -1042,9 +1042,9 @@ function ChainEditor({ workspaceId }: { workspaceId: string }) {
       {open && (
         <div
           className="glass nodrag"
-          style={{ position: "absolute", top: 18, left: 0, zIndex: 40, padding: 8, borderRadius: 10, width: 190, fontSize: 11 }}
+          style={{ position: "absolute", top: 18, left: 0, zIndex: 40, padding: 8, borderRadius: 10, width: 190, fontSize: "var(--cv-text-xxs)" }}
         >
-          <div style={{ color: "var(--cv-ink-faint)", marginBottom: 6, fontSize: 10 }}>
+          <div style={{ color: "var(--cv-ink-faint)", marginBottom: 6, fontSize: "var(--cv-text-xxs)" }}>
             fallback chain — drag to reorder; empty = auto
           </div>
           {items.map((cli, i) => (
@@ -1061,7 +1061,7 @@ function ChainEditor({ workspaceId }: { workspaceId: string }) {
               <CliMark cli={cli} color="#9a968e" size={12} />
               <span style={{ flex: 1 }}>{cli}</span>
               <button
-                style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", cursor: "pointer", fontSize: 10 }}
+                style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", cursor: "pointer", fontSize: "var(--cv-text-xxs)" }}
                 onClick={() => setDraft(items.filter((c) => c !== cli))}
               >
                 ×
@@ -1070,19 +1070,19 @@ function ChainEditor({ workspaceId }: { workspaceId: string }) {
           ))}
           <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
             {["claude", "codex", "gemini"].filter((c) => !items.includes(c)).map((c) => (
-              <button key={c} style={{ fontSize: 10, cursor: "pointer" }} onClick={() => setDraft([...items, c])}>
+              <button key={c} style={{ fontSize: "var(--cv-text-xxs)", cursor: "pointer" }} onClick={() => setDraft([...items, c])}>
                 + {c}
               </button>
             ))}
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
             <button
-              style={{ fontSize: 10, cursor: "pointer" }}
+              style={{ fontSize: "var(--cv-text-xxs)", cursor: "pointer" }}
               onClick={() => { setAgentChain(workspaceId, draft ?? []); setOpen(false); }}
             >
               save
             </button>
-            <button style={{ fontSize: 10, cursor: "pointer" }} onClick={() => setOpen(false)}>
+            <button style={{ fontSize: "var(--cv-text-xxs)", cursor: "pointer" }} onClick={() => setOpen(false)}>
               cancel
             </button>
           </div>
@@ -1134,7 +1134,7 @@ export function WorkspaceNode({
           top: -14,
           left: 18,
           padding: "5px 14px",
-          fontSize: 11.5,
+          fontSize: "var(--cv-text-xs)",
           fontWeight: 600,
           letterSpacing: 0.2,
           display: "flex",
@@ -1143,7 +1143,7 @@ export function WorkspaceNode({
           zIndex: 10,
         }}
       >
-        <span style={{ color: "var(--cv-ink-faint)", fontSize: 10 }}>◫</span>
+        <span style={{ color: "var(--cv-ink-faint)", fontSize: "var(--cv-text-xxs)" }}>◫</span>
         {data.name}
         <span style={{ color: "var(--cv-ink-faint)", fontWeight: 400 }}>
           {data.repo}
@@ -1191,7 +1191,7 @@ export function WebNode({
           alignItems: "center",
           gap: 8,
           padding: "8px 12px",
-          fontSize: 11,
+          fontSize: "var(--cv-text-xxs)",
           letterSpacing: "0.01em",
           color: "var(--cv-ink-dim)",
           borderBottom: "1px solid var(--cv-hairline)",

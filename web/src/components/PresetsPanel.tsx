@@ -7,7 +7,7 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid var(--cv-glass-edge)",
   borderRadius: 10,
   padding: "7px 10px",
-  fontSize: 12,
+  fontSize: "var(--cv-text-xs)",
   color: "var(--cv-ink)",
   outline: "none",
   width: "100%",
@@ -18,7 +18,7 @@ const btn: React.CSSProperties = {
   border: "1px solid var(--cv-glass-edge)",
   borderRadius: 8,
   padding: "4px 10px",
-  fontSize: 11,
+  fontSize: "var(--cv-text-xxs)",
   color: "var(--cv-ink)",
   cursor: "pointer",
 };
@@ -41,7 +41,7 @@ export function PresetsPanel() {
     <div
       style={{ ...panelRoot, padding: "16px 16px" }}
     >
-      <div style={{ fontSize: 11, color: "var(--cv-ink-dim)", marginBottom: 14 }}>
+      <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", marginBottom: 14 }}>
         Save this board's roster + arrangement; restore it later — missing members respawn.
       </div>
 
@@ -71,7 +71,7 @@ export function PresetsPanel() {
       </div>
 
       {names.length === 0 && (
-        <div style={{ fontSize: 11, color: "var(--cv-ink-dim)" }}>No presets on this board yet.</div>
+        <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>No presets on this board yet.</div>
       )}
       {names.map((n) => {
         const p = boardPresets[n];
@@ -86,7 +86,7 @@ export function PresetsPanel() {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "var(--cv-ink)" }}>{n}</span>
+              <span style={{ flex: 1, fontSize: "var(--cv-text-xs)", fontWeight: 600, color: "var(--cv-ink)" }}>{n}</span>
               <button style={{ ...btn, color: "var(--cv-accent)" }} onClick={() => applyPreset(n)}>
                 apply
               </button>
@@ -94,7 +94,7 @@ export function PresetsPanel() {
                 ×
               </button>
             </div>
-            <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", marginTop: 4 }}>
+            <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", marginTop: 4 }}>
               {p.agents.length} member{p.agents.length === 1 ? "" : "s"}
               {p.agents.length > 0 && " · " + p.agents.map((a) => a.name).join(", ")}
             </div>

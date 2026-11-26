@@ -267,7 +267,7 @@ export function CommandPalette({
             border: "none",
             borderBottom: "1px solid rgba(255,255,255,0.08)",
             padding: "13px 16px",
-            fontSize: 13.5,
+            fontSize: "var(--cv-text-md)",
             color: "var(--cv-ink)",
             outline: "none",
             fontFamily: "inherit",
@@ -275,7 +275,7 @@ export function CommandPalette({
         />
         <div style={{ overflowY: "auto", padding: "6px" }}>
           {filtered.length === 0 && (
-            <div style={{ padding: "16px 14px", fontSize: 12, color: "var(--cv-ink-dim)" }}>
+            <div style={{ padding: "16px 14px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)" }}>
               nothing matches — try "spawn", "run", "kill", "inbox", "fit"
             </div>
           )}
@@ -294,15 +294,15 @@ export function CommandPalette({
                 border: "none",
                 borderRadius: 8,
                 padding: "8px 12px",
-                fontSize: 12.5,
+                fontSize: "var(--cv-text-sm)",
                 color: "var(--cv-ink)",
                 cursor: "pointer",
                 fontFamily: "inherit",
               }}
             >
               <span style={{ display: "flex", alignItems: "center" }}>
-                <span style={{ color: "var(--cv-ink-faint)", fontSize: 10, textTransform: "uppercase", letterSpacing: 0.6, marginRight: 8, width: 46, flex: "none" }}>
-                  {a.group}
+                <span style={{ color: "var(--cv-ink-faint)", fontSize: "var(--cv-text-xxs)", letterSpacing: "0.02em", marginRight: 8, width: 46, flex: "none" }}>
+                  {a.group.charAt(0).toUpperCase() + a.group.slice(1)}
                 </span>
                 {a.cli && (
                   <CliMark cli={a.cli} color={cliMeta(a.cli).color} size={14} />
@@ -310,7 +310,7 @@ export function CommandPalette({
                 {a.cli && <span style={{ width: 6 }} />}
                 {a.label}
               </span>
-              {a.hint && <span style={{ fontSize: 10.5, color: "var(--cv-ink-faint)" }}>{a.hint}</span>}
+              {a.hint && <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>{a.hint}</span>}
             </button>
           ))}
         </div>
@@ -318,7 +318,7 @@ export function CommandPalette({
           style={{
             borderTop: "1px solid rgba(255,255,255,0.06)",
             padding: "6px 14px",
-            fontSize: 10,
+            fontSize: "var(--cv-text-xxs)",
             color: "var(--cv-ink-faint)",
             display: "flex",
             gap: 12,
