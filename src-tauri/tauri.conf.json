@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../web/dist",
     "devUrl": "http://localhost:5174",
-    "beforeDevCommand": "npm --prefix ../web run dev",
-    "beforeBuildCommand": "npm --prefix ../web run build"
+    "beforeDevCommand": "npm --prefix web run dev",
+    "beforeBuildCommand": "npm --prefix web run build"
   },
   "app": {
     "windows": [
@@ -47,7 +47,8 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.png",
-      "icons/icon.icns"
+      "icons/icon.icns",
+      "icons/icon.ico"
     ]
   }
 }
