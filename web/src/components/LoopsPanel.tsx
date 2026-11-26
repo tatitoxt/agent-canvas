@@ -96,20 +96,16 @@ export function LoopsPanel() {
     >
       <div
         style={{
-          fontSize: 12.5,
-          fontWeight: 650,
           padding: "0 12px 8px",
-          color: "var(--cv-ink)",
           display: "flex",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           alignItems: "center",
+          flexShrink: 0,
         }}
       >
-        Loops
-        <span style={{ flex: 1 }} />
         <button
-          className="glass-pill"
-          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}
+          className="cv-mini-btn"
+          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", color: "var(--cv-accent)" }}
           onClick={() => setCreating((c) => !c)}
         >
           {creating ? "cancel" : "+ new"}
@@ -128,16 +124,16 @@ export function LoopsPanel() {
               {TEMPLATES.map((t) => (
                 <button
                   key={t.name}
-                  className="glass-pill"
-                  style={{ fontSize: 10, padding: "3px 9px", cursor: "pointer", border: "none", color: "var(--cv-ink-dim)" }}
+                  className="cv-mini-btn"
+                  style={{ fontSize: 10, padding: "3px 9px", cursor: "pointer", color: "var(--cv-ink-dim)" }}
                   onClick={() => apply(t)}
                 >
                   {t.name}
                 </button>
               ))}
               <button
-                className="glass-pill"
-                style={{ fontSize: 10, padding: "3px 9px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}
+                className="cv-mini-btn"
+                style={{ fontSize: 10, padding: "3px 9px", cursor: "pointer", color: "var(--cv-accent)" }}
                 onClick={() => { setInstruction(""); setTrigger("interval"); setCreating(true); }}
               >
                 Start from scratch
@@ -183,8 +179,8 @@ export function LoopsPanel() {
               />
             )}
             <button
-              className="glass-pill"
-              style={{ fontSize: 11, fontWeight: 600, padding: "5px 14px", cursor: "pointer", border: "none", color: "var(--cv-done)" }}
+              className="cv-mini-btn"
+              style={{ fontSize: 11, fontWeight: 600, padding: "5px 14px", cursor: "pointer", color: "var(--cv-done)" }}
               onClick={save}
             >
               start loop
@@ -224,23 +220,23 @@ export function LoopsPanel() {
             </div>
             <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
               <button
-                className="glass-pill"
-                style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 12px", cursor: "pointer", border: "none", color: l.enabled ? "var(--cv-waiting)" : "var(--cv-done)" }}
+                className="cv-mini-btn"
+                style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 12px", cursor: "pointer", color: l.enabled ? "var(--cv-waiting)" : "var(--cv-done)" }}
                 onClick={() => setLoopEnabled(l.loop_id, !l.enabled)}
               >
                 {l.enabled ? "pause" : "resume"}
               </button>
               <button
-                className="glass-pill"
+                className="cv-mini-btn"
                 title="run it once right now"
-                style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 12px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}
+                style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 12px", cursor: "pointer", color: "var(--cv-accent)" }}
                 onClick={() => runLoop(l.loop_id)}
               >
                 run now
               </button>
               <button
-                className="glass-pill"
-                style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 12px", cursor: "pointer", border: "none", color: "var(--cv-blocked)" }}
+                className="cv-mini-btn"
+                style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 12px", cursor: "pointer", color: "var(--cv-blocked)" }}
                 onClick={() => deleteLoop(l.loop_id)}
               >
                 delete

@@ -59,7 +59,7 @@ export function CalendarPanel() {
       <div
         style={{
           fontSize: 12.5,
-          fontWeight: 650,
+          fontWeight: 600,
           padding: "0 12px 8px",
           color: "var(--cv-ink)",
           display: "flex",

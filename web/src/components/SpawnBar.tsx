@@ -212,7 +212,7 @@ export function SpawnBar() {
                       background: permission === l.id ? "color-mix(in srgb, var(--cv-perm) 16%, transparent)" : "transparent",
                       color: permission === l.id ? "var(--cv-perm)" : "var(--cv-ink-dim)",
                       fontSize: 9.5,
-                      fontWeight: 650,
+                      fontWeight: 600,
                       cursor: "pointer",
                       fontFamily: "inherit",
                     }}
@@ -238,7 +238,7 @@ export function SpawnBar() {
                       background: count === n ? "color-mix(in srgb, var(--cv-accent) 18%, transparent)" : "var(--cv-glass-hi)",
                       color: count === n ? "var(--cv-accent)" : "var(--cv-ink-dim)",
                       fontSize: 10,
-                      fontWeight: 650,
+                      fontWeight: 600,
                       cursor: "pointer",
                     }}
                   >

@@ -36,18 +36,13 @@ const rowBtn: React.CSSProperties = {
   background: "transparent",
   color: "var(--cv-ink)",
   fontSize: 12.5,
-  fontWeight: 550,
+  fontWeight: 500,
   textAlign: "left",
   cursor: "pointer",
   borderRadius: 8,
 };
 
 const sectionLabel: React.CSSProperties = {
-  fontSize: 9.5,
-  fontWeight: 700,
-  letterSpacing: 0.8,
-  textTransform: "uppercase",
-  color: "var(--cv-ink-faint)",
   padding: "10px 10px 4px",
 };
 
@@ -170,14 +165,14 @@ export function ToolsMenu({
           }}
         >
           <header style={{ display: "flex", flexDirection: collapsed ? "column" : "row", alignItems: "center", justifyContent: "center", gap: collapsed ? 6 : 8, minHeight: collapsed ? 112 : 48, padding: collapsed ? "8px 0" : "0 14px", borderBottom: "1px solid var(--cv-glass-edge)" }}>
-            {!collapsed && <strong style={{ flex: 1, fontSize: 13, fontWeight: 650 }}>Tools</strong>}
+            {!collapsed && <strong style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Tools</strong>}
             <button className="glass-pill" title={pinned ? "Unpin Tools panel" : "Pin Tools panel"} aria-label={pinned ? "Unpin Tools panel" : "Pin Tools panel"} onClick={() => { const next = !pinned; setPinned(next); localStorage.setItem("cv-tools-pinned", String(next)); }} style={{ width: 28, height: 28, display: "grid", placeItems: "center", color: pinned ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}><Icon name="pin" size={14} /></button>
             <button className="glass-pill" title={collapsed ? "Expand Tools panel" : "Collapse Tools panel"} aria-label={collapsed ? "Expand Tools panel" : "Collapse Tools panel"} onClick={() => setCollapsed((v) => !v)} style={{ width: 28, height: 28, display: "grid", placeItems: "center" }}><Icon name={collapsed ? "expand" : "collapse"} size={14} /></button>
             {!pinned && <button className="glass-pill" title="Close Tools panel" aria-label="Close Tools panel" onClick={() => setOpen(false)} style={{ width: 28, height: 28, display: "grid", placeItems: "center" }}><Icon name="x" size={14} /></button>}
           </header>
           <div className="cv-menu-scroll" style={{ flex: 1, overflowY: "auto", padding: collapsed ? "6px 5px" : "6px 6px 10px" }}>
           {!collapsed && <>
-          <div style={sectionLabel}>Apps &amp; panels</div>
+          <div className="cv-section-label" style={sectionLabel}>Apps &amp; panels</div>
           {PANEL_ITEMS.map((it) => (
             <div key={it.key} style={{ display: "flex", alignItems: "center", gap: 2 }}>
               <div style={{ flex: 1 }}>{item(it.icon, it.label, () => { onSelect(it.key); dismiss(); }, "hint" in it ? it.hint : undefined, active === it.key)}</div>
@@ -193,7 +188,7 @@ export function ToolsMenu({
             </div>
           ))}
           <div style={{ height: 1, margin: "8px 10px", background: "var(--cv-glass-edge)" }} />
-          <div style={sectionLabel}>Board</div>
+          <div className="cv-section-label" style={sectionLabel}>Board</div>
           {item("automations", "New orchestrator", () => { spawnOrchestrator(); dismiss(); }, "wire consoles, command all")}
           {item("accounts", "Team builder", () => { setTeamOpen(true); dismiss(); }, "roles × one CLI")}
           {item("shape", "Add shape", () => setSub((s) => (s === "shape" ? null : "shape")), "whiteboard", false, true)}
@@ -230,7 +225,7 @@ export function ToolsMenu({
           {item("play", "Resume all", () => resumeAll(activeBoard))}
           {item("gather", "Gather loose windows", () => { gatherLoose(); dismiss(); }, "into a group")}
           {item("eye", "Panel summaries", () => togglePanelSummaries(), summaries ? "on" : "off", summaries)}
-          <div style={sectionLabel}>Capture</div>
+          <div className="cv-section-label" style={sectionLabel}>Capture</div>
           {item("draw", "Pencil markups", () => { actions.onDraw(); dismiss(); }, actions.drawOn ? "on" : "", actions.drawOn)}
           {item("region", "Region shot", () => { actions.onRegion(); dismiss(); }, "drag → PNG")}
           {item("shot", "Canvas shot", () => { actions.onShot(); dismiss(); }, "⌘⇧S")}

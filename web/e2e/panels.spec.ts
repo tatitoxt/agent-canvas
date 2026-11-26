@@ -347,7 +347,7 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await expect(dock).toBeHidden();
   const artifacts = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
   await expect(artifacts).toBeVisible();
-  await expect(artifacts.getByText("Artifacts", { exact: true }).first()).toBeVisible();
+  await expect(artifacts.getByPlaceholder("Search artifacts or ask Dex")).toBeVisible();
   await expect(artifacts.getByRole("button", { name: "+ new" })).toBeVisible();
 
   const title = `Canvas artifact ${Date.now()}`;

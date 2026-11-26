@@ -173,7 +173,7 @@ export function RepoExplorerPanel() {
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 650, color: "var(--cv-ink)" }}>{base(file.path)}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--cv-ink)" }}>{base(file.path)}</div>
                   <div title={file.path} style={{ marginTop: 3, fontSize: 9.5, fontFamily: "monospace", color: "var(--cv-ink-faint)", whiteSpace: "nowrap" }}>{file.path}</div>
                 </div>
                 {!editing ? (

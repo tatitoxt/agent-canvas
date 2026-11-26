@@ -60,7 +60,7 @@ export function MissionStrip({ counts, open, onToggle }: Props) {
       onClick={() => setOpen()}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <span style={{ fontSize: 12, fontWeight: 650, letterSpacing: 0.3, marginRight: 2 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.3, marginRight: 2 }}>
           canvas
         </span>
         {ITEMS.map(({ key, label, color }) => (

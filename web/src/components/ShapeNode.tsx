@@ -198,7 +198,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
             border: "none",
             outline: "none",
             fontSize: 12,
-            fontWeight: 650,
+            fontWeight: 600,
             fontFamily: "inherit",
             color: s.color,
             letterSpacing: 0.3,

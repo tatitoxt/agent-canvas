@@ -35,7 +35,7 @@ export function StudioPanel() {
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 650, color: "var(--cv-ink)" }}>studio doc</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cv-ink)" }}>studio doc</span>
           <div style={{ display: "flex", gap: 8 }}>
             <button className="glass-pill" style={{ border: "none", cursor: "pointer", fontSize: 11, padding: "5px 12px", color: "var(--cv-accent)" }} onClick={copy}>copy</button>
             <button className="glass-pill" style={{ border: "none", cursor: "pointer", fontSize: 11, padding: "5px 12px", color: "var(--cv-accent)" }} onClick={download}>▤ .md</button>

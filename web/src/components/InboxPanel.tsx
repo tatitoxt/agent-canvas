@@ -56,19 +56,6 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
       data-panel="inbox"
       style={{ ...panelRoot, padding: "12px 8px" }}
     >
-      <div
-        style={{
-          fontSize: 12.5,
-          fontWeight: 650,
-          padding: "0 12px 8px",
-          color: "var(--cv-ink)",
-          display: "flex",
-          alignItems: "center",
-        }}
-      >
-        Inbox
-        <span style={{ flex: 1 }} />
-      </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
         {empty && (
           <div style={{ padding: "18px 12px", fontSize: 11.5, color: "var(--cv-ink-dim)" }}>
@@ -163,30 +150,30 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                 </button>
                 <span style={{ display: "flex", gap: 6, marginTop: 4 }}>
                   <button
-                    className="glass-pill"
+                    className="cv-mini-btn"
                     title="center the canvas on this agent's card"
-                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", color: "var(--cv-ink-dim)", cursor: "pointer", border: "none" }}
+                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", color: "var(--cv-ink-dim)", cursor: "pointer" }}
                     onClick={() => useBoard.getState().requestFocus(h.id)}
                   >
                     ⌖
                   </button>
                   <button
-                    className="glass-pill"
-                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 11px", color: "var(--cv-done)", cursor: "pointer", border: "none" }}
+                    className="cv-mini-btn"
+                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 11px", color: "var(--cv-done)", cursor: "pointer" }}
                     onClick={() => useBoard.getState().approveInput(h.id)}
                   >
                     allow
                   </button>
                   <button
-                    className="glass-pill"
-                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 11px", color: "var(--cv-blocked)", cursor: "pointer", border: "none" }}
+                    className="cv-mini-btn"
+                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 11px", color: "var(--cv-blocked)", cursor: "pointer" }}
                     onClick={() => useBoard.getState().denyInput(h.id)}
                   >
                     deny
                   </button>
                   <button
-                    className="glass-pill"
-                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 11px", color: "var(--cv-waiting)", cursor: "pointer", border: "none" }}
+                    className="cv-mini-btn"
+                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 11px", color: "var(--cv-waiting)", cursor: "pointer" }}
                     title="Allow this one and stop asking — agent moves to auto"
                     onClick={() => useBoard.getState().approveAlways(h.id)}
                   >
@@ -209,9 +196,9 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                   </span>
                 </button>
                 <button
-                  className="glass-pill"
+                  className="cv-mini-btn"
                   title="center the canvas on this agent's card"
-                  style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", color: "var(--cv-ink-dim)", cursor: "pointer", border: "none", flexShrink: 0 }}
+                  style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", color: "var(--cv-ink-dim)", cursor: "pointer", flexShrink: 0 }}
                   onClick={() => useBoard.getState().requestFocus(a.id)}
                 >
                   ⌖
@@ -219,9 +206,9 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                 {(["↵", "y", "n", "esc"] as const).map((k) => (
                   <button
                     key={k}
-                    className="glass-pill"
+                    className="cv-mini-btn"
                     title={`type ${k === "↵" ? "enter" : k === "esc" ? "escape" : `'${k}'`} into ${a.name}'s terminal`}
-                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", cursor: "pointer", border: "none", color: "var(--cv-ink-dim)", fontFamily: "var(--cv-font-mono)", flexShrink: 0 }}
+                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", cursor: "pointer", color: "var(--cv-ink-dim)", fontFamily: "var(--cv-font-mono)", flexShrink: 0 }}
                     onClick={(ev) => {
                       ev.stopPropagation();
                       const seq = k === "↵" ? "\r" : k === "esc" ? "\x1b" : k;

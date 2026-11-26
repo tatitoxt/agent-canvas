@@ -1,5 +1,4 @@
 import { useBoard } from "../store/board";
-import { Icon } from "./icons";
 import { panelRoot } from "./panelChrome";
 import { usePanelActions } from "./panelCtx";
 
@@ -66,19 +65,15 @@ export function SourceControlPanel() {
     >
       <div
         style={{
-          fontSize: 12.5,
-          fontWeight: 650,
           padding: "0 12px 8px",
-          color: "var(--cv-ink)",
           display: "flex",
+          justifyContent: "flex-end",
           alignItems: "center",
-          gap: 7,
           userSelect: "none",
+          flexShrink: 0,
         }}
       >
-        <Icon name="git" size={14} color="var(--cv-accent)" />
-        Source control
-        <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 500, color: "var(--cv-ink-faint)" }}>
+        <span style={{ fontSize: 10, fontWeight: 500, color: "var(--cv-ink-faint)" }}>
           {trees.length} {trees.length === 1 ? "tree" : "trees"}
           {dirty > 0 ? ` · ${dirty} changed` : ""}
         </span>

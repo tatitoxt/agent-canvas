@@ -222,7 +222,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
           border,
           cursor: "pointer",
           fontSize: 12.5,
-          fontWeight: 650,
+          fontWeight: 600,
         }}
       >
         <Handle type="target" position={Position.Left} />
@@ -604,7 +604,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
               color: "var(--cv-accent)",
               background: "color-mix(in srgb, var(--cv-accent) 10%, transparent)",
               fontSize: 10.5,
-              fontWeight: 650,
+              fontWeight: 600,
               cursor: canSteer && steeringText.trim() ? "pointer" : "default",
               opacity: canSteer && steeringText.trim() ? 1 : 0.48,
             }}
@@ -723,7 +723,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
               background: "color-mix(in srgb, var(--cv-accent) 8%, transparent)",
               color: "var(--cv-accent)",
               fontSize: 9,
-              fontWeight: 650,
+              fontWeight: 600,
               padding: "1px 8px",
               cursor: "pointer",
             }}

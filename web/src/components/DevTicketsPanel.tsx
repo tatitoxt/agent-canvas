@@ -1,5 +1,4 @@
 import { useBoard } from "../store/board";
-import { Icon } from "./icons";
 import { panelRoot } from "./panelChrome";
 
 const groupLabel: React.CSSProperties = {
@@ -78,19 +77,15 @@ export function DevTicketsPanel() {
     >
       <div
         style={{
-          fontSize: 12.5,
-          fontWeight: 650,
           padding: "0 12px 8px",
-          color: "var(--cv-ink)",
           display: "flex",
+          justifyContent: "flex-end",
           alignItems: "center",
-          gap: 7,
           userSelect: "none",
+          flexShrink: 0,
         }}
       >
-        <Icon name="ticket" size={14} color="var(--cv-accent)" />
-        Dev tickets
-        <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 500, color: "var(--cv-ink-faint)" }}>
+        <span style={{ fontSize: 10, fontWeight: 500, color: "var(--cv-ink-faint)" }}>
           {all.length} total
         </span>
       </div>

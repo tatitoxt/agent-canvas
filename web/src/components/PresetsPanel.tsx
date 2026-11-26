@@ -41,9 +41,6 @@ export function PresetsPanel() {
     <div
       style={{ ...panelRoot, padding: "16px 16px" }}
     >
-      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--cv-ink)", marginBottom: 4 }}>
-        ◫ Layout presets
-      </div>
       <div style={{ fontSize: 11, color: "var(--cv-ink-dim)", marginBottom: 14 }}>
         Save this board's roster + arrangement; restore it later — missing members respawn.
       </div>

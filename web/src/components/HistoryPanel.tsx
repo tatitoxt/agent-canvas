@@ -24,9 +24,6 @@ export function HistoryPanel({ onOpenEdge }: { onOpenEdge: (edgeId: string) => v
     <div
       style={{ ...panelRoot, padding: "12px 10px" }}
     >
-      <div style={{ padding: "14px 16px 8px", fontSize: 12, fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        Delegation history
-      </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 10px" }}>
         {rows.length === 0 && (
           <div style={{ padding: "12px 14px", fontSize: 11, color: "var(--cv-ink-faint)" }}>

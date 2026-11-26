@@ -52,9 +52,6 @@ export function UsagePanel() {
     <div
       style={{ ...panelRoot, padding: "12px 10px" }}
     >
-      <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 8px", color: "var(--cv-ink)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        Mission Map
-      </div>
       <div style={{ fontSize: 10, color: "var(--cv-ink-dim)", padding: "0 12px 10px" }}>
         {boardAgents.length} terminals · {live} active ·{" "}
         {fmtBytes(totalBytes)} output · {totalFiles} file{totalFiles === 1 ? "" : "s"} changed

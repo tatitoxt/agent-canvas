@@ -112,31 +112,25 @@ export function ArtifactsPanel() {
 
       <div
         style={{
-          fontSize: 13,
-          fontWeight: 650,
-          padding: "10px 16px 8px",
-          color: "var(--cv-ink)",
+          padding: "8px 16px",
           display: "flex",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           alignItems: "center",
+          flexShrink: 0,
         }}
       >
-        <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <img src="/canvas-mark.png" alt="" width={15} height={15} style={{ display: "block" }} />
-          Artifacts
-        </span>
         <span style={{ display: "flex", gap: 5, position: "relative" }}>
           <button
-            className="glass-pill"
-            style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-ink)" }}
+            className="cv-mini-btn"
+            style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", color: "var(--cv-ink)" }}
             title="Generate a PDF document from the board"
             onClick={() => setGenOpen((o) => !o)}
           >
             ⎙ pdf
           </button>
           <button
-            className="glass-pill"
-            style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-ink)" }}
+            className="cv-mini-btn"
+            style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", color: "var(--cv-ink)" }}
             onClick={() => setCreating((c) => !c)}
           >
             + new
@@ -177,8 +171,8 @@ export function ArtifactsPanel() {
             style={{ width: "100%", boxSizing: "border-box", minHeight: 56, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 12, padding: "7px 10px", fontSize: 11, color: "var(--cv-ink)", outline: "none", resize: "vertical" }}
           />
           <button
-            className="glass-pill"
-            style={{ marginTop: 6, fontSize: 11, padding: "5px 14px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}
+            className="cv-mini-btn"
+            style={{ marginTop: 6, fontSize: 11, padding: "5px 14px", cursor: "pointer", color: "var(--cv-accent)" }}
             onClick={() => {
               if (!title.trim()) return;
               artifactCreate(kind, title.trim(), undefined, text || undefined);
@@ -228,7 +222,7 @@ export function ArtifactsPanel() {
                   background: "var(--cv-glass-hi)",
                   color: "var(--cv-ink)",
                   fontSize: 11.5,
-                  fontWeight: 550,
+                  fontWeight: 500,
                   cursor: "pointer",
                   textAlign: "left",
                 }}

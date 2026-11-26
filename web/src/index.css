@@ -24,6 +24,7 @@
   --cv-ink-faint: color-mix(in srgb, var(--cv-ink) 40%, transparent);
   --cv-ink-disabled: color-mix(in srgb, var(--cv-ink) 20%, transparent);
   --cv-text-main: color-mix(in srgb, var(--cv-ink) 90%, transparent);
+  --cv-text-hint: var(--cv-ink-faint);
 
   /* Deska surface model — foreground percentages mixed onto background.
      Cards use the nearly-opaque panel shell; floating clusters/popovers use
@@ -179,6 +180,49 @@ body,
     background var(--cv-motion-fast) var(--cv-ease-out),
     border-color var(--cv-motion-fast) var(--cv-ease-out),
     box-shadow var(--cv-motion-base) var(--cv-ease-out);
+}
+
+/* Deska island label — quiet metadata, not microtype shouting. */
+.cv-section-label {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+  color: var(--cv-text-hint);
+  text-transform: none;
+}
+
+/* Small inline actions inside panel cards. Unlike glass-pill these are
+   flat local controls: no overlay elevation, blur, or cluster shadow. */
+.cv-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--cv-hairline);
+  border-radius: var(--cv-radius-md);
+  background: var(--cv-surface-3);
+  color: var(--cv-text-main);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color var(--cv-motion-fast) var(--cv-ease-out),
+    border-color var(--cv-motion-fast) var(--cv-ease-out),
+    color var(--cv-motion-fast) var(--cv-ease-out);
+}
+.cv-mini-btn:hover:not(:disabled) {
+  background: var(--cv-surface-4);
+  border-color: var(--cv-hairline-strong);
+}
+.cv-mini-btn:disabled {
+  opacity: 0.48;
+  cursor: default;
 }
 
 /* ---------- react flow base ---------- */
@@ -700,7 +744,7 @@ button.cv-card-close:hover,
   overflow: hidden;
   white-space: nowrap;
   font-size: 11px;
-  font-weight: 550;
+  font-weight: 500;
   transition: max-width var(--cv-motion-base) var(--cv-ease-out), opacity var(--cv-motion-fast) var(--cv-ease-out);
 }
 .cv-bottom-dock-actions > button:hover,

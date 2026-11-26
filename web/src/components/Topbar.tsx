@@ -38,18 +38,13 @@ const menuRow: React.CSSProperties = {
   background: "transparent",
   color: "var(--cv-ink)",
   fontSize: 11.5,
-  fontWeight: 550,
+  fontWeight: 500,
   textAlign: "left",
   cursor: "pointer",
   borderRadius: 8,
 };
 
 const sectionLabel: React.CSSProperties = {
-  fontSize: 8.5,
-  fontWeight: 700,
-  letterSpacing: 1,
-  textTransform: "uppercase",
-  color: "var(--cv-ink-faint)",
   padding: "8px 10px 3px",
 };
 
@@ -312,7 +307,7 @@ export function Topbar({
           </button>
           {drop("machine", (
             <>
-              <div style={sectionLabel}>Machine</div>
+              <div className="cv-section-label" style={sectionLabel}>Machine</div>
               {row("monitor", "This Mac", "agents run locally", () => {})}
               {row("ws", "Cloud box", "remote runner — soon", undefined, true)}
               {row("bot", "Phone", "pair a device — soon", undefined, true)}
@@ -331,7 +326,7 @@ export function Topbar({
           </button>
           {drop("ws", (
             <>
-              <div style={sectionLabel}>Workspaces</div>
+              <div className="cv-section-label" style={sectionLabel}>Workspaces</div>
               {wsList.length === 0 &&
                 row("ws", "no workspaces", "add one below")}
               {wsList.map((w) =>
@@ -375,7 +370,7 @@ export function Topbar({
           </button>
           {drop("wt", (
             <>
-              <div style={sectionLabel}>Worktrees</div>
+              <div className="cv-section-label" style={sectionLabel}>Worktrees</div>
               {Object.values(agents).filter((a) => a.worktree && a.status !== "exited").length === 0 &&
                 row("worktree", "no worktrees", "spawn agents in a workspace to see their trees")}
               {Object.values(agents)
@@ -403,7 +398,7 @@ export function Topbar({
           </button>
           {drop("tasks", (
             <>
-              <div style={sectionLabel}>Tasks</div>
+              <div className="cv-section-label" style={sectionLabel}>Tasks</div>
               {Object.values(edges).filter((e) => e.state === "delegated").length === 0 &&
                 row("tasks", "no tasks in flight", "history lives in the Tasks panel", () => onNav("history"))}
               {Object.values(edges)
@@ -433,7 +428,7 @@ export function Topbar({
             background: connected ? "var(--cv-done)" : "var(--cv-ink-faint)",
             margin: "0 7px 0 5px",
             flexShrink: 0,
-            boxShadow: connected ? "0 0 8px color-mix(in srgb, var(--cv-done) 42%, transparent)" : undefined,
+            boxShadow: connected ? "0 0 3px color-mix(in srgb, var(--cv-done) 18%, transparent)" : undefined,
           }}
         />
       </div>
@@ -492,7 +487,7 @@ export function Topbar({
           </button>
           {drop("panels", (
             <>
-              <div style={sectionLabel}>Panels · {panelItems.length + panelRegions.length}</div>
+              <div className="cv-section-label" style={sectionLabel}>Panels · {panelItems.length + panelRegions.length}</div>
               {panelItems.length === 0 && panelRegions.length === 0 &&
                 row("panels", "nothing on the board", "right-click the canvas → add to board")}
               {panelRegions.map((r) => (
@@ -524,7 +519,7 @@ export function Topbar({
                   )}
                 </div>
               ))}
-              {looseItems.length > 0 && <div style={sectionLabel}>Not in a region · {looseItems.length}</div>}
+              {looseItems.length > 0 && <div className="cv-section-label" style={sectionLabel}>Not in a region · {looseItems.length}</div>}
               {looseItems.map((it) =>
                 <button
                   key={it.id}
@@ -567,7 +562,7 @@ export function Topbar({
             background: "var(--cv-glass-hi)",
             color: "var(--cv-ink)",
             fontSize: 10,
-            fontWeight: 650,
+            fontWeight: 600,
             fontVariantNumeric: "tabular-nums",
           }}>
             <span style={{ width: 6, height: 6, borderRadius: 999, background: liveAgents.length ? "var(--cv-working)" : "var(--cv-ink-faint)" }} />

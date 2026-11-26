@@ -41,9 +41,6 @@ export function NotesPanel() {
       data-panel="notes"
       style={{ ...panelRoot, padding: "12px 10px" }}
     >
-      <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 8px", color: "var(--cv-ink)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        Notes
-      </div>
       <form
         style={{ display: "flex", gap: 6, margin: "0 4px 10px" }}
         onSubmit={(e) => {

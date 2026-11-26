@@ -60,9 +60,6 @@ export function SettingsPanel() {
     <div
       style={{ ...panelRoot, padding: "12px 10px", overflow: "hidden" }}
     >
-      <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 10px", color: "var(--cv-ink)", flexShrink: 0 }}>
-        Settings
-      </div>
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
       <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--cv-ink-dim)", padding: "0 12px 6px", textTransform: "uppercase", letterSpacing: 0.6 }}>
         Theme
@@ -170,7 +167,7 @@ export function SettingsPanel() {
                 background: "var(--cv-glass-hi)",
                 border: "1px solid var(--cv-glass-edge)",
                 fontSize: 9.5,
-                fontWeight: 650,
+                fontWeight: 600,
                 color: "var(--cv-ink)",
                 fontFamily: "var(--cv-mono, monospace)",
               }}

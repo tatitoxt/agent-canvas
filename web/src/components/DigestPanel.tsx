@@ -36,7 +36,7 @@ export function DigestPanel() {
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 650, color: "var(--cv-ink)" }}>Session digest</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cv-ink)" }}>Session digest</span>
           <div style={{ display: "flex", gap: 8 }}>
             <button className="glass-pill" style={{ fontSize: 10.5, padding: "4px 12px", cursor: "pointer", border: "none", color: "var(--cv-ink)" }} onClick={copy}>
               copy

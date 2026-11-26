@@ -1180,12 +1180,12 @@ function Board() {
             }}
           >
             <Icon name="draw" size={13} color="var(--cv-accent)" />
-            <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--cv-ink)" }}>Pencil</span>
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--cv-ink)" }}>Pencil</span>
             <span style={{ fontSize: 10, color: "var(--cv-ink-faint)", fontWeight: 500 }}>drag to mark up the canvas</span>
             <span style={{ width: 1, height: 16, background: "var(--cv-glass-edge)" }} />
             <button
               title="Clear every stroke"
-              style={{ border: "none", background: "transparent", fontSize: 10.5, padding: "4px 9px", cursor: "pointer", color: strokes.length ? "var(--cv-ink-dim)" : "var(--cv-ink-faint)", borderRadius: 999, fontWeight: 550 }}
+              style={{ border: "none", background: "transparent", fontSize: 10.5, padding: "4px 9px", cursor: "pointer", color: strokes.length ? "var(--cv-ink-dim)" : "var(--cv-ink-faint)", borderRadius: 999, fontWeight: 500 }}
               onClick={(e) => { e.stopPropagation(); setStrokes([]); }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
@@ -1202,7 +1202,7 @@ function Board() {
                 cursor: "pointer",
                 color: "var(--cv-accent)",
                 borderRadius: 999,
-                fontWeight: 650,
+                fontWeight: 600,
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
@@ -1402,7 +1402,7 @@ function Board() {
                 height: dragGhost.h,
                 border: "1.5px dashed var(--cv-accent)",
                 borderRadius: 14,
-                background: "rgba(201,162,107,0.08)",
+                background: "color-mix(in srgb, var(--cv-accent) 10%, transparent)",
                 pointerEvents: "none",
               }}
             />

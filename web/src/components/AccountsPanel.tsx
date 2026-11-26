@@ -114,19 +114,16 @@ export function AccountsPanel() {
     >
       <div
         style={{
-          fontSize: 12.5,
-          fontWeight: 650,
           padding: "0 12px 8px",
-          color: "var(--cv-ink)",
           display: "flex",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           alignItems: "center",
+          flexShrink: 0,
         }}
       >
-        Accounts
         <button
-          className="glass-pill"
-          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}
+          className="cv-mini-btn"
+          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", color: "var(--cv-accent)" }}
           onClick={() => setCreating((c) => !c)}
         >
           {creating ? "cancel" : "+ new"}
@@ -175,8 +172,8 @@ export function AccountsPanel() {
               agent's terminal and the login stays scoped to @{label.trim() || "label"}.
             </div>
             <button
-              className="glass-pill"
-              style={{ fontSize: 11.5, fontWeight: 600, padding: "6px 14px", cursor: "pointer", border: "none", color: "var(--cv-accent)", opacity: label.trim() ? 1 : 0.45, alignSelf: "flex-start" }}
+              className="cv-mini-btn"
+              style={{ fontSize: 11.5, fontWeight: 600, padding: "6px 14px", cursor: "pointer", color: "var(--cv-accent)", opacity: label.trim() ? 1 : 0.45, alignSelf: "flex-start" }}
               disabled={!label.trim()}
               onClick={() => {
                 createAccount(cli, label.trim(), env.trim() || undefined);

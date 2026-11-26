@@ -74,9 +74,6 @@ export function SkillsPanel() {
     <div
       style={{ ...panelRoot, padding: "12px 10px" }}
     >
-      <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 8px", color: "var(--cv-ink)" }}>
-        Skills
-      </div>
       <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", padding: "0 12px 10px" }}>
         one click → every agent in this board reads it via memory
       </div>
@@ -95,11 +92,10 @@ export function SkillsPanel() {
                 <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", lineHeight: 1.35 }}>{sk.blurb}</div>
               </div>
               <button
-                className="glass-pill"
+                className="cv-mini-btn"
                 disabled={isIn}
                 onClick={() => install(sk)}
                 style={{
-                  border: "none",
                   cursor: isIn ? "default" : "pointer",
                   fontSize: 10,
                   fontWeight: 600,

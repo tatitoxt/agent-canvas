@@ -21,13 +21,10 @@ const actionBtn: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 5,
-  border: "1px solid var(--cv-glass-edge)",
-  background: "var(--cv-glass-hi)",
   color: "var(--cv-ink)",
   fontSize: 10.5,
   fontWeight: 600,
   padding: "4px 10px",
-  borderRadius: 999,
   cursor: "pointer",
 };
 
@@ -882,7 +879,7 @@ export function GeneratePdfMenu({ onPick, onAsk }: {
           style={{
             display: "flex", alignItems: "center", gap: 10, width: "100%",
             padding: "8px 10px", border: "none", background: "transparent",
-            color: "var(--cv-ink)", fontSize: 12, fontWeight: 550,
+            color: "var(--cv-ink)", fontSize: 12, fontWeight: 500,
             borderRadius: 8, cursor: "pointer", textAlign: "left",
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
@@ -905,7 +902,7 @@ export function GeneratePdfMenu({ onPick, onAsk }: {
           placeholder="Ask for anything…"
           style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 10px", fontSize: 10.5, color: "var(--cv-ink)", outline: "none" }}
         />
-        <button type="submit" style={{ ...actionBtn, color: "var(--cv-accent)" }} title="Write a PDF about this from the board's state">→</button>
+        <button type="submit" className="cv-mini-btn" style={{ ...actionBtn, color: "var(--cv-accent)" }} title="Write a PDF about this from the board's state">→</button>
       </form>
     </div>
   );
@@ -1578,7 +1575,7 @@ export function VaultPanel() {
             placeholder="/path/to/vault"
             style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 999, padding: "5px 11px", fontSize: 10.5, color: "var(--cv-ink)", outline: "none", fontFamily: "var(--cv-font-mono)" }}
           />
-          <button className="glass-pill" style={{ fontSize: 10.5, padding: "4px 11px", cursor: "pointer", border: "none", color: "var(--cv-accent)", flexShrink: 0 }} type="submit">
+          <button className="cv-mini-btn" style={{ fontSize: 10.5, padding: "4px 11px", color: "var(--cv-accent)", flexShrink: 0 }} type="submit">
             open
           </button>
           <button
@@ -1828,10 +1825,11 @@ export function VaultPanel() {
               </span>
             )}
             <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
-              <button className="vault-board-action" style={actionBtn} title="Pin this live note as a resizable window on the board" onClick={pinCurrentNote}>
+              <button className="vault-board-action cv-mini-btn" style={actionBtn} title="Pin this live note as a resizable window on the board" onClick={pinCurrentNote}>
                 Add to Board
               </button>
               <button
+                className="cv-mini-btn"
                 style={actionBtn}
                 title="Spawn a Claude agent whose first instruction is this note"
                 onClick={() => {
@@ -1843,7 +1841,7 @@ export function VaultPanel() {
               >
                 ▶ task
               </button>
-              <button style={actionBtn} title="Export as PDF (saved to artifacts)" onClick={exportFile}>
+              <button className="cv-mini-btn" style={actionBtn} title="Export as PDF (saved to artifacts)" onClick={exportFile}>
                 <Icon name="ph-export" size={11} /> Export PDF
               </button>
               <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 14 }} onClick={closeVaultFile}>

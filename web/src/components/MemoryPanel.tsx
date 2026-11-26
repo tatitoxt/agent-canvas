@@ -33,20 +33,16 @@ export function MemoryPanel() {
     >
       <div
         style={{
-          fontSize: 12.5,
-          fontWeight: 650,
           padding: "0 12px 8px",
-          color: "var(--cv-ink)",
           display: "flex",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           alignItems: "center",
+          flexShrink: 0,
         }}
       >
-        Memory
-        <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
         <button
-          className="glass-pill"
-          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: dirty ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}
+          className="cv-mini-btn"
+          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", color: dirty ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}
           disabled={!dirty}
           onClick={() => {
             memoryWrite(scope, draft);
@@ -55,7 +51,6 @@ export function MemoryPanel() {
         >
           save
         </button>
-        </span>
       </div>
       <select
         value={scope}

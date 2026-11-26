@@ -66,11 +66,6 @@ const tinyBtn = (active: boolean): React.CSSProperties => ({
 });
 
 const sectionLabel: React.CSSProperties = {
-  fontSize: 8,
-  fontWeight: 700,
-  letterSpacing: 0.9,
-  color: "var(--cv-ink-faint)",
-  textTransform: "uppercase",
   padding: "1px 0 2px",
 };
 
@@ -84,7 +79,7 @@ const menuRow: React.CSSProperties = {
   background: "transparent",
   color: "var(--cv-ink)",
   fontSize: 12,
-  fontWeight: 550,
+  fontWeight: 500,
   textAlign: "left",
   cursor: "pointer",
   borderRadius: 8,
@@ -167,7 +162,7 @@ function SpacesBubble() {
 
   return (
     <nav className="glass" style={bubble}>
-      <div style={sectionLabel}>Spaces</div>
+      <div className="cv-section-label" style={sectionLabel}>Spaces</div>
       {Object.entries(boards).map(([id, n]) =>
         editing === id ? (
           renameInput(id)
@@ -265,7 +260,7 @@ function ExtrasBubble({ side, onSelect }: { side: "left" | "right"; onSelect: (k
             zIndex: 40,
           }}
         >
-          <div style={sectionLabel}>Extras</div>
+          <div className="cv-section-label" style={sectionLabel}>Extras</div>
           {[
             ["monitor", "VS Code", "bridge — soon"],
             ["vault", "Obsidian vault", "open vault panel"],
@@ -372,12 +367,12 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
           )}
         </span>
         <span style={{ flex: 1 }}>{t.label}</span>
-        {t.fact && <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)", fontWeight: 550 }}>{t.fact}</span>}
+        {t.fact && <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)", fontWeight: 500 }}>{t.fact}</span>}
         {!t.fact && !!t.badgeN && (
           <span
             style={{
               fontSize: 9.5,
-              fontWeight: 650,
+              fontWeight: 600,
               color: "var(--cv-ink-dim)",
               background: "var(--cv-glass-hi)",
               borderRadius: 999,
@@ -415,7 +410,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: expanded ? "space-between" : "center", padding: expanded ? "11px 8px 9px 14px" : "2px 0", width: expanded ? "100%" : undefined }}>
-          {expanded && <span style={{ fontSize: 13, fontWeight: 650, color: "var(--cv-ink)", letterSpacing: 0.2 }}>Library</span>}
+          {expanded && <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cv-ink)", letterSpacing: 0.2 }}>Library</span>}
           <button
             title={expanded ? "Collapse tools — icons only" : "Library — expand for panel names"}
             aria-label={expanded ? "Collapse Library" : "Expand Library"}
@@ -498,7 +493,7 @@ function OrchestratorsBubble() {
             zIndex: 40,
           }}
         >
-          <div style={sectionLabel}>Orchestrators</div>
+          <div className="cv-section-label" style={sectionLabel}>Orchestrators</div>
           {list.length === 0 && (
             <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
               none on this board
@@ -738,7 +733,7 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
               outline: "none",
               color: "var(--cv-ink)",
               fontSize: 12.5,
-              fontWeight: 550,
+              fontWeight: 500,
             }}
           />
           {SR && (

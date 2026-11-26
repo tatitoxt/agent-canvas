@@ -112,11 +112,7 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
       data-panel={kind}
       style={{ ...panelRoot, padding: "12px 10px" }}
     >
-      <div style={{ display: "flex", alignItems: "baseline", padding: "0 12px 8px" }}>
-        <span style={{ fontSize: 12.5, fontWeight: 650, color: "var(--cv-ink)" }}>
-          {kind === "prs" ? "Pull requests" : "Issues"}
-        </span>
-        <span style={{ flex: 1 }} />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "0 12px 8px", flexShrink: 0 }}>
         <span style={{ fontSize: 10, color: "var(--cv-ink-dim)", paddingLeft: 8 }}>{slug ?? "no repo"}</span>
         <button
           title="Open on github.com — this repo in your browser"
