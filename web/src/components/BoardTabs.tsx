@@ -176,7 +176,7 @@ export function BoardTabs() {
           const name = boards[activeBoard] ?? activeBoard;
           const rows = Object.values(st.agents)
             .filter((a) => (a.board_id ?? "main") === activeBoard)
-            .map((a) => `- **${a.name}** (${a.command ?? "?"}) — ${a.status}${a.lastLine ? `: ${a.lastLine}` : ""}`);
+            .map((a) => `- **${a.name}** (${a.command ?? "?"}) — ${a.status}${(st.activityLines[a.id] ?? a.lastLine) ? `: ${st.activityLines[a.id] ?? a.lastLine}` : ""}`);
           const dels = Object.values(st.edges).map(
             (e) => `- ${st.agents[e.from]?.name ?? e.from} → ${st.agents[e.to]?.name ?? e.to}: ${e.task} — *${e.state}*${e.result ? `\n  > ${e.result}` : ""}`,
           );

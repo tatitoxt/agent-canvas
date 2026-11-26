@@ -21,6 +21,7 @@ const ITEMS: { key: AgentStatus; label: string; color: string }[] = [
 export function MissionStrip({ counts, open, onToggle }: Props) {
   const connected = useBoard((s) => s.connected);
   const agents = useBoard((s) => s.agents);
+  const activityLines = useBoard((s) => s.activityLines);
   const activeBoard = useBoard((s) => s.activeBoard);
   const attention = useBoard((s) => s.attention);
   const setOpen = onToggle;
@@ -124,7 +125,7 @@ export function MissionStrip({ counts, open, onToggle }: Props) {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {a.lastLine ?? ""}
+                        {activityLines[a.id] ?? a.lastLine ?? ""}
                       </span>
                     </div>
                   ))}

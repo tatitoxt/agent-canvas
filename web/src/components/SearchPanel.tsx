@@ -16,6 +16,7 @@ export function SearchPanel({
 }) {
   const agents = useBoard((s) => s.agents);
   const ptyBuffers = useBoard((s) => s.ptyBuffers);
+  const activityLines = useBoard((s) => s.activityLines);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -29,17 +30,17 @@ export function SearchPanel({
       const buf = ptyBuffers[a.id];
       const text = buf ? clean(new TextDecoder().decode(buf)) : "";
       const at = text.toLowerCase().indexOf(q);
-      if (at === -1 && !a.name.toLowerCase().includes(q) && !(a.lastLine ?? "").toLowerCase().includes(q)) {
+      if (at === -1 && !a.name.toLowerCase().includes(q) && !((activityLines[a.id] ?? a.lastLine) ?? "").toLowerCase().includes(q)) {
         continue;
       }
       const snippet =
         at === -1
-          ? (a.lastLine ?? "")
+          ? ((activityLines[a.id] ?? a.lastLine) ?? "")
           : `…${text.slice(Math.max(0, at - 60), at + 90)}…`;
       out.push({ id: a.id, name: a.name, status: a.status, snippet });
     }
     return out;
-  }, [query, ptyBuffers, agents]);
+  }, [query, ptyBuffers, agents, activityLines]);
 
   return (
     <div

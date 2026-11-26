@@ -158,6 +158,41 @@ export function StatusBars({ color }: { color: string }) {
   );
 }
 
+function AgentTaskLine({ agentId, status, staticTask }: { agentId?: string; status: AgentNodeData["status"]; staticTask?: string }) {
+  const activityLine = useBoard((s) => (agentId ? s.activityLines[agentId] : undefined));
+  const task = staticTask ?? (status === "done" ? "session ended — transcript" : (activityLine ?? "live PTY — click to open"));
+  return (
+    <div
+      data-testid="agent-card-task"
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        gap: 9,
+        marginTop: 10,
+        paddingTop: 9,
+        borderTop: "1px solid var(--cv-hairline)",
+      }}
+    >
+      <span style={{ flex: "none", fontSize: "var(--cv-text-xs)", fontWeight: 700, color: "var(--cv-accent)" }}>Task</span>
+      <span
+        title={task}
+        style={{
+          minWidth: 0,
+          fontSize: "var(--cv-text-md)",
+          lineHeight: 1.45,
+          color: "var(--cv-text-main)",
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
+        {task}
+      </span>
+    </div>
+  );
+}
+
 export const AgentNode = memo(function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNodeData>>) {
   const meta = cliMeta(data.cli);
   const summaries = useBoard((s) => s.panelSummaries);
@@ -489,35 +524,8 @@ export const AgentNode = memo(function AgentNode({ id, data, selected, width }: 
           )}
         </div>
       )}
-      {summaries && data.task && (
-        <div
-          data-testid="agent-card-task"
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            gap: 9,
-            marginTop: 10,
-            paddingTop: 9,
-            borderTop: "1px solid var(--cv-hairline)",
-          }}
-        >
-          <span style={{ flex: "none", fontSize: "var(--cv-text-xs)", fontWeight: 700, color: "var(--cv-accent)" }}>Task</span>
-          <span
-            title={data.task}
-            style={{
-              minWidth: 0,
-              fontSize: "var(--cv-text-md)",
-              lineHeight: 1.45,
-              color: "var(--cv-text-main)",
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {data.task}
-          </span>
-        </div>
+      {summaries && (data.task || data.id) && (
+        <AgentTaskLine agentId={data.id} status={data.status} staticTask={data.task} />
       )}
       {summaries && data.id && <MiniTerm agentId={data.id} />}
       {data.id && (

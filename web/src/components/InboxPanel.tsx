@@ -27,6 +27,7 @@ const groupLabel: React.CSSProperties = {
  * waiting on input, blocked runs, delegations still in flight. */
 export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void }) {
   const agents = useBoard((s) => s.agents);
+  const activityLines = useBoard((s) => s.activityLines);
   const edges = useBoard((s) => s.edges);
   const approvals = useBoard((s) => s.approvals);
   const attention = useBoard((s) => s.attention);
@@ -191,7 +192,7 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                 <button style={{ ...rowStyle, flex: 1 }} className="inbox-row" onClick={() => onOpenAgent(a.id)}>
                   <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600 }}>{a.name}</span>
                   <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {a.lastLine ?? (a.status === "blocked" ? "blocked" : "waiting for input")}
+                    {activityLines[a.id] ?? a.lastLine ?? (a.status === "blocked" ? "blocked" : "waiting for input")}
                   </span>
                 </button>
                 <button

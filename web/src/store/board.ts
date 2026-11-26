@@ -406,6 +406,9 @@ export const PERMISSION_LEVELS = [
 type BoardState = {
   connected: boolean;
   agents: Record<string, LiveAgent>;
+  /** Latest terminal activity line per agent. Kept outside `agents` so a busy
+   * terminal does not rewrite every agent object — and with it every canvas node. */
+  activityLines: Record<string, string>;
   /** Board id → name (multiple canvases); "main" always exists. */
   boards: Record<string, string>;
   activeBoard: string;
@@ -753,6 +756,7 @@ const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
 export const useBoard = create<BoardState>((set, get) => ({
   connected: false,
   agents: {},
+  activityLines: {},
   boards: { main: "Main" },
   activeBoard: "main",
   edges: {},
@@ -1029,16 +1033,26 @@ export const useBoard = create<BoardState>((set, get) => ({
                   activityFlush = null;
                   const batch = pendingActivity;
                   pendingActivity = {};
-                  const cur = get().agents;
-                  const next = { ...cur };
+                  const curLines = get().activityLines;
+                  let linesChanged = false;
+                  const activityLines = { ...curLines };
+                  let attentionChanged = false;
                   const attention = { ...get().attention };
                   for (const [aid, line] of Object.entries(batch)) {
-                    if (cur[aid]) {
-                      next[aid] = { ...cur[aid], lastLine: line };
+                    if (!get().agents[aid]) continue;
+                    if (activityLines[aid] !== line) {
+                      activityLines[aid] = line;
+                      linesChanged = true;
+                    }
+                    if (attention[aid]) {
                       delete attention[aid];
+                      attentionChanged = true;
                     }
                   }
-                  set({ agents: next, attention });
+                  const patch: Partial<BoardState> = {};
+                  if (linesChanged) patch.activityLines = activityLines;
+                  if (attentionChanged) patch.attention = attention;
+                  if (Object.keys(patch).length > 0) set(patch);
                 }, 400);
               }
             }
