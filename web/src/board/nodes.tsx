@@ -1,5 +1,5 @@
 import { Handle, Position, NodeResizer, useReactFlow, type NodeProps, type Node } from "@xyflow/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { CliMark } from "../components/CliMark";
 import { Icon } from "../components/icons";
 import { useBoard } from "../store/board";
@@ -158,7 +158,7 @@ export function StatusBars({ color }: { color: string }) {
   );
 }
 
-export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNodeData>>) {
+export const AgentNode = memo(function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNodeData>>) {
   const meta = cliMeta(data.cli);
   const summaries = useBoard((s) => s.panelSummaries);
   const customSize = useBoard((s) => s.agentSizes[data.id ?? id]);
@@ -742,7 +742,7 @@ export function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNod
       <Handle type="source" position={Position.Right} />
     </div>
   );
-}
+});
 
 /** Live uptime for agents spawned this session (restored ones show nothing —
  * their real start predates the window). Ticks once a minute. */
