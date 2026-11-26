@@ -62,6 +62,16 @@
   --cv-control-divider: color-mix(in srgb, var(--cv-ink) 6%, transparent);
   --cv-minimap-mask: rgba(10, 11, 14, 0.55);
   --cv-minimap-node-stroke: color-mix(in srgb, var(--cv-ink) 25%, transparent);
+  /* Minimap type palette — saturated enough to survive the tiny scale and
+     the viewport dimming mask, still inside the app's muted accent family. */
+  --cv-minimap-node-term: #f5a524;
+  --cv-minimap-node-agent: #34c77b;
+  --cv-minimap-node-panel: #9a8af2;
+  --cv-minimap-node-note: #4aa3f0;
+  --cv-minimap-node-web: #28c4d3;
+  --cv-minimap-node-orchestrator: #d977b8;
+  --cv-minimap-node-workspace: #46536a;
+  --cv-minimap-node-shape: #e86f61;
 
   /* Deska accent and state palette. */
   --cv-accent: #f5a524;
@@ -428,6 +438,19 @@ body,
   overflow: hidden;
   border: 1px solid var(--cv-glass-edge);
 }
+.react-flow__minimap-node {
+  cursor: pointer;
+  transition: filter var(--cv-motion-fast) var(--cv-ease-out);
+}
+.react-flow__minimap-node:hover {
+  filter: brightness(1.2) saturate(1.08);
+}
+.react-flow__minimap-node.selected {
+  filter: brightness(1.1) saturate(1.05) drop-shadow(0 0 1px var(--cv-ink));
+}
+.react-flow__minimap-node.selected:hover {
+  filter: brightness(1.22) saturate(1.08) drop-shadow(0 0 1px var(--cv-ink));
+}
 
 /* ---------- xterm ---------- */
 
@@ -579,6 +602,14 @@ button.cv-card-close:hover,
   --cv-control-divider: rgba(35, 33, 29, 0.09);
   --cv-minimap-mask: rgba(63, 47, 25, 0.12);
   --cv-minimap-node-stroke: rgba(35, 33, 29, 0.22);
+  --cv-minimap-node-term: #d97706;
+  --cv-minimap-node-agent: #16804f;
+  --cv-minimap-node-panel: #6f5bd7;
+  --cv-minimap-node-note: #1f6fc5;
+  --cv-minimap-node-web: #0f8496;
+  --cv-minimap-node-orchestrator: #ad3f8d;
+  --cv-minimap-node-workspace: #7a8497;
+  --cv-minimap-node-shape: #c34f42;
   --cv-accent: #d97706;
   --cv-accent-dim: rgba(217, 119, 6, 0.14);
   --cv-working: #16a34a;

@@ -46,7 +46,8 @@ import { isTauri } from "./daemon/tauriClient";
 import { PaneMenu } from "./components/PaneMenu";
 import { TermNode } from "./board/TermNode";
 import { getAgentSpawnPositions, useBoard } from "./store/board";
-import type { AgentStatus, BoardNodeData } from "./board/types";
+import { minimapNodeColor } from "./board/minimap";
+import type { BoardNodeData } from "./board/types";
 
 const nodeTypes = {
   agent: AgentNode,
@@ -1341,22 +1342,7 @@ function Board() {
           className="!bg-[var(--cv-base)]"
           maskStrokeWidth={1.5}
           nodeStrokeWidth={1}
-          nodeColor={(n) => {
-            const data = n.data as Partial<BoardNodeData>;
-            if (data.kind === "orchestrator") return "#f5a524";
-            if (data.kind === "workspace") return "#1d1d20";
-            if (data.kind === "agent" && data.status) {
-              const map: Record<AgentStatus, string> = {
-                working: "#34c77b",
-                waiting: "#e5a01a",
-                blocked: "#e2604a",
-                done: "#34c77b",
-                idle: "#55565c",
-              };
-              return map[data.status] ?? "#33333a";
-            }
-            return "#33333a";
-          }}
+          nodeColor={minimapNodeColor}
           onClick={(_e, pos) => setCenter(pos.x, pos.y, { zoom: getZoom(), duration: 250 })}
           onNodeClick={(_e, node) =>
             setCenter(node.position.x + (node.measured?.width ?? 0) / 2, node.position.y + (node.measured?.height ?? 0) / 2, { zoom: Math.max(getZoom(), 0.9), duration: 250 })
