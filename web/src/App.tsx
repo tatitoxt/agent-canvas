@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toPng } from "html-to-image";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MiniMap,
   ReactFlow,
@@ -23,31 +22,41 @@ import { edgePoint, obstacleRects, segmentHitsRect, type Rect } from "./componen
 import { MdNode } from "./components/MdNode";
 import { DelegationEdge } from "./board/edges";
 import { initialEdges, initialNodes } from "./board/mockData";
-import { DelegateDialog } from "./components/DelegateDialog";
 import { NavRail, RightRail, BottomDock } from "./components/NavRail";
 import { Icon } from "./components/icons";
 import { SpawnBar } from "./components/SpawnBar";
-import { TerminalPanel } from "./components/TerminalPanel";
 import { PanelNode } from "./board/PanelNode";
 import { PANEL_DEFS } from "./components/panelRegistry";
 import { PanelActionsCtx } from "./components/panelCtx";
-import { StudioPanel } from "./components/StudioPanel";
-import { DigestPanel } from "./components/DigestPanel";
 import { NoticePill } from "./components/NoticePill";
 
-import { CommandPalette } from "./components/CommandPalette";
-
-import { DelegationPanel } from "./components/DelegationPanel";
-import { SearchPanel } from "./components/SearchPanel";
 import { Topbar } from "./components/Topbar";
-import { ContextMenu } from "./components/ContextMenu";
-import { CardMenu } from "./components/CardMenu";
 import { isTauri } from "./daemon/tauriClient";
-import { PaneMenu } from "./components/PaneMenu";
 import { TermNode } from "./board/TermNode";
 import { getAgentSpawnPositions, useBoard } from "./store/board";
 import { minimapNodeColor } from "./board/minimap";
 import type { BoardNodeData } from "./board/types";
+
+/** On-demand overlays: each ships in its own chunk and loads the first time
+ * the user actually opens it. All of them are absolutely-positioned floating
+ * UI, so a couple of empty frames (fallback null) is invisible — there is no
+ * layout to shift. */
+const TerminalPanel = lazy(() => import("./components/TerminalPanel").then((m) => ({ default: m.TerminalPanel })));
+const DelegationPanel = lazy(() => import("./components/DelegationPanel").then((m) => ({ default: m.DelegationPanel })));
+const SearchPanel = lazy(() => import("./components/SearchPanel").then((m) => ({ default: m.SearchPanel })));
+const CommandPalette = lazy(() => import("./components/CommandPalette").then((m) => ({ default: m.CommandPalette })));
+const DelegateDialog = lazy(() => import("./components/DelegateDialog").then((m) => ({ default: m.DelegateDialog })));
+const ContextMenu = lazy(() => import("./components/ContextMenu").then((m) => ({ default: m.ContextMenu })));
+const CardMenu = lazy(() => import("./components/CardMenu").then((m) => ({ default: m.CardMenu })));
+const PaneMenu = lazy(() => import("./components/PaneMenu").then((m) => ({ default: m.PaneMenu })));
+const DigestPanel = lazy(() => import("./components/DigestPanel").then((m) => ({ default: m.DigestPanel })));
+const StudioPanel = lazy(() => import("./components/StudioPanel").then((m) => ({ default: m.StudioPanel })));
+
+/** One boundary per overlay: a first-open chunk fetch must never blank the
+ * rest of the canvas chrome, so each lazy overlay suspends alone. */
+function Overlay({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={null}>{children}</Suspense>;
+}
 
 const nodeTypes = {
   agent: AgentNode,
@@ -175,6 +184,8 @@ function Board() {
   const termNodes = useBoard((s) => s.termNodes);
   const cardZ = useBoard((s) => s.cardZ);
   const wiringFrom = useBoard((s) => s.wiringFrom);
+  const digestOpen = useBoard((s) => s.digest != null);
+  const studioOpen = useBoard((s) => s.studioDoc != null);
   const toggleWire = useBoard((s) => s.toggleWire);
   const setWiring = useBoard((s) => s.setWiring);
   const { screenToFlowPosition, fitView, getNodes, getZoom, zoomTo, setNodes, setCenter } = useReactFlow();
@@ -223,6 +234,7 @@ function Board() {
     const vp = getViewportForBounds(bounds, w, h, 0.2, 2, 0.12);
     const el = document.querySelector<HTMLElement>(".react-flow__viewport");
     if (!el) return;
+    const { toPng } = await import("html-to-image");
     const dataUrl = await toPng(el, {
       backgroundColor: "#0e0e10",
       width: w,
@@ -388,6 +400,7 @@ function Board() {
     const w = Math.min(2400, Math.max(400, Math.ceil(bounds.width) + 160));
     const h = Math.min(2400, Math.max(300, Math.ceil(bounds.height) + 160));
     const v = getViewportForBounds(bounds, w, h, 0.2, 2, 0.12);
+    const { toPng } = await import("html-to-image");
     const dataUrl = await toPng(vp, {
       backgroundColor: "#0e0e10",
       width: w,
@@ -1371,8 +1384,8 @@ function Board() {
         )}
       </ReactFlow>
       {connected === false && null}
-      <DigestPanel />
-      <StudioPanel />
+      {digestOpen && <Overlay><DigestPanel /></Overlay>}
+      {studioOpen && <Overlay><StudioPanel /></Overlay>}
       <NoticePill />
       {sel.length >= 2 && !chromeHidden && (
         <button
@@ -1408,10 +1421,10 @@ function Board() {
         </button>
       )}
       {paneMenu && (
-        <PaneMenu x={paneMenu.x} y={paneMenu.y} onClose={() => setPaneMenu(null)} />
+        <Overlay><PaneMenu x={paneMenu.x} y={paneMenu.y} onClose={() => setPaneMenu(null)} /></Overlay>
       )}
       {cardMenu && (
-        <CardMenu
+        <Overlay><CardMenu
           x={cardMenu.x}
           y={cardMenu.y}
           nodeId={cardMenu.id}
@@ -1421,7 +1434,7 @@ function Board() {
               : undefined
           }
           onClose={() => setCardMenu(null)}
-        />
+        /></Overlay>
       )}
       {shapeMenu && (
         <div
@@ -1460,7 +1473,7 @@ function Board() {
         </div>
       )}
       {menu && (
-        <ContextMenu
+        <Overlay><ContextMenu
           x={menu.x}
           y={menu.y}
           nodeId={menu.id}
@@ -1471,36 +1484,37 @@ function Board() {
             if (a) openTerm({ id: a.id, name: a.name });
           }}
           onClose={() => setMenu(null)}
-        />
+        /></Overlay>
       )}
 
       {edgeDetail && liveEdges[edgeDetail] && (
-        <DelegationPanel
+        <Overlay><DelegationPanel
           edgeId={edgeDetail}
           onClose={() => setEdgeDetail(null)}
           onOpenAgent={(id, name) => openTerm({ id, name })}
-        />
+        /></Overlay>
       )}
       {openTerms.map((t, i) => (
-        <TerminalPanel
-          key={t.id}
-          agentId={t.id}
-          name={t.name}
-          index={i}
-          onClose={closeTerm}
-        />
+        <Overlay key={t.id}>
+          <TerminalPanel
+            agentId={t.id}
+            name={t.name}
+            index={i}
+            onClose={closeTerm}
+          />
+        </Overlay>
       ))}
       {search && (
-        <SearchPanel
+        <Overlay><SearchPanel
           onClose={() => setSearch(false)}
           onOpenAgent={(id, name) => {
             openTerm({ id, name });
             setSearch(false);
           }}
-        />
+        /></Overlay>
       )}
       {palette && (
-        <CommandPalette
+        <Overlay><CommandPalette
           onClose={() => setPalette(false)}
           onNav={(k) => {
             // Palette commands are explicit open/focus actions. Keep rail
@@ -1521,10 +1535,10 @@ function Board() {
             openTerm({ id, name });
             setPalette(false);
           }}
-        />
+        /></Overlay>
       )}
       {delegateFrom && (
-        <DelegateDialog from={delegateFrom.from} at={delegateFrom.at} onClose={() => setDelegateFrom(null)} />
+        <Overlay><DelegateDialog from={delegateFrom.from} at={delegateFrom.at} onClose={() => setDelegateFrom(null)} /></Overlay>
       )}
     </div>
     </PanelActionsCtx.Provider>

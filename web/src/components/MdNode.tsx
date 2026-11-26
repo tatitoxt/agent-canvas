@@ -1,9 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { NodeResizer, type NodeProps, type Node } from "@xyflow/react";
 import type { MdNodeData } from "../board/types";
-import { ReadingView, resolveNotePath } from "./VaultPanel";
+import { resolveNotePath } from "./notePath";
 import { useBoard } from "../store/board";
 import { Icon } from "./icons";
+
+/** The Obsidian-style reading view is the heavy half of the old VaultPanel —
+ * it lazy-loads so vault rendering stays out of the base canvas bundle.
+ * Notes show the same "Loading note…" filler they already use while the
+ * vault fetch is in flight, so the swap is invisible in practice. */
+const ReadingView = lazy(() =>
+  import("./noteView").then((m) => ({ default: m.ReadingView })),
+);
+
+const noteLoading = (
+  <div style={{ padding: 12, color: "var(--cv-ink-faint)", fontSize: "var(--cv-text-xxs)" }}>Loading note…</div>
+);
 
 /** A live Obsidian vault note pinned as an interactive canvas window. */
 const POLL_MS = 4000;
@@ -84,11 +96,13 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
           style={{ flex: 1, minHeight: 0, width: "100%", boxSizing: "border-box", resize: "none", border: 0, outline: 0, padding: "14px 16px", background: "var(--cv-bg)", color: "var(--cv-text-main)", font: "13px/1.65 var(--cv-font-mono, ui-monospace, monospace)" }}
         />
       ) : (
-        <ReadingView text={text} entries={entries} onLink={openLinkedNote}
-          embedLookup={resolveEmbed}
-          embedFetch={(path) => useBoard.getState().vaultPeek(path)}
-          embedAsset={(path) => useBoard.getState().vaultAssets[path]}
-          embedAssetFetch={(path) => useBoard.getState().vaultAsset(path)} />
+        <Suspense fallback={noteLoading}>
+          <ReadingView text={text} entries={entries} onLink={openLinkedNote}
+            embedLookup={resolveEmbed}
+            embedFetch={(path) => useBoard.getState().vaultPeek(path)}
+            embedAsset={(path) => useBoard.getState().vaultAssets[path]}
+            embedAssetFetch={(path) => useBoard.getState().vaultAsset(path)} />
+        </Suspense>
       )}
     </div>
   );

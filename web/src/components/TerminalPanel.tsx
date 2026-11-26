@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 
-import { TermHost } from "./TermHost";
+import { LazyTermHost as TermHost } from "./LazyTermHost";
 import { useBoard } from "../store/board";
 import { CliMark } from "./CliMark";
 import { announcedModel, STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "../board/nodes";
