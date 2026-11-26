@@ -21,6 +21,7 @@ const ITEMS: { key: AgentStatus; label: string; color: string }[] = [
 export function MissionStrip({ counts, open, onToggle }: Props) {
   const connected = useBoard((s) => s.connected);
   const agents = useBoard((s) => s.agents);
+  const activityLines = useBoard((s) => s.activityLines);
   const activeBoard = useBoard((s) => s.activeBoard);
   const attention = useBoard((s) => s.attention);
   const setOpen = onToggle;
@@ -36,10 +37,10 @@ export function MissionStrip({ counts, open, onToggle }: Props) {
     );
 
   const rows: { label: string; color: string; list: (typeof agents)[string][] }[] = [
-    { label: "needs you", color: "var(--cv-waiting)", list: grouped("waiting") },
-    { label: "blocked", color: "var(--cv-blocked)", list: grouped("blocked") },
-    { label: "working", color: "var(--cv-working)", list: grouped("working") },
-    { label: "resting", color: "var(--cv-done)", list: grouped("done") },
+    { label: "Needs you", color: "var(--cv-waiting)", list: grouped("waiting") },
+    { label: "Blocked", color: "var(--cv-blocked)", list: grouped("blocked") },
+    { label: "Working", color: "var(--cv-working)", list: grouped("working") },
+    { label: "Resting", color: "var(--cv-done)", list: grouped("done") },
   ];
 
   return (
@@ -60,18 +61,18 @@ export function MissionStrip({ counts, open, onToggle }: Props) {
       onClick={() => setOpen()}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <span style={{ fontSize: 12, fontWeight: 650, letterSpacing: 0.3, marginRight: 2 }}>
+        <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600, letterSpacing: 0.3, marginRight: 2 }}>
           canvas
         </span>
         {ITEMS.map(({ key, label, color }) => (
-          <span key={key} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11 }}>
+          <span key={key} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "var(--cv-text-xxs)" }}>
             <span className="status-dot" style={{ background: color }} />
             <span style={{ fontWeight: 600, color }}>{counts[key] ?? 0}</span>
             <span style={{ color: "var(--cv-ink-faint)" }}>{label}</span>
           </span>
         ))}
         {!connected && (
-          <span style={{ fontSize: 10.5, color: "var(--cv-ink-faint)" }}>demo</span>
+          <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>demo</span>
         )}
       </div>
       {open && (
@@ -94,11 +95,10 @@ export function MissionStrip({ counts, open, onToggle }: Props) {
                 <div key={r.label}>
                   <div
                     style={{
-                      fontSize: 9.5,
-                      fontWeight: 700,
+                      fontSize: "var(--cv-text-xxs)",
+                      fontWeight: 400,
                       color: r.color,
-                      textTransform: "uppercase",
-                      letterSpacing: 0.8,
+                      letterSpacing: "0.02em",
                       marginBottom: 3,
                     }}
                   >
@@ -110,7 +110,7 @@ export function MissionStrip({ counts, open, onToggle }: Props) {
                       style={{
                         display: "flex",
                         gap: 8,
-                        fontSize: 11,
+                        fontSize: "var(--cv-text-xxs)",
                         color: "var(--cv-ink)",
                         padding: "2px 0",
                         alignItems: "baseline",
@@ -125,7 +125,7 @@ export function MissionStrip({ counts, open, onToggle }: Props) {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {a.lastLine ?? ""}
+                        {activityLines[a.id] ?? a.lastLine ?? ""}
                       </span>
                     </div>
                   ))}
@@ -133,7 +133,7 @@ export function MissionStrip({ counts, open, onToggle }: Props) {
               ),
           )}
           {rows.every((r) => r.list.length === 0) && (
-            <div style={{ fontSize: 11, color: "var(--cv-ink-dim)" }}>no agents on this board</div>
+            <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>no agents on this board</div>
           )}
         </div>
       )}

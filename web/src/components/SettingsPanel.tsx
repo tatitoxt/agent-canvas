@@ -20,12 +20,11 @@ const SHORTCUTS: [string, string][] = [
 ];
 
 const label: React.CSSProperties = {
-  fontSize: 10.5,
-  fontWeight: 600,
+  fontSize: "var(--cv-text-xxs)",
+  fontWeight: 400,
   color: "var(--cv-ink-dim)",
   padding: "8px 12px 6px",
-  textTransform: "uppercase",
-  letterSpacing: 0.6,
+  letterSpacing: "0.02em",
 };
 
 const rowBtn: React.CSSProperties = {
@@ -33,7 +32,7 @@ const rowBtn: React.CSSProperties = {
   padding: "7px 6px",
   border: "none",
   cursor: "pointer",
-  fontSize: 10.5,
+  fontSize: "var(--cv-text-xxs)",
   color: "var(--cv-ink)",
 };
 
@@ -51,25 +50,28 @@ export function SettingsPanel() {
   const moveHistory = useBoard((s) => s.moveHistory);
   const panelSummaries = useBoard((s) => s.panelSummaries);
   const togglePanelSummaries = useBoard((s) => s.togglePanelSummaries);
+  const snapAlign = useBoard((s) => s.snapAlign);
+  const toggleSnapAlign = useBoard((s) => s.toggleSnapAlign);
   const vaultDir = useBoard((s) => s.vaultDir);
   const supported = typeof Notification !== "undefined";
   const [perm, setPerm] = useState<NotificationPermission>(supported ? Notification.permission : "denied");
   const [cleared, setCleared] = useState<number | null>(null);
+  const [importFeedback, setImportFeedback] = useState<string | null>(null);
   return (
     <div
       style={{ ...panelRoot, padding: "12px 10px", overflow: "hidden" }}
     >
-      <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 10px", color: "var(--cv-ink)", flexShrink: 0 }}>
-        Settings
-      </div>
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
-      <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--cv-ink-dim)", padding: "0 12px 6px", textTransform: "uppercase", letterSpacing: 0.6 }}>
+      <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 400, color: "var(--cv-ink-dim)", padding: "0 12px 6px", letterSpacing: "0.02em" }}>
         Theme
       </div>
       <div style={{ display: "flex", gap: 8, padding: "0 12px 8px" }}>
         {THEMES.map((t) => (
           <button
             key={t.key}
+            aria-pressed={theme === t.key}
+            aria-label={`Use ${t.label} theme`}
+            title={`Use ${t.label} theme`}
             onClick={() => setTheme(t.key)}
             className="glass"
             style={{
@@ -85,20 +87,22 @@ export function SettingsPanel() {
             }}
           >
             <span style={{ width: 26, height: 26, borderRadius: 8, background: t.sw, border: "1px solid var(--cv-glass-edge)" }} />
-            <span style={{ fontSize: 10.5, color: "var(--cv-ink)" }}>{t.label}</span>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)" }}>{t.label}</span>
           </button>
         ))}
       </div>
       <div style={label}>Terminal font</div>
       <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>
-        <button className="glass" style={{ ...rowBtn, flex: 0, padding: "7px 14px" }} onClick={() => bumpFont(-1)}>−</button>
-        <span style={{ flex: 1, textAlign: "center", fontSize: 11, color: "var(--cv-ink)" }}>{termFont}px</span>
-        <button className="glass" style={{ ...rowBtn, flex: 0, padding: "7px 14px" }} onClick={() => bumpFont(1)}>+</button>
+        <button aria-label="Decrease terminal font" className="glass" style={{ ...rowBtn, flex: 0, padding: "7px 14px" }} onClick={() => bumpFont(-1)} disabled={termFont <= 9}>−</button>
+        <span role="status" aria-label={`Terminal font ${termFont} pixels`} style={{ flex: 1, textAlign: "center", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)" }}>{termFont}px</span>
+        <button aria-label="Increase terminal font" className="glass" style={{ ...rowBtn, flex: 0, padding: "7px 14px" }} onClick={() => bumpFont(1)} disabled={termFont >= 22}>+</button>
       </div>
       <div style={label}>Canvas</div>
       <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ flex: 1, fontSize: 10.5, color: "var(--cv-ink-dim)" }}>card summaries under titles</span>
+        <span style={{ flex: 1, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>card summaries under titles</span>
         <button
+          aria-label={`Card summaries ${panelSummaries ? "on" : "off"}`}
+          aria-pressed={panelSummaries}
           className="glass"
           style={{ ...rowBtn, flex: 0, padding: "7px 12px", outline: panelSummaries ? "1.5px solid var(--cv-accent)" : "none" }}
           onClick={() => togglePanelSummaries()}
@@ -106,9 +110,21 @@ export function SettingsPanel() {
           {panelSummaries ? "on" : "off"}
         </button>
       </div>
+      <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ flex: 1, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>alignment snap when dropping cards</span>
+        <button
+          aria-label={`Alignment snap ${snapAlign ? "on" : "off"}`}
+          aria-pressed={snapAlign}
+          className="glass"
+          style={{ ...rowBtn, flex: 0, padding: "7px 12px", outline: snapAlign ? "1.5px solid var(--cv-accent)" : "none" }}
+          onClick={() => toggleSnapAlign()}
+        >
+          {snapAlign ? "on" : "off"}
+        </button>
+      </div>
       <div style={label}>Vault</div>
       <div style={{ padding: "0 12px 8px", display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ flex: 1, fontSize: 10.5, color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={vaultDir || "no vault mounted"}>
+        <span style={{ flex: 1, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={vaultDir || "no vault mounted"}>
           {vaultDir || "no vault mounted — use the vault panel"}
         </span>
       </div>
@@ -123,7 +139,7 @@ export function SettingsPanel() {
             flexShrink: 0,
           }}
         />
-        <span style={{ flex: 1, fontSize: 10.5, color: "var(--cv-ink-dim)" }}>
+        <span style={{ flex: 1, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
           {connected ? "connected — canvasd is driving agents" : "offline — agents can't spawn"}
         </span>
         {!connected && (
@@ -135,11 +151,12 @@ export function SettingsPanel() {
       <div style={label}>Canvas</div>
       <div style={{ padding: "0 12px 8px", display: "flex", gap: 8 }}>
         <button
+          aria-label="Clear exited agents"
           className="glass"
           style={rowBtn}
           onClick={() => setCleared(clearDone())}
         >
-          {cleared == null ? "clear done agents" : cleared > 0 ? `cleared ${cleared}` : "nothing to clear"}
+          {cleared == null ? "clear exited agents" : cleared > 0 ? `cleared ${cleared} exited` : "no exited agents"}
         </button>
         <button
           className="glass"
@@ -162,15 +179,15 @@ export function SettingsPanel() {
                 borderRadius: 5,
                 background: "var(--cv-glass-hi)",
                 border: "1px solid var(--cv-glass-edge)",
-                fontSize: 9.5,
-                fontWeight: 650,
+                fontSize: "var(--cv-text-xxs)",
+                fontWeight: 600,
                 color: "var(--cv-ink)",
                 fontFamily: "var(--cv-mono, monospace)",
               }}
             >
               {k}
             </span>
-            <span style={{ fontSize: 10, color: "var(--cv-ink-dim)" }}>{what}</span>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>{what}</span>
           </div>
         ))}
       </div>
@@ -189,7 +206,7 @@ export function SettingsPanel() {
             padding: "7px 6px",
             border: "none",
             cursor: supported && perm !== "denied" ? "pointer" : "default",
-            fontSize: 10.5,
+            fontSize: "var(--cv-text-xxs)",
             color: "var(--cv-ink)",
             opacity: !supported || perm === "denied" ? 0.5 : 1,
           }}
@@ -203,14 +220,15 @@ export function SettingsPanel() {
                 : "enable alerts"}
         </button>
       </div>
-      <div style={{ fontSize: 9.5, color: "var(--cv-ink-dim)", padding: "0 12px 6px", lineHeight: 1.4 }}>
+      <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", padding: "0 12px 6px", lineHeight: 1.4 }}>
         Pings you when an agent needs approval or a delegation returns — only while this tab is in the background.
       </div>
-      <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--cv-ink-dim)", padding: "8px 12px 6px", textTransform: "uppercase", letterSpacing: 0.6 }}>
+      <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 400, color: "var(--cv-ink-dim)", padding: "8px 12px 6px", letterSpacing: "0.02em" }}>
         Board data
       </div>
       <div style={{ padding: "0 12px 8px", display: "flex", gap: 8 }}>
         <button
+          aria-label="Export board settings as JSON"
           onClick={() => {
             const data: Record<string, string> = {};
             for (let i = 0; i < localStorage.length; i++) {
@@ -222,39 +240,51 @@ export function SettingsPanel() {
             a.href = URL.createObjectURL(blob);
             a.download = "canvas-export.json";
             a.click();
-            URL.revokeObjectURL(a.href);
+            window.setTimeout(() => URL.revokeObjectURL(a.href), 0);
           }}
           className="glass"
-          style={{ flex: 1, padding: "7px 6px", border: "none", cursor: "pointer", fontSize: 10.5, color: "var(--cv-ink)" }}
+          style={{ flex: 1, padding: "7px 6px", border: "none", cursor: "pointer", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)" }}
         >
           export json
         </button>
         <label
           className="glass"
-          style={{ flex: 1, padding: "7px 6px", fontSize: 10.5, color: "var(--cv-ink)", textAlign: "center", cursor: "pointer" }}
+          style={{ flex: 1, padding: "7px 6px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)", textAlign: "center", cursor: "pointer" }}
         >
           import json
           <input
+            aria-label="Import board settings JSON"
             type="file"
             accept="application/json"
             style={{ display: "none" }}
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (!f) return;
+              const input = e.currentTarget;
               void f.text().then((t) => {
                 try {
-                  const j = JSON.parse(t) as { data?: Record<string, string> };
-                  for (const [k, v] of Object.entries(j.data ?? {})) {
-                    if (k.startsWith("cv-") && typeof v === "string") localStorage.setItem(k, v);
+                  const j: unknown = JSON.parse(t);
+                  if (!j || typeof j !== "object" || (j as { app?: unknown }).app !== "agent-canvas" || ![1, 2].includes((j as { v?: number }).v ?? -1)) {
+                    throw new Error("This file is not a supported Agent Canvas export.");
                   }
+                  const data = (j as { data?: unknown }).data;
+                  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("The export is missing its settings data.");
+                  const entries = Object.entries(data as Record<string, unknown>);
+                  if (entries.some(([k, v]) => !k.startsWith("cv-") || typeof v !== "string")) throw new Error("The export contains invalid settings.");
+                  for (const [k, v] of entries) localStorage.setItem(k, v as string);
+                  setImportFeedback(`Imported ${entries.length} settings. Reloading…`);
                   location.reload();
-                } catch { /* bad file — ignore */ }
-              });
+                } catch (error) {
+                  setImportFeedback(error instanceof Error ? error.message : "Could not read this settings file.");
+                  input.value = "";
+                }
+              }).catch(() => setImportFeedback("Could not read this settings file."));
             }}
           />
         </label>
       </div>
-      <div style={{ fontSize: 9.5, color: "var(--cv-ink-dim)", padding: "0 12px 6px", lineHeight: 1.4 }}>
+      {importFeedback && <div role="status" style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-accent)", padding: "0 12px 6px" }}>{importFeedback}</div>}
+      <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", padding: "0 12px 6px", lineHeight: 1.4 }}>
         Carries your presets, shapes, notes, thread and theme between machines — canvas layouts live in the daemon's .canvas/board.db.
       </div>
       </div>

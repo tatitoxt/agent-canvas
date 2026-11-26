@@ -48,21 +48,45 @@ impl Agent {
         }
         let tail = self.tail.lock().unwrap();
         let text = String::from_utf8_lossy(&tail);
-        let last_line = text.lines().last().unwrap_or("").trim_end();
-        let promptish = last_line.ends_with('$')
-            || last_line.ends_with('#')
-            || last_line.ends_with('>')
-            || last_line.ends_with(":?")
-            || last_line.contains("(y/n)")
-            || last_line.contains("[Y/n]")
-            || last_line.contains("Allow")
-            || last_line.contains("approve");
-        if promptish {
+        if looks_like_waiting_prompt(&text) {
             "waiting"
         } else {
             "idle"
         }
     }
+}
+
+/// Detect an interactive CLI or shell prompt from the text currently visible
+/// at the end of a PTY buffer. PTYs redraw prompts with carriage returns and
+/// CLIs commonly color the prompt, so inspect only the final visible segment
+/// after removing ANSI escapes.
+fn looks_like_waiting_prompt(tail: &str) -> bool {
+    let Some(line) = tail.lines().last().and_then(|line| {
+        line.split('\r')
+            .rev()
+            .map(strip_ansi)
+            .map(|segment| segment.trim().to_string())
+            .find(|segment| !segment.is_empty())
+    }) else {
+        return false;
+    };
+    let lower = line.to_lowercase();
+
+    // Shell prompts and the prompt glyphs used by Claude Code and Codex.
+    if line.ends_with(['$', '#', '>', '❯', '›']) {
+        return true;
+    }
+
+    // Only treat approval language as a prompt when the visible line reads
+    // like an actual question/action gate; ordinary output can mention these
+    // words without waiting for input.
+    let asks_for_approval = [
+        "(y/n)", "[y/n]", "[y]", "(yes/no)", "do you want to proceed",
+        "would you like to proceed", "needs your approval", "press enter to",
+    ];
+    asks_for_approval.iter().any(|phrase| lower.contains(phrase))
+        || ((lower.contains("allow") || lower.contains("approve") || lower.contains("permission"))
+            && (line.ends_with('?') || lower.starts_with("allow ") || lower.starts_with("approve ")))
 }
 
 impl Agent {
@@ -87,6 +111,7 @@ impl Agent {
 
     /// SIGSTOP/SIGCONT the PTY child — Symvibe's "pause all": output
     /// queues in the kernel PTY buffer and the process resumes mid-line.
+    #[cfg(unix)]
     fn signal(&self, sig: i32) -> bool {
         self.child
             .lock()
@@ -96,12 +121,28 @@ impl Agent {
             .unwrap_or(false)
     }
 
+    #[cfg(unix)]
     pub fn suspend(&self) -> bool {
         self.signal(libc::SIGSTOP)
     }
 
+    #[cfg(unix)]
     pub fn resume(&self) -> bool {
         self.signal(libc::SIGCONT)
+    }
+
+    /// Windows v1 has no agent pause/resume: SIGSTOP/SIGCONT do not exist
+    /// and portable-pty exposes no process suspension primitive. Return
+    /// false so pause-all reports zero signalled agents instead of
+    /// pretending the freeze happened.
+    #[cfg(not(unix))]
+    pub fn suspend(&self) -> bool {
+        false
+    }
+
+    #[cfg(not(unix))]
+    pub fn resume(&self) -> bool {
+        false
     }
 
     #[allow(dead_code)]
@@ -151,13 +192,62 @@ fn append_transcript(path: &Path, chunk: &[u8]) {
     let _ = f.write_all(chunk);
 }
 
-/// Ensure `cwd` stays inside `repo_root`: reject absolute paths and `..`.
+/// Ensure `cwd` stays inside `repo_root`: reject absolute paths, Windows
+/// drive/UNC prefixes, and `..` using the platform's path-component parser
+/// (so `..\x` is rejected on Windows as well as `../x` everywhere).
 fn sanitize_relpath(cwd: &str) -> Result<PathBuf> {
+    use std::path::Component;
     let rel = Path::new(cwd);
-    if rel.is_absolute() || cwd.split('/').any(|seg| seg == "..") {
+    if rel.components().any(|component| {
+        matches!(
+            component,
+            Component::Prefix(_) | Component::RootDir | Component::ParentDir
+        )
+    }) {
         anyhow::bail!("cwd must be a repo-relative path without '..'");
     }
     Ok(rel.to_path_buf())
+}
+
+/// A commitless repository has no HEAD for `git worktree add` to branch
+/// from, so every spawn dies before the PTY exists — the first-run failure
+/// of a fresh `~/Canvas`. Bootstrap one empty commit so the worktree model
+/// holds in scratch repos. Best effort: a missing git binary or a directory
+/// that is not a git repo at all falls through to the worktree error, which
+/// the caller surfaces to the operator.
+pub fn ensure_initial_commit(repo_root: &Path) {
+    let head_resolves = std::process::Command::new("git")
+        .args(["rev-parse", "--verify", "HEAD"])
+        .current_dir(repo_root)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if head_resolves {
+        return;
+    }
+    // Only bootstrap inside an existing git repository — never `git init`
+    // a plain directory as a side effect of spawning a terminal.
+    let is_repo = std::process::Command::new("git")
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .current_dir(repo_root)
+        .output()
+        .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "true")
+        .unwrap_or(false);
+    if !is_repo {
+        return;
+    }
+    // Inline identity: a fresh machine may have no user.name/user.email
+    // configured, and --no-gpg-sign keeps commit.gpgsign=true setups from
+    // blocking on a key prompt. The commit is empty — no content authorship.
+    let _ = std::process::Command::new("git")
+        .args([
+            "-c", "user.name=Canvas",
+            "-c", "user.email=canvas@localhost",
+            "commit", "--allow-empty", "--no-gpg-sign",
+            "-m", "canvas: initial commit",
+        ])
+        .current_dir(repo_root)
+        .output();
 }
 
 /// Create (or reuse) a git worktree for the agent under
@@ -167,6 +257,7 @@ fn ensure_worktree(repo_root: &Path, agent_id: &str, branch: &str) -> Result<Pat
     if dir.exists() {
         return Ok(dir);
     }
+    ensure_initial_commit(repo_root);
     let status = std::process::Command::new("git")
         .args([
             "worktree",
@@ -186,6 +277,51 @@ fn ensure_worktree(repo_root: &Path, agent_id: &str, branch: &str) -> Result<Pat
         );
     }
     Ok(dir)
+}
+
+/// Build the platform shell used to launch an agent command inside the PTY.
+///
+/// Unix needs a bash shim because the slave PTY starts in ECHO+ICANON mode:
+/// query replies sent before the child CLI configures termios would otherwise
+/// be echoed into the scrollback and line-buffered away from the child. The
+/// shim disables both, then `exec`s the requested command so the shell does
+/// not remain as an extra process.
+#[cfg(unix)]
+fn shell_command(command: &str) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new("/bin/bash");
+    cmd.arg("-lc");
+    cmd.arg(format!(
+        "stty -echo -icanon 2>/dev/null; exec {}",
+        command
+    ));
+    cmd
+}
+
+/// Windows uses ConPTY rather than Unix termios, so there is no `stty` race
+/// to work around. `cmd /C` preserves the existing command-line shape: agent
+/// commands may include flags or cmd shell syntax, and the interactive child
+/// still runs attached to the ConPTY.
+#[cfg(windows)]
+fn shell_command(command: &str) -> CommandBuilder {
+    let shell = std::env::var_os("ComSpec").unwrap_or_else(|| "cmd.exe".into());
+    let mut cmd = CommandBuilder::new(shell);
+    cmd.arg("/C");
+    cmd.arg(command);
+    cmd
+}
+
+/// Prepend the directory holding this binary to PATH so `canvasctl` is
+/// reachable inside every PTY, using the host platform's PATH separator.
+fn path_with_exe_dir() -> Option<std::ffi::OsString> {
+    let exe_dir = std::env::current_exe()
+        .ok()?
+        .parent()
+        .map(|dir| dir.to_path_buf())?;
+    let mut entries = vec![exe_dir];
+    if let Some(path) = std::env::var_os("PATH") {
+        entries.extend(std::env::split_paths(&path));
+    }
+    std::env::join_paths(entries).ok()
 }
 
 impl Default for AgentManager {
@@ -253,22 +389,18 @@ impl AgentManager {
         })?;
 
         // Allowlisted env: the PTY does not inherit arbitrary session env.
-        let mut cmd = CommandBuilder::new("/bin/bash");
-        cmd.arg("-lc");
-        // The slave spawns with ECHO+ICANON until the child CLI configures
-        // its own termios — and bash -lc never does. Query replies sent in
-        // that window (cursor reports, OSC answers) get echoed back into
-        // the scrollback as `^[[1;1R` garbage AND line-buffered (the CLI
-        // never receives them until a newline). Disable both up front;
-        // interactive children (bash itself, TUIs) set their own modes.
-        cmd.arg(format!(
-            "stty -echo -icanon 2>/dev/null; exec {}",
-            command
-        ));
+        let mut cmd = shell_command(command);
         cmd.cwd(&spawn_dir);
         cmd.env("TERM", "xterm-256color");
         cmd.env("CANVAS_AGENT_ID", &id);
+        #[cfg(unix)]
         cmd.env("HOME", std::env::var("HOME").unwrap_or_else(|_| "/".into()));
+        // Many agent CLIs read HOME even on Windows. Populate it from the
+        // real user profile instead of the Unix-only `/` fallback.
+        #[cfg(windows)]
+        if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+            cmd.env("HOME", home);
+        }
         for (k, v) in self.extra_env.lock().unwrap().iter() {
             cmd.env(k, v);
         }
@@ -276,14 +408,11 @@ impl AgentManager {
             cmd.env(k, v);
         }
         // Put the directory holding this binary (canvasd / the app) first
-        // on PATH so `canvasctl` is reachable inside every PTY.
-        let path = std::env::var("PATH").unwrap_or_default();
-        let path = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.to_path_buf()))
-            .map(|d| format!("{}:{path}", d.display()))
-            .unwrap_or(path);
-        cmd.env("PATH", path);
+        // on PATH so `canvasctl` is reachable inside every PTY. If the exe
+        // path is unavailable, CommandBuilder still inherits the ambient PATH.
+        if let Some(path) = path_with_exe_dir() {
+            cmd.env("PATH", path);
+        }
 
         let child = pair.slave.spawn_command(cmd)?;
         drop(pair.slave);
@@ -507,11 +636,30 @@ pub fn canvas_result_line(tail: &str) -> Option<String> {
             // the screen actually shows — a result overwritten by later
             // output on the same line doesn't count, while a CRLF-writing
             // child leaves \r\r\n and its empty tail must be skipped.
-            l.split('\r')
+            let segments: Vec<String> = l
+                .split('\r')
                 .map(strip_ansi)
-                .rev()
-                .find(|s| !s.trim().is_empty())
-                .and_then(|s| s.trim().strip_prefix("CANVAS_RESULT:").map(|v| v.trim().to_string()))
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            let visible = segments.last()?;
+            if let Some(result) = visible.strip_prefix("CANVAS_RESULT:") {
+                return Some(result.trim().to_string());
+            }
+            if let Some((prefix, result)) = visible.split_once("CANVAS_RESULT:") {
+                if prefix.trim_end().ends_with(['$', '#']) {
+                    return Some(result.trim().to_string());
+                }
+            }
+            if visible.ends_with(['$', '#']) {
+                let previous = segments.iter().rev().nth(1)?;
+                let (prefix, result) = previous.split_once("CANVAS_RESULT:")?;
+                if prefix.trim_end().ends_with(['$', '#']) {
+                    return Some(result.trim().to_string());
+                }
+            }
+
+            None
         })
         .filter(|s| !s.is_empty())
 }
@@ -681,6 +829,17 @@ mod tests {
         // Result-looking text overwritten by later output on the same
         // line is not a result — the screen no longer shows it.
         assert_eq!(canvas_result_line("x \rCANVAS_RESULT: stale\rnext output"), None);
+        assert_eq!(
+            canvas_result_line("bash-3.2$ CANVAS_RESULT: shipped it\rbash-3.2$ "),
+            Some("shipped it".to_string())
+        );
+        let macos_bash_tail = concat!(
+            "\r\nThe default interactive shell is now zsh.\r\n",
+            "To update your account to use zsh.\r\n",
+            "\u{1b}[?1034hbash-3.2$ CANVAS_RESULT: shipped it\r\n",
+            "bash-3.2$ "
+        );
+        assert_eq!(canvas_result_line(macos_bash_tail).as_deref(), Some("shipped it"));
         assert_eq!(canvas_result_line("$ echo hi\r\nhi\r\n$ "), None);
     }
 
@@ -705,11 +864,87 @@ mod tests {
     }
 
     #[test]
+    fn waiting_prompt_detection_handles_cli_glyphs_and_pty_redraws() {
+        assert!(looks_like_waiting_prompt("\u{1b}[32m❯\u{1b}[0m "));
+        assert!(looks_like_waiting_prompt("\u{1b}[34m›\u{1b}[0m "));
+        assert!(looks_like_waiting_prompt("user@box:~/repo$ "));
+        assert!(looks_like_waiting_prompt("working…\r\u{1b}[33mAllow this action?\u{1b}[0m "));
+        assert!(looks_like_waiting_prompt("Continue? [Y/n]"));
+        assert!(!looks_like_waiting_prompt("The agent will allow this when ready"));
+        assert!(!looks_like_waiting_prompt("Implemented approval handling."));
+        assert!(!looks_like_waiting_prompt("working…"));
+    }
+
+    #[test]
     fn rejects_unsafe_cwd() {
         assert!(sanitize_relpath("../etc").is_err());
         assert!(sanitize_relpath("/tmp").is_err());
         assert!(sanitize_relpath("a/../b").is_err());
         assert!(sanitize_relpath("src/lib").is_ok());
+    }
+
+    fn git_temp_root() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("canvas-agent-test-{}", uuid::Uuid::new_v4().simple()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn git(args: &[&str], cwd: &Path) -> std::process::Output {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .unwrap()
+    }
+
+    fn head_resolves(repo: &Path) -> bool {
+        git(&["rev-parse", "--verify", "HEAD"], repo).status.success()
+    }
+
+    #[test]
+    fn worktree_bootstraps_commitless_repo() {
+        // The first-run ~/Canvas failure: `git init` happened but no commit
+        // exists, so HEAD is unborn and plain `git worktree add … HEAD` dies.
+        let repo = git_temp_root();
+        assert!(git(&["init"], &repo).status.success());
+        assert!(!head_resolves(&repo));
+
+        let wt = ensure_worktree(&repo, "testagent01", "Terminal").unwrap();
+        assert!(wt.exists());
+        assert!(head_resolves(&repo));
+        // Exactly one commit — the empty bootstrap — and the worktree branch
+        // forked off it.
+        let log = git(&["log", "--oneline"], &repo);
+        assert_eq!(String::from_utf8_lossy(&log.stdout).lines().count(), 1);
+        let branch = git(&["rev-parse", "--abbrev-ref", "HEAD"], &wt);
+        assert_eq!(
+            String::from_utf8_lossy(&branch.stdout).trim(),
+            "canvas/Terminal-testagent01"
+        );
+        std::fs::remove_dir_all(&repo).unwrap();
+    }
+
+    #[test]
+    fn bootstrap_does_not_add_commits_to_a_committed_repo() {
+        let repo = git_temp_root();
+        assert!(git(&["init"], &repo).status.success());
+        ensure_initial_commit(&repo);
+        assert!(head_resolves(&repo));
+        // Second run is a no-op — one commit total, not one per spawn.
+        ensure_initial_commit(&repo);
+        let log = git(&["log", "--oneline"], &repo);
+        assert_eq!(String::from_utf8_lossy(&log.stdout).lines().count(), 1);
+        std::fs::remove_dir_all(&repo).unwrap();
+    }
+
+    #[test]
+    fn bootstrap_never_inits_a_plain_directory() {
+        let dir = git_temp_root();
+        ensure_initial_commit(&dir);
+        assert!(!dir.join(".git").exists());
+        // …and the worktree failure still surfaces rather than being hidden.
+        assert!(ensure_worktree(&dir, "testagent02", "Terminal").is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
 

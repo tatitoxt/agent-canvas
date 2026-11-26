@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { useBoard } from "../store/board";
+import { memo, useEffect, useRef, useState } from "react";
+import { getAgentSpawnPositions, useBoard } from "../store/board";
 import { isTauri } from "../daemon/tauriClient";
 import { Icon } from "./icons";
 import { ToolsMenu, type ToolsMenuActions } from "./ToolsRail";
 import { PANEL_META } from "./panelMeta";
 
 const pill: React.CSSProperties = {
-  padding: "5px 10px",
-  fontSize: 11.5,
+  padding: "6px 11px",
+  fontSize: "var(--cv-text-xs)",
   fontWeight: 600,
   color: "var(--cv-ink)",
   display: "flex",
@@ -20,8 +20,8 @@ const pill: React.CSSProperties = {
 const iconBtn = (active: boolean): React.CSSProperties => ({
   display: "grid",
   placeItems: "center",
-  width: 34,
-  height: 34,
+  width: 38,
+  height: 38,
   borderRadius: 999,
   color: active ? "var(--cv-accent)" : "var(--cv-ink)",
   cursor: "pointer",
@@ -37,19 +37,14 @@ const menuRow: React.CSSProperties = {
   border: "none",
   background: "transparent",
   color: "var(--cv-ink)",
-  fontSize: 11.5,
-  fontWeight: 550,
+  fontSize: "var(--cv-text-xs)",
+  fontWeight: 500,
   textAlign: "left",
   cursor: "pointer",
   borderRadius: 8,
 };
 
 const sectionLabel: React.CSSProperties = {
-  fontSize: 8.5,
-  fontWeight: 700,
-  letterSpacing: 1,
-  textTransform: "uppercase",
-  color: "var(--cv-ink-faint)",
   padding: "8px 10px 3px",
 };
 
@@ -59,7 +54,7 @@ const miniInput: React.CSSProperties = {
   borderRadius: 8,
   height: 24,
   padding: "0 8px",
-  fontSize: 10.5,
+  fontSize: "var(--cv-text-xxs)",
   color: "var(--cv-ink)",
   outline: "none",
   width: "100%",
@@ -69,7 +64,7 @@ const miniInput: React.CSSProperties = {
 /** Deska-style topbar. Left: machine (This Mac / cloud / phone), workspaces,
  * worktrees, tasks. Right, icon-only: mission map, search, automations,
  * notifications, tools, settings. Everything iconified with tooltips. */
-export function Topbar({
+export const Topbar = memo(function Topbar({
   nav,
   onNav,
   tools,
@@ -84,24 +79,39 @@ export function Topbar({
   const agents = useBoard((s) => s.agents);
   const edges = useBoard((s) => s.edges);
   const approvals = useBoard((s) => s.approvals);
+  const activeBoard = useBoard((s) => s.activeBoard);
 
   const wsList = Object.values(workspaces);
-  const liveAgents = Object.values(agents).filter((a) => a.status !== "exited");
-  const delegated = Object.values(edges).filter((e) => e.state === "delegated").length;
-  const waiting = Object.values(agents).filter((a) => a.status === "waiting").length;
-  const blockedN = Object.values(agents).filter((a) => a.status === "blocked").length;
-  const notifCount = Object.keys(approvals).length + waiting + blockedN;
+  const liveAgents = Object.values(agents).filter(
+    (a) => a.status !== "exited" && (a.board_id ?? "main") === activeBoard,
+  );
+  const boardEdges = Object.values(edges).filter((e) =>
+    (agents[e.from]?.board_id ?? agents[e.to]?.board_id ?? "main") === activeBoard,
+  );
+  const delegated = boardEdges.filter((e) => e.state === "delegated").length;
+  const waiting = liveAgents.filter((a) => a.status === "waiting").length;
+  const blockedN = liveAgents.filter((a) => a.status === "blocked").length;
+  const boardApprovals = Object.keys(approvals).filter(
+    (agentId) => agents[agentId] && (agents[agentId].board_id ?? "main") === activeBoard,
+  ).length;
+  const notifCount = boardApprovals + waiting + blockedN;
 
-  const activeBoard = useBoard((s) => s.activeBoard);
   const shapes = useBoard((s) => s.shapes);
   const positions = useBoard((s) => s.positions);
+  const workspaceSizes = useBoard((s) => s.workspaceSizes);
+  const agentSizes = useBoard((s) => s.agentSizes);
+  // Read viewport geometry imperatively: it changes on every pan frame, while
+  // the switcher only needs a snapshot when its menu/render is already open.
+  // Subscribing here makes the whole topbar/tools tree rerender continuously
+  // during canvas panning.
+  const viewportRect = useBoard.getState().viewportRect;
   const panelNodes = useBoard((s) => s.panelNodes);
   const termNodes = useBoard((s) => s.termNodes);
   const mdNodes = useBoard((s) => s.mdNodes);
   const webNodes = useBoard((s) => s.webNodes);
   const orchestrators = useBoard((s) => s.orchestrators);
 
-  const [menu, setMenu] = useState<"machine" | "ws" | "wt" | "tasks" | "usage" | "panels" | null>(null);
+  const [menu, setMenu] = useState<"machine" | "ws" | "wt" | "tasks" | "panels" | null>(null);
   const [wsName, setWsName] = useState("");
   const [wsRepo, setWsRepo] = useState("");
 
@@ -111,9 +121,28 @@ export function Topbar({
   const panelItems: PanelItem[] = [];
   // Same ordering the board uses for "Terminal N" titles so the switcher
   // matches what the card header shows.
-  const boardAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard);
+  const boardAgents = Object.values(agents)
+    .filter((a) => (a.board_id ?? "main") === activeBoard)
+    .sort((a, b) => (a.seenAt ?? 0) - (b.seenAt ?? 0));
   const termNo = new Map(boardAgents.map((a, i) => [a.id, i + 1]));
-  boardAgents.forEach((a, agentIdx) => {
+  const looseAgents = boardAgents.filter((a) => !a.workspace_id);
+  const explicitLoose = looseAgents.filter((a) => positions[a.id]);
+  const missingLoose = looseAgents.filter((a) => !positions[a.id]);
+  const looseFallbacks = getAgentSpawnPositions(
+    missingLoose.length,
+    viewportRect,
+    explicitLoose.map((a) => ({ ...positions[a.id], w: agentSizes[a.id]?.w ?? 460, h: agentSizes[a.id]?.h ?? 260 })),
+  );
+  const looseFallbackById = new Map(missingLoose.map((a, i) => [a.id, looseFallbacks[i]]));
+  const workspaceFallbackById = new Map<string, { x: number; y: number }>();
+  const workspaceOffsets = new Map<string, number>();
+  for (const a of boardAgents) {
+    if (!a.workspace_id || positions[a.id]) continue;
+    const offset = workspaceOffsets.get(a.workspace_id) ?? 0;
+    workspaceFallbackById.set(a.id, { x: 24, y: 64 + offset * 284 });
+    workspaceOffsets.set(a.workspace_id, offset + 1);
+  }
+  boardAgents.forEach((a) => {
     // Agents inside a workspace keep positions RELATIVE to the parent node —
     // translate to absolute canvas coords so region grouping and focus work.
     // Never-dragged agents have no positions entry: replicate the canvas
@@ -121,8 +150,8 @@ export function Topbar({
     // unmoved workspace's rect — and group falsely under it.
     const ws = a.workspace_id ? workspaces[a.workspace_id] : undefined;
     const rel = positions[a.id] ?? (ws
-      ? { x: 60 + (agentIdx % 3) * 300, y: 80 + Math.floor(agentIdx / 3) * 190 }
-      : { x: 1000 + (agentIdx % 2) * 500, y: 60 + Math.floor(agentIdx / 2) * 300 });
+      ? (workspaceFallbackById.get(a.id) ?? { x: 24, y: 64 })
+      : (looseFallbackById.get(a.id) ?? { x: 24, y: 64 }));
     const base = ws ? (positions[ws.id] ?? { x: 60, y: 60 }) : { x: 0, y: 0 };
     const p = { x: base.x + rel.x, y: base.y + rel.y };
     const done = a.status === "exited";
@@ -164,7 +193,17 @@ export function Topbar({
     // Workspaces are regions too — terminals inside them group under the ws name.
     ...Object.values(workspaces)
       .filter((w) => (w.board_id ?? "main") === activeBoard)
-      .map((w) => ({ id: w.id, ...(positions[w.id] ?? { x: 60, y: 60 }), w: 900, h: 540, text: `workspace ${w.name}` })),
+      .map((w) => {
+        const fallbackCount = boardAgents.filter((a) => a.workspace_id === w.id && !positions[a.id]).length;
+        const size = workspaceSizes[w.id] ?? { w: 900, h: 540 };
+        return {
+          id: w.id,
+          ...(positions[w.id] ?? { x: 60, y: 60 }),
+          w: size.w,
+          h: Math.max(size.h, 100 + fallbackCount * 284),
+          text: `workspace ${w.name}`,
+        };
+      }),
   ];
   const itemRegion = (it: PanelItem) => {
     const hits = regionRects.filter((r) => it.cx >= r.x && it.cx <= r.x + r.w! && it.cy >= r.y && it.cy <= r.y + r.h!);
@@ -186,7 +225,7 @@ export function Topbar({
     return () => window.removeEventListener("mousedown", onDown);
   }, [menu]);
 
-  const drop = (key: "machine" | "ws" | "wt" | "tasks" | "usage" | "panels", node: React.ReactNode) =>
+  const drop = (key: "machine" | "ws" | "wt" | "tasks" | "panels", node: React.ReactNode) =>
     menu === key ? (
       <div
         className="cv-menu cv-menu-scroll"
@@ -216,7 +255,7 @@ export function Topbar({
     >
       <Icon name={icon} size={14} color="var(--cv-ink-dim)" />
       <span style={{ flex: 1 }}>{label}</span>
-      {dim && <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>soon</span>}
+      {dim && <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>soon</span>}
     </button>
   );
 
@@ -226,6 +265,7 @@ export function Topbar({
   return (
     <div
       ref={wrap}
+      className="cv-topbar-fuse"
       style={{
         position: "absolute",
         top: 12,
@@ -233,11 +273,18 @@ export function Topbar({
         // webview — push the bar right so they never sit on the buttons.
         left: isTauri() ? 96 : 58,
         right: 12,
-        zIndex: 15,
+        // Above the pencil (29) and region-shot (30) modal overlays — the
+        // Tools menu is an exit path out of those modes, so it must stay
+        // clickable while they own the canvas pointer.
+        zIndex: 31,
         display: "flex",
-        alignItems: "flex-start",
+        // Stretch, not flex-start: both cluster bubbles share the strip's
+        // full height, so the two fusion bubbles are the same size and the
+        // joined bar is one uniform surface end to end.
+        alignItems: "stretch",
         gap: 8,
-        pointerEvents: "none",
+        padding: 3,
+        pointerEvents: "auto",
       }}
     >
       {/* ── left: app · machine · workspaces · worktrees · tasks ── */}
@@ -263,11 +310,11 @@ export function Topbar({
           >
             <Icon name="monitor" size={13} color="var(--cv-ink-dim)" />
             This Mac
-            <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>▾</span>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>▾</span>
           </button>
           {drop("machine", (
             <>
-              <div style={sectionLabel}>Machine</div>
+              <div className="cv-section-label" style={sectionLabel}>Machine</div>
               {row("monitor", "This Mac", "agents run locally", () => {})}
               {row("ws", "Cloud box", "remote runner — soon", undefined, true)}
               {row("bot", "Phone", "pair a device — soon", undefined, true)}
@@ -282,11 +329,11 @@ export function Topbar({
           >
             <Icon name="ws" size={13} color="var(--cv-ink-dim)" />
             {wsList.length > 0 ? `${wsList.length} ws` : "Workspaces"}
-            <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>▾</span>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>▾</span>
           </button>
           {drop("ws", (
             <>
-              <div style={sectionLabel}>Workspaces</div>
+              <div className="cv-section-label" style={sectionLabel}>Workspaces</div>
               {wsList.length === 0 &&
                 row("ws", "no workspaces", "add one below")}
               {wsList.map((w) =>
@@ -326,11 +373,11 @@ export function Topbar({
           >
             <Icon name="worktree" size={13} color="var(--cv-ink-dim)" />
             Worktrees
-            <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>▾</span>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>▾</span>
           </button>
           {drop("wt", (
             <>
-              <div style={sectionLabel}>Worktrees</div>
+              <div className="cv-section-label" style={sectionLabel}>Worktrees</div>
               {Object.values(agents).filter((a) => a.worktree && a.status !== "exited").length === 0 &&
                 row("worktree", "no worktrees", "spawn agents in a workspace to see their trees")}
               {Object.values(agents)
@@ -354,11 +401,11 @@ export function Topbar({
           >
             <Icon name="tasks" size={13} color="var(--cv-ink-dim)" />
             Tasks{delegated > 0 ? ` ${delegated}` : ""}
-            <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>▾</span>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>▾</span>
           </button>
           {drop("tasks", (
             <>
-              <div style={sectionLabel}>Tasks</div>
+              <div className="cv-section-label" style={sectionLabel}>Tasks</div>
               {Object.values(edges).filter((e) => e.state === "delegated").length === 0 &&
                 row("tasks", "no tasks in flight", "history lives in the Tasks panel", () => onNav("history"))}
               {Object.values(edges)
@@ -376,55 +423,68 @@ export function Topbar({
             </>
           ))}
         </div>
-        <div
-          title={connected ? "daemon connected — canvasd is running" : "daemon offline — start canvasd"}
+        <span
+          data-testid="daemon-status"
+          role="status"
+          aria-label={connected ? "Canvas daemon connected" : "Canvas demo mode; daemon offline"}
+          title={connected ? "canvasd connected" : "demo mode · start canvasd to connect"}
           style={{
             width: 7,
             height: 7,
             borderRadius: 999,
             background: connected ? "var(--cv-done)" : "var(--cv-ink-faint)",
-            margin: "0 5px",
+            margin: "0 7px 0 5px",
             flexShrink: 0,
+            boxShadow: connected ? "0 0 3px color-mix(in srgb, var(--cv-done) 18%, transparent)" : undefined,
           }}
         />
-        {!connected && (
-          <span style={{ fontSize: 10.5, color: "var(--cv-blocked)", paddingRight: 6 }}>
-            offline
-          </span>
-        )}
       </div>
 
-      <div style={{ flex: 1 }} />
+      {/* The spacer doubles as the fusion stage: its ::before/::after are
+          the two glass masses that extrude from each bubble's inner edge
+          and meet in the middle of the gap (see .cv-fuse-gap in index.css). */}
+      <div className="cv-fuse-gap" style={{ flex: 1 }} />
 
-      {/* ── right: loose round glass buttons — no container bubble ── */}
+      {/* ── right: loose round glass buttons that fuse into one bubble on
+          hover — Deska's topbar trick ── */}
       <div
+        className="cv-fuse"
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 7,
+          gap: 2,
           pointerEvents: "auto",
         }}
       >
         <div style={{ position: "relative" }}>
           <button
             className="glass-pill"
-            style={{ ...iconBtn(menu === "panels"), background: "transparent", border: "none" }}
+            style={{
+              ...pill,
+              ...iconBtn(menu === "panels"),
+              width: "auto",
+              padding: "0 10px",
+              display: "flex",
+              gap: 7,
+              background: "transparent",
+              border: "none",
+              fontSize: "var(--cv-text-xxs)",
+              color: menu === "panels" ? "var(--cv-accent)" : "var(--cv-ink-dim)",
+            }}
             title="Panels on the canvas — which terminals are open"
             onClick={() => setMenu((m) => (m === "panels" ? null : "panels"))}
           >
             <Icon name="windows" size={15} color={menu === "panels" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+            <span>Panels</span>
             {panelItems.length > 0 && (
               <span
                 style={{
-                  position: "absolute",
-                  top: 2,
-                  right: 2,
                   minWidth: 13,
-                  height: 13,
+                  height: 17,
                   borderRadius: 999,
                   background: "var(--cv-glass-hi)",
                   color: "var(--cv-ink)",
-                  fontSize: 8.5,
+                  fontSize: "var(--cv-text-xxs)",
                   fontWeight: 700,
                   display: "grid",
                   placeItems: "center",
@@ -437,7 +497,7 @@ export function Topbar({
           </button>
           {drop("panels", (
             <>
-              <div style={sectionLabel}>Panels · {panelItems.length + panelRegions.length}</div>
+              <div className="cv-section-label" style={sectionLabel}>Panels · {panelItems.length + panelRegions.length}</div>
               {panelItems.length === 0 && panelRegions.length === 0 &&
                 row("panels", "nothing on the board", "right-click the canvas → add to board")}
               {panelRegions.map((r) => (
@@ -451,7 +511,7 @@ export function Topbar({
                   >
                     <Icon name="region" size={14} color="var(--cv-accent)" />
                     <span style={{ flex: 1 }}>{r.shape.text ?? "Region"}</span>
-                    <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>{r.members.length}</span>
+                    <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>{r.members.length}</span>
                   </button>
                   {r.members.map((it) =>
                     <button
@@ -464,12 +524,12 @@ export function Topbar({
                     >
                       <Icon name={it.icon} size={13} color="var(--cv-ink-dim)" />
                       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{it.label}</span>
-                      {it.sub && <span style={{ fontSize: 9, color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 90 }}>{it.sub}</span>}
+                      {it.sub && <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 90 }}>{it.sub}</span>}
                     </button>,
                   )}
                 </div>
               ))}
-              {looseItems.length > 0 && <div style={sectionLabel}>Not in a region · {looseItems.length}</div>}
+              {looseItems.length > 0 && <div className="cv-section-label" style={sectionLabel}>Not in a region · {looseItems.length}</div>}
               {looseItems.map((it) =>
                 <button
                   key={it.id}
@@ -481,62 +541,69 @@ export function Topbar({
                 >
                   <Icon name={it.icon} size={13} color="var(--cv-ink-dim)" />
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{it.label}</span>
-                  {it.sub && <span style={{ fontSize: 9, color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 90 }}>{it.sub}</span>}
+                  {it.sub && <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 90 }}>{it.sub}</span>}
                 </button>,
               )}
             </>
           ))}
         </div>
-        <div style={{ position: "relative" }}>
-          <button
-            className="glass-pill"
-            style={{ ...pill, border: "none", background: "transparent", fontSize: 10.5, color: "var(--cv-ink-dim)" }}
-            title="Usage — PTY output captured per agent"
-            onClick={() => setMenu((m) => (m === "usage" ? null : "usage"))}
-          >
+        <button
+          className="glass-pill cv-topbar-summary"
+          style={{
+            ...pill,
+            height: 34,
+            padding: "0 11px",
+            border: "none",
+            background: "transparent",
+            color: nav === "usage" ? "var(--cv-accent)" : "var(--cv-ink-dim)",
+            gap: 7,
+          }}
+          title="Mission Map — agents, terminals, models and accounts"
+          onClick={() => onNav("usage")}
+        >
+          <Icon name="mission-map" size={16} color={nav === "usage" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <span>Mission Map</span>
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "3px 7px",
+            borderRadius: 999,
+            background: "var(--cv-glass-hi)",
+            color: "var(--cv-ink)",
+            fontSize: "var(--cv-text-xxs)",
+            fontWeight: 600,
+            fontVariantNumeric: "tabular-nums",
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: 999, background: liveAgents.length ? "var(--cv-working)" : "var(--cv-ink-faint)" }} />
             {liveAgents.length} live
-            <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>▾</span>
-          </button>
-          {drop("usage", (
-            <>
-              <div style={sectionLabel}>Usage</div>
-              {liveAgents.length === 0 &&
-                row("monitor", "no live agents", "spawn one from the + button")}
-              {liveAgents.map((a) => {
-                const kb = (a.output_bytes ?? 0) / 1024;
-                return row(
-                  "terminal",
-                  a.name,
-                  `${a.status} · ${kb < 1024 ? `${kb.toFixed(1)} KB` : `${(kb / 1024).toFixed(1)} MB`} output`,
-                  () => useBoard.getState().requestFocus(a.id),
-                );
-              })}
-            </>
-          ))}
-        </div>
+          </span>
+        </button>
         <button
           className="glass-pill"
           style={{ ...iconBtn(false), background: "transparent", border: "none" }}
           title="Search — find on the board (⌘F)"
           onClick={openSearch}
         >
-          <Icon name="search" size={15} color="var(--cv-ink-dim)" />
+          <Icon name="search" size={16} color="var(--cv-ink-dim)" />
         </button>
         <button
-          className="glass-pill"
-          style={{ ...iconBtn(nav === "automations"), background: "transparent", border: "none" }}
+          className="glass-pill cv-topbar-labeled-control"
+          style={{ ...iconBtn(nav === "automations"), width: "auto", padding: "0 10px", display: "flex", gap: 7, background: "transparent", border: "none" }}
           title="Automations"
           onClick={() => onNav("automations")}
         >
-          <Icon name="automations" size={15} color={nav === "automations" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <Icon name="automations" size={16} color={nav === "automations" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <span className="cv-topbar-control-label">Automations</span>
         </button>
         <button
-          className="glass-pill"
-          style={{ ...iconBtn(nav === "inbox"), background: "transparent", border: "none" }}
+          className="glass-pill cv-topbar-labeled-control"
+          style={{ ...iconBtn(nav === "inbox"), width: "auto", padding: "0 10px", display: "flex", gap: 7, background: "transparent", border: "none" }}
           title="Notifications — approvals and agents that need you"
           onClick={() => onNav("inbox")}
         >
-          <Icon name="bell" size={15} color={nav === "inbox" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <Icon name="bell" size={16} color={nav === "inbox" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <span className="cv-topbar-control-label">Inbox</span>
           {notifCount > 0 && (
             <span
               style={{
@@ -548,7 +615,7 @@ export function Topbar({
                 borderRadius: 999,
                 background: "var(--cv-waiting)",
                 color: "var(--cv-base)",
-                fontSize: 8.5,
+                fontSize: "var(--cv-text-xxs)",
                 fontWeight: 700,
                 display: "grid",
                 placeItems: "center",
@@ -561,27 +628,11 @@ export function Topbar({
         </button>
         <button
           className="glass-pill"
-          style={{ ...iconBtn(nav === "usage"), background: "transparent", border: "none" }}
-          title="Juice — the board's mission map: who's working, waiting and done"
-          onClick={tools.onMission}
-        >
-          <Icon name="juice" size={15} color={nav === "usage" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
-        </button>
-        <button
-          className="glass-pill"
-          style={{ ...iconBtn(false), background: "transparent", border: "none" }}
-          title="Mission Map — who's working, waiting and done"
-          onClick={tools.onMission}
-        >
-          <Icon name="map" size={15} color="var(--cv-ink-dim)" />
-        </button>
-        <button
-          className="glass-pill"
           style={{ ...iconBtn(false), background: "transparent", border: "none" }}
           title="Gather — group loose windows into a frame"
           onClick={() => useBoard.getState().gatherLoose()}
         >
-          <Icon name="gather" size={15} color="var(--cv-ink-dim)" />
+          <Icon name="gather" size={16} color="var(--cv-ink-dim)" />
         </button>
         {lastGather && (
           <button
@@ -590,7 +641,7 @@ export function Topbar({
             title="Undo grouping — put windows back where they were"
             onClick={() => useBoard.getState().undoGather()}
           >
-            <Icon name="history" size={15} color="var(--cv-accent)" />
+            <Icon name="history" size={16} color="var(--cv-accent)" />
           </button>
         )}
         <ToolsMenu active={nav} onSelect={onNav} actions={tools} />
@@ -600,9 +651,9 @@ export function Topbar({
           title="Settings"
           onClick={() => onNav("settings")}
         >
-          <Icon name="settings" size={15} color={nav === "settings" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
+          <Icon name="settings" size={16} color={nav === "settings" ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
         </button>
       </div>
     </div>
   );
-}
+});

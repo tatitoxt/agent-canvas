@@ -11,6 +11,19 @@ export function cleanPinSpot(anchor: string | undefined): Pt {
   const iw = window.innerWidth;
   const ih = window.innerHeight;
   const panel = anchor ? document.querySelector(`[data-panel="${anchor}"]`) : null;
+  // Floating chrome sits above React Flow and can steal NodeResizer pointer
+  // events even when the card itself appears visible. Keep pinned windows in
+  // the central canvas lane, clear of the topbar, side rails and bottom dock.
+  const bounds = {
+    left: 76,
+    top: 104,
+    right: iw - 184,
+    bottom: ih - 132,
+  };
+  const clampCard = (p: Pt): Pt => ({
+    x: Math.max(bounds.left, Math.min(p.x, bounds.right - CARD_W)),
+    y: Math.max(bounds.top, Math.min(p.y, bounds.bottom - CARD_H)),
+  });
   const cands: Pt[] = [];
   if (panel) {
     const pr = panel.getBoundingClientRect();
@@ -30,12 +43,13 @@ export function cleanPinSpot(anchor: string | undefined): Pt {
     { x: iw * 0.45, y: ih * 0.7 },
     { x: iw * 0.62, y: ih * 0.8 },
   );
-  if (!panel) return cands[4];
+  const safeCands = cands.map(clampCard);
+  if (!panel) return safeCands[4];
   const pr = panel.getBoundingClientRect();
   const panelRect: Rect = { x: pr.left, y: pr.top, w: pr.width, h: pr.height };
   const panelC = { x: panelRect.x + panelRect.w / 2, y: panelRect.y + panelRect.h / 2 };
   const obstacles = obstacleRects([`[data-panel="${anchor}"]`]);
-  for (const c of cands) {
+  for (const c of safeCands) {
     const card: Rect = { x: c.x, y: c.y, w: CARD_W, h: CARD_H };
     // card itself must sit on free canvas — never under/ontop another node
     if (obstacles.some((o) => rectsOverlap(card, o, 6))) continue;
@@ -44,11 +58,11 @@ export function cleanPinSpot(anchor: string | undefined): Pt {
     if (!obstacles.some((o) => segmentHitsRect(a, b, o))) return c;
   }
   // nothing fully clean: take the first spot where at least the CARD is free
-  for (const c of cands) {
+  for (const c of safeCands) {
     const card: Rect = { x: c.x, y: c.y, w: CARD_W, h: CARD_H };
     if (!obstacles.some((o) => rectsOverlap(card, o, 6))) return c;
   }
-  return cands[0];
+  return safeCands[0];
 }
 
 /** Pick a free drop spot (screen px) beside an agent/workplace node so the
@@ -107,7 +121,7 @@ export function PinBtn({ title, body, anchor }: { title: string; body: string; a
         alignItems: "center",
         gap: 4,
         padding: "2px 8px",
-        fontSize: 10,
+        fontSize: "var(--cv-text-xxs)",
         fontWeight: 600,
         flexShrink: 0,
       }}

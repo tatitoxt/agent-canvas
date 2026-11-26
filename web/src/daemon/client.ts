@@ -164,6 +164,10 @@ export type Handlers = {
   onControl: (msg: ServerMsg) => void;
   onPty: (agentId: string, bytes: Uint8Array) => void;
   onClose?: () => void;
+  /** Transport-level failure the control channel never sees — a rejected
+   * Tauri invoke, a socket that refused the write. The board surfaces these
+   * as operator-visible notices instead of a silent console.error. */
+  onError?: (message: string) => void;
 };
 
 export class CanvasClient {
@@ -241,6 +245,10 @@ export class CanvasClient {
     this.send({ cmd: "repo_read", dir, path });
   }
 
+  repoWrite(dir: string, path: string, text: string, baseText: string) {
+    this.send({ cmd: "repo_write", dir, path, text, base_text: baseText });
+  }
+
   vaultRead(dir: string, path: string) {
     this.send({ cmd: "vault_read", dir, path });
   }
@@ -279,6 +287,11 @@ export class CanvasClient {
   }
   vaultRegister(dir: string) {
     this.send({ cmd: "vault_register", dir });
+  }
+  openObsidian(vaultDir: string, path: string) {
+    const vault = vaultDir.replace(/\/+$/, "").split("/").pop() ?? "";
+    const file = path.replace(/\.md$/, "");
+    window.open(`obsidian://open?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(file)}`, "_blank", "noopener");
   }
   defaultVaultDir(): Promise<string | null> {
     return Promise.resolve(null);

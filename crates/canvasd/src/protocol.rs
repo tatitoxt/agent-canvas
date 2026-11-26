@@ -77,6 +77,9 @@ pub enum ClientMsg {
     RepoTree { dir: String },
     /// Read a text file for the repo viewer — capped, binary rejected.
     RepoRead { dir: String, path: String },
+    /// Save edits to an existing text file under a registered repository.
+    /// The base text is checked to avoid overwriting external changes.
+    RepoWrite { dir: String, path: String, text: String, base_text: String },
     /// Read one file from the vault.
     VaultRead { dir: String, path: String },
     /// Read one file without making it "the open note" — powers `![[embeds]]`.
@@ -228,8 +231,9 @@ pub enum ClientMsg {
     SetLoopEnabled { loop_id: String, enabled: bool },
     /// Fire a loop's instruction immediately, regardless of its schedule.
     RunLoop { loop_id: String },
-    /// SIGSTOP/SIGCONT every live agent on a board — Symvibe's
-    /// "pause all": PTYs freeze mid-task, output buffers in the kernel.
+    /// Pause/resume every live agent on a board — Symvibe's "pause all".
+    /// Unix uses SIGSTOP/SIGCONT so output buffers in the kernel; Windows v1
+    /// has no suspension primitive and reports zero signalled agents.
     PauseAll { board_id: Option<String> },
     ResumeAll { board_id: Option<String> },
     /// Stream an agent's saved transcript back as PtyOutput frames — for

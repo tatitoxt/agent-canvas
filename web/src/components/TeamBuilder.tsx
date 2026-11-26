@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useBoard } from "../store/board";
+import { Icon } from "./icons";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--cv-glass-hi)",
   border: "1px solid var(--cv-glass-edge)",
   borderRadius: 10,
   padding: "7px 10px",
-  fontSize: 12,
+  fontSize: "var(--cv-text-xs)",
   color: "var(--cv-ink)",
   outline: "none",
 };
@@ -72,8 +73,8 @@ export function TeamBuilder({ onClose }: { onClose: () => void }) {
       onClick={(e) => e.stopPropagation()}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--cv-ink)" }}>◨ Team builder</span>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 14 }}>×</button>
+        <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 700, color: "var(--cv-ink)" }}>◨ Team builder</span>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", display: "flex", padding: 2 }}><Icon name="ph-x" size={12} /></button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
         {ROLES.map((r) => {
@@ -91,11 +92,11 @@ export function TeamBuilder({ onClose }: { onClose: () => void }) {
                 border: `1px solid ${n > 0 ? "var(--cv-accent)" : "var(--cv-glass-edge)"}`,
               }}
             >
-              <span style={{ color: "var(--cv-accent)", fontSize: 12 }}>{r.glyph}</span>
-              <span style={{ flex: 1, fontSize: 11.5, color: "var(--cv-ink)" }}>{r.label}</span>
-              <button onClick={() => bump(r.key, -1)} style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 12 }}>−</button>
-              <span style={{ fontSize: 11, color: "var(--cv-ink)", minWidth: 10, textAlign: "center" }}>{n}</span>
-              <button onClick={() => bump(r.key, 1)} style={{ background: "none", border: "none", color: "var(--cv-ink)", cursor: "pointer", fontSize: 12 }}>+</button>
+              <span style={{ color: "var(--cv-accent)", fontSize: "var(--cv-text-xs)" }}>{r.glyph}</span>
+              <span style={{ flex: 1, fontSize: "var(--cv-text-xs)", color: "var(--cv-ink)" }}>{r.label}</span>
+              <button onClick={() => bump(r.key, -1)} style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xs)" }}>−</button>
+              <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)", minWidth: 10, textAlign: "center" }}>{n}</span>
+              <button onClick={() => bump(r.key, 1)} style={{ background: "none", border: "none", color: "var(--cv-ink)", cursor: "pointer", fontSize: "var(--cv-text-xs)" }}>+</button>
             </div>
           );
         })}
@@ -114,7 +115,7 @@ export function TeamBuilder({ onClose }: { onClose: () => void }) {
             border: "none",
             borderRadius: 10,
             padding: "7px 14px",
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             fontWeight: 700,
             color: "var(--cv-base)",
             cursor: total > 0 ? "pointer" : "default",
@@ -124,7 +125,7 @@ export function TeamBuilder({ onClose }: { onClose: () => void }) {
           Spawn {total || ""}
         </button>
       </div>
-      <div style={{ marginTop: 8, fontSize: 10.5, color: "var(--cv-ink-dim)" }}>
+      <div style={{ marginTop: 8, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
         Lands on board “{activeBoard}” · each member gets the role as its name
       </div>
     </div>

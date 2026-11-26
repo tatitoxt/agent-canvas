@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useBoard, PERMISSION_LEVELS } from "../store/board";
+import { getAgentSpawnPositions, useBoard, PERMISSION_LEVELS } from "../store/board";
 import { CliMark } from "./CliMark";
 import { cliMeta } from "../board/nodes";
 
@@ -9,7 +9,7 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 10,
   height: 30,
   padding: "0 10px",
-  fontSize: 11.5,
+  fontSize: "var(--cv-text-xs)",
   lineHeight: 1,
   color: "var(--cv-ink)",
   outline: "none",
@@ -17,10 +17,9 @@ const inputStyle: React.CSSProperties = {
 };
 
 const sectionLabel: React.CSSProperties = {
-  fontSize: 8.5,
-  fontWeight: 700,
-  letterSpacing: 1,
-  textTransform: "uppercase",
+  fontSize: "var(--cv-text-xxs)",
+  fontWeight: 400,
+  letterSpacing: "0.02em",
   color: "var(--cv-ink-faint)",
   padding: "6px 4px 2px",
 };
@@ -110,7 +109,7 @@ export function SpawnBar() {
         >
           {!connected ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 4 }}>
-              <span style={{ flex: 1, fontSize: 11.5, color: "var(--cv-ink-dim)" }}>
+              <span style={{ flex: 1, fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)" }}>
                 daemon offline
               </span>
               <button
@@ -152,7 +151,7 @@ export function SpawnBar() {
                         border: `1px solid ${on ? "var(--cv-accent)" : "var(--cv-glass-edge)"}`,
                         background: on ? "color-mix(in srgb, var(--cv-accent) 16%, transparent)" : "var(--cv-glass-hi)",
                         color: on ? "var(--cv-ink)" : "var(--cv-ink-dim)",
-                        fontSize: 10.5,
+                        fontSize: "var(--cv-text-xxs)",
                         fontWeight: on ? 650 : 500,
                         cursor: "pointer",
                         textAlign: "left",
@@ -160,7 +159,7 @@ export function SpawnBar() {
                       }}
                     >
                       {c.cmd === "custom" ? (
-                        <span style={{ width: 13, textAlign: "center", fontSize: 12 }}>+</span>
+                        <span style={{ width: 13, textAlign: "center", fontSize: "var(--cv-text-xs)" }}>+</span>
                       ) : (
                         <CliMark cli={c.cmd} color={color} size={13} />
                       )}
@@ -173,7 +172,7 @@ export function SpawnBar() {
               </div>
               {boardWs.length > 0 && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 10, color: "var(--cv-ink-dim)", flex: 1 }} title="inside a workspace the agent gets its own git worktree of that repo">
+                  <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", flex: 1 }} title="inside a workspace the agent gets its own git worktree of that repo">
                     workspace
                   </span>
                   <select
@@ -208,11 +207,11 @@ export function SpawnBar() {
                       flex: 1,
                       height: 22,
                       borderRadius: 7,
-                      border: `1px solid ${permission === l.id ? "var(--cv-accent)" : "var(--cv-glass-edge)"}`,
-                      background: permission === l.id ? "color-mix(in srgb, var(--cv-accent) 16%, transparent)" : "transparent",
-                      color: permission === l.id ? "var(--cv-accent)" : "var(--cv-ink-dim)",
-                      fontSize: 9.5,
-                      fontWeight: 650,
+                      border: `1px solid ${permission === l.id ? "var(--cv-perm)" : "var(--cv-glass-edge)"}`,
+                      background: permission === l.id ? "color-mix(in srgb, var(--cv-perm) 16%, transparent)" : "transparent",
+                      color: permission === l.id ? "var(--cv-perm)" : "var(--cv-ink-dim)",
+                      fontSize: "var(--cv-text-xxs)",
+                      fontWeight: 600,
                       cursor: "pointer",
                       fontFamily: "inherit",
                     }}
@@ -222,7 +221,7 @@ export function SpawnBar() {
                 ))}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ fontSize: 10, color: "var(--cv-ink-dim)", flex: 1 }} title="parallel workers — each runs in its own git worktree">
+                <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", flex: 1 }} title="parallel workers — each runs in its own git worktree">
                   workers · own worktree each
                 </span>
                 {[1, 2, 3, 4].map((n) => (
@@ -237,8 +236,8 @@ export function SpawnBar() {
                       border: `1px solid ${count === n ? "var(--cv-accent)" : "var(--cv-glass-edge)"}`,
                       background: count === n ? "color-mix(in srgb, var(--cv-accent) 18%, transparent)" : "var(--cv-glass-hi)",
                       color: count === n ? "var(--cv-accent)" : "var(--cv-ink-dim)",
-                      fontSize: 10,
-                      fontWeight: 650,
+                      fontSize: "var(--cv-text-xxs)",
+                      fontWeight: 600,
                       cursor: "pointer",
                     }}
                   >
@@ -255,17 +254,42 @@ export function SpawnBar() {
                   background: "var(--cv-accent)",
                   color: "#14110d",
                   fontWeight: 700,
-                  fontSize: 11.5,
+                  fontSize: "var(--cv-text-xs)",
                   cursor: "pointer",
-                  boxShadow: "0 0 14px rgba(245,165,36,0.35)",
+                  boxShadow: "0 0 0 1px color-mix(in srgb, var(--cv-accent) 30%, transparent)",
                   opacity: canSpawn ? 1 : 0.45,
                 }}
                 disabled={!canSpawn}
                 onClick={() => {
                   const cmd = choice === "custom" ? command.trim() : choice;
+                  const st = useBoard.getState();
+                  const origin = st.pendingSpawnPos;
+                  st.setPendingSpawnPos(null);
+                  const existing = Object.values(st.agents).filter((a) => (a.board_id ?? "main") === st.activeBoard);
+                  let placements: Array<{ x: number; y: number }>;
+                  if (wsId) {
+                    const wsAgents = existing.filter((a) => a.workspace_id === wsId);
+                    const row = wsAgents.length;
+                    const wsSize = st.workspaceSizes[wsId] ?? { w: 900, h: 540 };
+                    st.resizeWorkspace(wsId, Math.max(wsSize.w, 520), Math.max(wsSize.h, 100 + (row + count) * 284));
+                    placements = Array.from({ length: count }, (_, i) => ({ x: 24, y: 64 + (row + i) * 284 }));
+                  } else {
+                    const explicit = existing.filter((a) => !a.workspace_id && st.positions[a.id]);
+                    const missing = existing.filter((a) => !a.workspace_id && !st.positions[a.id]);
+                    const fallback = getAgentSpawnPositions(missing.length, st.viewportRect, explicit.map((a) => ({ ...st.positions[a.id], w: st.agentSizes[a.id]?.w ?? 460, h: st.agentSizes[a.id]?.h ?? 260 })));
+                    const occupied = [
+                      ...explicit.map((a) => ({ ...st.positions[a.id], w: st.agentSizes[a.id]?.w ?? 460, h: st.agentSizes[a.id]?.h ?? 260 })),
+                      ...fallback.map((p) => ({ ...p, w: 460, h: 260 })),
+                      ...Object.values(st.panelNodes[st.activeBoard] ?? {}).map((n) => ({ x: n.x, y: n.y, w: n.w, h: n.h })),
+                      ...Object.values(st.termNodes[st.activeBoard] ?? {}).map((n) => ({ x: n.x, y: n.y, w: n.w, h: n.h })),
+                    ];
+                    placements = getAgentSpawnPositions(count, st.viewportRect, occupied, { w: 460, h: 260 }, origin);
+                  }
                   for (let i = 0; i < count; i++) {
+                    const name = count > 1 ? `${cmd}-p${i + 1}` : cmd;
+                    st.setSpawnPositionForName(name, placements[i]);
                     spawn(
-                      count > 1 ? `${cmd}-p${i + 1}` : cmd,
+                      name,
                       cmd,
                       wsId || undefined,
                       permission,

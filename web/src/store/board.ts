@@ -3,6 +3,11 @@ import { CanvasClient, type ServerMsg } from "../daemon/client";
 import { isTauri, TauriCanvasClient } from "../daemon/tauriClient";
 import type { AgentStatus } from "../board/types";
 import { PANEL_META } from "../components/panelMeta";
+import { replayedPtyBytes } from "../board/ptyAccounting";
+import { recordPtyBuffer, resetPtyBufferWindow } from "../board/ptyBufferMeta";
+import { resetScreen } from "../board/ptyScreen";
+import { initialNodes } from "../board/mockData";
+import { planGatherLayout, type GatherRect } from "./gatherLayout";
 
 export type LiveAgent = {
   id: string;
@@ -112,6 +117,53 @@ function newOutput(
     .slice(0, 3)
     .join(" · ")
     .slice(0, 160);
+}
+
+type CanvasPoint = { x: number; y: number };
+type CanvasRect = { x: number; y: number; w: number; h: number };
+
+/** Place new agents in the visible canvas, preferring open space near its center. */
+export function getAgentSpawnPositions(
+  count: number,
+  viewport: { left: number; top: number; right: number; bottom: number } | null,
+  occupied: CanvasRect[],
+  size = { w: 460, h: 260 },
+  origin?: CanvasPoint | null,
+): CanvasPoint[] {
+  const cols = Math.max(1, Math.floor((viewport ? viewport.right - viewport.left - 24 : 1120) / (size.w + 28)));
+  const stepX = size.w + 28;
+  const stepY = size.h + 28;
+  const area = viewport ?? { left: 0, top: 0, right: cols * stepX, bottom: 3 * stepY };
+  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, Math.max(min, max)));
+  const center = origin
+    ? { x: clamp(origin.x, area.left + 12, area.right - size.w - 12), y: clamp(origin.y, area.top + 12, area.bottom - size.h - 12) }
+    : {
+        x: clamp((area.left + area.right - size.w) / 2, area.left + 12, area.right - size.w - 12),
+        y: clamp((area.top + area.bottom - size.h) / 2, area.top + 12, area.bottom - size.h - 12),
+      };
+  const xSlots: number[] = [];
+  const ySlots: number[] = [];
+  for (let x = area.left + 12; x + size.w <= area.right - 12; x += stepX) xSlots.push(x);
+  for (let y = area.top + 12; y + size.h <= area.bottom - 12; y += stepY) ySlots.push(y);
+  const candidates = xSlots.flatMap((x) => ySlots.map((y) => ({ x, y })))
+    .sort((a, b) => Math.hypot(a.x - center.x, a.y - center.y) - Math.hypot(b.x - center.x, b.y - center.y));
+  const selected: CanvasPoint[] = [];
+  const fits = (p: CanvasPoint) => {
+    const overlapsExisting = occupied.some((r) => p.x < r.x + r.w + 18 && p.x + size.w + 18 > r.x && p.y < r.y + r.h + 18 && p.y + size.h + 18 > r.y);
+    const overlapsSelected = selected.some((r) => p.x < r.x + size.w + 18 && p.x + size.w + 18 > r.x && p.y < r.y + size.h + 18 && p.y + size.h + 18 > r.y);
+    return !overlapsExisting && !overlapsSelected;
+  };
+  for (const p of candidates) {
+    if (selected.length >= count) break;
+    if (fits(p)) selected.push(p);
+  }
+  // If the visible canvas is full, preserve non-overlap in a tidy continuation
+  // just below it. The visible cells are always returned first.
+  for (let i = 0; selected.length < count; i++) {
+    const p = { x: area.left + 12 + (i % cols) * stepX, y: area.bottom + 32 + Math.floor(i / cols) * stepY };
+    if (fits(p)) selected.push(p);
+  }
+  return selected;
 }
 
 /** Poll an agent's ring for a reply after writing `sent` to it; post
@@ -355,6 +407,9 @@ export const PERMISSION_LEVELS = [
 type BoardState = {
   connected: boolean;
   agents: Record<string, LiveAgent>;
+  /** Latest terminal activity line per agent. Kept outside `agents` so a busy
+   * terminal does not rewrite every agent object — and with it every canvas node. */
+  activityLines: Record<string, string>;
   /** Board id → name (multiple canvases); "main" always exists. */
   boards: Record<string, string>;
   activeBoard: string;
@@ -368,13 +423,14 @@ type BoardState = {
   /** PTY bytes produced per usage key since this client connected — the
    * UsagePanel's "session" column. */
   sessionUse: Record<string, number>;
-  /** agentId → transcript bytes still to skip metering after (re)connect. */
-  ptySkip: Record<string, number>;
   /** Weekly usage ledger persisted in localStorage (see AcctLedger). */
   acctLedger: AcctLedger;
   /** Meter PTY output into the session + weekly buckets for the
    * agent's account; fires a toast at each weekly-cap threshold. */
   meterOutput: (agentId: string, n: number) => void;
+  /** Ingest one PTY packet: fan out to live terminals immediately, batch the
+   * rolling transcript mirror for React state. */
+  receivePty: (agentId: string, bytes: Uint8Array) => void;
   /** Set a usage key's weekly cap in KB (null resets to the default). */
   setAcctCap: (key: string, kb: number | null) => void;
   /** node_id ("main" or a workspace id) → memory.md text. */
@@ -383,11 +439,15 @@ type BoardState = {
   digest: string | null;
   /** Transient toast — latest info/error line shown bottom-right. */
   notice: string | null;
+  notices: { id: number; text: string }[];
   /** Obsidian-style vault browser state. */
   vaultDir: string;
   vaultEntries: string[];
   repoEntries: string[];
   repoFile: { path: string; text: string } | null;
+  repoFiles: Record<string, { dir: string; path: string; text: string }>;
+  repoRequestDir: string;
+  repoRequestPath: string;
   vaultFile: { path: string; text: string } | null;
   /** Latest vault full-text search hits. */
   vaultHits: { path: string; line: number; text: string }[];
@@ -397,6 +457,9 @@ type BoardState = {
   studioDoc: string | null;
   /** Embedded web pages on the canvas: node id -> url, per board. */
   webNodes: Record<string, Record<string, string>>;
+  /** Per-page canvas window dimensions, keyed by board and web node id. */
+  webNodeSizes: Record<string, { w: number; h: number }>;
+  resizeWebNode: (id: string, w: number, h: number, persist?: boolean, boardId?: string, pos?: { x: number; y: number }) => void;
   /** UI theme — swaps the seed tokens; glass derives via color-mix. */
   theme: string;
   setTheme: (t: string) => void;
@@ -406,6 +469,15 @@ type BoardState = {
   notes: Record<string, { note_id: string; board_id: string; col: string; text: string; pos: number; due?: string }>;
   /** Saved node positions — replayed from the daemon's layout table. */
   positions: Record<string, { x: number; y: number }>;
+  /** Per-agent size overrides for cards resized on the canvas. */
+  agentSizes: Record<string, { w: number; h?: number }>;
+  /** React Flow is the source of transient geometry while a resize gesture is active. */
+  resizingAgents: Record<string, boolean>;
+  markAgentResizing: (id: string, resizing: boolean) => void;
+  resizeAgentCard: (id: string, w: number, h?: number, persist?: boolean, pos?: { x: number; y: number }) => void;
+  /** Workspace frame dimensions are local UI state, keyed by workspace ID. */
+  workspaceSizes: Record<string, { w: number; h: number }>;
+  resizeWorkspace: (id: string, w: number, h: number, pos?: { x: number; y: number }) => void;
   /** Drop position for a delegation child, keyed by parent agent id —
    * applied when the delegation message names the child. */
   pendingPositions: Record<string, { x: number; y: number }>;
@@ -423,7 +495,8 @@ type BoardState = {
   loops: Record<string, LoopDef>;
   /** agent_id → latest automation guardrail alert (hang / denied policy). */
   attention: Record<string, string>;
-  ptyListeners: Record<string, Set<(bytes: Uint8Array) => void>>;
+  /** `null` marks the beginning of a daemon scrollback replay after reconnect. */
+  ptyListeners: Record<string, Set<(bytes: Uint8Array | null) => void>>;
   /** Rolling PTY scrollback per agent (~64KB) — transcript shown when a
    * terminal opens, and rebuilt from the daemon's replay on reconnect. */
   ptyBuffers: Record<string, Uint8Array>;
@@ -456,12 +529,14 @@ type BoardState = {
   artifactCreate: (kind: string, title: string, path?: string, text?: string) => void;
   gitPush: (agentId: string) => void;
   notify: (text: string) => void;
+  dismissNotice: (id: number) => void;
   vaultList: (dir: string) => void;
   repoTree: (dir: string) => void;
   /** Directory the repo explorer opens to — set by per-agent file buttons. */
   explorerDir: string | null;
   openExplorer: (dir?: string) => void;
   repoRead: (dir: string, path: string) => void;
+  repoWrite: (dir: string, path: string, text: string, baseText: string) => void;
   vaultRead: (path: string) => void;
   vaultPeek: (path: string) => void;
   vaultAsset: (path: string) => void;
@@ -475,12 +550,16 @@ type BoardState = {
   vaultGraph: { nodes: string[]; edges: [string, string][] } | null;
   vaultDiscover: () => void;
   vaultRegister: (dir: string) => void;
+  openObsidian: (path: string) => Promise<void>;
   closeVaultFile: () => void;
   webNodeAdd: (url: string) => void;
   webNodeRemove: (id: string) => void;
   /** Live markdown nodes — vault files pinned on the board, re-polled
    * so an agent editing the file shows up live on the card. */
   mdNodes: Record<string, Record<string, string>>;
+  /** Per-note canvas card dimensions, keyed by Markdown node ID. */
+  mdNodeSizes: Record<string, { w: number; h: number }>;
+  resizeMdNode: (id: string, w: number, h: number, persist?: boolean, boardId?: string, pos?: { x: number; y: number }) => void;
   mdContents: Record<string, string>;
   /** Binary vault assets (images) as data URLs — filled by vault_asset. */
   vaultAssets: Record<string, string>;
@@ -493,12 +572,12 @@ type BoardState = {
   openPanelNode: (panel: string, pos?: { x: number; y: number }, size?: { w: number; h: number }) => void;
   closePanelNode: (id: string) => void;
   movePanelNode: (id: string, x: number, y: number) => void;
-  resizePanelNode: (id: string, w: number, h: number) => void;
+  resizePanelNode: (id: string, w: number, h: number, pos?: { x: number; y: number }) => void;
   collapsePanelNode: (id: string) => void;
   maximizePanelNode: (id: string, viewRect?: { x: number; y: number; w: number; h: number }) => void;
   /** Live terminals living ON the canvas as cards — `term-<agentId>` per
    * board. Popped out of the bottom drawer; movable/resizable/closable. */
-  termNodes: Record<string, Record<string, { x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number; locked?: boolean }>>;
+  termNodes: Record<string, Record<string, { x: number; y: number; w: number; h: number; collapsed?: boolean; expandH?: number; locked?: boolean; maximized?: boolean; prevRect?: { x: number; y: number; w: number; h: number } }>>;
   /** Clone a panel card beside it (Deska Split Right/Down). */
   splitPanelCard: (id: string, dir: "right" | "down") => void;
   /** Deska card ops: z-order and position lock for canvas cards. */
@@ -519,14 +598,17 @@ type BoardState = {
   viewportRect: { left: number; top: number; right: number; bottom: number } | null;
   pendingSpawnPos: { x: number; y: number } | null;
   setPendingSpawnPos: (p: { x: number; y: number } | null) => void;
+  pendingSpawnPositions: Record<string, { x: number; y: number }>;
+  setSpawnPositionForName: (name: string, pos: { x: number; y: number }) => void;
   setAgentChain: (workspaceId: string, chain: string[]) => void;
   openTermNode: (agentId: string, pos?: { x: number; y: number }) => void;
   closeTermNode: (id: string) => void;
   moveTermNode: (id: string, x: number, y: number) => void;
   /** Move any client-side card (term-/panel-/shape-/md-/web-/orch-) to another board. */
   moveCardToBoard: (id: string, boardId: string) => void;
-  resizeTermNode: (id: string, w: number, h: number) => void;
+  resizeTermNode: (id: string, w: number, h: number, pos?: { x: number; y: number }) => void;
   collapseTermNode: (id: string) => void;
+  maximizeTermNode: (id: string, viewRect?: { x: number; y: number; w: number; h: number }) => void;
   studioDocNow: () => void;
   closeStudioDoc: () => void;
   artifactDelete: (artifactId: string) => void;
@@ -546,10 +628,10 @@ type BoardState = {
   dismissAlert: (agentId: string) => void;
   /** Clear returned delegation rows from the inbox. */
   clearReturned: () => void;
-  moveNode: (agentId: string, x: number, y: number) => void;
-  attachPty: (agentId: string, cb: (bytes: Uint8Array) => void) => void;
+  moveNode: (agentId: string, x: number, y: number, recordHistory?: boolean) => void;
+  attachPty: (agentId: string, cb: (bytes: Uint8Array | null) => void) => void;
   ptyBuffer: (agentId: string) => Uint8Array | undefined;
-  detachPty: (agentId: string, cb?: (bytes: Uint8Array) => void) => void;
+  detachPty: (agentId: string, cb?: (bytes: Uint8Array | null) => void) => void;
   sendInput: (agentId: string, bytes: Uint8Array) => void;
   resizePty: (agentId: string, cols: number, rows: number) => void;
   /** Ask the daemon to replay an exited agent's saved transcript. */
@@ -574,6 +656,12 @@ type BoardState = {
    * inline mini-terminal preview for a quieter board. */
   panelSummaries: boolean;
   togglePanelSummaries: () => void;
+  /** Alignment snap mode — when on, a dropped card magnetically aligns
+   * to another card's edge/center within a few px. Invisible (no guide
+   * lines) and deliberately weak. Off by default: drags land exactly
+   * where the pointer lets go. */
+  snapAlign: boolean;
+  toggleSnapAlign: () => void;
   /** Whether the spawn chooser is open (summoned by the orchestrator's
    * + or the rail's New Task — there is no permanent spawn button). */
   spawnOpen: boolean;
@@ -584,7 +672,12 @@ type BoardState = {
   gatherLoose: () => void;
   /** Snapshot of the last gather for undo — positions before the moves
    * plus the frame it created. */
-  lastGather: { board: string; items: { id: string; kind: "agent" | "panel" | "term"; x: number; y: number }[]; frameId: string } | null;
+  lastGather: { board: string; items: { id: string; kind: "agent" | "panel" | "term" | "md" | "web"; x: number; y: number }[]; frameId: string } | null;
+  /** Cards currently flying because gather/undo moved them — the canvas adds
+   * a temporary transform-transition class only to these nodes. */
+  gatherMotion: { ids: string[]; token: number } | null;
+  /** Group frames fading out before they are removed (undo gather). */
+  leavingShapes: Record<string, true>;
   undoGather: () => void;
   /** Frame a board rect as a "Group N" region; returns its label. */
   frameNodes: (x: number, y: number, w: number, h: number) => string;
@@ -647,7 +740,7 @@ type BoardState = {
   /** nodeId -> panel key the card was pinned from (dashed anchor cable). */
   anchors: Record<string, Record<string, string>>;
   moveShape: (id: string, x: number, y: number) => void;
-  updateShape: (id: string, patch: Partial<import("../board/types").ShapeDef>) => void;
+  updateShape: (id: string, patch: Partial<import("../board/types").ShapeDef>, persist?: boolean) => void;
   deleteShape: (id: string) => void;
   /** Symvibe-style orchestrator cards: a board node wired to consoles with
    * cables; its composer broadcasts the command to every wired PTY. */
@@ -664,6 +757,54 @@ let client: DaemonTransport | null = null;
 let pendingActivity: Record<string, string> = {};
 let activityFlush: ReturnType<typeof setTimeout> | null = null;
 
+// PTY bytes are high-frequency input events, not UI state. Interactive
+// terminals receive every chunk synchronously through ptyListeners; the
+// zustand mirror used by previews/search/replays is flushed a few times per
+// second so one burst does not translate into one React render per packet.
+const PTY_STATE_FLUSH_MS = 150;
+const pendingPtyChunks = new Map<string, Uint8Array[]>();
+let ptyStateFlush: ReturnType<typeof setTimeout> | null = null;
+
+function mergedPtyBytes(prev: Uint8Array | undefined, chunks: Uint8Array[]): Uint8Array {
+  const pendingLength = chunks.reduce((n, chunk) => n + chunk.length, 0);
+  const merged = new Uint8Array((prev?.length ?? 0) + pendingLength);
+  let offset = 0;
+  if (prev) {
+    merged.set(prev, 0);
+    offset = prev.length;
+  }
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return merged.length > 65_536 ? merged.subarray(merged.length - 65_536) : merged;
+}
+
+function flushPendingPtyState(get: () => BoardState, apply: (patch: Partial<BoardState>) => void) {
+  if (ptyStateFlush) {
+    clearTimeout(ptyStateFlush);
+    ptyStateFlush = null;
+  }
+  if (pendingPtyChunks.size === 0) return;
+  const ptyBuffers = { ...get().ptyBuffers };
+  for (const [agentId, chunks] of pendingPtyChunks) {
+    const prev = ptyBuffers[agentId];
+    const merged = mergedPtyBytes(prev, chunks);
+    recordPtyBuffer(agentId, prev, chunks, merged);
+    ptyBuffers[agentId] = merged;
+  }
+  pendingPtyChunks.clear();
+  apply({ ptyBuffers });
+}
+
+// Metering needs byte-accurate totals, not byte-accurate React state. Fold
+// packets into a half-second ledger flush and keep transcript-replay skips in
+// module memory (they are internal accounting state; nothing renders them).
+const METER_FLUSH_MS = 500;
+let pendingSessionUse: Record<string, number> = {};
+let meterFlush: ReturnType<typeof setTimeout> | null = null;
+const ptySkipBytes = new Map<string, number>();
+
 const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
   new URLSearchParams(location.search).get("token") ??
   "";
@@ -671,6 +812,7 @@ const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
 export const useBoard = create<BoardState>((set, get) => ({
   connected: false,
   agents: {},
+  activityLines: {},
   boards: { main: "Main" },
   activeBoard: "main",
   edges: {},
@@ -681,10 +823,12 @@ export const useBoard = create<BoardState>((set, get) => ({
   memories: {},
   digest: null,
   notice: null,
+  notices: [],
   vaultDir: "",
   vaultEntries: [],
   repoEntries: [],
   repoFile: null,
+  repoFiles: {},
   vaultFile: null,
   vaultHits: [],
   vaultKnown: [],
@@ -698,12 +842,49 @@ export const useBoard = create<BoardState>((set, get) => ({
   webNodes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-webnodes") ?? "{}"); } catch { return {}; }
   })(),
+  webNodeSizes: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-webnodesizes") ?? "{}"); } catch { return {}; }
+  })(),
+  resizeWebNode: (id, w, h, persist = true, boardId = get().activeBoard, pos) => {
+    const next = { ...get().webNodeSizes, [`${boardId}:${id}`]: { w: Math.max(320, w), h: Math.max(220, h) } };
+    if (persist) localStorage.setItem("cv-webnodesizes", JSON.stringify(next));
+    set({ webNodeSizes: next, ...(pos ? { positions: { ...get().positions, [id]: pos } } : {}) });
+    if (persist && pos) client?.moveNode(id, pos.x, pos.y);
+  },
   notes: {},
   artifacts: {},
   positions: {},
+  agentSizes: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-agentsizes") ?? "{}"); } catch { return {}; }
+  })(),
+  resizingAgents: {},
+  markAgentResizing: (id, resizing) => set((s) => {
+    if (resizing) return { resizingAgents: { ...s.resizingAgents, [id]: true } };
+    const next = { ...s.resizingAgents };
+    delete next[id];
+    return { resizingAgents: next };
+  }),
+  resizeAgentCard: (id, w, h, persist = true, pos) => {
+    const next = { ...get().agentSizes, [id]: { w, h } };
+    if (persist) localStorage.setItem("cv-agentsizes", JSON.stringify(next));
+    set({ agentSizes: next, ...(pos ? { positions: { ...get().positions, [id]: pos } } : {}) });
+    if (persist && pos) client?.moveNode(id, pos.x, pos.y);
+  },
+  workspaceSizes: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-workspacesizes") ?? "{}"); } catch { return {}; }
+  })(),
+  resizeWorkspace: (id, w, h, pos) => {
+    const next = { ...get().workspaceSizes, [id]: { w: Math.max(520, w), h: Math.max(320, h) } };
+    localStorage.setItem("cv-workspacesizes", JSON.stringify(next));
+    set({ workspaceSizes: next, ...(pos ? { positions: { ...get().positions, [id]: pos } } : {}) });
+    if (pos) client?.moveNode(id, pos.x, pos.y);
+  },
   pendingPositions: {},
   approvals: {},
-  termFont: 13,
+  termFont: (() => {
+    const saved = Number(localStorage.getItem("cv-term-font"));
+    return Number.isFinite(saved) && saved >= 9 && saved <= 22 ? saved : 13;
+  })(),
   moveHistory: [],
   viewCmdN: 0,
   automations: {},
@@ -715,7 +896,6 @@ export const useBoard = create<BoardState>((set, get) => ({
   ptyBuffers: {},
   ptySize: {},
   sessionUse: {},
-  ptySkip: {},
   acctLedger: loadLedger(),
 
   connect: (token: string) => {
@@ -765,6 +945,13 @@ export const useBoard = create<BoardState>((set, get) => ({
               set({ pendingSpawnPos: null });
               get().moveNode(msg.agent_id, pSpawn.x, pSpawn.y);
             }
+            const namedSpawn = get().pendingSpawnPositions[msg.name];
+            if (namedSpawn) {
+              const pendingSpawnPositions = { ...get().pendingSpawnPositions };
+              delete pendingSpawnPositions[msg.name];
+              set({ pendingSpawnPositions });
+              get().moveNode(msg.agent_id, namedSpawn.x, namedSpawn.y);
+            }
             break;
           }
           case "workspace_created":
@@ -810,6 +997,12 @@ export const useBoard = create<BoardState>((set, get) => ({
               };
               const shapes = clone(get().shapes, "cv-shapes");
               const mdNodes = clone(get().mdNodes, "cv-mdnodes");
+              const mdNodeSizes = { ...get().mdNodeSizes };
+              for (const id of Object.keys(mdNodes[dst] ?? {})) {
+                const size = mdNodeSizes[`${src}:${id}`] ?? mdNodeSizes[id];
+                if (size) mdNodeSizes[`${dst}:${id}`] = { ...size };
+              }
+              localStorage.setItem("cv-mdnodesizes", JSON.stringify(mdNodeSizes));
               const panelNodes = clone(get().panelNodes, "cv-panelnodes");
               const webNodes = clone(get().webNodes, "cv-webnodes");
               // positions is a flat id → {x,y} map: copy the entries for the
@@ -823,7 +1016,7 @@ export const useBoard = create<BoardState>((set, get) => ({
               ]) {
                 if (positions[id]) positions[id] = { ...positions[id] };
               }
-              set({ shapes, mdNodes, panelNodes, webNodes, positions });
+              set({ shapes, mdNodes, mdNodeSizes, panelNodes, webNodes, positions });
               get().setActiveBoard(dst);
               get().notify(`board duplicated — cards copied (agents stay on ${get().boards[src] ?? src})`);
             }
@@ -896,16 +1089,26 @@ export const useBoard = create<BoardState>((set, get) => ({
                   activityFlush = null;
                   const batch = pendingActivity;
                   pendingActivity = {};
-                  const cur = get().agents;
-                  const next = { ...cur };
+                  const curLines = get().activityLines;
+                  let linesChanged = false;
+                  const activityLines = { ...curLines };
+                  let attentionChanged = false;
                   const attention = { ...get().attention };
                   for (const [aid, line] of Object.entries(batch)) {
-                    if (cur[aid]) {
-                      next[aid] = { ...cur[aid], lastLine: line };
+                    if (!get().agents[aid]) continue;
+                    if (activityLines[aid] !== line) {
+                      activityLines[aid] = line;
+                      linesChanged = true;
+                    }
+                    if (attention[aid]) {
                       delete attention[aid];
+                      attentionChanged = true;
                     }
                   }
-                  set({ agents: next, attention });
+                  const patch: Partial<BoardState> = {};
+                  if (linesChanged) patch.activityLines = activityLines;
+                  if (attentionChanged) patch.attention = attention;
+                  if (Object.keys(patch).length > 0) set(patch);
                 }, 400);
               }
             }
@@ -1109,13 +1312,24 @@ export const useBoard = create<BoardState>((set, get) => ({
               }
             }
             if (tnTouched) localStorage.setItem("cv-termnodes", JSON.stringify(termNodes));
+            // A reconnect replays each live PTY's rolling tail. Clear that
+            // session's old xterm and preview first so the replay rebuilds
+            // them once instead of appending duplicate history. Exited-agent
+            // transcripts are requested separately when their view mounts.
+            const ptyBuffers = { ...get().ptyBuffers };
+            ptySkipBytes.clear();
+            for (const a of msg.agents) {
+              ptySkipBytes.set(a.agent_id, replayedPtyBytes(a.output_bytes));
+              if (a.status === "exited") continue;
+              pendingPtyChunks.delete(a.agent_id);
+              delete ptyBuffers[a.agent_id];
+              resetPtyBufferWindow(a.agent_id);
+              resetScreen(a.agent_id);
+              get().ptyListeners[a.agent_id]?.forEach((cb) => cb(null));
+            }
             set({
               agents,
-              // Scrollback replayed on (re)connect isn't new output —
-              // meterOutput skips up to each agent's transcript size.
-              ptySkip: Object.fromEntries(
-                msg.agents.map((a) => [a.agent_id, a.output_bytes ?? 0]),
-              ),
+              ptyBuffers,
               positions,
               edges,
               workspaces,
@@ -1149,10 +1363,16 @@ export const useBoard = create<BoardState>((set, get) => ({
             set({ vaultEntries: msg.entries });
             break;
           case "repo_listing":
-            set({ repoEntries: msg.entries });
+            // Ignore late replies from a previous repo after the user has
+            // switched the Explorer. Otherwise stale files can appear under
+            // the newly selected workspace.
+            if (msg.dir === get().repoRequestDir) set({ repoEntries: msg.entries });
             break;
           case "repo_file":
-            set({ repoFile: { path: msg.path, text: msg.text } });
+            set((s) => ({ repoFiles: { ...s.repoFiles, [`${msg.dir}\u0000${msg.path}`]: { dir: msg.dir, path: msg.path, text: msg.text } } }));
+            if (msg.dir === get().repoRequestDir && msg.path === get().repoRequestPath) {
+              set({ repoFile: { path: msg.path, text: msg.text } });
+            }
             break;
           case "vault_hits":
             set({ vaultHits: msg.hits });
@@ -1176,7 +1396,7 @@ export const useBoard = create<BoardState>((set, get) => ({
             set({ vaultAssets: { ...get().vaultAssets, [msg.path]: `data:${msg.mime};base64,${msg.data}` } });
             break;
           case "git_pushed": {
-            set({ notice: `pushed — ${msg.output || "done"}` });
+            get().notify(`pushed — ${msg.output || "done"}`);
             break;
           }
           case "artifact_created": {
@@ -1221,7 +1441,7 @@ export const useBoard = create<BoardState>((set, get) => ({
             break;
           }
           case "error":
-            set({ notice: `error — ${msg.message}` });
+            get().notify(`error — ${msg.message}`);
             console.error("[canvasd]", msg.message);
             break;
           default:
@@ -1229,15 +1449,14 @@ export const useBoard = create<BoardState>((set, get) => ({
         }
       },
       onPty: (agentId: string, bytes: Uint8Array) => {
-        const prev = get().ptyBuffers[agentId];
-        const merged = new Uint8Array((prev?.length ?? 0) + bytes.length);
-        if (prev) merged.set(prev, 0);
-        merged.set(bytes, prev?.length ?? 0);
-        const capped =
-          merged.length > 65_536 ? merged.subarray(merged.length - 65_536) : merged;
-        set({ ptyBuffers: { ...get().ptyBuffers, [agentId]: capped } });
-        get().ptyListeners[agentId]?.forEach((cb) => cb(bytes));
-        get().meterOutput(agentId, bytes.length);
+        get().receivePty(agentId, bytes);
+      },
+      // Transport-level failures (a rejected Tauri invoke — e.g. a spawn
+      // that died before its PTY existed) never arrive as control messages;
+      // without this the click appears to do nothing.
+      onError: (message: string) => {
+        const detail = message.length > 240 ? `${message.slice(0, 240)}…` : message;
+        get().notify(`error — ${detail}`);
       },
       onClose: () => {
         client = null;
@@ -1327,6 +1546,20 @@ export const useBoard = create<BoardState>((set, get) => ({
   createAccount: (cli, label, env) => client?.createAccount(cli, label, env),
   deleteAccount: (accountId) => client?.deleteAccount(accountId),
 
+  receivePty: (agentId, bytes) => {
+    const chunks = pendingPtyChunks.get(agentId) ?? [];
+    chunks.push(bytes);
+    pendingPtyChunks.set(agentId, chunks);
+    if (!ptyStateFlush) {
+      ptyStateFlush = setTimeout(() => {
+        ptyStateFlush = null;
+        flushPendingPtyState(get, (patch) => set(patch));
+      }, PTY_STATE_FLUSH_MS);
+    }
+    get().ptyListeners[agentId]?.forEach((cb) => cb(bytes));
+    get().meterOutput(agentId, bytes.length);
+  },
+
   meterOutput: (agentId, n) => {
     const a = get().agents[agentId];
     // Exited agents only emit transcript replays — not new work.
@@ -1334,40 +1567,50 @@ export const useBoard = create<BoardState>((set, get) => ({
     // (Re)connect replays each running agent's scrollback through onPty
     // before live bytes — skip up to its transcript size so history
     // doesn't double-count toward usage.
-    const skip = get().ptySkip[agentId] ?? 0;
+    const skip = ptySkipBytes.get(agentId) ?? 0;
     if (skip > 0) {
       const rest = Math.max(0, n - skip);
-      set({ ptySkip: { ...get().ptySkip, [agentId]: Math.max(0, skip - n) } });
+      ptySkipBytes.set(agentId, Math.max(0, skip - n));
       if (rest === 0) return;
       n = rest;
     }
     const key = agentAcctKey(a, Object.values(get().accounts));
-    const ledger = get().acctLedger;
-    // Roll the bucket when the ISO week changed under a running session.
-    const l = ledger.week === isoWeek() ? ledger : { ...ledger, week: isoWeek(), bytes: {}, fired: {} };
-    const weekBytes = (l.bytes[key] ?? 0) + n;
-    const next: AcctLedger = {
-      ...l,
-      bytes: { ...l.bytes, [key]: weekBytes },
-    };
-    const capKb = l.caps[key] ?? DEFAULT_WEEK_CAP_KB;
-    const pct = (weekBytes / 1024 / capKb) * 100;
-    // Fire the highest unmet milestone and mark everything below it too —
-    // a burst that jumps 15%→60% toasts "50%" once, not four times.
-    let mask = l.fired[key] ?? 0;
-    for (let i = WEEK_MILESTONES.length - 1; i >= 0; i--) {
-      if (pct >= WEEK_MILESTONES[i] && !(mask & (1 << i))) {
-        mask |= (2 << i) - 1; // this milestone and every one below it
-        next.fired = { ...l.fired, [key]: mask };
-        get().notify(`${acctLabel(key)} hit ${WEEK_MILESTONES[i]}% of the week`);
-        break;
+    pendingSessionUse[key] = (pendingSessionUse[key] ?? 0) + n;
+    if (meterFlush) return;
+    meterFlush = setTimeout(() => {
+      meterFlush = null;
+      const pending = pendingSessionUse;
+      pendingSessionUse = {};
+      const ledger = get().acctLedger;
+      // Roll the bucket when the ISO week changed under a running session.
+      const l = ledger.week === isoWeek() ? ledger : { ...ledger, week: isoWeek(), bytes: {}, fired: {} };
+      const bytes = { ...l.bytes };
+      const fired = { ...l.fired };
+      const sessionUse = { ...get().sessionUse };
+      const notifications: string[] = [];
+      for (const [usageKey, count] of Object.entries(pending)) {
+        const weekBytes = (bytes[usageKey] ?? 0) + count;
+        bytes[usageKey] = weekBytes;
+        sessionUse[usageKey] = (sessionUse[usageKey] ?? 0) + count;
+        const capKb = l.caps[usageKey] ?? DEFAULT_WEEK_CAP_KB;
+        const pct = (weekBytes / 1024 / capKb) * 100;
+        // Fire the highest unmet milestone and mark everything below it too —
+        // a burst that jumps 15%→60% toasts "50%" once, not four times.
+        let mask = fired[usageKey] ?? 0;
+        for (let i = WEEK_MILESTONES.length - 1; i >= 0; i--) {
+          if (pct >= WEEK_MILESTONES[i] && !(mask & (1 << i))) {
+            mask |= (2 << i) - 1; // this milestone and every one below it
+            fired[usageKey] = mask;
+            notifications.push(`${acctLabel(usageKey)} hit ${WEEK_MILESTONES[i]}% of the week`);
+            break;
+          }
+        }
       }
-    }
-    saveLedger(next);
-    set({
-      acctLedger: next,
-      sessionUse: { ...get().sessionUse, [key]: (get().sessionUse[key] ?? 0) + n },
-    });
+      const next: AcctLedger = { ...l, bytes, fired };
+      saveLedger(next);
+      set({ acctLedger: next, sessionUse });
+      notifications.forEach((text) => get().notify(text));
+    }, METER_FLUSH_MS);
   },
   setAcctCap: (key, kb) => {
     const l = { ...get().acctLedger, caps: { ...get().acctLedger.caps } };
@@ -1386,13 +1629,22 @@ export const useBoard = create<BoardState>((set, get) => ({
     if (!client) { get().notify("daemon offline"); return; }
     client.gitPush(agentId);
   },
-  notify: (text) => set({ notice: text }),
+  notify: (text) =>
+    set((s) => ({
+      notice: text,
+      notices: text
+        ? [...s.notices, { id: (s.notices[s.notices.length - 1]?.id ?? 0) + 1, text }].slice(-4)
+        : s.notices,
+    })),
+  dismissNotice: (id) => set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
   vaultList: (dir) => {
     set({ vaultDir: dir });
     try { localStorage.setItem("cv-vault-dir", dir); } catch { /* noop */ }
     client?.vaultList(dir);
   },
   explorerDir: null,
+  repoRequestDir: "",
+  repoRequestPath: "",
   openExplorer: (dir) => {
     if (dir) set({ explorerDir: dir });
     const board = get().activeBoard;
@@ -1401,11 +1653,16 @@ export const useBoard = create<BoardState>((set, get) => ({
     else get().openPanelNode("explorer");
   },
   repoTree: (dir) => {
-    set({ repoEntries: [], repoFile: null });
+    set({ repoRequestDir: dir, repoRequestPath: "", repoEntries: [], repoFile: null });
     client?.repoTree(dir);
   },
   repoRead: (dir, path) => {
+    set({ repoRequestDir: dir, repoRequestPath: path, repoFile: null });
     client?.repoRead(dir, path);
+  },
+  repoWrite: (dir, path, text, baseText) => {
+    set({ notice: null });
+    client?.repoWrite(dir, path, text, baseText);
   },
   vaultRead: (path) => client?.vaultRead(get().vaultDir, path),
   vaultPeek: (path) => client?.vaultPeek(get().vaultDir, path),
@@ -1424,6 +1681,19 @@ export const useBoard = create<BoardState>((set, get) => ({
   vaultSearch: (query) => client?.vaultSearch(get().vaultDir, query),
   vaultDiscover: () => client?.vaultDiscover(),
   vaultRegister: (dir) => client?.vaultRegister(dir),
+  openObsidian: async (path) => {
+    const vaultDir = get().vaultDir;
+    if (!client || !vaultDir) {
+      get().notify("Open a vault before launching Obsidian.");
+      return;
+    }
+    try {
+      await client.openObsidian(vaultDir, path);
+      get().notify("Opened the note in Obsidian.");
+    } catch (error) {
+      get().notify(error instanceof Error ? error.message : String(error));
+    }
+  },
   closeVaultFile: () => set({ vaultFile: null }),
   studioDocNow: () => client?.studioDoc(),
   closeStudioDoc: () => set({ studioDoc: null }),
@@ -1436,6 +1706,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     const next = get().webNodes;
     localStorage.setItem("cv-webnodes", JSON.stringify(next));
     client?.moveNode(id, 300 + Math.random() * 200, 140 + Math.random() * 160);
+    get().requestFocus(id);
   },
   webNodeRemove: (id) => {
     const board = get().activeBoard;
@@ -1445,11 +1716,25 @@ export const useBoard = create<BoardState>((set, get) => ({
       return { webNodes: { ...st.webNodes, [board]: m } };
     });
     localStorage.setItem("cv-webnodes", JSON.stringify(get().webNodes));
+    const sizeKey = `${board}:${id}`;
+    const sizes = { ...get().webNodeSizes };
+    delete sizes[sizeKey];
+    localStorage.setItem("cv-webnodesizes", JSON.stringify(sizes));
+    set({ webNodeSizes: sizes });
   },
 
   mdNodes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-mdnodes") ?? "{}"); } catch { return {}; }
   })(),
+  mdNodeSizes: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-mdnodesizes") ?? "{}"); } catch { return {}; }
+  })(),
+  resizeMdNode: (id, w, h, persist = true, boardId = get().activeBoard, pos) => {
+    const next = { ...get().mdNodeSizes, [`${boardId}:${id}`]: { w: Math.max(260, w), h: Math.max(180, h) } };
+    if (persist) localStorage.setItem("cv-mdnodesizes", JSON.stringify(next));
+    set({ mdNodeSizes: next, ...(pos ? { positions: { ...get().positions, [id]: pos } } : {}) });
+    if (persist && pos) client?.moveNode(id, pos.x, pos.y);
+  },
   panelNodes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}"); } catch { return {}; }
   })(),
@@ -1464,6 +1749,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     const next = { ...get().panelNodes, [board]: m };
     localStorage.setItem("cv-panelnodes", JSON.stringify(next));
     set({ panelNodes: next });
+    get().bringCardToFront(id);
   },
   closePanelNode: (id) => {
     const board = get().activeBoard;
@@ -1481,7 +1767,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     localStorage.setItem("cv-panelnodes", JSON.stringify(next));
     set({ panelNodes: next });
   },
-  resizePanelNode: (id, w, h) => {
+  resizePanelNode: (id, w, h, pos) => {
     const board = get().activeBoard;
     const n = get().panelNodes[board]?.[id];
     if (!n) return;
@@ -1490,7 +1776,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     const meta = PANEL_META[n.panel];
     const cw = Math.max(w, meta?.minW ?? 0);
     const ch = Math.max(h, meta?.minH ?? 0);
-    const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: { ...n, w: cw, h: ch } } };
+    const next = { ...get().panelNodes, [board]: { ...get().panelNodes[board], [id]: { ...n, ...(pos ?? {}), w: cw, h: ch } } };
     localStorage.setItem("cv-panelnodes", JSON.stringify(next));
     set({ panelNodes: next });
   },
@@ -1534,8 +1820,12 @@ export const useBoard = create<BoardState>((set, get) => ({
   setPendingTermPos: (p) => set({ pendingTermPos: p }),
   viewportRect: null,
   lastGather: null,
+  gatherMotion: null,
+  leavingShapes: {},
   pendingSpawnPos: null,
   setPendingSpawnPos: (p) => set({ pendingSpawnPos: p }),
+  pendingSpawnPositions: {},
+  setSpawnPositionForName: (name, pos) => set((s) => ({ pendingSpawnPositions: { ...s.pendingSpawnPositions, [name]: pos } })),
   setAgentChain: (workspaceId, chain) => {
     const ws = get().workspaces[workspaceId];
     if (!ws) return;
@@ -1565,6 +1855,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     const next = { ...get().termNodes, [board]: m };
     localStorage.setItem("cv-termnodes", JSON.stringify(next));
     set({ termNodes: next });
+    get().bringCardToFront(id);
   },
   closeTermNode: (id) => {
     const board = get().activeBoard;
@@ -1582,11 +1873,11 @@ export const useBoard = create<BoardState>((set, get) => ({
     localStorage.setItem("cv-termnodes", JSON.stringify(next));
     set({ termNodes: next });
   },
-  resizeTermNode: (id, w, h) => {
+  resizeTermNode: (id, w, h, pos) => {
     const board = get().activeBoard;
     const n = get().termNodes[board]?.[id];
     if (!n) return;
-    const next = { ...get().termNodes, [board]: { ...get().termNodes[board], [id]: { ...n, w, h } } };
+    const next = { ...get().termNodes, [board]: { ...get().termNodes[board], [id]: { ...n, ...(pos ?? {}), w, h } } };
     localStorage.setItem("cv-termnodes", JSON.stringify(next));
     set({ termNodes: next });
   },
@@ -1597,6 +1888,23 @@ export const useBoard = create<BoardState>((set, get) => ({
     const m = n.collapsed
       ? { ...n, collapsed: false, h: n.expandH ?? n.h }
       : { ...n, collapsed: true, expandH: n.h, h: 34 };
+    const next = { ...get().termNodes, [board]: { ...get().termNodes[board], [id]: m } };
+    localStorage.setItem("cv-termnodes", JSON.stringify(next));
+    set({ termNodes: next });
+  },
+  maximizeTermNode: (id, viewRect) => {
+    const board = get().activeBoard;
+    const n = get().termNodes[board]?.[id];
+    if (!n) return;
+    const m = n.maximized
+      ? { ...n, maximized: false, ...(n.prevRect ?? {}) }
+      : {
+          ...n,
+          maximized: true,
+          collapsed: false,
+          prevRect: { x: n.x, y: n.y, w: n.w, h: n.collapsed ? n.expandH ?? n.h : n.h },
+          ...(viewRect ?? {}),
+        };
     const next = { ...get().termNodes, [board]: { ...get().termNodes[board], [id]: m } };
     localStorage.setItem("cv-termnodes", JSON.stringify(next));
     set({ termNodes: next });
@@ -1698,6 +2006,11 @@ export const useBoard = create<BoardState>((set, get) => ({
   })(),
   mdNodeAdd: (path, anchor, at) => {
     const board = get().activeBoard;
+    const existing = Object.entries(get().mdNodes[board] ?? {}).find(([, notePath]) => notePath === path)?.[0];
+    if (existing) {
+      get().requestFocus(existing);
+      return;
+    }
     const id = `md-${Math.random().toString(16).slice(2, 10)}`;
     const next = { ...get().mdNodes, [board]: { ...(get().mdNodes[board] ?? {}), [id]: path } };
     localStorage.setItem("cv-mdnodes", JSON.stringify(next));
@@ -1709,6 +2022,10 @@ export const useBoard = create<BoardState>((set, get) => ({
     set({ mdNodes: next });
     client?.moveNode(id, at?.x ?? 300 + Math.random() * 200, at?.y ?? 140 + Math.random() * 160);
     client?.vaultRead(get().vaultDir, path);
+    // Pinning a note is an explicit user action — the card must surface
+    // above the board instead of landing underneath existing agent cards,
+    // same as panel/term cards already do.
+    get().bringCardToFront(id);
   },
   mdNodeRemove: (id) => {
     const board = get().activeBoard;
@@ -1816,16 +2133,21 @@ export const useBoard = create<BoardState>((set, get) => ({
     set({ edges });
   },
 
-  moveNode: (agentId, x, y) => {
+  moveNode: (agentId, x, y, recordHistory = true) => {
     set((s) => ({
       positions: { ...s.positions, [agentId]: { x, y } },
-      moveHistory: [...s.moveHistory.slice(-49), { id: agentId, prev: s.positions[agentId] }],
+      // Gather/undo reposition many cards as one atomic operation; only a
+      // deliberate manual move belongs in Cmd+Z card-move history.
+      ...(recordHistory ? { moveHistory: [...s.moveHistory.slice(-49), { id: agentId, prev: s.positions[agentId] }] } : {}),
     }));
     client?.moveNode(agentId, x, y);
   },
 
-  bumpFont: (delta) =>
-    set((s) => ({ termFont: Math.min(22, Math.max(9, s.termFont + delta)) })),
+  bumpFont: (delta) => {
+    const termFont = Math.min(22, Math.max(9, get().termFont + Math.trunc(delta)));
+    localStorage.setItem("cv-term-font", String(termFont));
+    set({ termFont });
+  },
 
   undoMove: () => {
     const { moveHistory, positions } = get();
@@ -1936,7 +2258,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     for (const m of missing) get().spawn(m.name, m.command);
     reposition();
     if (missing.length) setTimeout(reposition, 2500); // once spawned ids land
-    set({ notice: `preset "${name}" applied${missing.length ? ` (+${missing.length} spawned)` : ""}` });
+    get().notify(`preset "${name}" applied${missing.length ? ` (+${missing.length} spawned)` : ""}`);
   },
 
   deletePreset: (name) => {
@@ -1954,7 +2276,10 @@ export const useBoard = create<BoardState>((set, get) => ({
       // migrate old pinned stickies to glass pin cards — first pins were
       // stickies with an anchor, the very first had the "card-" id prefix
       for (const board of Object.values(raw)) {
-        for (const [id, sh] of Object.entries(board as Record<string, { kind: string; anchor?: string; title?: string; text: string; color: string }>)) {
+        for (const [id, sh] of Object.entries(board as Record<string, { kind: string; anchor?: string; title?: string; text: string; color: string; group?: boolean }>)) {
+          // Frames created before the structural-region treatment did not
+          // carry the marker; their generated labels make the intent clear.
+          if (sh.kind === "rect" && /^Group \d+$/.test(sh.text ?? "")) sh.group = true;
           if (sh.kind === "sticky" && (sh.anchor || id.startsWith("card-"))) {
             sh.kind = "pin";
             const lines = sh.text.split("\n");
@@ -1969,15 +2294,23 @@ export const useBoard = create<BoardState>((set, get) => ({
   })(),
 
   addShape: (kind) => {
-    const { activeBoard, shapes } = get();
+    const { activeBoard, shapes, viewportRect } = get();
     const id = `shape-${Math.random().toString(36).slice(2, 10)}`;
+    const w = kind === "sticky" ? 170 : 190;
+    const h = kind === "sticky" ? 150 : 120;
+    const x = viewportRect
+      ? Math.max(viewportRect.left, Math.min((viewportRect.left + viewportRect.right - w) / 2, viewportRect.right - w))
+      : 300 + Math.random() * 200;
+    const y = viewportRect
+      ? Math.max(viewportRect.top, Math.min((viewportRect.top + viewportRect.bottom - h) / 2, viewportRect.bottom - h))
+      : 200 + Math.random() * 140;
     const def = {
       id,
       kind,
-      x: 300 + Math.random() * 200,
-      y: 200 + Math.random() * 140,
-      w: kind === "sticky" ? 170 : 190,
-      h: kind === "sticky" ? 150 : 120,
+      x,
+      y,
+      w,
+      h,
       color: kind === "sticky" ? "#e0c04a" : "#e8e6e3",
       text: "",
     };
@@ -1994,8 +2327,8 @@ export const useBoard = create<BoardState>((set, get) => ({
       kind: "pin" as const,
       x: pos?.x ?? 320 + Math.random() * 240,
       y: pos?.y ?? 220 + Math.random() * 160,
-      w: 250,
-      h: 150,
+      w: 380,
+      h: 240,
       color: color ?? "#f5a524",
       title,
       text: body ?? "",
@@ -2010,6 +2343,9 @@ export const useBoard = create<BoardState>((set, get) => ({
     } else {
       set({ shapes: next });
     }
+    // A pin is an explicit "put this in front of me" action — surface the
+    // card above whatever is already on the board, same as panel/term cards.
+    get().bringCardToFront(id);
   },
 
   moveShape: (id, x, y) => {
@@ -2021,12 +2357,12 @@ export const useBoard = create<BoardState>((set, get) => ({
     set({ shapes: next });
   },
 
-  updateShape: (id, patch) => {
+  updateShape: (id, patch, persist = true) => {
     const { activeBoard, shapes } = get();
     const s = shapes[activeBoard]?.[id];
     if (!s) return;
     const next = { ...shapes, [activeBoard]: { ...shapes[activeBoard], [id]: { ...s, ...patch } } };
-    localStorage.setItem("cv-shapes", JSON.stringify(next));
+    if (persist) localStorage.setItem("cv-shapes", JSON.stringify(next));
     set({ shapes: next });
   },
 
@@ -2137,7 +2473,13 @@ export const useBoard = create<BoardState>((set, get) => ({
       get().undoGather();
       return "gather undone";
     }
-    if (/undo|deshacer/.test(t)) return undoMove() ? "undid last move" : "nothing to undo";
+    if (/undo|deshacer/.test(t)) {
+      if (get().lastGather) {
+        get().undoGather();
+        return "gather undone";
+      }
+      return undoMove() ? "undid last move" : "nothing to undo";
+    }
     if (/fit|reset view|zoom|overview/.test(t)) {
       requestView();
       return "fitted view";
@@ -2187,7 +2529,8 @@ export const useBoard = create<BoardState>((set, get) => ({
       memory: "memory",
       "pull requests": "prs", prs: "prs", pr: "prs",
       issues: "issues", issue: "issues",
-      "dex tickets": "notes", tickets: "notes", ticket: "notes", notes: "notes",
+      "dex tickets": "tickets", tickets: "tickets", ticket: "tickets", notes: "notes",
+      "mission map": "usage",
       artifacts: "artifacts", artifact: "artifacts",
       obsidian: "vault", vault: "vault", files: "vault",
       settings: "settings", setting: "settings",
@@ -2208,16 +2551,41 @@ export const useBoard = create<BoardState>((set, get) => ({
   requestNav: (key) => set((s) => ({ navRequest: { key, n: (s.navRequest?.n ?? 0) + 1 } })),
   edgeDetail: null,
   setEdgeDetail: (id) => set({ edgeDetail: id }),
-  panelSummaries: true,
+  panelSummaries: localStorage.getItem("cv-panel-summaries") !== "false",
   togglePanelSummaries: () => {
-    set((s) => ({ panelSummaries: !s.panelSummaries }));
+    const panelSummaries = !get().panelSummaries;
+    localStorage.setItem("cv-panel-summaries", String(panelSummaries));
+    set({ panelSummaries });
     get().notify(get().panelSummaries ? "card summaries on" : "card summaries off");
+  },
+  snapAlign: localStorage.getItem("cv-snap-align") === "true",
+  toggleSnapAlign: () => {
+    const snapAlign = !get().snapAlign;
+    localStorage.setItem("cv-snap-align", String(snapAlign));
+    set({ snapAlign });
+    get().notify(snapAlign ? "alignment snap on — cards magnetically align when dropped close" : "alignment snap off — free drag");
   },
   spawnOpen: false,
   setSpawnOpen: (v) => set(v ? { spawnOpen: v } : { spawnOpen: v, pendingSpawnPos: null }),
   focusSpawn: () => set({ spawnOpen: true }),
   gatherLoose: () => {
-    const { agents, edges, positions, activeBoard, shapes, panelNodes, termNodes } = get();
+    const {
+      agents,
+      edges,
+      positions,
+      agentSizes,
+      activeBoard,
+      shapes,
+      panelNodes,
+      termNodes,
+      mdNodes,
+      webNodes,
+      viewportRect,
+      connected,
+      workspaces,
+      workspaceSizes,
+      orchestrators,
+    } = get();
     const wired = new Set(Object.values(edges).flatMap((e) => [e.from, e.to]));
     // A card is "loose" when its center isn't already inside a group frame.
     const rects = Object.values(shapes[activeBoard] ?? {}).filter(
@@ -2226,79 +2594,202 @@ export const useBoard = create<BoardState>((set, get) => ({
     const inside = (x: number, y: number) =>
       rects.some((r) => x >= r.x && x <= r.x + r.w! && y >= r.y && y <= r.y + r.h!);
     const loose: Array<{ id: string; x: number; y: number; w: number; h: number; move: (id: string, x: number, y: number) => void }> = [];
-    // Agents never dragged have no positions entry — the canvas renders them
-    // on the fallback spawn grid; snapshot THAT spot, not the origin.
+
+    // React Flow scales the viewport with a CSS transform, so offsetWidth/
+    // offsetHeight remain untransformed flow units. Measuring the live node
+    // is the difference between a tight terminal grid and huge phantom gaps
+    // (agent cards are auto-height; 240px was only a rough guess).
+    const measureNode = (id: string, fallbackW: number, fallbackH: number) => {
+      if (typeof document === "undefined") return { w: fallbackW, h: fallbackH };
+      const el = document.querySelector<HTMLElement>(`.react-flow__node[data-id="${id}"]`);
+      const xy = el?.style.transform.match(/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/);
+      return {
+        x: xy ? Number(xy[1]) : undefined,
+        y: xy ? Number(xy[2]) : undefined,
+        w: el?.offsetWidth && el.offsetWidth > 40 ? el.offsetWidth : fallbackW,
+        h: el?.offsetHeight && el.offsetHeight > 24 ? el.offsetHeight : fallbackH,
+      };
+    };
+
+    // Agents never dragged have no positions entry — snapshot the same
+    // visible fallback layout used by the canvas instead of an offscreen grid.
     const boardAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard);
     const fallbackPos = new Map<string, { x: number; y: number }>();
-    boardAgents.forEach((a, i) => {
-      fallbackPos.set(a.id, a.workspace_id
-        ? { x: 60 + (i % 3) * 300, y: 80 + Math.floor(i / 3) * 190 }
-        : { x: 1000 + (i % 2) * 500, y: 60 + Math.floor(i / 2) * 300 });
-    });
+    const looseAgents = boardAgents.filter((a) => !a.workspace_id);
+    const explicitLoose = looseAgents.filter((a) => positions[a.id]);
+    const missingLoose = looseAgents.filter((a) => !positions[a.id]);
+    const fallbackLoose = getAgentSpawnPositions(
+      missingLoose.length,
+      viewportRect,
+      explicitLoose.map((a) => ({ ...positions[a.id], w: agentSizes[a.id]?.w ?? 460, h: agentSizes[a.id]?.h ?? 260 })),
+    );
+    const fallbackById = new Map(missingLoose.map((a, index) => [a.id, fallbackLoose[index]]));
+    // Workspace children use positions RELATIVE to their parent. Replicate
+    // the canvas's per-workspace fallback stack; absolute conversion happens
+    // below when those stationary cards become obstacles.
+    const workspaceOffsets = new Map<string, number>();
+    for (const a of boardAgents) {
+      if (positions[a.id]) {
+        fallbackPos.set(a.id, positions[a.id]);
+      } else if (a.workspace_id) {
+        const offset = workspaceOffsets.get(a.workspace_id) ?? 0;
+        workspaceOffsets.set(a.workspace_id, offset + 1);
+        fallbackPos.set(a.id, { x: 24, y: 64 + offset * 284 });
+      } else {
+        fallbackPos.set(a.id, fallbackById.get(a.id) ?? { x: 24, y: 64 });
+      }
+    }
+
     for (const a of boardAgents) {
       const p = positions[a.id] ?? fallbackPos.get(a.id);
-      if (
-        a.status !== "exited" &&
-        !a.workspace_id &&
-        !wired.has(a.id) &&
-        !(p && positions[a.id] && inside(p.x + 180, p.y + 110))
-      ) {
-        loose.push({ id: a.id, x: p?.x ?? 0, y: p?.y ?? 0, w: 460, h: 240, move: (id, x, y) => get().moveNode(id, x, y) });
+      if (!p || a.status === "exited" || a.workspace_id || wired.has(a.id)) continue;
+      const size = agentSizes[a.id];
+      const measured = measureNode(a.id, size?.w ?? 460, size?.h ?? 220);
+      const cx = p.x + measured.w / 2;
+      const cy = p.y + measured.h / 2;
+      if (!inside(cx, cy)) {
+        loose.push({ id: a.id, x: p.x, y: p.y, w: measured.w, h: measured.h, move: (id, x, y) => get().moveNode(id, x, y, false) });
       }
     }
     for (const [id, n] of Object.entries(panelNodes[activeBoard] ?? {})) {
-      if (!inside(n.x + (n.w ?? 320) / 2, n.y + (n.h ?? 420) / 2))
+      // Position lock and maximize are explicit user states. Gather respects
+      // them; the card remains in place and becomes an obstacle for the layout.
+      if (!n.locked && !n.maximized && !inside(n.x + (n.w ?? 320) / 2, n.y + (n.h ?? 420) / 2))
         loose.push({ id, x: n.x, y: n.y, w: n.w ?? 320, h: n.h ?? 420, move: (i, x, y) => get().movePanelNode(i, x, y) });
     }
     for (const [id, n] of Object.entries(termNodes[activeBoard] ?? {})) {
-      if (!inside(n.x + (n.w ?? 560) / 2, n.y + (n.h ?? 320) / 2))
+      if (!n.locked && !n.maximized && !inside(n.x + (n.w ?? 560) / 2, n.y + (n.h ?? 320) / 2))
         loose.push({ id, x: n.x, y: n.y, w: n.w ?? 560, h: n.h ?? 320, move: (i, x, y) => get().moveTermNode(i, x, y) });
+    }
+    for (const [id] of Object.entries(mdNodes[activeBoard] ?? {})) {
+      const p = positions[id] ?? { x: 640, y: 160 };
+      const measured = measureNode(id, 340, 260);
+      if (!inside(p.x + measured.w / 2, p.y + measured.h / 2))
+        loose.push({ id, ...p, w: measured.w, h: measured.h, move: (i, x, y) => get().moveNode(i, x, y, false) });
+    }
+    for (const [id] of Object.entries(webNodes[activeBoard] ?? {})) {
+      const p = positions[id] ?? { x: 600, y: 120 };
+      const measured = measureNode(id, 520, 360);
+      if (!inside(p.x + measured.w / 2, p.y + measured.h / 2))
+        loose.push({ id, ...p, w: measured.w, h: measured.h, move: (i, x, y) => get().moveNode(i, x, y, false) });
     }
     if (!loose.length) {
       get().notify("gather — no loose windows");
       return;
     }
+
     // Snapshot every loose position before moving a single card — undo
     // grouping puts them all back (Deska "put windows back").
     const snapshotItems = loose.map((l) => ({
       id: l.id,
-      kind: (l.id.startsWith("panel-") ? "panel" : l.id.startsWith("term-") ? "term" : "agent") as "agent" | "panel" | "term",
+      kind: (l.id.startsWith("panel-") ? "panel" : l.id.startsWith("term-") ? "term" : l.id.startsWith("md-") ? "md" : l.id.startsWith("web-") ? "web" : "agent") as "agent" | "panel" | "term" | "md" | "web",
       x: l.x,
       y: l.y,
     }));
-    // Anchor the grid inside the current viewport — scattered cards must
-    // come INTO view, not pile up where the leftmost one happened to be.
-    const vp = get().viewportRect;
-    let x0 = vp ? vp.left + 80 : Math.min(...loose.map((l) => l.x));
-    let y0 = vp ? vp.top + 110 : Math.min(...loose.map((l) => l.y));
-    const cols = Math.ceil(Math.sqrt(loose.length));
-    const cw = Math.max(...loose.map((l) => l.w)) + 32;
-    const ch = Math.max(...loose.map((l) => l.h)) + 32;
-    // Don't bury existing groups: while the grid area intersects a frame,
-    // slide the anchor below it (few frames in practice — one pass suffices).
-    const rows0 = Math.ceil(loose.length / cols);
-    // Frame rect exactly as drawn: origin (x0-26, y0-46), size (cols*cw+12,
-    // rows*ch+56) — anything looser flags clear space as a collision.
-    for (const r of [...rects].sort((a, b) => a.y - b.y)) {
-      const gx1 = x0 - 26, gy1 = y0 - 46;
-      const gx2 = gx1 + cols * cw + 12, gy2 = gy1 + rows0 * ch + 56;
-      const overlap = gx1 < r.x + r.w! && gx2 > r.x && gy1 < r.y + r.h! && gy2 > r.y;
-      if (overlap) y0 = r.y + r.h! + 110;
+
+    // Stationary content is sacred: group frames, workspaces, wired/parented
+    // agents, orchestrators, locked cards and already-grouped cards all shape
+    // the placement search. The old gather only avoided other shape rects,
+    // so a fresh frame could swallow an entire workspace visually.
+    const looseIds = new Set(loose.map((l) => l.id));
+    const obstacles: GatherRect[] = [];
+    const addObstacle = (x: number, y: number, w: number, h: number) => {
+      if ([x, y, w, h].every(Number.isFinite) && w > 0 && h > 0) obstacles.push({ x, y, w, h });
+    };
+    for (const s of Object.values(shapes[activeBoard] ?? {})) addObstacle(s.x, s.y, s.w, s.h);
+    for (const w of Object.values(workspaces)) {
+      if ((w.board_id ?? "main") !== activeBoard) continue;
+      const p = positions[w.id] ?? { x: 60, y: 60 };
+      const sz = workspaceSizes[w.id] ?? { w: 900, h: 540 };
+      addObstacle(p.x, p.y, sz.w, sz.h);
     }
-    loose.forEach((l, i) =>
-      l.move(l.id, x0 + (i % cols) * cw, y0 + Math.floor(i / cols) * ch),
-    );
-    const rows = Math.ceil(loose.length / cols);
+    // Demo mode renders fixture workspaces outside the store. Treat those
+    // visible fixtures as obstacles too; otherwise gather passes its offline
+    // visual smoke test geometrically while visibly swallowing the mock board.
+    if (!connected && Object.keys(agents).length === 0) {
+      for (const n of initialNodes) {
+        if (n.parentId) continue; // parent fixtures already cover their children
+        const fallbackW = n.type === "workspace" ? 900 : n.type === "orchestrator" ? 292 : 460;
+        const fallbackH = n.type === "workspace" ? 540 : n.type === "orchestrator" ? 190 : 220;
+        const styleW = typeof n.style?.width === "number" ? n.style.width : undefined;
+        const styleH = typeof n.style?.height === "number" ? n.style.height : undefined;
+        const measured = measureNode(n.id, styleW ?? fallbackW, styleH ?? fallbackH);
+        addObstacle(measured.x ?? n.position.x, measured.y ?? n.position.y, measured.w, measured.h);
+      }
+    }
+    for (const a of boardAgents) {
+      if (looseIds.has(a.id)) continue;
+      const rel = positions[a.id] ?? fallbackPos.get(a.id) ?? { x: 24, y: 64 };
+      const ws = a.workspace_id ? workspaces[a.workspace_id] : undefined;
+      const base = ws ? (positions[ws.id] ?? { x: 60, y: 60 }) : { x: 0, y: 0 };
+      const size = agentSizes[a.id];
+      const measured = measureNode(a.id, size?.w ?? 460, size?.h ?? 220);
+      addObstacle(base.x + rel.x, base.y + rel.y, measured.w, measured.h);
+    }
+    for (const [id, o] of Object.entries(orchestrators)) {
+      if (o.board !== activeBoard) continue;
+      const p = positions[id] ?? { x: 420, y: 80 };
+      const measured = measureNode(id, 292, 190);
+      addObstacle(p.x, p.y, measured.w, measured.h);
+    }
+    for (const [id, n] of Object.entries(panelNodes[activeBoard] ?? {})) {
+      if (!looseIds.has(id)) addObstacle(n.x, n.y, n.w ?? 320, n.h ?? 420);
+    }
+    for (const [id, n] of Object.entries(termNodes[activeBoard] ?? {})) {
+      if (!looseIds.has(id)) addObstacle(n.x, n.y, n.w ?? 560, n.h ?? 320);
+    }
+    for (const [id] of Object.entries(mdNodes[activeBoard] ?? {})) {
+      if (looseIds.has(id)) continue;
+      const p = positions[id] ?? { x: 640, y: 160 };
+      const measured = measureNode(id, 340, 260);
+      addObstacle(p.x, p.y, measured.w, measured.h);
+    }
+    for (const [id] of Object.entries(webNodes[activeBoard] ?? {})) {
+      if (looseIds.has(id)) continue;
+      const p = positions[id] ?? { x: 600, y: 120 };
+      const measured = measureNode(id, 520, 360);
+      addObstacle(p.x, p.y, measured.w, measured.h);
+    }
+
+    // viewportRect is in flow units, but rails/topbar/dock occupy SCREEN px.
+    // Recover the zoom from the viewport width and convert those margins so
+    // the group never slides underneath floating chrome at low zoom (or wastes
+    // excessive space at high zoom).
+    const zoomGuess = viewportRect && typeof window !== "undefined"
+      ? Math.min(2, Math.max(0.2, window.innerWidth / Math.max(1, viewportRect.right - viewportRect.left)))
+      : 1;
+    const px = (screenPx: number) => screenPx / zoomGuess;
+    const plan = planGatherLayout(loose, viewportRect, obstacles, {
+      left: px(64),
+      top: px(84),
+      right: px(56),
+      bottom: px(76),
+    });
+    if (!plan) {
+      get().notify("gather — no loose windows");
+      return;
+    }
+
+    const token = Date.now() + Math.random();
+    set({ gatherMotion: { ids: loose.map((l) => l.id), token } });
+    const movers = new Map(loose.map((l) => [l.id, l.move]));
+    for (const p of plan.placements) movers.get(p.id)?.(p.id, p.x, p.y);
+
     // The frame needs its id for undo — frameNodes returns the label, so
     // capture the newest frame id from the shapes map right after.
     const beforeIds = new Set(Object.keys(get().shapes[activeBoard] ?? {}));
-    const n = get().frameNodes(
-      x0 - 26, y0 - 46, cols * cw + 12, rows * ch + 56,
-    );
+    const n = get().frameNodes(plan.frame.x, plan.frame.y, plan.frame.w, plan.frame.h);
     const frameId = Object.keys(get().shapes[activeBoard] ?? {}).find((k) => !beforeIds.has(k)) ?? "";
     set({ lastGather: { board: activeBoard, items: snapshotItems, frameId } });
-    get().notify(`gathered ${loose.length} into ${n} — "undo gather" puts them back`);
-    get().requestView();
+    get().notify(`gathered ${loose.length} window${loose.length === 1 ? "" : "s"} into ${n}`);
+
+    // Choreography: windows and camera travel together. The focus effect's
+    // first retry naturally starts a frame after the node mount, so the region
+    // materializes for one beat before the camera settles on it.
+    if (frameId) get().requestFocus(frameId);
+    setTimeout(() => {
+      if (get().gatherMotion?.token === token) set({ gatherMotion: null });
+    }, 330);
   },
   undoGather: () => {
     const g = get().lastGather;
@@ -2316,23 +2807,38 @@ export const useBoard = create<BoardState>((set, get) => ({
       return;
     }
     if (get().activeBoard !== g.board) get().setActiveBoard(g.board);
+    const token = Date.now() + Math.random();
+    set({ gatherMotion: { ids: g.items.map((item) => item.id), token } });
     for (const item of g.items) {
       if (item.kind === "panel") get().movePanelNode(item.id, item.x, item.y);
       else if (item.kind === "term") get().moveTermNode(item.id, item.x, item.y);
-      else get().moveNode(item.id, item.x, item.y);
+      else get().moveNode(item.id, item.x, item.y, false);
     }
-    // Drop the frame the gather created.
+    // Let the outgoing region dissolve while the windows fly back; deleting
+    // it in the same frame made undo feel like a hard cut.
     if (g.frameId) {
-      const board = get().activeBoard;
-      const m = { ...(get().shapes[board] ?? {}) };
-      delete m[g.frameId];
-      const next = { ...get().shapes, [board]: m };
-      localStorage.setItem("cv-shapes", JSON.stringify(next));
-      set({ shapes: next });
+      set((s) => ({ leavingShapes: { ...s.leavingShapes, [g.frameId]: true } }));
+      setTimeout(() => {
+        const boardShapes = { ...(get().shapes[g.board] ?? {}) };
+        delete boardShapes[g.frameId];
+        const next = { ...get().shapes, [g.board]: boardShapes };
+        localStorage.setItem("cv-shapes", JSON.stringify(next));
+        set((s) => {
+          const leavingShapes = { ...s.leavingShapes };
+          delete leavingShapes[g.frameId];
+          return { shapes: next, leavingShapes };
+        });
+      }, 180);
     }
     set({ lastGather: null });
     get().notify("gather undone — windows back where they were");
-    get().requestView();
+    // Join the reverse flight immediately. App-level fitView ignores the
+    // dissolving frame, so the camera can follow the windows home instead of
+    // waiting for the region to vanish and missing half the motion.
+    setTimeout(() => get().requestView(), 20);
+    setTimeout(() => {
+      if (get().gatherMotion?.token === token) set({ gatherMotion: null });
+    }, 330);
   },
   /** Drop a translucent "Group N" rect behind a region of the board —
    * shared by gatherLoose and the selection pill. Returns the label. */
@@ -2341,7 +2847,7 @@ export const useBoard = create<BoardState>((set, get) => ({
     const n = Object.keys(shapes[activeBoard] ?? {}).filter(
       (k) => shapes[activeBoard][k].text?.startsWith("Group")).length + 1;
     const id = `shape-${Math.random().toString(36).slice(2, 10)}`;
-    const def = { id, kind: "rect" as const, x, y, w, h, color: "#e8b25a", text: `Group ${n}` };
+    const def = { id, kind: "rect" as const, x, y, w, h, color: "#e8b25a", text: `Group ${n}`, group: true };
     const next = { ...shapes, [activeBoard]: { ...(shapes[activeBoard] ?? {}), [id]: def } };
     localStorage.setItem("cv-shapes", JSON.stringify(next));
     set({ shapes: next });
@@ -2835,7 +3341,10 @@ export const useBoard = create<BoardState>((set, get) => ({
     reply(r.startsWith("try:") ? `can't parse that — ${r}` : r);
   },
 
-  ptyBuffer: (agentId) => get().ptyBuffers[agentId],
+  ptyBuffer: (agentId) => {
+    flushPendingPtyState(get, (patch) => set(patch));
+    return get().ptyBuffers[agentId];
+  },
 
   attachPty: (agentId, cb) =>
     set((s) => {

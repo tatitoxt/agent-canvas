@@ -64,6 +64,9 @@ export type ShapeDef = {
   /** Card title (pinned panels) — body lives in `text`. */
   title?: string;
   anchor?: string;
+  /** Frames created by Gather/“group windows” use a cleaner region chrome
+   * than freehand whiteboard rects. */
+  group?: boolean;
 };
 
 export type ShapeNodeData = {

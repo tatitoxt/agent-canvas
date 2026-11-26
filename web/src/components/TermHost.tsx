@@ -4,12 +4,14 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
 import { useBoard } from "../store/board";
+import { PtyWriteBuffer } from "../board/ptyWriteBuffer";
+import { observeNearViewport } from "../lib/nearViewport";
 
 /** The xterm core shared by the bottom drawer (TerminalPanel) and the
  * canvas terminal card (TermNode): mounts the emulator, replays the
  * scrollback buffer, pipes PTY bytes both ways, answers OSC color
  * queries, and keeps the PTY size in sync with the box. */
-const DECOR = { matchBackground: "#7a5a1e", matchOverviewRuler: "#e8b25a", activeMatchBackground: "#e8b25a", activeMatchColorOverviewRuler: "#ffffff" };
+const DECOR = { matchBackground: "#5c4316", matchOverviewRuler: "#f5a524", activeMatchBackground: "#f5a524", activeMatchColorOverviewRuler: "#ffffff" };
 
 
 /** tmux-style grouped clients: several TermHosts can mirror the same PTY
@@ -48,15 +50,30 @@ export function TermHost({ agentId }: { agentId: string }) {
   const [findOpen, setFindOpen] = useState(false);
   const [findQ, setFindQ] = useState("");
 
+  // Keep terminal shortcuts scoped to this pane. In particular, Cmd/Ctrl+F
+  // should search scrollback without sending control characters to a TUI.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "f") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setFindOpen(true);
+    };
+    host.addEventListener("keydown", onKeyDown, true);
+    return () => host.removeEventListener("keydown", onKeyDown, true);
+  }, []);
+
   useEffect(() => {
     const term = new Terminal({
       fontSize: useBoard.getState().termFont,
-      fontFamily: "ui-monospace, Menlo, monospace",
+      fontFamily: "\"Hack\", \"JetBrains Mono\", \"SF Mono\", Menlo, Consolas, \"IBM Plex Mono\", ui-monospace, monospace",
       theme: {
-        background: "#121214",
-        foreground: "#eceae6",
-        cursor: "#c9a26b",
-        selectionBackground: "rgba(255,255,255,0.12)",
+        background: "#0a0b0e",
+        foreground: "#eef1f5",
+        cursor: "#f5a524",
+        selectionBackground: "rgba(245,165,36,0.4)",
       },
       convertEol: true,
     });
@@ -71,15 +88,34 @@ export function TermHost({ agentId }: { agentId: string }) {
     mirrors.get(agentId)!.add(mirror);
     syncMirroredSize(agentId);
 
+    // Panning must never destroy this xterm, but an offscreen xterm should
+    // not spend CPU parsing/painting either. Bytes are coalesced while the
+    // terminal is outside the viewport halo and flushed in order when it
+    // returns. PtyWriteBuffer's high-water fallback keeps the no-loss
+    // guarantee bounded in memory even for pathological output streams.
+    const writeBuffer = new PtyWriteBuffer((bytes) => term.write(bytes));
+    const stopObservingVisibility = observeNearViewport(hostRef.current!, (near) => {
+      writeBuffer.setActive(near);
+    });
+
     const { attachPty, detachPty, sendInput, ptyBuffer, requestTranscript } = useBoard.getState();
     const history = ptyBuffer(agentId);
     if (history?.length) {
       // Replaying scrollback means this card is a restore, not a fresh
       // shell — mark it the way Deska does so the timeline stays honest.
-      term.write("\x1b[2m\x1b[3m--- restored session ---\x1b[0m\r\n");
-      term.write(history);
+      writeBuffer.push(new TextEncoder().encode("\x1b[2m\x1b[3m--- restored session ---\x1b[0m\r\n"));
+      writeBuffer.push(history);
     }
-    const onBytes = (bytes: Uint8Array) => term.write(bytes);
+    const onBytes = (bytes: Uint8Array | null) => {
+      if (bytes === null) {
+        // A daemon reconnect replays the scrollback from byte zero. Clear the
+        // queue with the old stream so replay bytes cannot interleave with it.
+        writeBuffer.reset();
+        term.reset();
+        return;
+      }
+      writeBuffer.push(bytes);
+    };
     attachPty(agentId, onBytes);
     if (useBoard.getState().agents[agentId]?.status === "exited") {
       requestTranscript(agentId);
@@ -92,9 +128,9 @@ export function TermHost({ agentId }: { agentId: string }) {
     const reply = (text: string) =>
       sendInput(agentId, new TextEncoder().encode(`\x1b]${text}\x07`));
     const oscReplies: Record<number, string> = {
-      10: "10;rgb:ecec/eaea/e6e6",
-      11: "11;rgb:1212/1212/1414",
-      12: "12;rgb:c9c9/a2a2/6b6b",
+      10: "10;rgb:eeee/f1f1/f5f5",
+      11: "11;rgb:0a0a/0b0b/0e0e",
+      12: "12;rgb:f5f5/a5a5/2424",
     };
     const oscHandlers = Object.entries(oscReplies).map(([ps, answer]) =>
       term.parser.registerOscHandler(Number(ps), (data) => {
@@ -108,6 +144,7 @@ export function TermHost({ agentId }: { agentId: string }) {
     termRef.current = term;
 
     return () => {
+      stopObservingVisibility();
       sub.dispose();
       oscHandlers.forEach((h) => h.dispose());
       detachPty(agentId, onBytes);
@@ -121,18 +158,24 @@ export function TermHost({ agentId }: { agentId: string }) {
   }, [agentId]);
 
   useEffect(() => {
-    const term = termRef.current;
-    if (term && term.options.fontSize !== termFont) {
-      term.options.fontSize = termFont;
-      term.refresh(0, Math.max(0, term.rows - 1));
+    const activeMirrors = mirrors.get(agentId);
+    if (!activeMirrors) return;
+    for (const mirror of activeMirrors) {
+      if (mirror.term.options.fontSize !== termFont) {
+        mirror.term.options.fontSize = termFont;
+        mirror.term.refresh(0, Math.max(0, mirror.term.rows - 1));
+        mirror.fit.fit();
+      }
     }
-  }, [termFont]);
+  }, [agentId, termFont]);
 
   const findInput = (
     <input
       autoFocus
       value={findQ}
       placeholder="find in buffer"
+      aria-label="Find in terminal buffer"
+      data-testid="terminal-find-input"
       onChange={(e) => {
         setFindQ(e.target.value);
         if (e.target.value) searchRef.current?.findNext(e.target.value, { decorations: DECOR });
@@ -150,7 +193,7 @@ export function TermHost({ agentId }: { agentId: string }) {
       }}
       style={{
         width: 130,
-        fontSize: 10.5,
+        fontSize: "var(--cv-text-xxs)",
         padding: "3px 8px",
         borderRadius: 999,
         border: "1px solid var(--cv-glass-edge)",
@@ -180,14 +223,14 @@ export function TermHost({ agentId }: { agentId: string }) {
           <button
             title="previous match (shift+enter)"
             onClick={() => searchRef.current?.findPrevious(findQ)}
-            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11, padding: "0 2px" }}
+            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: "0 2px" }}
           >
             ↑
           </button>
           <button
             title="next match (enter)"
             onClick={() => searchRef.current?.findNext(findQ)}
-            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11, padding: "0 2px" }}
+            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: "0 2px" }}
           >
             ↓
           </button>
@@ -197,29 +240,26 @@ export function TermHost({ agentId }: { agentId: string }) {
               setFindOpen(false);
               termRef.current?.focus();
             }}
-            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11, padding: "0 2px" }}
+            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: "0 2px" }}
           >
             ✕
           </button>
         </div>
       )}
-      <div ref={hostRef} className="min-h-0 flex-1" />
+      <div ref={hostRef} className="min-h-0 min-w-0 flex-1" style={{ minWidth: 0 }} />
       <div
         className="nodrag"
         style={{ position: "absolute", top: findOpen ? 30 : 6, right: 8, display: findOpen ? "none" : "flex", gap: 4, alignItems: "center", zIndex: 5 }}
       >
         <button
           title="find in terminal buffer"
+          aria-label="Find in terminal buffer"
           onClick={() => setFindOpen((v) => !v)}
-          style={{ background: "none", border: "none", color: findOpen ? "var(--cv-accent)" : "var(--cv-ink-dim)", cursor: "pointer", fontSize: 12, padding: "0 2px" }}
+          style={{ background: "none", border: "none", color: findOpen ? "var(--cv-accent)" : "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xs)", padding: "0 2px" }}
         >
           ⌕
         </button>
       </div>
     </div>
   );
-  return <div ref={hostRef} className="min-h-0 flex-1" />;
-  // min-w-0: inside a split flex row the xterm screen's intrinsic width
-  // would otherwise veto shrinking and clip the sibling pane.
-  return <div ref={hostRef} className="min-h-0 min-w-0 flex-1" style={{ minWidth: 0 }} />;
 }

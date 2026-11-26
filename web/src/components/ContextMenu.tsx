@@ -66,7 +66,7 @@ export function ContextMenu({
     border: "none",
     background: "transparent",
     color: "var(--cv-ink)",
-    fontSize: 12,
+    fontSize: "var(--cv-text-xs)",
     padding: "7px 12px",
     borderRadius: 8,
     cursor: "pointer",
@@ -76,7 +76,7 @@ export function ContextMenu({
   return (
     <div
       ref={ref}
-      className="glass"
+      className="cv-menu"
       style={{
         position: "fixed",
         left: Math.min(x, window.innerWidth - 220),
@@ -142,7 +142,7 @@ export function ContextMenu({
         </button>
         {boardsOpen && (
           <div
-            className="glass"
+            className="cv-menu"
             style={{
               position: "absolute",
               left: "100%",

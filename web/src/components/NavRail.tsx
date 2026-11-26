@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useBoard } from "../store/board";
 import { Icon } from "./icons";
 
@@ -8,6 +8,7 @@ const railCol: React.CSSProperties = {
   top: 226,
   bottom: 12,
   zIndex: 20,
+  pointerEvents: "none",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -65,11 +66,6 @@ const tinyBtn = (active: boolean): React.CSSProperties => ({
 });
 
 const sectionLabel: React.CSSProperties = {
-  fontSize: 8,
-  fontWeight: 700,
-  letterSpacing: 0.9,
-  color: "var(--cv-ink-faint)",
-  textTransform: "uppercase",
   padding: "1px 0 2px",
 };
 
@@ -78,12 +74,12 @@ const menuRow: React.CSSProperties = {
   alignItems: "center",
   gap: 9,
   width: "100%",
-  padding: "6px 10px",
+  padding: "7px 10px",
   border: "none",
   background: "transparent",
   color: "var(--cv-ink)",
-  fontSize: 11.5,
-  fontWeight: 550,
+  fontSize: "var(--cv-text-xs)",
+  fontWeight: 500,
   textAlign: "left",
   cursor: "pointer",
   borderRadius: 8,
@@ -98,7 +94,7 @@ const badge = (bg: string): React.CSSProperties => ({
   borderRadius: 999,
   background: bg,
   color: "var(--cv-base)",
-  fontSize: 8.5,
+  fontSize: "var(--cv-text-xxs)",
   fontWeight: 700,
   display: "grid",
   placeItems: "center",
@@ -157,7 +153,7 @@ function SpacesBubble() {
         border: "1px solid var(--cv-glass-edge)",
         background: "var(--cv-glass-hi)",
         color: "var(--cv-ink)",
-        fontSize: 11,
+        fontSize: "var(--cv-text-xxs)",
         textAlign: "center",
         outline: "none",
       }}
@@ -166,7 +162,7 @@ function SpacesBubble() {
 
   return (
     <nav className="glass" style={bubble}>
-      <div style={sectionLabel}>Spaces</div>
+      <div className="cv-section-label" style={sectionLabel}>Spaces</div>
       {Object.entries(boards).map(([id, n]) =>
         editing === id ? (
           renameInput(id)
@@ -180,7 +176,7 @@ function SpacesBubble() {
             title={`${n} — double-click to rename${id !== "main" ? ", ⌫ deletes when empty" : ""}`}
             style={{
               ...btn(id === activeBoard),
-              fontSize: 12,
+              fontSize: "var(--cv-text-xs)",
               fontWeight: 700,
               color: id === activeBoard ? "var(--cv-accent)" : "var(--cv-ink-dim)",
             }}
@@ -204,7 +200,7 @@ function SpacesBubble() {
                   borderRadius: 999,
                   background: "var(--cv-blocked)",
                   color: "var(--cv-base)",
-                  fontSize: 9,
+                  fontSize: "var(--cv-text-xxs)",
                   display: "grid",
                   placeItems: "center",
                 }}
@@ -221,7 +217,7 @@ function SpacesBubble() {
         <button
           onClick={() => { setEditing("new"); setEditName(""); }}
           title="New board"
-          style={{ ...btn(false), fontSize: 15 }}
+          style={{ ...btn(false), fontSize: "var(--cv-text-lg)" }}
         >
           +
         </button>
@@ -264,7 +260,7 @@ function ExtrasBubble({ side, onSelect }: { side: "left" | "right"; onSelect: (k
             zIndex: 40,
           }}
         >
-          <div style={sectionLabel}>Extras</div>
+          <div className="cv-section-label" style={sectionLabel}>Extras</div>
           {[
             ["monitor", "VS Code", "bridge — soon"],
             ["vault", "Obsidian vault", "open vault panel"],
@@ -285,7 +281,7 @@ function ExtrasBubble({ side, onSelect }: { side: "left" | "right"; onSelect: (k
               <Icon name={icon as string} size={14} color="var(--cv-ink-dim)" />
               <span style={{ flex: 1 }}>{label}</span>
               {hint.includes("soon") && (
-                <span style={{ fontSize: 9, color: "var(--cv-ink-faint)" }}>soon</span>
+                <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>soon</span>
               )}
             </button>
           ))}
@@ -297,7 +293,7 @@ function ExtrasBubble({ side, onSelect }: { side: "left" | "right"; onSelect: (k
 
 /** Left rail — the code bubble up top (source control, explorer,
  * dev ticket, daemon status), Extras parked at the bottom. */
-export function NavRail({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
+export const NavRail = memo(function NavRail({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
   const repoUrl = useBoard((s) => s.repoUrl);
   const agents = useBoard((s) => s.agents);
   const activeBoard = useBoard((s) => s.activeBoard);
@@ -309,27 +305,18 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
     .filter((a) => (a.board_id ?? "main") === activeBoard && a.status !== "exited");
   const gitAgents = openAgents.filter((a) => a.worktree);
 
-  const [menu, setMenu] = useState<"git" | null>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(() => localStorage.getItem("cv-library-expanded") === "1");
+  const toggleExpanded = () => setExpanded((e) => { localStorage.setItem("cv-library-expanded", e ? "0" : "1"); return !e; });
   const railRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!menu) return;
-    const onDown = (e: MouseEvent) => {
-      if (railRef.current && !railRef.current.contains(e.target as Node)) setMenu(null);
-    };
-    window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
-  }, [menu]);
-
   const tools: { icon?: string; img?: string; label: string; hint: string; onClick: () => void; key?: string; color?: string; fact?: string; badgeN?: number }[] = [
-    { icon: "git", label: "Source Control", hint: `worktrees, push an agent's branch${gitAgents.length ? ` — ${gitAgents.length} live` : ""}`, onClick: () => setMenu((m) => (m === "git" ? null : "git")), badgeN: gitAgents.length },
+    { icon: "git", label: "Source Control", hint: `worktrees, push an agent's branch${gitAgents.length ? ` — ${gitAgents.length} live` : ""}`, onClick: () => onSelect("sc"), key: "sc", badgeN: gitAgents.length },
     { img: "/obsidian.svg", label: "Obsidian", hint: "your real vault — 'obsidian <note>' in Dex writes to it", onClick: () => onSelect("vault"), key: "vault", color: "#8B5CF6" },
     ...(repoUrl ? [
       { icon: "github", label: "Pull requests", hint: "live list from the repo's GitHub", onClick: () => onSelect("prs"), key: "prs", fact: ghCounts.prs != null ? `${ghCounts.prs} open` : undefined },
-      { icon: "issue", label: "Issues", hint: "live list from the repo's GitHub", onClick: () => onSelect("issues"), key: "issues", fact: ghCounts.issues != null ? `${ghCounts.issues} open` : undefined },
+      { icon: "github", label: "Issues", hint: "live list from the repo's GitHub", onClick: () => onSelect("issues"), key: "issues", fact: ghCounts.issues != null ? `${ghCounts.issues} open` : undefined },
     ] as const : []),
-    { icon: "ticket", label: "Dex Tickets", hint: "notes and tasks on the board", onClick: () => onSelect("notes"), key: "notes", fact: noteCount ? `${noteCount}` : undefined },
-    { icon: "zap", label: "Delegations", hint: "delegation tickets — status, result, open the edge", onClick: () => onSelect("tickets"), key: "tickets" },
+    { icon: "ticket", label: "Dex Tickets", hint: "delegations, status, results and changed files", onClick: () => onSelect("tickets"), key: "tickets" },
+    { icon: "notes", label: "Notes", hint: "notes and tasks on the board", onClick: () => onSelect("notes"), key: "notes", fact: noteCount ? `${noteCount}` : undefined },
     { icon: "artifacts", label: "Artifacts", hint: "shots, docs and files the agents produced", onClick: () => onSelect("artifacts"), key: "artifacts", fact: artifactCount ? `${artifactCount}` : undefined },
     { icon: "loops", label: "Loops", hint: "recurring instructions per agent", onClick: () => onSelect("loops"), key: "loops", fact: loopCount ? `${loopCount} active` : undefined },
   ];
@@ -340,17 +327,63 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         key={t.label}
         title={t.hint}
         onClick={t.onClick}
-        style={menuRow}
-        onMouseEnter={(e) => hoverRow(e, true)}
-        onMouseLeave={(e) => hoverRow(e, false)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          width: "100%",
+          padding: "10px 10px",
+          border: "none",
+          background: "transparent",
+          color: t.key && active === t.key ? "var(--cv-ink)" : "color-mix(in srgb, var(--cv-ink) 78%, transparent)",
+          fontSize: "var(--cv-text-sm)",
+          fontWeight: 500,
+          letterSpacing: 0.1,
+          textAlign: "left",
+          cursor: "pointer",
+          borderRadius: 9,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "var(--cv-glass-hi)";
+          e.currentTarget.style.color = "var(--cv-ink)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "transparent";
+          e.currentTarget.style.color = t.key && active === t.key ? "var(--cv-ink)" : "color-mix(in srgb, var(--cv-ink) 78%, transparent)";
+        }}
       >
-        {t.img ? (
-          <img src={t.img} alt="" width={14} height={14} />
-        ) : (
-          <Icon name={t.icon!} size={14} color={t.color ?? (t.key && active === t.key ? "var(--cv-accent)" : "var(--cv-ink-dim)")} />
-        )}
+        {/* brand marks (github fill, obsidian img) are full-bleed artwork, so
+            they render a touch smaller than the thin line icons — same optical
+            weight, correct brand. Line icons stay phosphor-thin at 16. */}
+        <span style={{ width: 16, height: 16, display: "grid", placeItems: "center", flex: "none" }}>
+          {t.img ? (
+            <img src={t.img} alt="" width={14} height={14} style={{ display: "block" }} />
+          ) : (
+            <Icon
+              name={t.icon!}
+              size={t.icon === "github" ? 14 : 16}
+              color={t.color ?? (t.key && active === t.key ? "var(--cv-accent)" : "var(--cv-ink-dim)")}
+            />
+          )}
+        </span>
         <span style={{ flex: 1 }}>{t.label}</span>
-        {t.fact && <span style={{ fontSize: 9, color: "var(--cv-ink-dim)", fontWeight: 600 }}>{t.fact}</span>}
+        {t.fact && <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", fontWeight: 500 }}>{t.fact}</span>}
+        {!t.fact && !!t.badgeN && (
+          <span
+            style={{
+              fontSize: "var(--cv-text-xxs)",
+              fontWeight: 600,
+              color: "var(--cv-ink-dim)",
+              background: "var(--cv-glass-hi)",
+              borderRadius: 999,
+              padding: "1px 6px",
+              minWidth: 16,
+              textAlign: "center",
+            }}
+          >
+            {t.badgeN}
+          </span>
+        )}
       </button>
     ) : (
       <button key={t.label} title={t.hint} onClick={t.onClick} style={btn(!!t.key && active === t.key)}>
@@ -363,92 +396,62 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
       </button>
     );
 
-  const gitMenuEl = menu === "git" && (
-    <div
-      className="cv-menu cv-menu-scroll"
-      style={{
-        position: "absolute",
-        left: expanded ? 180 : 46,
-        top: expanded ? 64 : 36,
-        width: 220,
-        padding: 6,
-        zIndex: 40,
-        maxHeight: 340,
-        overflowY: "auto",
-      }}
-    >
-      <div style={sectionLabel}>Source control</div>
-      <button
-        style={menuRow}
-        title="open the full source-control panel as a canvas card"
-        onClick={() => { onSelect("sc"); setMenu(null); }}
-        onMouseEnter={(e) => hoverRow(e, true)}
-        onMouseLeave={(e) => hoverRow(e, false)}
-      >
-        <Icon name="expand" size={13} color="var(--cv-ink-dim)" />
-        <span style={{ flex: 1 }}>open as panel</span>
-      </button>
-      {gitAgents.length === 0 && (
-        <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
-          no agents with worktrees
-        </div>
-      )}
-      {gitAgents.map((a) => (
-        <button
-          key={a.id}
-          style={menuRow}
-          title={`push ${a.worktree} — the agent's branch`}
-          onClick={() => { useBoard.getState().gitPush(a.id); setMenu(null); }}
-          onMouseEnter={(e) => hoverRow(e, true)}
-          onMouseLeave={(e) => hoverRow(e, false)}
-        >
-          <Icon name="git" size={13} color="var(--cv-ink-dim)" />
-          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {a.name}
-          </span>
-          <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>push</span>
-        </button>
-      ))}
-    </div>
-  );
-
   return (
-    <div ref={railRef} style={{ ...railCol, alignItems: expanded ? "stretch" : "center", width: expanded ? 174 : undefined }}>
+    <div ref={railRef} style={{ ...railCol, alignItems: expanded ? "stretch" : "center", width: expanded ? 196 : undefined }}>
       <nav
-        className={expanded ? "glass cv-menu-scroll" : "glass"}
+        className={expanded ? "glass" : "glass"}
         style={{
           ...bubble,
+          pointerEvents: "auto",
           alignItems: expanded ? "stretch" : "center",
-          padding: expanded ? "6px 4px" : bubble.padding,
-          gap: expanded ? 1 : bubble.gap,
-          maxHeight: expanded ? "70vh" : undefined,
-          overflowY: expanded ? "auto" : undefined,
+          padding: expanded ? 0 : bubble.padding,
+          gap: expanded ? 0 : bubble.gap,
+          overflow: expanded ? "hidden" : undefined,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: expanded ? "space-between" : "center", padding: expanded ? "2px 6px 6px" : "2px 0", width: expanded ? "100%" : undefined }}>
-          {expanded && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--cv-ink)" }}>Library</span>}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: expanded ? "space-between" : "center", padding: expanded ? "11px 8px 9px 14px" : "2px 0", width: expanded ? "100%" : undefined }}>
+          {expanded && <span style={{ fontSize: "var(--cv-text-sm)", fontWeight: 600, color: "var(--cv-ink)", letterSpacing: 0.2 }}>Library</span>}
           <button
             title={expanded ? "Collapse tools — icons only" : "Library — expand for panel names"}
-            onClick={() => setExpanded((e) => !e)}
-            style={{ ...tinyBtn(false), borderRadius: 999 }}
+            aria-label={expanded ? "Collapse Library" : "Expand Library"}
+            aria-expanded={expanded}
+            onClick={toggleExpanded}
+            style={expanded ? { ...tinyBtn(false), width: 24, height: 24 } : { ...tinyBtn(false), borderRadius: 999 }}
           >
-            <Icon name={expanded ? "expand" : "collapse"} size={12} />
+            {/* affordance = the action: expanded shows Deska's sidebar-toggle
+                glyph, collapsed shows the chevron that opens the panel */}
+            <Icon name={expanded ? "sidebar" : "expand"} size={expanded ? 13 : 12} />
           </button>
         </div>
-        {!expanded && <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 0.4, color: "var(--cv-ink-dim)", textTransform: "uppercase" }}>Library</span>}
-        {tools.map(renderTool)}
-      </nav>
-      {gitMenuEl}
+        {expanded && <div style={{ height: 1, background: "var(--cv-glass-edge)", flex: "none" }} />}
 
+        {expanded ? (
+          <div
+            className="cv-menu-scroll"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+              padding: "8px 8px 10px",
+              maxHeight: "70vh",
+              overflowY: "auto",
+            }}
+          >
+            {tools.map(renderTool)}
+          </div>
+        ) : (
+          tools.map(renderTool)
+        )}
+      </nav>
       <div style={{ flex: 1 }} />
 
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, pointerEvents: "auto" }}>
         <ExtrasBubble side="left" onSelect={onSelect} />
         <OrchestratorsBubble />
       </div>
     </div>
   );
-}
+});
 
 function OrchestratorsBubble() {
   const orchestrators = useBoard((s) => s.orchestrators);
@@ -490,7 +493,7 @@ function OrchestratorsBubble() {
             zIndex: 40,
           }}
         >
-          <div style={sectionLabel}>Orchestrators</div>
+          <div className="cv-section-label" style={sectionLabel}>Orchestrators</div>
           {list.length === 0 && (
             <div style={{ ...menuRow, color: "var(--cv-ink-faint)", cursor: "default" }}>
               none on this board
@@ -509,7 +512,7 @@ function OrchestratorsBubble() {
               <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {o.name}
               </span>
-              <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>{o.wired.length} wired</span>
+              <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>{o.wired.length} wired</span>
             </button>
           ))}
           <button
@@ -532,7 +535,7 @@ function OrchestratorsBubble() {
  * gather, hide, summaries) parked at the bottom-right edge, right
  * of the minimap. */
 
-export function RightRail() {
+export const RightRail = memo(function RightRail() {
   const summaries = useBoard((s) => s.panelSummaries);
   const zoomPct = useBoard((s) => s.zoomPct);
 
@@ -542,7 +545,7 @@ export function RightRail() {
 
       <div style={{ flex: 1 }} />
 
-      <nav className="glass" style={{ ...bubbleRow, padding: "3px 4px", gap: 1, borderRadius: 999 }}>
+      <nav className="glass" style={{ ...bubbleRow, padding: "3px 4px", gap: 1, borderRadius: 999, pointerEvents: "auto" }}>
         <button title="Zoom out" onClick={() => useBoard.getState().requestZoom(-1)} style={tinyBtn(false)}>
           <Icon name="minus" size={11} />
         </button>
@@ -551,7 +554,7 @@ export function RightRail() {
         </button>
         <span
           title="Zoom level"
-          style={{ fontSize: 9.5, color: "var(--cv-ink-dim)", fontWeight: 600, minWidth: 30, textAlign: "center" }}
+          style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", fontWeight: 600, minWidth: 30, textAlign: "center" }}
         >
           {zoomPct}%
         </span>
@@ -575,12 +578,19 @@ export function RightRail() {
       </nav>
     </div>
   );
-}
+});
 
 /** Bottom dock — the wide Dex pill sits dead-center at the bottom of
  * the screen. A 3-column grid keeps it exactly on the 50% axis:
  * create on its left, the small round inbox on its right. */
-export function BottomDock({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
+export const BottomDock = memo(function BottomDock({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
+  const activeBoard = useBoard((s) => s.activeBoard);
+  const agents = useBoard((s) => s.agents);
+  const panelNodes = useBoard((s) => s.panelNodes);
+  // Count every retained terminal on this board, including completed agents:
+  // their transcript/card is still open until the user clears or closes it.
+  const terminalCount = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard).length;
+  const editorCount = Object.values(panelNodes[activeBoard] ?? {}).filter((n) => n.panel === "explorer").length;
   const [dexText, setDexText] = useState("");
   const [dexHist, setDexHist] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(-1);
@@ -633,20 +643,22 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
     >
       {/* ── left of Dex · create ──────────────────────────── */}
       <div style={{ justifySelf: "end", display: "flex", alignItems: "flex-end", gap: 8, marginRight: 16, pointerEvents: "auto" }}>
-        <nav className="glass" style={{ ...bubbleRow, padding: "4px 6px", gap: 4, borderRadius: 999 }}>
+        <nav className="glass cv-bottom-dock-actions" aria-label="Canvas shortcuts" style={{ ...bubbleRow, padding: "4px 6px", gap: 4, borderRadius: 999 }}>
           <button
             title="New task — open the spawn chooser (lives on the Orchestrator)"
             onClick={() => useBoard.getState().focusSpawn()}
             style={{ ...btn(false), borderRadius: 999 }}
           >
             <Icon name="newtask" size={16} />
+            <span className="cv-bottom-dock-label">New task</span>
           </button>
           <button
-            title="File Explorer — browse workspace repos"
-            onClick={() => onSelect("explorer")}
-            style={{ ...btn(active === "explorer"), borderRadius: 999 }}
+            title="Files — open your Obsidian vault"
+            onClick={() => onSelect("vault")}
+            style={{ ...btn(active === "vault"), borderRadius: 999 }}
           >
-            <Icon name="explorer" size={16} />
+            <Icon name="vault" size={16} />
+            <span className="cv-bottom-dock-label">Files</span>
           </button>
           <button
             title="Terminal — spawn a plain shell"
@@ -654,13 +666,17 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
             style={{ ...btn(false), borderRadius: 999 }}
           >
             <Icon name="terminal" size={16} />
+            {terminalCount > 0 && <span aria-label={`${terminalCount} open terminal${terminalCount === 1 ? "" : "s"}`} style={badge("var(--cv-accent)")}>{terminalCount}</span>}
+            <span className="cv-bottom-dock-label">Terminal</span>
           </button>
           <button
-            title="Board Notes — kanban tasks"
-            onClick={() => onSelect("notes")}
-            style={{ ...btn(active === "notes"), borderRadius: 999 }}
+            title="Code Editor — open the workspace file tree and code viewer"
+            onClick={() => onSelect("explorer")}
+            style={{ ...btn(active === "explorer"), borderRadius: 999 }}
           >
             <Icon name="code" size={16} />
+            {editorCount > 0 && <span aria-label={`${editorCount} open code editor${editorCount === 1 ? "" : "s"}`} style={{ ...badge("var(--cv-glass-hi)"), color: "var(--cv-ink)" }}>{editorCount}</span>}
+            <span className="cv-bottom-dock-label">Code editor</span>
           </button>
 
         </nav>
@@ -716,8 +732,8 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
               background: "transparent",
               outline: "none",
               color: "var(--cv-ink)",
-              fontSize: 12.5,
-              fontWeight: 550,
+              fontSize: "var(--cv-text-sm)",
+              fontWeight: 500,
             }}
           />
           {SR && (
@@ -742,4 +758,4 @@ export function BottomDock({ active, onSelect }: { active: string; onSelect: (ke
       {/* inbox lives in ONE place: the topbar bell — no bottom bubble. */}
     </div>
   );
-}
+});

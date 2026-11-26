@@ -42,7 +42,7 @@ export function PaneMenu({ x, y, onClose }: { x: number; y: number; onClose: () 
   return (
     <div
       ref={ref}
-      className="glass"
+      className="cv-menu"
       style={{
         position: "fixed",
         left: Math.min(x, window.innerWidth - 200),
@@ -72,14 +72,14 @@ export function PaneMenu({ x, y, onClose }: { x: number; y: number; onClose: () 
           border: "none",
           background: "transparent",
           color: "var(--cv-accent)",
-          fontSize: 12,
+          fontSize: "var(--cv-text-xs)",
           fontWeight: 600,
           padding: "6px 10px",
           borderRadius: 8,
           cursor: "pointer",
         }}
       >
-        <span style={{ color: "#7cb9ff", fontSize: 11 }}>›_</span>
+        <span style={{ color: "#7cb9ff", fontSize: "var(--cv-text-xxs)" }}>›_</span>
         New terminal
       </button>
       <button
@@ -99,17 +99,17 @@ export function PaneMenu({ x, y, onClose }: { x: number; y: number; onClose: () 
           border: "none",
           background: "transparent",
           color: "var(--cv-accent)",
-          fontSize: 12,
+          fontSize: "var(--cv-text-xs)",
           fontWeight: 600,
           padding: "6px 10px",
           borderRadius: 8,
           cursor: "pointer",
         }}
       >
-        <span style={{ color: "var(--cv-accent)", fontSize: 12 }}>＋</span>
+        <span style={{ color: "var(--cv-accent)", fontSize: "var(--cv-text-xs)" }}>＋</span>
         New agent…
       </button>
-      <div style={{ fontSize: 9.5, color: "var(--cv-ink-faint)", padding: "4px 10px 6px", letterSpacing: 0.6, textTransform: "uppercase" }}>
+      <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", padding: "4px 10px 6px", letterSpacing: "0.02em" }}>
         Add to board
       </div>
       {Object.entries(PANEL_DEFS).map(([key, def]) => (
@@ -129,7 +129,7 @@ export function PaneMenu({ x, y, onClose }: { x: number; y: number; onClose: () 
             border: "none",
             background: "transparent",
             color: "var(--cv-ink)",
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             padding: "6px 10px",
             borderRadius: 8,
             cursor: "pointer",

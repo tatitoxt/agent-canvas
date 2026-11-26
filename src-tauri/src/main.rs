@@ -12,7 +12,7 @@ use canvasd::agent::{canvas_result_line, dirty_diff, dirty_file_count, dirty_fil
 use canvasd::protocol::{AgentStatus, ServerMsg, SnapshotAgent, SnapshotAutomation, SnapshotDelegation};
 use canvasd::store::Store;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::mpsc;
@@ -440,6 +440,327 @@ fn vault_list_entries(root: &PathBuf) -> Vec<String> {
     entries
 }
 
+/// Flat repository file list for the Code Editor. Repositories must already
+/// be registered as workspaces; don't let a renderer-provided path grant
+/// itself access to arbitrary files on the host.
+fn repo_tree_entries(root: &PathBuf) -> Vec<String> {
+    let mut entries = Vec::new();
+    let mut stack = vec![root.clone()];
+    while let Some(dir) = stack.pop() {
+        let Ok(read_dir) = std::fs::read_dir(&dir) else { continue };
+        for entry in read_dir.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build") {
+                continue;
+            }
+            if entry.file_type().map(|kind| kind.is_symlink()).unwrap_or(true) {
+                continue;
+            }
+            if path.is_dir() && stack.len() + entries.len() < 6000 {
+                stack.push(path);
+            } else if path.is_file() {
+                if let Ok(relative) = path.strip_prefix(root) {
+                    entries.push(relative.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    entries.sort();
+    entries
+}
+
+fn read_repo_file(root: &PathBuf, path: &str) -> Result<String, String> {
+    let rel = std::path::Path::new(path);
+    if rel.is_absolute() || rel.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err("access denied: path escapes the repository".into());
+    }
+    let canonical = std::fs::canonicalize(root.join(rel)).map_err(|_| format!("read failed: {path}"))?;
+    let root = std::fs::canonicalize(root).map_err(|e| e.to_string())?;
+    if !canonical.starts_with(&root) || !canonical.is_file() {
+        return Err("access denied: path is outside the repository".into());
+    }
+    let metadata = std::fs::metadata(&canonical).map_err(|e| e.to_string())?;
+    if metadata.len() > 256 * 1024 {
+        return Err(format!("file too large to view (256 KiB cap): {path}"));
+    }
+    let bytes = std::fs::read(&canonical).map_err(|e| e.to_string())?;
+    if bytes.len() > 256 * 1024 || bytes[..bytes.len().min(8192)].contains(&0) {
+        return Err(format!("binary or oversized file — not viewable: {path}"));
+    }
+    String::from_utf8(bytes).map_err(|_| format!("file is not UTF-8 text: {path}"))
+}
+
+fn atomic_replace_file(path: &std::path::Path, text: &str) -> Result<(), String> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+    let parent = path.parent().ok_or_else(|| "write failed: missing parent directory".to_string())?;
+    let name = path.file_name().ok_or_else(|| "write failed: missing file name".to_string())?.to_string_lossy();
+    let permissions = std::fs::metadata(path).map_err(|e| format!("write failed: {e}"))?.permissions();
+    let mut last_error = None;
+    for _ in 0..8 {
+        let temp = parent.join(format!(".{name}.canvas-save-{}-{}", std::process::id(), NEXT_TEMP.fetch_add(1, Ordering::Relaxed)));
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)] {
+            use std::os::unix::fs::OpenOptionsExt;
+            use std::os::unix::fs::PermissionsExt;
+            options.mode(permissions.mode());
+        }
+        match options.open(&temp) {
+            Ok(mut file) => {
+                let result = (|| {
+                    file.write_all(text.as_bytes()).map_err(|e| format!("write failed: {e}"))?;
+                    file.sync_all().map_err(|e| format!("write failed: {e}"))?;
+                    std::fs::set_permissions(&temp, permissions).map_err(|e| format!("write failed: {e}"))?;
+                    std::fs::rename(&temp, path).map_err(|e| format!("write failed: {e}"))
+                })();
+                if result.is_err() { let _ = std::fs::remove_file(&temp); }
+                return result;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => last_error = Some(error),
+            Err(error) => return Err(format!("write failed: {error}")),
+        }
+    }
+    Err(format!("write failed: {}", last_error.map(|e| e.to_string()).unwrap_or_else(|| "could not allocate temporary file".into())))
+}
+
+fn write_repo_file(root: &PathBuf, path: &str, text: &str, base_text: &str) -> Result<(), String> {
+    if text.len() > 256 * 1024 || text.as_bytes().contains(&0) {
+        return Err("file exceeds the 256 KiB text editor limit".into());
+    }
+    let current = read_repo_file(root, path)?;
+    if current != base_text { return Err(format!("file changed on disk; reload before saving: {path}")); }
+    let rel = std::path::Path::new(path);
+    let canonical = std::fs::canonicalize(root.join(rel)).map_err(|_| format!("write failed: {path}"))?;
+    let canonical_root = std::fs::canonicalize(root).map_err(|e| e.to_string())?;
+    if !canonical.starts_with(&canonical_root) || !canonical.is_file() {
+        return Err("access denied: path is outside the repository".into());
+    }
+    atomic_replace_file(&canonical, text)
+}
+
+fn expand_home_path(path: &str) -> PathBuf {
+    if path == "~" || path.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home).join(path.strip_prefix("~/").unwrap_or(""));
+        }
+    }
+    PathBuf::from(path)
+}
+
+fn resolve_registered_repo_dir(dir: &str, roots: &[PathBuf]) -> Result<PathBuf, String> {
+    let requested_path = expand_home_path(dir);
+    for root_path in roots {
+        let Ok(root) = std::fs::canonicalize(root_path) else { continue };
+        let candidate = if requested_path.is_absolute() {
+            requested_path.clone()
+        } else {
+            root.join(&requested_path)
+        };
+        let Ok(requested) = std::fs::canonicalize(candidate) else { continue };
+        if requested.starts_with(&root) && requested.is_dir() {
+            return Ok(requested);
+        }
+    }
+    Err(format!("access denied: repository is not registered or not found: {dir}"))
+}
+
+fn registered_repo_root(state: &CanvasState, dir: &str) -> Result<PathBuf, String> {
+    let mut registered = vec![state.repo_root.clone()];
+    let workspaces = state.store.workspaces_snapshot().map_err(|e| e.to_string())?;
+    registered.extend(workspaces.into_iter().map(|(_, _, repo, _)| expand_home_path(&repo)));
+    // Restored snapshots can carry a repository-relative worktree such as
+    // `.canvas-worktrees/<id>`. Resolve it against each registered workspace,
+    // then canonicalize before checking containment so symlinks cannot escape.
+    resolve_registered_repo_dir(dir, &registered)
+}
+
+#[tauri::command]
+fn repo_tree(app: AppHandle, state: State<'_, CanvasState>, dir: String) -> Result<(), String> {
+    let root = match registered_repo_root(state.inner(), &dir) {
+        Ok(root) => root,
+        Err(message) => {
+            emit_control(&app, &ServerMsg::Error { agent_id: None, message });
+            return Ok(());
+        }
+    };
+    let mut entries = repo_tree_entries(&root);
+    entries.truncate(4000);
+    emit_control(&app, &ServerMsg::RepoListing { dir, entries });
+    Ok(())
+}
+
+#[tauri::command]
+fn repo_read(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String) -> Result<(), String> {
+    let result = registered_repo_root(state.inner(), &dir).and_then(|root| read_repo_file(&root, &path));
+    let text = match result {
+        Ok(text) => text,
+        Err(message) => {
+            emit_control(&app, &ServerMsg::Error { agent_id: None, message });
+            return Ok(());
+        }
+    };
+    emit_control(&app, &ServerMsg::RepoFile { dir, path, text });
+    Ok(())
+}
+
+#[tauri::command]
+fn repo_write(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String, text: String, base_text: String) -> Result<(), String> {
+    let result = registered_repo_root(state.inner(), &dir)
+        .and_then(|root| write_repo_file(&root, &path, &text, &base_text));
+    if let Err(message) = result {
+        emit_control(&app, &ServerMsg::Error { agent_id: None, message });
+        return Ok(());
+    }
+    emit_control(&app, &ServerMsg::RepoFile { dir, path, text });
+    Ok(())
+}
+
+#[cfg(test)]
+mod repo_explorer_tests {
+    use super::{expand_home_path, read_repo_file, repo_tree_entries, resolve_registered_repo_dir, uri_component, write_repo_file};
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+
+    fn temp_root() -> PathBuf {
+        loop {
+            let root = std::env::temp_dir().join(format!(
+                "canvas-repo-explorer-{}-{}",
+                std::process::id(),
+                NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+            ));
+            match std::fs::create_dir(&root) {
+                Ok(()) => return root,
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => panic!("could not create test repo: {e}"),
+            }
+        }
+    }
+
+    #[test]
+    fn lists_source_files_and_skips_hidden_and_dependency_directories() {
+        let root = temp_root();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::create_dir_all(root.join("node_modules/pkg")).unwrap();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        std::fs::write(root.join("src/main.ts"), "export {};").unwrap();
+        std::fs::write(root.join("node_modules/pkg/index.js"), "ignored").unwrap();
+        std::fs::write(root.join(".git/config"), "ignored").unwrap();
+
+        assert_eq!(repo_tree_entries(&root), vec!["src/main.ts"]);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn reads_text_but_rejects_traversal_binary_and_oversized_files() {
+        let root = temp_root();
+        std::fs::write(root.join("README.md"), "hello").unwrap();
+        std::fs::write(root.join("binary.dat"), [0, 1, 2]).unwrap();
+        std::fs::write(root.join("large.txt"), vec![b'x'; 256 * 1024 + 1]).unwrap();
+
+        assert_eq!(read_repo_file(&root, "README.md").unwrap(), "hello");
+        assert!(read_repo_file(&root, "../outside").unwrap_err().contains("access denied"));
+        assert!(read_repo_file(&root, "binary.dat").unwrap_err().contains("binary"));
+        assert!(read_repo_file(&root, "large.txt").unwrap_err().contains("too large"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn writes_existing_repo_text_and_rejects_stale_drafts_and_traversal() {
+        let root = temp_root();
+        std::fs::write(root.join("README.md"), "before").unwrap();
+        write_repo_file(&root, "README.md", "after", "before").unwrap();
+        assert_eq!(read_repo_file(&root, "README.md").unwrap(), "after");
+        assert!(write_repo_file(&root, "README.md", "clobber", "before").unwrap_err().contains("changed on disk"));
+        assert!(write_repo_file(&root, "../outside", "x", "").unwrap_err().contains("access denied"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn refuses_invalid_utf8_without_changing_original_bytes() {
+        let root = temp_root();
+        let original = [0x66, 0x80, 0x6f];
+        std::fs::write(root.join("README.md"), original).unwrap();
+        assert!(read_repo_file(&root, "README.md").unwrap_err().contains("UTF-8"));
+        assert!(write_repo_file(&root, "README.md", "replacement", "foo").is_err());
+        assert_eq!(std::fs::read(root.join("README.md")).unwrap(), original);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn expands_home_workspace_paths_and_keeps_relative_paths_relative() {
+        let home = std::env::var("HOME").unwrap();
+        assert_eq!(expand_home_path("~/projects/demo"), PathBuf::from(home).join("projects/demo"));
+        assert_eq!(expand_home_path("relative/worktree"), PathBuf::from("relative/worktree"));
+    }
+
+    #[test]
+    fn repo_root_prefers_canvas_repo_then_board_cwd_then_user_default() {
+        use super::pick_repo_root;
+        let home = PathBuf::from("/home/tester");
+
+        // CANVAS_REPO always wins — even over a board-looking cwd.
+        let cwd = temp_root();
+        std::fs::create_dir(cwd.join(".git")).unwrap();
+        assert_eq!(
+            pick_repo_root(Some("/elsewhere/board"), &cwd, &home),
+            PathBuf::from("/elsewhere/board")
+        );
+        // Blank values count as unset.
+        assert_eq!(pick_repo_root(Some("  "), &cwd, &home), cwd);
+
+        // A cwd with board evidence (.git or .canvas) stays the cwd, as the
+        // daemon always did for terminal launches.
+        std::fs::remove_dir_all(cwd.join(".git")).unwrap();
+        std::fs::create_dir(cwd.join(".canvas")).unwrap();
+        assert_eq!(pick_repo_root(None, &cwd, &home), cwd);
+        std::fs::remove_dir_all(cwd).unwrap();
+
+        // Finder/launchd launches (cwd is the filesystem root) and random
+        // folders fall to the per-user default — the launch crash this
+        // resolution order prevents.
+        assert_eq!(pick_repo_root(None, Path::new("/"), &home), home.join("Canvas"));
+        assert_eq!(pick_repo_root(None, Path::new("/usr/local/bin"), &home), home.join("Canvas"));
+    }
+
+    #[test]
+    fn obsidian_uri_components_encode_spaces_unicode_and_query_delimiters() {
+        assert_eq!(uri_component("Team Notes/visión & plan"), "Team%20Notes%2Fvisi%C3%B3n%20%26%20plan");
+    }
+
+    #[test]
+    fn resolves_relative_worktrees_only_inside_registered_roots() {
+        let root = temp_root();
+        let worktree = root.join(".canvas-worktrees/agent-1");
+        std::fs::create_dir_all(&worktree).unwrap();
+        std::fs::write(worktree.join("README.md"), "worktree").unwrap();
+
+        let canonical_root = std::fs::canonicalize(&root).unwrap();
+        let candidate = resolve_registered_repo_dir(".canvas-worktrees/agent-1", std::slice::from_ref(&root)).unwrap();
+        assert!(candidate.starts_with(&canonical_root));
+        assert!(candidate.is_dir());
+        assert!(resolve_registered_repo_dir("../", std::slice::from_ref(&root)).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_symlinks_that_escape_the_repository() {
+        let root = temp_root();
+        let outside = temp_root();
+        std::fs::write(outside.join("secret.txt"), "secret").unwrap();
+        std::os::unix::fs::symlink(outside.join("secret.txt"), root.join("secret.txt")).unwrap();
+
+        assert!(read_repo_file(&root, "secret.txt").unwrap_err().contains("access denied"));
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(outside).unwrap();
+    }
+}
+
 fn vault_links(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut rest = text;
@@ -485,6 +806,54 @@ fn vault_register(app: AppHandle, dir: String) -> Result<(), String> {
     let vaults = canvasd::vault::register(&dir)?;
     emit_control(&app, &ServerMsg::VaultDiscovered { vaults });
     Ok(())
+}
+
+fn uri_component(value: &str) -> String {
+    let mut out = String::new();
+    for byte in value.as_bytes() {
+        if byte.is_ascii_alphanumeric() || b"-_.~".contains(byte) {
+            out.push(*byte as char);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
+#[tauri::command]
+fn open_obsidian(vault_dir: String, path: String) -> Result<(), String> {
+    let root = expand_home_path(&vault_dir);
+    let root = std::fs::canonicalize(&root).map_err(|_| "Obsidian vault folder is unavailable".to_string())?;
+    if !path.trim().is_empty() {
+        let rel = std::path::Path::new(&path);
+        if rel.is_absolute() || rel.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            return Err("note path must stay inside the selected vault".into());
+        }
+        let target = std::fs::canonicalize(root.join(rel)).map_err(|_| format!("note not found in vault: {path}"))?;
+        if !target.starts_with(&root) || !target.is_file() {
+            return Err("note path must stay inside the selected vault".into());
+        }
+    }
+    let vault_name = root.file_name().and_then(|n| n.to_str()).filter(|n| !n.is_empty())
+        .ok_or_else(|| "could not determine the Obsidian vault name".to_string())?;
+    let mut uri = format!("obsidian://open?vault={}", uri_component(vault_name));
+    if !path.trim().is_empty() {
+        let file = path.strip_suffix(".md").unwrap_or(&path);
+        uri.push_str(&format!("&file={}", uri_component(file)));
+    }
+
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open").arg(&uri).spawn();
+    #[cfg(target_os = "windows")]
+    let result = std::process::Command::new("explorer.exe").arg(&uri).spawn();
+    #[cfg(target_os = "linux")]
+    let result = std::process::Command::new("xdg-open").arg(&uri).spawn();
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    let result: std::io::Result<std::process::Child> = Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "opening Obsidian links is unsupported on this platform",
+    ));
+    result.map(|_| ()).map_err(|e| format!("could not open Obsidian: {e}"))
 }
 
 #[tauri::command]
@@ -1766,6 +2135,26 @@ fn chrome_bookmarks() -> Vec<ChromeBookmark> {
     out
 }
 
+/// Where the board lives when nothing points anywhere else.
+///
+/// - `CANVAS_REPO` wins (dev / power-user override).
+/// - A terminal launch inside a canvas-looking directory (one that already
+///   has `.canvas` state or is a git repo) keeps the cwd behavior the
+///   daemon always had.
+/// - Everything else — a Finder/launchd launch, whose cwd is `/` and where
+///   `Store::open` dies trying to create `/.canvas` (the launch crash), or
+///   a random folder — lands in the per-user default `~/Canvas`.
+fn pick_repo_root(canvas_repo: Option<&str>, cwd: &Path, home: &Path) -> PathBuf {
+    if let Some(dir) = canvas_repo.map(str::trim).filter(|dir| !dir.is_empty()) {
+        return PathBuf::from(dir);
+    }
+    let looks_like_board = cwd.join(".canvas").is_dir() || cwd.join(".git").exists();
+    if looks_like_board && cwd.parent().is_some() {
+        return cwd.to_path_buf();
+    }
+    home.join("Canvas")
+}
+
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -1778,9 +2167,31 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let repo_root = std::env::var("CANVAS_REPO")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| std::env::current_dir().unwrap());
+            let repo_root = {
+                let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+                let home = std::env::var("HOME")
+                    .or_else(|_| std::env::var("USERPROFILE"))
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| cwd.clone());
+                let root = pick_repo_root(std::env::var("CANVAS_REPO").ok().as_deref(), &cwd, &home);
+                if root == home.join("Canvas") {
+                    // The per-user default: create it, and make it a git
+                    // repo so the main board can spawn worktree agents out
+                    // of the box. Best effort — a missing git binary must
+                    // not stop the app.
+                    let _ = std::fs::create_dir_all(&root);
+                    if !root.join(".git").exists() {
+                        let _ = std::process::Command::new("git").arg("init").arg(&root).output();
+                    }
+                    // `git init` alone leaves the repo commitless — no HEAD
+                    // for `git worktree add` to branch from, so every spawn
+                    // died before its PTY existed. Bootstrap the empty
+                    // initial commit up front (also covers a ~/Canvas that
+                    // was init'ed by an older build and never committed).
+                    canvasd::agent::ensure_initial_commit(&root);
+                }
+                root
+            };
             let store = Arc::new(Store::open(&repo_root)?);
             store.mark_all_exited()?;
             // Update check on launch: downloads + installs when GitHub
@@ -2021,6 +2432,9 @@ fn main() {
             git_push,
             studio_doc,
             vault_list,
+            repo_tree,
+            repo_read,
+            repo_write,
             vault_search,
             vault_read,
             vault_peek,
@@ -2033,6 +2447,7 @@ fn main() {
             vault_graph,
             vault_discover,
             vault_register,
+            open_obsidian,
             default_vault_dir,
             create_workspace,
             move_to_board,

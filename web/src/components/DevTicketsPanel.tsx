@@ -1,12 +1,10 @@
 import { useBoard } from "../store/board";
-import { Icon } from "./icons";
 import { panelRoot } from "./panelChrome";
 
 const groupLabel: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: 0.8,
-  textTransform: "uppercase",
+  fontSize: "var(--cv-text-xxs)",
+  fontWeight: 400,
+  letterSpacing: "0.02em",
   color: "var(--cv-ink-faint)",
   padding: "10px 12px 4px",
 };
@@ -78,25 +76,21 @@ export function DevTicketsPanel() {
     >
       <div
         style={{
-          fontSize: 12.5,
-          fontWeight: 650,
           padding: "0 12px 8px",
-          color: "var(--cv-ink)",
           display: "flex",
+          justifyContent: "flex-end",
           alignItems: "center",
-          gap: 7,
           userSelect: "none",
+          flexShrink: 0,
         }}
       >
-        <Icon name="ticket" size={14} color="var(--cv-accent)" />
-        Dev tickets
-        <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 500, color: "var(--cv-ink-faint)" }}>
+        <span style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 500, color: "var(--cv-ink-faint)" }}>
           {all.length} total
         </span>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "0 4px" }}>
         {all.length === 0 && (
-          <div style={{ ...groupLabel, padding: "14px 12px", textTransform: "none", fontWeight: 500, letterSpacing: 0 }}>
+          <div style={{ ...groupLabel, padding: "14px 12px", letterSpacing: "0.01em" }}>
             No tickets yet — drag a wire off an agent card to delegate a
             task and it lands here.
           </div>
@@ -126,12 +120,12 @@ export function DevTicketsPanel() {
                   onMouseEnter={(ev) => (ev.currentTarget.style.background = "var(--cv-glass-hi)")}
                   onMouseLeave={(ev) => (ev.currentTarget.style.background = "transparent")}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--cv-text-xs)", fontWeight: 600 }}>
                     <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {e.task || "untitled task"}
                     </span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "var(--cv-ink-dim)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {nameOf(e.from)} → {nameOf(e.to)}
                     </span>
@@ -142,7 +136,7 @@ export function DevTicketsPanel() {
                   {e.result && (
                     <div
                       style={{
-                        fontSize: 10,
+                        fontSize: "var(--cv-text-xxs)",
                         color: "var(--cv-ink-dim)",
                         overflow: "hidden",
                         display: "-webkit-box",
@@ -154,7 +148,7 @@ export function DevTicketsPanel() {
                     </div>
                   )}
                   {(e.files ?? 0) > 0 && (
-                    <div style={{ fontSize: 9.5, color: "var(--cv-waiting)" }}>
+                    <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-waiting)" }}>
                       {e.files} file{e.files === 1 ? "" : "s"} changed
                     </div>
                   )}

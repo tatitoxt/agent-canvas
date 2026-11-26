@@ -1,13 +1,11 @@
 import { useBoard } from "../store/board";
-import { Icon } from "./icons";
 import { panelRoot } from "./panelChrome";
 import { usePanelActions } from "./panelCtx";
 
 const groupLabel: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: 0.8,
-  textTransform: "uppercase",
+  fontSize: "var(--cv-text-xxs)",
+  fontWeight: 400,
+  letterSpacing: "0.02em",
   color: "var(--cv-ink-faint)",
   padding: "10px 12px 4px",
 };
@@ -27,7 +25,7 @@ const card: React.CSSProperties = {
 
 const mono: React.CSSProperties = {
   fontFamily: "var(--cv-mono, ui-monospace, monospace)",
-  fontSize: 10.5,
+  fontSize: "var(--cv-text-xxs)",
   color: "var(--cv-ink-dim)",
 };
 
@@ -66,26 +64,22 @@ export function SourceControlPanel() {
     >
       <div
         style={{
-          fontSize: 12.5,
-          fontWeight: 650,
           padding: "0 12px 8px",
-          color: "var(--cv-ink)",
           display: "flex",
+          justifyContent: "flex-end",
           alignItems: "center",
-          gap: 7,
           userSelect: "none",
+          flexShrink: 0,
         }}
       >
-        <Icon name="git" size={14} color="var(--cv-accent)" />
-        Source control
-        <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 500, color: "var(--cv-ink-faint)" }}>
+        <span style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 500, color: "var(--cv-ink-faint)" }}>
           {trees.length} {trees.length === 1 ? "tree" : "trees"}
           {dirty > 0 ? ` · ${dirty} changed` : ""}
         </span>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "0 4px" }}>
         {trees.length === 0 && (
-          <div style={{ ...groupLabel, padding: "14px 12px", textTransform: "none", fontWeight: 500, letterSpacing: 0 }}>
+          <div style={{ ...groupLabel, padding: "14px 12px", letterSpacing: "0.01em" }}>
             No agent worktrees yet — spawn an agent in a workspace and its
             branch shows up here.
           </div>
@@ -118,7 +112,7 @@ export function SourceControlPanel() {
                     background: "var(--cv-glass-hi)",
                     color: "var(--cv-ink)",
                     borderRadius: 7,
-                    fontSize: 10,
+                    fontSize: "var(--cv-text-xxs)",
                     fontWeight: 600,
                     padding: "3px 9px",
                     cursor: "pointer",
@@ -128,29 +122,29 @@ export function SourceControlPanel() {
                   push
                 </button>
               </div>
-              <div style={{ ...mono, fontSize: 9.5, color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.worktree}>
+              <div style={{ ...mono, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.worktree}>
                 {a.worktree}
               </div>
               {(a.files ?? 0) > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 2 }}>
                   {(a.paths ?? []).slice(0, 8).map((p) => (
-                    <div key={p} style={{ ...mono, fontSize: 10, color: "var(--cv-waiting)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <div key={p} style={{ ...mono, fontSize: "var(--cv-text-xxs)", color: "var(--cv-waiting)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       M&nbsp;{p}
                     </div>
                   ))}
                   {(a.paths ?? []).length > 8 && (
-                    <div style={{ ...mono, fontSize: 9.5, color: "var(--cv-ink-faint)" }}>
+                    <div style={{ ...mono, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>
                       +{(a.paths ?? []).length - 8} more
                     </div>
                   )}
                 </div>
               ) : (
-                <div style={{ fontSize: 10, color: "var(--cv-ink-faint)" }}>clean tree</div>
+                <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>clean tree</div>
               )}
               <button
                 title={`open ${a.name}'s terminal`}
                 onClick={() => openTerm({ id: a.id, name: a.name })}
-                style={{ alignSelf: "flex-start", border: "none", background: "transparent", color: "var(--cv-accent)", fontSize: 10, fontWeight: 600, padding: 0, cursor: "pointer" }}
+                style={{ alignSelf: "flex-start", border: "none", background: "transparent", color: "var(--cv-accent)", fontSize: "var(--cv-text-xxs)", fontWeight: 600, padding: 0, cursor: "pointer" }}
               >
                 open terminal →
               </button>

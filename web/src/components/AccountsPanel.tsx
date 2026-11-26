@@ -26,7 +26,7 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid var(--cv-glass-edge)",
   borderRadius: 999,
   padding: "6px 12px",
-  fontSize: 12,
+  fontSize: "var(--cv-text-xs)",
   color: "var(--cv-ink)",
   outline: "none",
   width: "100%",
@@ -45,7 +45,7 @@ function CapEditor({ usageKey, capKb }: { usageKey: string; capKb: number }) {
     return (
       <button
         title="edit this account's weekly cap"
-        style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: 9.5, padding: 0 }}
+        style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-xxs)", padding: 0 }}
         onClick={() => { setVal(custom != null ? String(custom) : ""); setEditing(true); }}
       >
         {custom != null ? `cap ${fmtBytes(capKb * 1024)}` : "cap"}
@@ -55,7 +55,7 @@ function CapEditor({ usageKey, capKb }: { usageKey: string; capKb: number }) {
   return (
     <input
       autoFocus
-      style={{ ...inputStyle, width: 72, padding: "2px 8px", fontSize: 10 }}
+      style={{ ...inputStyle, width: 72, padding: "2px 8px", fontSize: "var(--cv-text-xxs)" }}
       placeholder={`${DEFAULT_WEEK_CAP_KB / 1024} MB`}
       title="weekly cap in KB — Enter to save, empty = default"
       value={val}
@@ -114,19 +114,16 @@ export function AccountsPanel() {
     >
       <div
         style={{
-          fontSize: 12.5,
-          fontWeight: 650,
           padding: "0 12px 8px",
-          color: "var(--cv-ink)",
           display: "flex",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           alignItems: "center",
+          flexShrink: 0,
         }}
       >
-        Accounts
         <button
-          className="glass-pill"
-          style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }}
+          className="cv-mini-btn"
+          style={{ padding: "3px 11px", color: "var(--cv-accent)" }}
           onClick={() => setCreating((c) => !c)}
         >
           {creating ? "cancel" : "+ new"}
@@ -170,13 +167,13 @@ export function AccountsPanel() {
               value={env}
               onChange={(e) => setEnv(e.target.value)}
             />
-            <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", padding: "0 2px" }}>
+            <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", padding: "0 2px" }}>
               Each account gets its own config dir — sign in inside the
               agent's terminal and the login stays scoped to @{label.trim() || "label"}.
             </div>
             <button
-              className="glass-pill"
-              style={{ fontSize: 11.5, fontWeight: 600, padding: "6px 14px", cursor: "pointer", border: "none", color: "var(--cv-accent)", opacity: label.trim() ? 1 : 0.45, alignSelf: "flex-start" }}
+              className="cv-mini-btn"
+              style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600, padding: "6px 14px", cursor: "pointer", color: "var(--cv-accent)", opacity: label.trim() ? 1 : 0.45, alignSelf: "flex-start" }}
               disabled={!label.trim()}
               onClick={() => {
                 createAccount(cli, label.trim(), env.trim() || undefined);
@@ -190,12 +187,12 @@ export function AccountsPanel() {
           </div>
         )}
         {list.length === 0 && !creating && (
-          <div style={{ fontSize: 11.5, color: "var(--cv-ink-dim)", padding: "4px 12px" }}>
+          <div style={{ fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)", padding: "4px 12px" }}>
             No named accounts — agents use the machine's default sign-in.
           </div>
         )}
         {list.length > 0 && (
-          <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)", padding: "0 12px 6px" }}>
+          <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", padding: "0 12px 6px" }}>
             all agents · {fmtBytes(totalBytes)} output
           </div>
         )}
@@ -203,10 +200,9 @@ export function AccountsPanel() {
           <div key={groupCli}>
             <div
               style={{
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: 0.8,
-                textTransform: "uppercase",
+                fontSize: "var(--cv-text-xxs)",
+                fontWeight: 400,
+                letterSpacing: "0.02em",
                 color: "var(--cv-ink-faint)",
                 padding: "6px 12px 3px",
               }}
@@ -230,14 +226,14 @@ export function AccountsPanel() {
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 12, color: "var(--cv-accent)", flex: "none" }}>
+                    <span style={{ fontSize: "var(--cv-text-xs)", color: "var(--cv-accent)", flex: "none" }}>
                       {CLIS.find((c) => c.cmd === a.cli)?.label.split(" ")[0] ?? "▢"}
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--cv-ink)" }}>
+                      <div style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600, color: "var(--cv-ink)" }}>
                         @{a.label}
                       </div>
-                      <div style={{ fontSize: 10.5, color: "var(--cv-ink-dim)" }}>
+                      <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
                         {a.cli}
                         {(sess > 0 || week > 0) && (
                           <span style={{ color: "var(--cv-accent)", opacity: 0.85 }}>
@@ -249,14 +245,14 @@ export function AccountsPanel() {
                     <CapEditor usageKey={key} capKb={capKb} />
                     <button
                       title={`spawn a ${a.cli} agent as @${a.label}`}
-                      style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-accent)", fontSize: 14, fontWeight: 700, padding: "0 2px" }}
+                      style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-accent)", fontSize: "var(--cv-text-md)", fontWeight: 700, padding: "0 2px" }}
                       onClick={() => spawn(a.cli, a.cli, undefined, undefined, a.account_id)}
                     >
                       +
                     </button>
                     <button
                       title={inUse.has(a.label) ? "in use by an agent" : "delete account"}
-                      style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: 13 }}
+                      style={{ border: "none", background: "none", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-sm)" }}
                       onClick={() => deleteAccount(a.account_id)}
                     >
                       ×

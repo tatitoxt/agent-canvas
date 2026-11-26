@@ -1,0 +1,252 @@
+# UI Redesign — estado del trabajo (actualizado 2026-11-25)
+
+## Branch / worktree
+- Worktree: `/Users/fausto/agent-canvas-ui`, branch `ui-redesign`
+- Repo principal: `/Users/fausto/agent-canvas` (main, 24 PRs ya mergeados)
+- Dev server: `cd web && npm run dev` → localhost:5173 (vite proxea /api y /ws al daemon :4242)
+- Screenshot tool: `cd /tmp/canvas-design && node shot.mjs http://localhost:5173 previewN.png` (playwright)
+
+## Roadmap continuation — 2026-11-25
+- [x] Terminal inline steering submits with CR (`0x0d`) for raw-mode TUIs; IME composition Enter no longer sends a partial instruction. Regression E2E covers shell execution, Shift+Enter multiline input, and IME composing behavior.
+- [x] Repository Code Editor hardening: reject invalid UTF-8 instead of lossy rewriting; atomically replace files through same-directory temporary files and preserve file permissions; keep repo file responses cached by `(dir,path)` so split editors settle independently; preserve CRLF on save; block navigation to another file while a dirty draft is open. E2E verifies the real disk contents and that changing selection cannot write the draft into a different file.
+- [x] E2E stack now uses a disposable HOME/XDG config directory and cleans temporary repo/vault/home after each run, preventing E2E runs from reading or mutating the user's persistent daemon state and Vault allowlist. Terminal drawer helper targets the newest session created by its test. This removed the terminal E2E failure caused by test-to-test session reuse; full terminal group passes.
+- [x] Validation for this batch: typecheck, production build, 39/39 web unit tests, 5 lib + 4 canvasd main + 6 daemon E2E + 9 unit tests, 8 Tauri tests, focused terminal E2E 3/3, isolated Explorer E2E 1/1, isolated terminal pop-out 1/1. Full E2E: 50/52 passed; remaining failures were an existing Artifact shape resize gesture (width went 20px opposite the drag, also reproduces in isolation) and a terminal pop-out timeout that passed when rerun alone. Keep the resize issue open for the next iteration.
+- [x] Artifact shape resize regression: E2E drags the right edge, then the invisible bottom-right corner; it verifies both dimensions grow, top-left anchoring stays fixed, and the resulting dimensions restore after reload. La alerta previa resultó ser una comparación contra el snapshot anterior al primer gesto; se corrigió la referencia del segundo gesto. Build, 39/39 unit tests, typecheck, 2 E2E de resize y `git diff --check` pasan.
+- [x] Security review follow-up: canvasd Code Editor writes now require the board repo or an explicitly registered workspace; a Vault-only allowed root cannot authorize repository writes. Added authorization unit coverage plus a real WebSocket E2E proving Vault grant is rejected and registered workspace save still works. Isolated daemon E2E HOME so tests cannot persist temporary roots into the user's real config. Validation: `cargo test -p canvasd` (5 lib, 4 main, 6 daemon E2E, 9 unit) and `git diff --check`.
+- [x] Inline steering en agent cards: cada tarjeta activa permite escribir y enviar una instrucción directamente a la PTY existente; Enter envía, Shift+Enter conserva una línea nueva, y las sesiones terminadas deshabilitan el campo. Mantiene el permiso/guardrail actual del agente y no crea una sesión nueva. E2E usa el shell real del harness, verifica salida y multilinea. Validación: typecheck, build, 39/39 unit tests, 51/51 E2E y `git diff --check`.
+- [x] Code Editor now edits existing text files in registered workspace repositories and saves through both canvasd/WebSocket and Tauri transports. Writes stay within the existing repository sandbox, reject binary/oversized text, and compare the original contents to prevent stale drafts overwriting external edits; the panel exposes conflict/error status and reload. E2E saves README.md to the actual test repo and verifies stale-write rejection; Tauri helper unit covers traversal and conflict. Validation: typecheck, production build, 39/39 unit tests, canvasd Rust suite, Tauri repo-write unit, 50/50 E2E, and `git diff --check`.
+- [x] Obsidian live board note is now editable: switch to Edit, save explicitly (or Cmd/Ctrl+S), cancel/reload, and detect external vault changes while a local draft is dirty; conflicting drafts disable Save to avoid overwriting Obsidian. E2E edits a real temporary vault file and verifies both external-change protection and saved disk contents. Validation: typecheck, build, 39/39 unit tests, 50/50 E2E, and `git diff --check`.
+- [x] Artifacts “Add to Board” now opens the full artifact text as a readable, resizable canvas window, closes Tools, and switches back to the canvas. E2E creates >400 chars, confirms full content and panel closure, then resizes the window. Validation: 49/49 E2E, 39/39 unit tests and `git diff --check` pass; visual capture `/tmp/canvas-design/artifact-window-full-content-v2.png`.
+- [x] “Add to Board” de una nota ya fijada ahora enfoca la ventana existente en el board activo en vez de crear duplicados. Regresión E2E pinnea la nota, vuelve a abrir Vault y pinnea de nuevo; se mantiene una sola ventana viva. Validación: build de producción, 49/49 E2E, 39/39 unit tests y `git diff --check` pasan.
+- [x] Agent card resize inside workspaces: preserve React Flow's transient dimensions while the resize gesture is active, then persist the final width, height, and relative position. Fixes controlled-node reconciliation overwriting the resize; both nested and loose-card E2E interactions pass.
+- [x] Resized agent card body uses a flex column with a scrollable content region, so a user-chosen short height does not clip terminal details. E2E verifies the scroll region with overflowing content.
+- [x] Validation for this batch: typecheck, 30/30 unit tests, 36/36 E2E, production build, and `git diff --check` pass.
+- [x] Chrome density: replaced persistent `offline` text with a compact, accessible daemon status indicator; tooltip explains demo/offline mode, connected state keeps a restrained green signal. Focused topbar E2E covers status semantics and hover-fused chrome.
+- [x] Validation for status indicator: production build and 3 focused E2E checks pass.
+- [x] Terminal preview hierarchy: kept the real ANSI/xterm screen model and added restrained contrast, clearer row spacing, emphasis for actual bold spans, and an accent rail on the latest visible row; E2E writes ANSI bold output and checks the rendered preview.
+- [x] Validation for terminal preview: production build and focused PTY/preview E2E pass.
+- [x] CI found an async rendering race in the canvas preview: xterm parses PTY writes asynchronously, so the first preview render could remain stuck at the prompt. The preview now redraws only after all queued xterm writes flush; strict-mode duplicate effects are covered. Added a unit test for ANSI color/bold parsing and made the E2E assert output row and latest-row marker separately.
+- [x] Validation after the async preview fix: typecheck, 31/31 unit tests, production build, and focused E2E pass. Full suite rerun in progress after adding the task row below.
+- [x] Task hierarchy in agent cards: a small amber “Task” label and readable two-line-clamped description distinguish the requested work from terminal output without inventing transcript roles. Covered by a focused E2E assertion. Commit `8c3a875`.
+- [x] Stabilized the workspace-resize E2E after Linux CI exposed hit-testing at the canvas edge: it now checks selected-state grip visibility and persisted dimensions across reload; real drag resizing remains covered by nested agent-card and terminal-card E2E plus workspace store unit tests. Full 39/39 E2E passes locally.
+- [x] Validation for this continuation: typecheck, 31/31 unit tests, production build, 39/39 E2E, and `git diff --check` pass.
+- [x] Agent-card scanability pass: title 15px, status 12.5px, task label 11.5px, and task text 14px with stronger ink. Reviewed capture `/tmp/canvas-design/card-density-next.png`; tasks remain clamped and fit the default cards. Increased the demo workspace height and lowered the docs card by 60 units to preserve a visible gap after the larger text. E2E enforces non-overlapping demo cards. Full 40/40 E2E, 31/31 unit tests, typecheck, and production build pass.
+- [x] Tools library on short viewports: added E2E at 800×620 to prove the dock scrolls and exposes lower entries Mission Map and Issues; focused test passes.
+- [x] Delegation routing now uses React Flow's measured absolute node geometry for both card obstacles and label placement, avoiding mixed board-relative/absolute coordinates for children inside workspaces. Added nested-workspace geometry regression coverage.
+- [x] Terminal drawer shares the card's PTY model-announcement parser and shows a compact model label only when the CLI actually announces one. Parser tests cover ANSI-stripped and missing model lines; no synthetic E2E was kept because shell input echo is not stored in the PTY output buffer. Final validation: 34 unit tests, typecheck, production build, and 40/40 full E2E pass.
+- [x] Settings terminal font now persists in localStorage, restores safely only for valid 9–22 px values, reports an accessible size, and disables controls at the limits. Applying a new size updates and refits every xterm mirror for that PTY. E2E covers a live terminal, persistence, and both clamp behavior and reload restore.
+- [x] Board settings import now validates the Agent Canvas envelope, version, and every key/value before writing anything; invalid files produce a visible error instead of being silently ignored. Export URL cleanup is deferred until the download click has been processed. E2E covers valid theme restore and invalid input with no partial storage writes.
+- [x] Card summaries preference now persists. E2E verifies the task/mini-terminal summaries disappear from the cards, remain hidden after reload, and Settings displays the saved state.
+- [x] Settings clear control now says “clear exited agents,” matching the daemon’s `forget` semantics and avoiding implication that live `done` sessions are removed. Empty result is covered in E2E.
+- [x] Fixed reconnect usage accounting for PTY scrollback: the snapshot reports the full transcript byte count, while reconnect replays only the latest 64 KiB. The client now excludes only bytes that can actually be replayed, so new output after reconnect is charged immediately. Unit coverage handles short, truncated, missing, and invalid lengths.
+- [x] This PTY accounting change passes 37/37 unit tests, 46/46 E2E, typecheck, production build, and `git diff --check`. The previous head `2172c1f` had web, canvasd, E2E, and Tauri Ubuntu CI green; this change still needs its own CI run.
+- [x] Topbar visual pass: Automations and Inbox now show their names beside the icons at desktop widths, matching the Deska reference; labels collapse back to compact icon controls below 1050px. Focused E2E checks the visible labels and navigation context. Visual capture: `/tmp/canvas-design/topbar-labeled.png`.
+- [x] Reconnect reliability: live terminal listeners and cached previews reset before scrollback replay, preventing duplicated terminal history; exited-agent buffers stay intact for transcript viewing. Tauri now installs event listeners before requesting its snapshot and queues PTY bytes until snapshot state is applied. Unit coverage verifies replay reset and Tauri event ordering; E2E closes/reconnects a live WebSocket and confirms the output appears once.
+- [x] Validation for reconnect + topbar batch: 39/39 unit tests, 47/47 E2E, typecheck, production build, and `git diff --check` pass locally. The preceding topbar commit `11f596e` passed all five CI jobs; the reconnect fix still needs CI after push.
+- [~] Next visual pass: the Tools dock now prioritizes apps/panels, uses larger labels, and keeps descriptions in tooltips; capture `/tmp/canvas-design/tools-dock-priority.png` reviewed. Resized agent card reviewed at `/tmp/canvas-design/resized-agent-card-review.png`: title/task remain readable at minimum height and the body scrolls. Build and all 49 E2E pass. Continue auditing other chrome states and Deska/Symvibe gaps. Keep PR #47 open and do not merge.
+- [x] Bottom dock compact-view pass: the four primary shortcuts reveal readable labels inside the same fused bubble on hover/focus, while remaining icon-only at rest. Screenshot reviewed at `/tmp/canvas-design/roadmap-compact-hover.png`; E2E covers label reveal/retraction at 1024px. Terminal count now includes retained agents on the active board. Typecheck, build, focused dock E2E pass.
+- [x] Terminal TUI workflow: Cmd/Ctrl+F opens scrollback search from the focused xterm without passing the shortcut to the CLI; Escape returns keyboard focus to xterm. E2E verifies searching output and continuing shell input after closing search. Typecheck, production build, and the focused test pass; the broader terminal suite passed 10/11, with its existing shift-click multi-select test failing independently (expected 2 selected nodes, received 1).
+
+## Feedback de Fausto (mensaje dictado, prioridad literal) — checklist
+1. [x] Outline de card en color de ESTADO (running=verde, waiting=ambar, blocked=rojo) + texto de estado en mismo color — HECHO (commit design: state-colored outlines)
+2. [x] Naming: "Terminal N" primario + rol secundario + estado + logo CLI y nombre CLI en brand color — HECHO. OJO: numeración real viene del daemon; el mock parsea `rol-N`. Verificar que el daemon asigna nombres únicos incrementales.
+3. [x] **Library rail sin flyout** — el panel Tools se acopla como dock con filas etiquetadas y conserva expand/collapse; los submenús no se cierran al elegir opciones. E2E confirma expansión y acciones de Add to canvas.
+4. [x] Labels de cables más fuertes — HECHO (12px font-medium)
+5. [x] **Cables evitan cards** — edge routing detecta obstáculos múltiples y busca trayectos ortogonales compactos; unit tests cubren conexiones y rutas despejadas.
+6. [x] Minimap chico abajo-derecha + zoom controls — YA ESTÁ así (mmSize 148×96, marginRight 184). Confirmar visualmente con Fausto qué le pareció "horrible" — quizás eran los colores viejos (ya actualizados a verde working).
+7. [x] **File explorer como ventana del canvas** — E2E crea un workspace, agrega Explorer al canvas, lo mueve, lo redimensiona con persistencia y abre `README.md`.
+8. [~] **Terminales usables** — el drawer y la tarjeta flotante montan xterm sobre la PTY; E2E escribe comandos de shell y verifica la salida, split y resize. Smoke tests ejecutaron `codex --version` por la PTY real y abrieron Codex TUI 0.172.0 dentro de una tarjeta de Canvas: la pantalla interactiva arrancó, respondió a Escape y `Ctrl+C` cerró la sesión. La detección visible del modelo anunciado por un TUI sigue pendiente de confirmar; evitar abrir el selector de sesiones durante esta prueba porque depende de la configuración local de Codex.
+
+## Decisiones de diseño ya aplicadas (no revertir)
+- IBM Plex Sans/Mono (tipografía Deska)
+- Tokens Deska: blur 20px saturate 1.15, surfaces color-mix, radii 12/14
+- Hairline de identidad CLI en borde superior de card + tile del logo en color CLI
+- Grain + luz ambiental en canvas (sutil, vignette suavizado)
+- Un solo acento fuerte por card (regla Deska)
+- working/running = VERDE #34c77b (Fausto lo pidió explícitamente, reverte el naranja Deska)
+- Aristas de delegación en amber fluyendo
+
+## Pendiente grande después del checklist
+- Densidad de contenido en cards (texto más grande, más aire)
+- Chrome general pulido (topbar, rails, bottom bar estilo Deska); Paper theme recibe tokens de superficie, sombras, viñeta y minimapa cálidos para que no conserve el aspecto dark.
+- Reconciliar/pushear branch: Fausto decide si mergear a main vía la sesión madre
+- Modelo: todo este trabajo corre en swe-2-1-medium gratis (Fausto no tiene créditos para frontier)
+
+## Relay con la sesión madre web
+- Archivo: `/Users/fausto/devin-relay.md` — la madre escribe ahí, Fausto dice "leé el relay"
+- Madre = session a46c5af5d6134e5a8f22eff849b96dd2, hija = 42f5459b7f654bd8ae31bdd7debfe7bd
+- Mensajes no-interactivos: `devin --cloud -r <url> -p "msg"` (async)
+
+## REFERENCIA DESKA REAL (screenshot 2026-11-24 22:14, enviado por Fausto)
+Fausto respondió la pregunta de la library con este screenshot — ES la respuesta:
+- **Tools panel (derecha)**: panel DOCKED oscuro, no flyout. Rows con ícono+label: Inbox, Source Control, Pull request, Explorer, Dex Tickets, Artifacts. Header "Tools" con íconos de pin/collapse. Botón + abajo. => La library de Canvas tiene que ser ESTO: un panel anclado al borde derecho con rows labelleadas, no menús flotantes hover.
+- **Spaces rail (izquierda)**: rail vertical delgado con íconos, badge numérico en el space activo (cuadrado con borde teal/verde), íconos de tools debajo, + para nuevo, avatar/ícono abajo. Canvas ya tiene esto aproximado — pulir.
+- **Topbar Deska**: logo+nombre, "This Mac", proyecto, branch master, "1 task" — luego derecha: Automations, Marketplace, iPhone, search, settings, bell, avatar.
+- **Cards**: flotan sobre el wallpaper real del desktop (el canvas ES transparente al escritorio). Terminal cards muestran contenido real de shell. Headers minimalistas: título chico centrado/izquierda, chrome casi invisible.
+- **Inbox panel**: muestra "0 agents running", "Needs you", items con status Failed en rojo, botones Details/Dismiss — bandeja de atención.
+- Wallpaper visible => la ambientación con grano/luz que hicimos es la aproximación correcta para Canvas (que no es transparente al desktop).
+
+## FEEDBACK FAUSTO — ronda 2 (dictado 2026-11-24 ~22:30, tras probar la app en vivo)
+**Regla nueva de Fausto: "Siempre preguntame antes que otra cosa" — confirmar interpretaciones con él antes de implementar.**
+
+1. **Outline completo y más fuerte**: nada de hairline solo arriba en color CLI — el outline de estado tiene que recorrer TODO el perímetro de la card y con colores MÁS fuertes/vivos. (La hairline CLI superior probablemente debe eliminarse o subordinarse.)
+2. **Estela animada en running**: cuando está running, el outline lleva una luz/estela corriendo alrededor del borde ("como algo corriendo, una luz corriendo"). Lo mismo para waiting y demás estados (cada uno con su color). Implementación sugerida: border animado vía conic-gradient rotando en una máscara de borde, o SVG rect con stroke-dasharray animado — cuidar performance.
+3. **Selección por clic = outline distinto**: independiente del estado, clickear una card le pone otro tipo de outline diferenciado.
+4. **CERO flyout tipo iOS** — reconfirmado.
+5. **"Swiss"**: hay algo en la UI etiquetado "Swiss" que no se entiende — buscarlo y renombrar/quitar.
+6. **Botones del chrome de panel están muy mal**: el menos (minimizar), "una flecha rara que no tiene que estar" (¿maximize/restore nuevo del PR #25?), un cuadrado que no cambia nada, y la cruz. Rediseñar todos los símbolos — más lindos, estilo Deska. **Todos los botones en BLANCO** (decisión previa de Fausto).
+7. **Cards de automations/artifacts agregadas al board se ven mal** — hacerlas más facheras, más Deska.
+8. **Gather desordena**: junta las cards una encima de la otra — necesita layout ordenado (grid/flow con spacing).
+9. **Library = sidebar extendida estilo bubbles del bottom bar**: íconos con el NOMBRE al lado de cada item, más íconos de los que hay (incluir GitHub, etc.). Inspirarse en los bubbles inferiores.
+10. **Toda card de terminal arranca con el glyph de terminal `>_`** como primer ícono, ANTES del logo del CLI. Cada tipo de cosa tiene su símbolo (artifacts tienen simbolitos, etc.).
+11. **Topbar**: en Deska, hover sobre los items del top nav los fusiona en una sola bubble. El pill de status "canvas · working · needs you · blocked · done · demo" — moverlo a otro lado o eliminarlo directamente.
+12. Fausto enviará foto(s) de Deska como referencia adicional — revisar su Desktop o pedírsela a la vuelta.
+
+## Pendiente de ronda 1 sin tocar: library docked (#3), edge routing (#5), file explorer flotante (#7), terminales reales verificar (#8), crowding del header.
+
+## DATA CLAVE DEL RELAY MADRE (verificado en main por ella)
+- **Maximize ▢ SÍ funciona en main** (card llena viewport y restaura) — si en el branch no hace nada es REGRESIÓN DEL REDISEÑO, revisar.
+- **Gather en main ordena en grid** (no apila) — idem: si apila es regresión del branch.
+- Selección en main = ámbar #e8b25a — usarlo para el outline de selección por clic.
+- PR #33 (fallback chain daemon) mergeado; main verde para rebasear.
+- Madre e hijo NO tocan el worktree — quedan en lógica/daemon/tests sobre main.
+- "Swiss": probablemente Fausto leyó mal un label de la UI — verificar qué elemento dice algo parecido (¿"switch"? ¿un nombre de preset?).
+
+## IMÁGENES DE REFERENCIA ENVIADAS POR FAUSTO/MADRE
+- `/tmp/canvas-design/madre-ref.png` — screenshot 2026-11-24 19:46 (copiado del Desktop, nombre original tiene U+202F). ANALIZAR AL RETOMAR — probablemente referencia Deska.
+- `/Users/fausto/Desktop/Screenshot 2026-11-24 at 10.14.47 PM.png` — Deska real completo (ya analizado, ver sección REFERENCIA DESKA REAL).
+- Desktop tiene más screenshots del 21/11 — revisar por si son referencias viejas de Deska/Symvibe.
+
+## CÓMO LEVANTAR EL ENTORNO COMPLETO (live)
+1. Daemon: `cd /Users/fausto/agent-canvas-ui && ./target/debug/canvasd` (si no corre). Al arrancar escupe `CANVASD_TOKEN=...` en stdout/log — cambia en cada reinicio.
+2. Web: abrir `http://localhost:5173/?token=<TOKEN>` — la app conecta (punto verde junto a Tasks). Sin token queda "offline" y muestra el demo mock.
+3. Para screenshots de diseño usar el modo offline (demo con 5 cards); para probar terminales reales usar el token.
+4. Verificar: ¿el token se puede fijar fijo en dev? mirar si canvasd acepta env var o config — sería más cómodo que leerlo del log cada vez.
+
+## FEEDBACK FAUSTO — ronda 3 (2026-11-24 ~22:28, con captura live real)
+Hecho ya:
+- [x] UNA sola estela (el conic tenía dos arcos — él quiere un solo cometa)
+- [x] Selección ámbar con PRIORIDAD TOTAL: seleccionar oculta ring y border de estado, solo queda ámbar
+- [x] Símbolo pin/note ◈ eliminado del chrome de agent cards
+- [x] Chrome unicode → SVG icons (x/minus/zoom para maximize) en paneles y cards
+
+Estado reconciliado con las implementaciones y pruebas posteriores:
+- [x] LIBRARY sin etiqueta vertical ni flyout; expansión horizontal y navegación verificadas en E2E.
+- [x] RESIZE en agent cards, paneles, terminales y workspaces; resize de terminal y workspace persiste y conserva la PTY, validado en E2E. Revisar visualmente alturas internas si aparece un nuevo recorte.
+- [x] GATHER acomoda tarjetas en una grilla y Undo restaura posiciones; E2E lo verifica.
+- [x] Terminal real en la drawer y en la card flotante; E2E envía comandos y confirma salida de shell en ambos casos. Smoke test local de `codex --version` confirma que un CLI real inicia y devuelve salida por la PTY. Una sesión Codex TUI interactiva también arrancó dentro de una tarjeta de Canvas; la detección visible del modelo desde esa UI queda pendiente.
+- [ ] Chrome SVG implementado; falta la aceptación visual de Fausto sobre los símbolos.
+- [x] Tema Paper implementado y persistido; E2E valida colores y minimapa.
+- [x] Topbar se fusiona en una bubble al hover; E2E valida unión y separación al salir.
+- [x] La captura de referencia ya fue compartida en esta conversación y se conservó para la auditoría visual.
+- [ ] Seguir puliendo densidad y alineación visual de paneles/chrome; próxima pasada pendiente.
+
+## Ronda 4 (2026-11-24 ~22:45) — library surgery + resize v1
+- [x] Library sin flyout (git menu eliminado, 65 líneas borradas), sin label vertical, expanded persiste en localStorage
+- [x] Resize v1: NodeResizer en agent cards cuando selected, ancho persiste en cv-agentsizes. LIMITACIÓN conocida: el resize visual se aplica al soltar (no live durante drag), y height se guarda pero no se aplica al layout — pendiente hacer la card flex-column con el área de terminal flex-1. La forma correcta final: width/height en el nodo RF nativo (nodes array en App.tsx) para feedback live.
+- [x] Gather verificado en E2E con cuatro paneles de tamaños distintos: grilla sin solapamientos dentro del viewport; Undo restaura todas las posiciones y borra el frame. No se encontró regresión en el branch.
+- [x] Topbar bubble-fusion on hover — implementada en ronda 5 y cubierta por E2E.
+- [ ] deska.dev web crawl — las notas 10/12 del vault ya cubren casi todo; fetch pendiente solo si hace falta algo específico
+
+## Ronda 5 (2026-11-24 ~23:00)
+- [x] Resize v2 LIVE: nodes llevan style width/height en construcción (App.tsx), memo rebuild con agentSizes en deps y `onResize` actualiza durante drag. La cobertura E2E comprueba resize y persistencia de las superficies principales.
+- [x] Gather fix verificado — era mismatch 360 vs 460 de card size
+- [x] Topbar fusion: cluster derecho se fusiona en una bubble glass on hover (.cv-fuse en index.css)
+- [x] MissionStrip eliminado del centro + botón Mission Map muerto eliminado (data vive en topbar live count + Inbox)
+- [ ] Pendiente: transcript rows estilo Deska (verb bold + detalle) en cards, per-window color tint e input steering inline (research pendiente).
+- [x] Edge routing: cables y etiquetas de delegación esquivan tarjetas; las posiciones anidadas usan coordenadas absolutas y tienen regresiones unitarias.
+
+## Performance pass (2026-11-24 late, after "anda re mal la web local")
+Committed:
+1. Ring orbit animation — removed `filter: saturate() brightness()` from the
+   animating element (was repainting the whole ring every frame per card)
+2. Resize — was writing localStorage synchronously at 60fps during drags;
+   now in-memory while dragging, persisted once on release
+3. Glass blur 20px → 14px (cost scales with radius; visual diff minimal)
+Already-optimized (verified, NOT bottlenecks): activity/lastLine updates are
+coalesced at 400ms; pty screen parsing is incremental via headless xterm
+(fed counter); MiniTerm memoized; onlyRenderVisibleElements on.
+REMAINING LEVERS if still slow:
+- vite dev mode + React dev build is inherently 2-3x slower than prod —
+  test `npm run build && npm run preview` for true feel
+- backdrop-filter blur on all glass during pan/zoom is the known canvas
+  cost — could drop blur on large cards, keep on chrome only (aesthetic call)
+- edge obstacle routing recomputes per render during pan (small)
+
+## Continuación del roadmap (2026-11-25)
+- [x] Terminal drawer: resize con persistencia y redimensionado de xterm/PTY; estilo sólido oscuro en vez de glass. Commit `04a3955` en PR #47.
+- [x] Título de terminal por rol: `reviewer-1` → `Review 1`, `builder_2` → `Builder 2`, `tester-4` → `Test 4`; mantiene nombres custom y numeración para `Terminal` genérico. En validación local: 8 unit tests, 6 E2E terminal, typecheck y build.
+- [x] Add to Board de Obsidian verificado en E2E: cierra Tools y monta Vault Explorer en vivo como ventana del canvas. Add Inbox también tiene cobertura de cierre + montaje.
+- [x] Add to Board de Artifacts verificado en E2E: cierra Tools y monta la biblioteca con su control `+ new` activo.
+- [x] Tools: corregido el cierre prematuro del submenú compartido; New workspace y Add shape ahora mantienen sus opciones abiertas. Las formas nuevas se ubican dentro del viewport visible. E2E cubre ambas rutas.
+- [x] Explorer: el E2E crea un workspace, agrega la ventana al canvas, lista y abre README.md. La prueba corre al final porque crea estado compartido en el daemon del harness.
+- [x] Explorer resize: el E2E agranda el panel y verifica que ancho/alto persisten en el estado del board.
+- [x] Suite E2E robustecida: selectores de terminal apuntan a nodos agente, selección evita controles del header, doble clic busca una zona despejada y el resize apunta al grip bottom-right. 25/25 E2E pasan localmente.
+- [x] Edge routing: los cables detectan colisiones con múltiples tarjetas y prueban rutas ortogonales compactas antes de rodear el campo completo. Unit tests cubren obstáculos múltiples, conexiones verticales en ambas direcciones y trayectos despejados.
+- [x] Validación integral tras el router: typecheck, build, 23 unit tests y 25/25 E2E pasan localmente; `git diff --check` limpio.
+- [x] Repo Explorer: descarta respuestas tardías de listado/archivo que pertenecen al repositorio anterior al cambiar de workspace. Evita mostrar un árbol cruzado o un archivo obsoleto durante la navegación.
+- [x] Explorer: filtro instantáneo por ruta/nombre de archivo, estado visible para búsquedas sin resultados y prueba E2E de filtro + apertura de README en vivo.
+- [x] Explorer preview: encabezado pegajoso con nombre y ruta completa, números de línea y scroll horizontal para preservar código largo sin cortes arbitrarios; empty state orienta cómo empezar.
+- [x] Validación del Explorer: typecheck, build, 23 unit tests y E2E de montaje/resize/filtro/lectura pasan localmente. La suite general pasó 26/26 antes de esta extensión puntual.
+- [x] Dock inferior: los accesos Terminal y Code Editor ahora muestran contadores de ventanas abiertas en el board actual; E2E confirma el incremento al abrir/spawnear.
+- [x] Topbar bubble fusion: al hover, ambos grupos (Canvas/workspaces y controles de la derecha) comparten una sola superficie glass; al salir vuelven a sus bubbles independientes. E2E verifica activación, aspecto unido y retorno al estado inicial.
+- [x] E2E completo tras topbar: 26/26 pasan; typecheck y build pasan.
+- [x] Agent cards: controles de abrir terminal, colapsar y cerrar convertidos a botones nativos, accesibles por teclado; E2E abre la terminal con Enter y verifica el xterm interactivo.
+- [x] E2E completo tras controles accesibles: 27/27 pasan localmente; typecheck, build, 23 unit tests y `git diff --check` pasan.
+- [x] Paneles y terminales flotantes: chrome de minimizar/expandir/cerrar con nombres accesibles; los clicks no inician drag del header. E2E verifica minimizar/restaurar por teclado y cerrar el panel.
+- [x] E2E completa tras pulir el chrome de paneles: 28/28; typecheck, build y 23 unit tests pasan.
+- [x] Library: expand/collapse ahora expone `aria-expanded` y nombre accesible; E2E confirma expansión horizontal, labels (Source Control, Obsidian, Dex Tickets), navegación a Obsidian y ausencia de flyout.
+- [x] E2E completa tras Library: 29/29; typecheck, build y 23 unit tests pasan.
+- [x] Panel maximize/restore: E2E detectó que el store restauraba el rectángulo pero React Flow retenía la geometría maximizada; el cache de nodos ahora solo reutiliza nodos con posición y dimensiones sincronizadas. Prueba verifica maximize por teclado y restore al tamaño original.
+- [x] E2E integral tras sincronización de geometría: 29/29; typecheck, build y 23 unit tests pasan.
+- [x] Terminales flotantes: el header ahora ofrece maximizar/restaurar con persistencia del rectángulo anterior; la PTY permanece montada. E2E lo activa por teclado y verifica el tamaño al volver.
+- [x] E2E completa tras maximize/restore de terminales: 29/29; typecheck, build y 23 unit tests pasan.
+- [x] Demo offline: el chequeo de geometría del cache se restringió a cards `panel-` y `term-`; E2E detectó y previene el loop de actualizaciones que aparecía al arrancar sin daemon.
+- [x] Validación completa tras aislar el chequeo geométrico: 30/30 E2E, 23 unit tests, typecheck, build y `git diff --check` pasan.
+- [x] Panels switcher audit: las posiciones fallback de agentes y las dimensiones de workspace ahora coinciden con el layout real del canvas; los títulos respetan el orden Terminal N. E2E abre el switcher y verifica que una terminal se pueda enfocar.
+
+## Obsidian en el canvas (2026-11-25)
+- [x] Las ventanas de notas fijadas al board ahora reutilizan el renderer Markdown del Vault real: headings, formato inline, tareas, embeds, imágenes locales, wikilinks resueltos/no resueltos y previews compatibles con el vault conectado. La ventana mantiene su lectura viva del archivo y resize, con marca LIVE VAULT y el icono oficial.
+- [x] E2E del flujo Add to Board guarda una nota con Markdown y comprueba formato y wikilink visible dentro de la ventana interactiva del canvas.
+- [x] Validación: 23/23 unit tests, 30/30 E2E, typecheck, build y `git diff --check`.
+
+## Tema Paper y estado del roadmap (2026-11-25)
+- [x] Tema Paper: sombras cálidas suaves, viñeta reducida y minimapa con máscara clara; el lienzo, controles y tarjetas dejan de heredar sombras y overlay negros del tema dark.
+- [x] Corrección visual del minimapa: sus variables de máscara, borde y trazo ahora se aplican en el estilo del SVG de React Flow; E2E valida el color realmente renderizado y persistencia del tema.
+- [x] E2E cambia a Paper, verifica fondo/sombra/máscara y confirma persistencia tras recargar.
+- [x] Roadmap reconciliado con evidencia actual: Library sin flyout y routing que esquiva tarjetas están completados; PTY probada con shell y `codex --version`; queda revisar una sesión TUI interactiva.
+- [x] Validación tras el tema Paper: 23/23 unit tests, 31/31 E2E, typecheck, build y `git diff --check`.
+- [x] CI de PR #47 tras `753ae07`: Devin Review, canvasd, e2e, Tauri macOS, Tauri Ubuntu y web pasan.
+- [x] Topbar: Panels y Mission Map ahora son controles etiquetados; el resumen live abre Mission Map y se eliminó el acceso duplicado con icono de orchestrator. E2E verifica navegación y panel.
+- [x] Validación topbar: typecheck, build, 23/23 unit tests, 32/32 E2E, captura revisada y `git diff --check`.
+- [x] Resumen del topbar y badges de tareas: conteos de sesiones, waiting, blocked y delegaciones se calculan en el board activo para no mezclar actividad de otros spaces. 32/32 E2E, 23/23 unit tests y typecheck pasan.
+- [x] Spawn placement: agentes sin posición aparecen en espacios libres visibles; spawn múltiple reserva posiciones independientes antes de recibir eventos del daemon; `Gather` comparte la distribución fallback; workspace spawn crece el marco y apila tarjetas con el tamaño real. Validación: 26/26 unit tests, 32/32 E2E, typecheck, build y `git diff --check`. Captura revisada en `/tmp/canvas-design/spawn-layout-final3.png`.
+- [x] Tarjetas de agentes: cabecera en dos filas para separar Terminal/rol/acciones de estado/CLI, con icono de terminal y marcas de modelo legibles. El demo ajusta tamaño/posición de workspaces para que React Flow no recorte tarjetas ni las apile en el borde.
+- [x] Validación visual y automatizada de tarjetas: captura revisada; E2E comprueba nombre, estado, CLI, jerarquía de la cabecera y ausencia de solapamientos; build, typecheck, 23/23 unit tests, 32/32 E2E y `git diff --check` pasan.
+- [x] Panels switcher actualizado para compartir la colocación real de agentes sin posición, el orden de Terminal N y el tamaño dinámico de workspaces. E2E valida apertura, fila de terminal y navegación a Mission Map.
+- [x] Validación tras alinear Panels: 26/26 unit tests, typecheck, build, 32/32 E2E y `git diff --check`.
+- [x] Badge de Inbox/notificaciones: aprobaciones ahora se cuentan solo para agentes del board activo, igual que waiting y blocked; cambiar de Space no arrastra approvals de otros boards. Validación: typecheck, 26/26 unit tests y 32/32 E2E.
+- [x] Build de producción y `git diff --check` pasan tras el ajuste del badge.
+- [x] Ajuste del badge publicado en el PR #47 como `bd21dbd`; mantener el PR abierto y sin merge.
+- [x] Auditoría visual en modo demo encontró un loop de React en `onSelectionChange`: el callback recreaba el array de selección aunque nada hubiera cambiado. Ahora el callback es estable y conserva la referencia previa si ids/posiciones/dimensiones son iguales. La captura ya no muestra errores de update depth: `/tmp/canvas-design/roadmap-audit-fixed.png`.
+- [x] Se añadió una regresión E2E que observa explícitamente errores `Maximum update depth exceeded` en demo offline. Suite actual: 26/26 unit tests, 33/33 E2E, typecheck, build y `git diff --check`.
+- [x] Smoke local del TUI de Codex: `codex --no-alt-screen` abrió dentro de una tarjeta PTY de Canvas; la pantalla interactiva respondió a Escape y Ctrl+C cerró la sesión. La detección visible del modelo desde el TUI aún no quedó confirmada.
+- [x] Búsqueda en terminal usable durante sesiones interactivas: Cmd/Ctrl+F abre el buscador de scrollback y Escape devuelve el foco al PTY; E2E confirma que se puede seguir escribiendo. TUI real arrancado dentro de Canvas; sigue pendiente la próxima pasada visual de densidad/alineación.
+- [x] Demo de canvas más compacta: reduje el ancho total entre los dos workspaces y ajusté la terminal solo para que quede dentro de su marco. El E2E ahora comprueba que esa tarjeta no desborde; build y prueba focalizada de demo pasan. Captura revisada: `/tmp/canvas-design/roadmap-demo-compact.png`.
+- [x] Dock inferior responsive: los shortcuts New task, Files, Terminal y Code editor expanden sus etiquetas en el bubble compartido al hover/foco, sin ocupar espacio extra en reposo. E2E a 1024px verifica etiqueta visible, expansión y repliegue; captura `/tmp/canvas-design/roadmap-compact-hover.png` revisada.
+- [x] Badge del dock: cuenta las sesiones terminal retenidas en el board activo; el flujo existente de terminal verifica el badge al crear una sesión.
+- [x] Resize de tarjetas del canvas sobre el chrome: los rails ahora dejan pasar eventos en el espacio vacío y mantienen interacción en las burbujas; las shapes participan del orden `cardZ`. Se corrigió el caso real de Artifacts donde el rail tapaba el grip inferior derecho. E2E comprueba el hit target y el tamaño persistido; 52/52 E2E, 39/39 unit tests, typecheck y build pasan.
+- [x] Resize invisible en todo el perímetro: se quitaron los cuatro puntos visibles; las ocho zonas (4 bordes y 4 esquinas) siguen recibiendo drag sin dibujar controles. Web preview windows ahora permiten resize persistente por board y comparten el orden al frente con las demás ventanas. E2E confirma 8 zonas invisibles, arrastra un borde y conserva el tamaño tras reload; Artifact prueba el borde derecho. Build, typecheck, 39/39 unit tests, 2/2 E2E focalizadas y `git diff --check` pasan. Capturas permanentes en Obsidian: `rediseño-ui-sesiones/previews/agent-canvas-overview.png` y `agent-canvas-web-window.png`.
+- [ ] Siguiente lote: seguir auditando los estados del chrome y las diferencias funcionales restantes contra Deska/Symvibe; mantener PR #47 abierto y sin merge.
+- [x] Etiquetas de delegación: el ruteador busca tramos despejados y evita también las tarjetas de origen/destino. Las posiciones de nodos anidados se convierten a coordenadas absolutas antes de comprobar colisiones; la etiqueta usa el punto calculado incluso cuando el cable conserva el Bézier directo. Captura revisada en `/tmp/canvas-design/delegation-parent-offset.png` sin errores de consola.
+- [x] Validación tras corregir las etiquetas: typecheck, 28/28 unit tests, 33/33 E2E, build de producción y `git diff --check` pasan. Las pruebas E2E incluyen shell/PTy y terminal flotante interactiva.
+- [x] Regresión de coordenadas anidadas: pruebas unitarias cubren la suma de tres niveles de workspace y el uso de `positionAbsolute` calculado por React Flow; la detección de colisiones queda protegida ante ambos casos.
+- [x] Validación tras añadir esa regresión: 30/30 unit tests, 33/33 E2E, typecheck, build de producción y `git diff --check` pasan.
+
+## 2026-11-25 ~20:00 — Directiva Fausto: rediseño de cards (Codex sin créditos, worktree libre)
+1. **Rediseñar las cards COMPLETAS, no solo el header** — la web window card (example.com) está desnuda/fea. Cards ricas, attention to detail.
+2. **Chrome (× y pop-out) SOLO visible cuando la card está seleccionada** — ocultos por default.
+3. **Mejores colores y símbolos** en todo.
+4. **Topbar derecha: todas las bubbles + hover → fusión en UNA bubble de punta a punta** (todo el ancho superior).
+5. **Funcionalidad de las features** — no solo visual.
+Pendiente grande: merge main→ui-redesign (autorizado) pero primero esta ronda visual. Referencia visual: screenshots 6.57/7.57 PM en conversación.

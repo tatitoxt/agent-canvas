@@ -18,21 +18,36 @@ const b64decode = (s: string) =>
 export class TauriCanvasClient {
   private unlistens: UnlistenFn[] = [];
   private handlers: Handlers;
+  private snapshotReady = false;
+  private pendingPty: Array<{ agentId: string; bytes: Uint8Array }> = [];
 
   constructor(handlers: Handlers) {
     this.handlers = handlers;
-    void listen<{ agent_id: string; data: string }>("canvas://pty", (ev) => {
-      handlers.onPty(ev.payload.agent_id, b64decode(ev.payload.data));
+    // Install both event listeners before requesting the snapshot. The
+    // snapshot command emits PTY scrollback while it builds that response;
+    // queue those bytes until the store has reset existing live terminals.
+    const ptyReady = listen<{ agent_id: string; data: string }>("canvas://pty", (ev) => {
+      const item = { agentId: ev.payload.agent_id, bytes: b64decode(ev.payload.data) };
+      if (this.snapshotReady) handlers.onPty(item.agentId, item.bytes);
+      else this.pendingPty.push(item);
     }).then((u) => this.unlistens.push(u));
 
-    void listen<unknown>("canvas://control", (ev) => {
+    const controlReady = listen<unknown>("canvas://control", (ev) => {
       handlers.onControl(ev.payload as Parameters<Handlers["onControl"]>[0]);
     }).then((u) => this.unlistens.push(u));
 
-    // Snapshot arrives via command, not an event, in Tauri mode.
-    void invoke<unknown>("snapshot").then((snap) => {
-      handlers.onControl(snap as Parameters<Handlers["onControl"]>[0]);
-    });
+    void Promise.all([ptyReady, controlReady])
+      .then(() => invoke<unknown>("snapshot"))
+      .then((snap) => {
+        handlers.onControl(snap as Parameters<Handlers["onControl"]>[0]);
+        this.snapshotReady = true;
+        this.pendingPty.splice(0).forEach(({ agentId, bytes }) => handlers.onPty(agentId, bytes));
+      })
+      .catch((error) => {
+        this.snapshotReady = true;
+        this.pendingPty.splice(0).forEach(({ agentId, bytes }) => handlers.onPty(agentId, bytes));
+        console.error(error);
+      });
   }
 
   whenOpen(): Promise<void> {
@@ -40,6 +55,16 @@ export class TauriCanvasClient {
   }
   isClosed(): boolean {
     return false;
+  }
+
+  /** A rejected invoke never reaches the control channel — without this the
+   * click appears to do nothing (the commitless-~/Canvas spawn failure was
+   * invisible for exactly this reason). Log for the record, then surface. */
+  private reportFailure(op: string, error: unknown) {
+    console.error(`[tauri] ${op} failed:`, error);
+    const detail =
+      typeof error === "string" ? error : error instanceof Error ? error.message : String(error);
+    this.handlers.onError?.(detail);
   }
 
   setAgentChain(_workspaceId: string, _chain: string[]) {
@@ -50,7 +75,7 @@ export class TauriCanvasClient {
 
   spawnAgent(name: string, command: string, cwd = ".", workspaceId?: string, permission?: string, boardId?: string, accountId?: string, initialInput?: string) {
     void invoke("spawn_agent", { name, command, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null, boardId: boardId ?? null, accountId: accountId ?? null, initialInput: initialInput ?? null }).catch(
-      console.error,
+      (e) => this.reportFailure("spawn_agent", e),
     );
   }
 
@@ -160,7 +185,7 @@ export class TauriCanvasClient {
 
   delegate(from: string, name: string, command: string, task: string, cwd = ".", workspaceId?: string, permission?: string, accountId?: string, boardId?: string, initialInput?: string) {
     void invoke("delegate", { from, name, command, task, cwd, workspaceId: workspaceId ?? null, permission: permission ?? null, accountId: accountId ?? null, boardId: boardId ?? null, initialInput: initialInput ?? null }).catch(
-      console.error,
+      (e) => this.reportFailure("delegate", e),
     );
   }
 
@@ -172,14 +197,16 @@ export class TauriCanvasClient {
     void invoke("vault_list", { dir }).catch(console.error);
   }
 
-  repoTree(_dir: string) {
-    // Tauri shell: repo explorer needs the canvasd control socket; the
-    // embedded host does not implement repo_tree yet — no-op like
-    // setAgentChain until it does.
+  repoTree(dir: string) {
+    void invoke("repo_tree", { dir }).catch(console.error);
   }
 
-  repoRead(_dir: string, _path: string) {
-    // See repoTree.
+  repoRead(dir: string, path: string) {
+    void invoke("repo_read", { dir, path }).catch(console.error);
+  }
+
+  repoWrite(dir: string, path: string, text: string, baseText: string) {
+    void invoke("repo_write", { dir, path, text, baseText }).catch(console.error);
   }
 
   vaultRead(dir: string, path: string) {
@@ -220,6 +247,9 @@ export class TauriCanvasClient {
   }
   vaultRegister(dir: string) {
     void invoke("vault_register", { dir }).catch(console.error);
+  }
+  openObsidian(vaultDir: string, path: string): Promise<void> {
+    return invoke("open_obsidian", { vaultDir, path });
   }
   async defaultVaultDir(): Promise<string | null> {
     try {

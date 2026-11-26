@@ -13,39 +13,122 @@
    ============================================================ */
 
 :root {
-  /* base — dark warm neutral, alive (dot grid), not dead flat
-     (Deska dark-warm is #0a0b0e; ours stays a hair warmer) */
-  --cv-base: #0e0e10;
-  --cv-dot: rgba(255, 255, 255, 0.045);
+  /* Deska dark theme, extracted from the real app over CDP. */
+  --cv-base: #0a0b0e;
+  --cv-bg: var(--cv-base);
+  --cv-dot: rgba(255, 255, 255, 0.05);
 
-  /* ink — warm whites */
-  --cv-ink: #eceae6;
-  --cv-ink-dim: color-mix(in srgb, var(--cv-ink) 62%, transparent);
+  /* ink — Deska foreground #eef1f5 and its exact opacity steps */
+  --cv-ink: #eef1f5;
+  --cv-ink-dim: color-mix(in srgb, var(--cv-ink) 60%, transparent);
   --cv-ink-faint: color-mix(in srgb, var(--cv-ink) 40%, transparent);
+  --cv-ink-disabled: color-mix(in srgb, var(--cv-ink) 20%, transparent);
+  --cv-text-main: color-mix(in srgb, var(--cv-ink) 90%, transparent);
+  --cv-text-hint: var(--cv-ink-faint);
 
-  /* glass surfaces — color-mix steps of ink over base (Deska's
-     surface model: fg% mixed onto bg, themable from two tokens) */
-  --cv-glass: color-mix(in srgb, var(--cv-ink) 5%, var(--cv-base));
-  --cv-glass-hi: color-mix(in srgb, var(--cv-ink) 9%, var(--cv-base));
-  --cv-glass-edge: color-mix(in srgb, var(--cv-ink) 12%, transparent);
-  --cv-glass-shine: color-mix(in srgb, var(--cv-ink) 15%, transparent);
-  --cv-blur: 20px;
+  /* Deska surface model — foreground percentages mixed onto background.
+     Cards use the nearly-opaque panel shell; floating clusters/popovers use
+     progressively lighter glass. */
+  --cv-surface-1: color-mix(in srgb, var(--cv-ink) 5%, var(--cv-base));
+  --cv-surface-2: color-mix(in srgb, var(--cv-ink) 10%, var(--cv-base));
+  --cv-surface-3: color-mix(in srgb, var(--cv-ink) 15%, var(--cv-base));
+  --cv-surface-4: color-mix(in srgb, var(--cv-ink) 20%, var(--cv-base));
+  --cv-glass: color-mix(in srgb, color-mix(in srgb, var(--cv-ink) 4%, var(--cv-base)) 85%, transparent);
+  --cv-glass-header: color-mix(in srgb, color-mix(in srgb, var(--cv-ink) 5%, var(--cv-base)) 94%, transparent);
+  --cv-glass-popover: color-mix(in srgb, color-mix(in srgb, var(--cv-ink) 6%, var(--cv-base)) 97%, transparent);
+  --cv-panel-bg: color-mix(in srgb, color-mix(in srgb, var(--cv-ink) 2%, var(--cv-base)) 97%, transparent);
+  --cv-glass-hi: var(--cv-surface-2);
+  --cv-hairline: color-mix(in srgb, var(--cv-ink) 6%, transparent);
+  --cv-hairline-strong: color-mix(in srgb, var(--cv-ink) 11%, transparent);
+  --cv-glass-edge: var(--cv-hairline);
+  --cv-glass-shine: color-mix(in srgb, var(--cv-ink) 6%, transparent);
 
-  /* one accent — vivid amber-orange (Deska's saturation, not pastel) */
+  /* Deska glass tiers — cluster 16px, popover 18px, topbar 24px + saturation. */
+  --cv-blur-cluster: 16px;
+  --cv-blur-popover: 18px;
+  --cv-blur-topbar: 24px;
+  --cv-blur: var(--cv-blur-cluster);
+
+  /* Deska shadow scale. Canvas cards use the cluster elevation rather than
+     the old cinematic 44px bloom. */
+  --cv-shadow-card: 0 10px 28px rgba(0, 0, 0, 0.4);
+  --cv-shadow-pill: 0 10px 28px rgba(0, 0, 0, 0.4);
+  --cv-shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --cv-shadow-overlay: 0 20px 48px rgba(0, 0, 0, 0.55);
+  --cv-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --cv-card-shadow: inset 0 1px 0 var(--cv-glass-shine), var(--cv-shadow-card);
+  --cv-shadow: var(--cv-card-shadow);
+  --cv-vignette: rgba(0, 0, 0, 0.16);
+  --cv-control-divider: color-mix(in srgb, var(--cv-ink) 6%, transparent);
+  --cv-minimap-mask: rgba(10, 11, 14, 0.55);
+  --cv-minimap-node-stroke: color-mix(in srgb, var(--cv-ink) 25%, transparent);
+  /* Minimap type palette — saturated enough to survive the tiny scale and
+     the viewport dimming mask, still inside the app's muted accent family. */
+  --cv-minimap-node-term: #f5a524;
+  --cv-minimap-node-agent: #34c77b;
+  --cv-minimap-node-panel: #9a8af2;
+  --cv-minimap-node-note: #4aa3f0;
+  --cv-minimap-node-web: #28c4d3;
+  --cv-minimap-node-orchestrator: #d977b8;
+  --cv-minimap-node-workspace: #46536a;
+  --cv-minimap-node-shape: #e86f61;
+
+  /* Deska accent and state palette. */
   --cv-accent: #f5a524;
-  --cv-accent-dim: rgba(245, 165, 36, 0.16);
+  --cv-accent-ink: var(--cv-base);
+  --cv-accent-dim: color-mix(in srgb, var(--cv-accent) 16%, transparent);
+  --cv-accent-overlay-1: color-mix(in srgb, var(--cv-accent) 10%, transparent);
+  --cv-accent-overlay-2: color-mix(in srgb, var(--cv-accent) 25%, transparent);
+  --cv-accent-overlay-3: color-mix(in srgb, var(--cv-accent) 40%, transparent);
+  --cv-accent-overlay-4: color-mix(in srgb, var(--cv-accent) 60%, transparent);
+  --cv-working: #34c77b;
+  --cv-waiting: #e5a01a;
+  --cv-blocked: #e2604a;
+  --cv-danger: var(--cv-blocked);
+  --cv-done: #34c77b;
+  --cv-idle: #8a8f98;
+  --cv-error: rgb(188, 54, 42);
+  --cv-error-overlay: rgba(188, 54, 42, 0.1);
 
-  /* vivid statuses — saturated, the way Deska paints running/needs-you */
-  --cv-working: #3ddc84;
-  --cv-waiting: #ffb224;
-  --cv-blocked: #ff5d5d;
-  --cv-done: #34d399;
-  --cv-idle: #9aa0a6;
+  /* permission/identity secondary — Deska's editor violet */
+  --cv-perm: #b48cff;
 
-  /* radii — Deska panel 12 / cluster 14 / pill 999 */
+  /* radii — Deska sm 4 / md 6 / lg 8 / panel 12 / cluster 14 / popover 15 */
+  --cv-radius-sm: 4px;
+  --cv-radius-md: 6px;
+  --cv-radius-lg: 8px;
   --cv-radius: 12px;
+  --cv-radius-panel: 12px;
   --cv-radius-region: 14px;
+  --cv-radius-popover: 15px;
   --cv-radius-pill: 999px;
+
+  /* Deska motion — fast/base/slow with its precise ease-out curve. */
+  --cv-motion-fast: 120ms;
+  --cv-motion-base: 180ms;
+  --cv-motion-slow: 250ms;
+  --cv-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --cv-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Deska type/spacing scales (default step). xxs is the floor — Deska's
+     mono 11 island labels, hints and dense metadata. Nothing visible
+     renders below it. */
+  --cv-text-xxs: 11px;
+  --cv-text-xs: 12px;
+  --cv-text-sm: 13px;
+  --cv-text-md: 14px;
+  --cv-text-lg: 15px;
+  --cv-text-xl: 16px;
+  --cv-space-1: 4px;
+  --cv-space-2: 8px;
+  --cv-space-3: 12px;
+  --cv-space-4: 16px;
+  --cv-space-5: 20px;
+  --cv-space-6: 24px;
+
+  /* type — Deska's UI/mono stacks, with platform fonts as safe fallbacks */
+  --cv-font-ui: "Segoe UI", "Roboto", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif;
+  --cv-font-mono: "Hack", "JetBrains Mono", "SF Mono", Menlo, Consolas, "IBM Plex Mono", ui-monospace, monospace;
 
   color-scheme: dark;
 }
@@ -56,35 +139,103 @@ body,
   height: 100%;
   margin: 0;
   background: var(--cv-base);
-  color: var(--cv-ink);
-  font-family:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI",
-    sans-serif;
+  color: var(--cv-text-main);
+  font-family: var(--cv-font-ui);
   -webkit-font-smoothing: antialiased;
 }
 
-/* ---------- glass primitive ---------- */
+/* ---------- glass primitives — Deska's three elevations ---------- */
 
 .glass {
   background: var(--cv-glass);
-  backdrop-filter: blur(var(--cv-blur)) saturate(1.35);
-  -webkit-backdrop-filter: blur(var(--cv-blur)) saturate(1.35);
+  backdrop-filter: blur(var(--cv-blur-cluster));
+  -webkit-backdrop-filter: blur(var(--cv-blur-cluster));
   border: 1px solid var(--cv-glass-edge);
-  border-radius: var(--cv-radius);
-  box-shadow:
-    inset 0 1px 0 var(--cv-glass-shine),
-    0 12px 32px rgba(0, 0, 0, 0.35);
+  border-radius: var(--cv-radius-panel);
+  box-shadow: var(--cv-card-shadow);
+  transition:
+    background var(--cv-motion-fast) var(--cv-ease-out),
+    border-color var(--cv-motion-fast) var(--cv-ease-out),
+    box-shadow var(--cv-motion-base) var(--cv-ease-out);
+}
+
+/* Board cards are panel shells in Deska: almost opaque, no backdrop filter,
+   a 6% hairline and the compact cluster elevation. */
+.glass-panel {
+  background: var(--cv-panel-bg);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--cv-glass-edge);
+  border-radius: var(--cv-radius-panel);
+  box-shadow: var(--cv-card-shadow);
+  transition:
+    background var(--cv-motion-fast) var(--cv-ease-out),
+    border-color var(--cv-motion-fast) var(--cv-ease-out),
+    box-shadow var(--cv-motion-base) var(--cv-ease-out),
+    transform var(--cv-motion-fast) var(--cv-ease-out);
+}
+
+/* Deska's card hover lift: one physical pixel, fast ease-out. It applies to
+   the card surface only while the node is stationary; drag transforms belong
+   exclusively to React Flow's wrapper. */
+.react-flow__node:not(.dragging) > .glass-panel:hover {
+  transform: translateY(-1px);
 }
 
 .glass-pill {
-  background: var(--cv-glass);
-  backdrop-filter: blur(var(--cv-blur)) saturate(1.35);
-  -webkit-backdrop-filter: blur(var(--cv-blur)) saturate(1.35);
+  background: var(--cv-glass-header);
+  backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
+  -webkit-backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
   border: 1px solid var(--cv-glass-edge);
   border-radius: var(--cv-radius-pill);
-  box-shadow:
-    inset 0 1px 0 var(--cv-glass-shine),
-    0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--cv-card-shadow);
+  transition:
+    background var(--cv-motion-fast) var(--cv-ease-out),
+    border-color var(--cv-motion-fast) var(--cv-ease-out),
+    box-shadow var(--cv-motion-base) var(--cv-ease-out);
+}
+
+/* Deska island label — quiet metadata, not microtype shouting. */
+.cv-section-label {
+  font-size: var(--cv-text-xxs);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+  color: var(--cv-text-hint);
+  text-transform: none;
+}
+
+/* Small inline actions inside panel cards. Unlike glass-pill these are
+   flat local controls: no overlay elevation, blur, or cluster shadow. */
+.cv-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--cv-hairline);
+  border-radius: var(--cv-radius-md);
+  background: var(--cv-surface-3);
+  color: var(--cv-text-main);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  font-family: inherit;
+  font-size: var(--cv-text-xxs);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color var(--cv-motion-fast) var(--cv-ease-out),
+    border-color var(--cv-motion-fast) var(--cv-ease-out),
+    color var(--cv-motion-fast) var(--cv-ease-out);
+}
+.cv-mini-btn:hover:not(:disabled) {
+  background: var(--cv-surface-4);
+  border-color: var(--cv-hairline-strong);
+}
+.cv-mini-btn:disabled {
+  opacity: 0.48;
+  cursor: default;
 }
 
 /* ---------- react flow base ---------- */
@@ -95,8 +246,103 @@ body,
     var(--cv-base);
 }
 
+/* ambient light + grain — the dot grid stays, but the canvas stops being
+   dead flat: a soft warm pool of light from the top-center, vignette at
+   the corners, and a whisper of noise over everything (Deska gets this
+   texture for free from the wallpaper; we synthesize ours) */
+.react-flow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(120% 90% at 50% -20%, color-mix(in srgb, var(--cv-ink) 5.5%, transparent), transparent 55%),
+    radial-gradient(150% 130% at 50% 118%, transparent 62%, var(--cv-vignette));
+}
+.react-flow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.028 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
 .react-flow__node {
   font-family: inherit;
+}
+
+/* Gather/undo flight — scoped to store-moved cards only. Manual drags must
+ * stay 1:1 with the pointer, so React Flow's .dragging state always wins. */
+.react-flow__node.cv-gather-motion:not(.dragging) {
+  transition: transform var(--cv-motion-slow) var(--cv-ease-out);
+  /* Let the camera lead by a beat when the destination is outside the
+   * current viewport — the windows remain visually continuous instead of
+   * sprinting off-canvas ahead of it. */
+  transition-delay: 45ms;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__node.cv-gather-motion:not(.dragging) { transition: none; }
+}
+
+/* Resize through invisible hit areas around the whole selected card. The
+   four corners plus four edge lines remain draggable without drawing the
+   usual corner dots, handles or resize outline over the content.
+   The library default sizes the edge lines to 1px — ungrabbable for users
+   and sub-pixel flaky for hit testing, because card containers clip
+   overflow and the 50/50 straddle leaves only a half-pixel inside. The
+   zones are invisible anyway, so make them fat (10px) and bias them
+   INWARD: the grab strip lives inside the card edge, comfortably within
+   the overflow clip, while corners keep a 16px square that still overlaps
+   both edge strips (and wins them through z-index). */
+.cv-node-resize-handle {
+  width: 18px !important;
+  height: 18px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  opacity: 0 !important;
+  z-index: 12 !important;
+}
+.react-flow__resize-control.handle.cv-node-resize-handle.bottom.right { translate: -80% -80% !important; }
+.react-flow__resize-control.handle.cv-node-resize-handle.bottom.left { translate: -20% -80% !important; }
+.react-flow__resize-control.handle.cv-node-resize-handle.top.right { translate: -80% -20% !important; }
+.react-flow__resize-control.handle.cv-node-resize-handle.top.left { translate: -20% -20% !important; }
+.cv-node-resize-line {
+  border-color: transparent !important;
+  background: transparent !important;
+  opacity: 0 !important;
+  z-index: 11 !important;
+}
+.react-flow__resize-control.line.cv-node-resize-line.top,
+.react-flow__resize-control.line.cv-node-resize-line.bottom {
+  height: 10px !important;
+}
+.react-flow__resize-control.line.cv-node-resize-line.left,
+.react-flow__resize-control.line.cv-node-resize-line.right {
+  width: 10px !important;
+}
+.react-flow__resize-control.line.cv-node-resize-line.bottom { transform: translate(0, -90%) !important; }
+.react-flow__resize-control.line.cv-node-resize-line.top { transform: translate(0, -10%) !important; }
+.react-flow__resize-control.line.cv-node-resize-line.right { transform: translate(-90%, 0) !important; }
+.react-flow__resize-control.line.cv-node-resize-line.left { transform: translate(-10%, 0) !important; }
+
+/* The invisible resize zones overlap the trailing header chrome by a few
+   pixels by design: the top-right corner handle (18px square, biased
+   inward) reaches over the close/collapse buttons that live flush against
+   the card's top-right corner. A click there must operate the button —
+   never start a resize — so the interactive chrome stacks above the
+   hit zones (handles z-12, lines z-11). The overlap is tiny, so the
+   resize zone stays grabbable all around the button. This is hit-testing
+   order only: neither the zones nor the buttons move a pixel. */
+.cv-card-chrome,
+.agent-card .card-chrome,
+.cv-card-btn {
+  position: relative;
+  z-index: 13;
 }
 
 .react-flow__handle {
@@ -105,7 +351,7 @@ body,
   background: var(--cv-ink-faint);
   border: none;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--cv-motion-fast) var(--cv-ease-out);
 }
 .react-flow__node:hover .react-flow__handle {
   opacity: 0.7;
@@ -119,27 +365,40 @@ body,
 /* Deska marquee — dashed accent selection rectangle with a light fill. */
 .react-flow__selection {
   border: 1.5px dashed var(--cv-accent);
-  background: rgba(201, 162, 107, 0.07);
+  background: color-mix(in srgb, var(--cv-accent) 7%, transparent);
   border-radius: 6px;
-}
-
-/* Selected cards get a dashed preview outline, same accent. */
-.react-flow__node.selected {
-  outline: 1.5px dashed var(--cv-accent);
-  outline-offset: 4px;
-  border-radius: 14px;
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: rgba(255, 255, 255, 0.4);
 }
-/* Selected cards get a clear amber ring — works for single clicks and the
+/* Selected cards get Deska's active accent ring — works for single clicks and the
  * ghost multi-select alike (React Flow adds .selected to every picked node). */
 .react-flow__node.selected {
-  outline: 2px solid var(--cv-accent);
-  outline-offset: 2px;
+  outline: 1.5px solid var(--cv-accent) !important;
+  outline-offset: 0;
   border-radius: 12px;
-  z-index: 20 !important;
+  /* Put the selected node's resize handles above floating canvas rails.
+     A local handle z-index cannot escape the node's React Flow stacking
+     context, so the selected node itself must win hit testing. */
+  z-index: 30 !important;
+}
+
+/* Drag ghost — the card contents fade to a blueprint transparency while
+   React Flow's node wrapper keeps a full-strength dashed amber outline at
+   the exact target rect. Do NOT put opacity on the wrapper: the outline is
+   the part that must remain visible. Applies uniformly to agent terminals,
+   panels, vault/windows, web embeds, workspaces and shapes. */
+.react-flow__node.dragging {
+  outline: 1.5px dashed var(--cv-accent) !important;
+  /* Sit on the card edge rather than drawing a second selection-style halo
+     outside the drop rect. */
+  outline-offset: -1.5px;
+  border-radius: 14px;
+  z-index: 40 !important;
+}
+.react-flow__node.dragging > * {
+  opacity: 0.2 !important;
 }
 .edge-delegated .react-flow__edge-path {
   stroke-dasharray: 5 5;
@@ -157,11 +416,11 @@ body,
   border: 1px solid var(--cv-glass-edge);
   background: var(--cv-glass);
   backdrop-filter: blur(var(--cv-blur));
-  box-shadow: inset 0 1px 0 var(--cv-glass-shine), 0 8px 24px rgba(0,0,0,0.3);
+  box-shadow: inset 0 1px 0 var(--cv-glass-shine), var(--cv-shadow-pill);
 }
 .react-flow__controls button {
   background: transparent;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--cv-control-divider);
   color: var(--cv-ink-dim);
   width: 26px;
   height: 26px;
@@ -179,6 +438,19 @@ body,
   overflow: hidden;
   border: 1px solid var(--cv-glass-edge);
 }
+.react-flow__minimap-node {
+  cursor: pointer;
+  transition: filter var(--cv-motion-fast) var(--cv-ease-out);
+}
+.react-flow__minimap-node:hover {
+  filter: brightness(1.2) saturate(1.08);
+}
+.react-flow__minimap-node.selected {
+  filter: brightness(1.1) saturate(1.05) drop-shadow(0 0 1px var(--cv-ink));
+}
+.react-flow__minimap-node.selected:hover {
+  filter: brightness(1.22) saturate(1.08) drop-shadow(0 0 1px var(--cv-ink));
+}
 
 /* ---------- xterm ---------- */
 
@@ -192,6 +464,61 @@ body,
 .xterm .xterm-viewport::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.14);
   border-radius: 999px;
+}
+
+/* Panel chrome — Deska's 16px controls. They stay fully hidden until the
+   card is active/selected (Fausto's model), then fade in with Deska's fast
+   120ms ease-out timing. Close is the only destructive red hover. */
+.agent-card .card-chrome,
+.cv-card-chrome {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--cv-motion-fast) var(--cv-ease-out);
+}
+.react-flow__node.selected .card-chrome,
+.react-flow__node.selected .cv-card-chrome {
+  opacity: 1 !important;
+  pointer-events: auto;
+}
+.agent-card .card-chrome button,
+.cv-card-chrome button,
+.cv-card-btn {
+  box-sizing: border-box;
+  width: 16px !important;
+  height: 16px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: var(--cv-radius-sm) !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  color: var(--cv-ink-dim) !important;
+  cursor: pointer;
+  flex: none;
+  transition:
+    opacity var(--cv-motion-fast) var(--cv-ease-out),
+    background var(--cv-motion-fast) var(--cv-ease-out),
+    color var(--cv-motion-fast) var(--cv-ease-out),
+    transform var(--cv-motion-fast) var(--cv-ease-out);
+}
+.agent-card .card-chrome button:hover,
+.cv-card-chrome button:hover,
+.cv-card-btn:hover {
+  background: color-mix(in srgb, var(--cv-ink) 5%, transparent) !important;
+  color: var(--cv-text-main) !important;
+}
+.agent-card .card-chrome button[data-danger="true"]:hover,
+.cv-card-chrome button.cv-card-close:hover,
+button.cv-card-close:hover,
+.cv-card-close:hover {
+  background: var(--cv-error-overlay) !important;
+  color: var(--cv-error) !important;
+}
+.agent-card .card-chrome button:active,
+.cv-card-chrome button:active,
+.cv-card-btn:active {
+  transform: scale(0.94);
 }
 
 /* ---------- status dot (the ONLY status indicator) ---------- */
@@ -209,21 +536,42 @@ body,
   100% {
     box-shadow:
       inset 0 1px 0 var(--cv-glass-shine),
-      0 12px 32px rgba(0, 0, 0, 0.35),
-      0 0 0 0 rgba(255, 178, 36, 0);
+      var(--cv-shadow-card),
+      0 0 0 0 color-mix(in srgb, var(--cv-waiting) 0%, transparent);
   }
   50% {
     box-shadow:
       inset 0 1px 0 var(--cv-glass-shine),
-      0 12px 32px rgba(0, 0, 0, 0.35),
-      0 0 0 5px rgba(255, 178, 36, 0.12);
+      var(--cv-shadow-card),
+      0 0 0 5px color-mix(in srgb, var(--cv-waiting) 12%, transparent);
   }
 }
 .node-waiting {
   animation: halo-breathe 3.2s ease-in-out infinite;
 }
 
+/* Gather region entrance/exit — quiet structural chrome, not a popover. */
+@keyframes cv-group-in {
+  from { opacity: 0; transform: scale(0.985); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes cv-group-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.985); }
+}
+.cv-group-frame {
+  transform-origin: center;
+  animation: cv-group-in var(--cv-motion-slow) var(--cv-ease-out) both;
+}
+.cv-group-frame-out {
+  animation: cv-group-out 180ms ease-in both;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .cv-group-frame,
+  .cv-group-frame-out {
+    animation: none;
+  }
   .node-waiting,
   .edge-delegated .react-flow__edge-path {
     animation: none;
@@ -245,14 +593,36 @@ body,
   --cv-base: #ece8e1;
   --cv-dot: rgba(30, 26, 20, 0.06);
   --cv-ink: #23211d;
+  --cv-glass-shine: rgba(255, 255, 255, 0.72);
+  --cv-shadow-card: 0 10px 28px rgba(63, 47, 25, 0.12);
+  --cv-shadow-pill: 0 5px 16px rgba(63, 47, 25, 0.1);
+  --cv-shadow-popover: 0 16px 40px rgba(63, 47, 25, 0.18);
+  --cv-shadow-hover: 0 5px 16px rgba(63, 47, 25, 0.12);
+  --cv-vignette: rgba(117, 91, 52, 0.035);
+  --cv-control-divider: rgba(35, 33, 29, 0.09);
+  --cv-minimap-mask: rgba(63, 47, 25, 0.12);
+  --cv-minimap-node-stroke: rgba(35, 33, 29, 0.22);
+  --cv-minimap-node-term: #d97706;
+  --cv-minimap-node-agent: #16804f;
+  --cv-minimap-node-panel: #6f5bd7;
+  --cv-minimap-node-note: #1f6fc5;
+  --cv-minimap-node-web: #0f8496;
+  --cv-minimap-node-orchestrator: #ad3f8d;
+  --cv-minimap-node-workspace: #7a8497;
+  --cv-minimap-node-shape: #c34f42;
   --cv-accent: #d97706;
   --cv-accent-dim: rgba(217, 119, 6, 0.14);
   --cv-working: #16a34a;
   --cv-waiting: #d97706;
   --cv-blocked: #dc2626;
+  --cv-danger: var(--cv-blocked);
   --cv-done: #16a34a;
   --cv-idle: #7a756c;
   color-scheme: light;
+}
+
+[data-theme="paper"] .react-flow::after {
+  opacity: 0.12;
 }
 
 [data-theme="sepia"] {
@@ -264,6 +634,7 @@ body,
   --cv-working: #3ddc84;
   --cv-waiting: #ffb224;
   --cv-blocked: #ff5d5d;
+  --cv-danger: var(--cv-blocked);
   --cv-done: #34d399;
   --cv-idle: #9aa0a6;
   color-scheme: dark;
@@ -288,10 +659,7 @@ body,
     from var(--cv-ring-angle),
     transparent 0deg,
     var(--cv-ring) 40deg,
-    transparent 95deg,
-    transparent 180deg,
-    var(--cv-ring) 220deg,
-    transparent 275deg
+    transparent 95deg
   );
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
@@ -299,7 +667,8 @@ body,
   mask-composite: exclude;
   animation: cv-ring-spin 3s linear infinite;
   z-index: -1;
-  filter: saturate(1.4) brightness(1.15);
+  /* no filter here — a filter on an animating element repaints the whole
+     ring every frame; the color arrives pre-brightened instead */
 }
 @keyframes cv-ring-spin {
   to {
@@ -310,14 +679,20 @@ body,
 
 /* ---------- Apple-style dropdown menu (opaque, rounded rows, thin scroll) ---------- */
 .cv-menu {
-  background: color-mix(in srgb, var(--cv-base) 92%, transparent);
-  backdrop-filter: blur(28px) saturate(1.5);
-  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  background: var(--cv-glass-popover);
+  backdrop-filter: blur(var(--cv-blur-popover));
+  -webkit-backdrop-filter: blur(var(--cv-blur-popover));
   border: 1px solid var(--cv-glass-edge);
-  border-radius: 16px;
+  border-radius: var(--cv-radius-popover);
   box-shadow:
     inset 0 1px 0 var(--cv-glass-shine),
-    0 18px 48px rgba(0, 0, 0, 0.55);
+    var(--cv-shadow-popover);
+}
+.cv-menu button {
+  transition: background var(--cv-motion-fast) var(--cv-ease-out);
+}
+.cv-menu button:hover {
+  background: var(--cv-glass-hi) !important;
 }
 .cv-menu-scroll {
   scrollbar-width: thin;
@@ -342,6 +717,290 @@ body,
 .vault-ctx-item:hover {
   background: var(--cv-glass-hi) !important;
 }
+.vault-board-action {
+  border-color: color-mix(in srgb, var(--cv-accent) 40%, var(--cv-glass-edge)) !important;
+  background: color-mix(in srgb, var(--cv-accent) 11%, var(--cv-glass-hi)) !important;
+  transition: background var(--cv-motion-fast) var(--cv-ease-out), border-color var(--cv-motion-fast) var(--cv-ease-out), transform var(--cv-motion-fast) var(--cv-ease-out);
+}
+.vault-board-action:hover {
+  border-color: color-mix(in srgb, var(--cv-accent) 76%, var(--cv-glass-edge)) !important;
+  background: color-mix(in srgb, var(--cv-accent) 20%, var(--cv-glass-hi)) !important;
+  transform: translateY(-1px);
+}
+.vault-board-action:active {
+  transform: translateY(0) scale(0.98);
+}
+.vault-board-action:focus-visible {
+  outline: 2px solid var(--cv-accent);
+  outline-offset: 2px;
+}
 .cv-menu-scroll::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* ---------- topbar right cluster — Deska fusion: loose icons that merge
+   into a single bubble when hovered ---------- */
+.cv-fuse {
+  border-radius: 999px;
+  padding: 3px 5px;
+  /* The right cluster reads as ONE bubble permanently — the loose-circles
+     look read as scattered widgets. The strip hover-fusion rule below
+     still dissolves it into the end-to-end bar (higher specificity). */
+  background: var(--cv-glass);
+  backdrop-filter: blur(var(--cv-blur)) saturate(1.15);
+  -webkit-backdrop-filter: blur(var(--cv-blur)) saturate(1.15);
+  border: 1px solid var(--cv-glass-edge);
+  box-shadow:
+    inset 0 1px 0 var(--cv-glass-shine),
+    var(--cv-shadow-pill);
+  transition: background var(--cv-motion-base) var(--cv-ease-out), box-shadow var(--cv-motion-base) var(--cv-ease-out), border-color var(--cv-motion-base) var(--cv-ease-out);
+}
+/* Inside the single bubble the items are segments, not pills — no rings,
+   and they fade in/out smoothly when the strip fusion dissolves them. */
+.cv-fuse .glass-pill,
+.cv-fuse button {
+  box-shadow: none !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  transition: background var(--cv-motion-base) var(--cv-ease-out), box-shadow var(--cv-motion-base) var(--cv-ease-out);
+}
+.cv-fuse button:hover {
+  background: var(--cv-glass-hi) !important;
+}
+.cv-topbar-labeled-control {
+  white-space: nowrap;
+  font-size: var(--cv-text-xxs);
+  color: var(--cv-ink-dim);
+}
+.cv-topbar-labeled-control:hover,
+.cv-topbar-labeled-control:focus-visible {
+  color: var(--cv-ink);
+}
+.cv-topbar-control-label {
+  line-height: 1;
+}
+.cv-bottom-dock-actions > button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  overflow: hidden;
+  transition: width var(--cv-motion-base) var(--cv-ease-out), padding var(--cv-motion-base) var(--cv-ease-out), background var(--cv-motion-fast) var(--cv-ease-out);
+}
+.cv-bottom-dock-label {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: var(--cv-text-xxs);
+  font-weight: 500;
+  transition: max-width var(--cv-motion-base) var(--cv-ease-out), opacity var(--cv-motion-fast) var(--cv-ease-out);
+}
+.cv-bottom-dock-actions > button:hover,
+.cv-bottom-dock-actions > button:focus-visible {
+  width: auto !important;
+  min-width: 32px;
+  gap: 7px;
+  padding-inline: 10px !important;
+}
+.cv-bottom-dock-actions > button:hover .cv-bottom-dock-label,
+.cv-bottom-dock-actions > button:focus-visible .cv-bottom-dock-label {
+  max-width: 84px;
+  opacity: 1;
+}
+/* ---------- topbar fusion — Deska-style convergence choreography.
+   Invariants:
+   - ZERO layout shift: gap/padding/margins/box sizes never change on
+     hover. Click targets stay pixel-fixed; the fusion is purely visual
+     (pseudo-element fills, hairlines and shadows).
+   - The merge is GEOGRAPHIC, not a wash blooming from the center: a glass
+     mass extrudes from the inner edge of each bubble and the two fronts
+     advance through the gap until they meet in its middle — left front
+     grows rightward, right front grows leftward.
+   - Bubble regions unify in place: each cluster cross-fades onto a
+     pre-shaped flat-inner-edge bar segment (::before revealed as the
+     bubble's own fill dissolves), so the finished bar is one continuous
+     surface — same height, same tone, no seams.
+   The front travel is 100% visible and runs 300ms on Deska's ease-out
+   curve — fast off the bubble's edge, decelerating gently into the join.
+   ---------- */
+.cv-topbar-fuse {
+  border-radius: 999px;
+  --cv-fuse-fill: color-mix(in srgb, var(--cv-ink) 7%, color-mix(in srgb, var(--cv-base) 82%, transparent));
+  /* Only the ambient drop shadow lives on the strip itself. Hover-out
+     (this base timing) lets it fall immediately so the split reads clean;
+     hover-in overrides with a delay so it blooms as the fronts meet. */
+  transition: box-shadow 140ms var(--cv-ease-out);
+}
+.cv-topbar-fuse:hover {
+  box-shadow: var(--cv-shadow-hover);
+  transition: box-shadow var(--cv-motion-base) var(--cv-ease-out) 110ms;
+}
+/* The advancing fronts live in the flex spacer so their geometry IS the
+   true gap. Each one is anchored past the flex gutter (-8px) flush against
+   its bubble's edge — where the extrusion visually attaches — and grows to
+   cover exactly half the gap, so the two noses meet in the middle. The
+   nose travels rounded (organic, liquid) and flattens as it arrives so the
+   meeting seam vanishes. These are absolutely positioned pseudo-elements:
+   animating their width never touches layout. */
+.cv-fuse-gap {
+  position: relative;
+}
+.cv-fuse-gap::before,
+.cv-fuse-gap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: var(--cv-fuse-fill);
+  backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
+  -webkit-backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
+  /* The bar's top/bottom hairlines ride along with the front. */
+  box-shadow:
+    inset 0 1px 0 0 var(--cv-glass-edge),
+    inset 0 -1px 0 0 var(--cv-glass-edge);
+  pointer-events: none;
+  transition:
+    width 300ms var(--cv-ease-out),
+    border-radius 300ms var(--cv-ease-out);
+}
+.cv-fuse-gap::before {
+  left: -8px;
+  border-radius: 0 999px 999px 0;
+}
+.cv-fuse-gap::after {
+  right: -8px;
+  border-radius: 999px 0 0 999px;
+}
+.cv-topbar-fuse:hover .cv-fuse-gap::before {
+  /* half the gap + the gutter + a half-pixel past center so no sub-pixel
+     crack can open where the fronts join */
+  width: calc(50% + 8.5px);
+  border-radius: 0;
+}
+.cv-topbar-fuse:hover .cv-fuse-gap::after {
+  width: calc(50% + 8px);
+  border-radius: 0;
+}
+/* The bar segments — each cluster bubble carries a ::before pre-shaped as
+   its final bar segment: the fill, blur and perimeter hairlines of the
+   continuous bar with the inner edge already flat. It sits underneath the
+   bubble's own fill (negative z-index inside the strip's stacking context)
+   fully formed; as the bubble dissolves, the segment is simply revealed —
+   a monotone cross-fade with no tonal dip and no double-fill. */
+.cv-topbar-fuse > .glass-pill,
+.cv-topbar-fuse > .cv-fuse {
+  position: relative;
+  /* Symmetric dissolution — both bubbles fade fill, ring, shadow and blur
+     together, with no directional stagger: the merge is a mirror-symmetric
+     convergence, not a sweep. Timing is direction-aware: this base rule
+     drives hover-OUT, where the bubbles must not re-materialize until the
+     retreating mass is back — a 120ms delay lands the reformation exactly
+     as the fronts finish retracting (300ms), so the receding fill never
+     reads as a detached sliver mid-gap. The :hover override below drives
+     hover-IN with the earlier 60ms start. */
+  transition:
+    background var(--cv-motion-base) var(--cv-ease-out) 120ms,
+    border-color var(--cv-motion-base) var(--cv-ease-out) 120ms,
+    box-shadow var(--cv-motion-base) var(--cv-ease-out) 120ms,
+    backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 120ms,
+    -webkit-backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 120ms;
+}
+.cv-topbar-fuse:hover > .glass-pill,
+.cv-topbar-fuse:hover > .cv-fuse {
+  transition:
+    background var(--cv-motion-base) var(--cv-ease-out) 60ms,
+    border-color var(--cv-motion-base) var(--cv-ease-out) 60ms,
+    box-shadow var(--cv-motion-base) var(--cv-ease-out) 60ms,
+    backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 60ms,
+    -webkit-backdrop-filter var(--cv-motion-base) var(--cv-ease-out) 60ms;
+}
+.cv-topbar-fuse > .glass-pill::before,
+.cv-topbar-fuse > .cv-fuse::before {
+  content: "";
+  position: absolute;
+  /* inset -1px covers the border-box exactly (the anchor is the padding
+     box), so the segment's hairlines land where the bubble's ring was. */
+  inset: -1px;
+  background: var(--cv-fuse-fill);
+  backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
+  -webkit-backdrop-filter: blur(var(--cv-blur-topbar)) saturate(1.1);
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  /* Same direction-aware timing as the bubble dissolution above: the
+     segment lingers into hover-out (120ms) so the bar surface never opens
+     a hole while the mass is still retracting, and fades in early (60ms)
+     on hover-in. */
+  transition: opacity var(--cv-motion-base) var(--cv-ease-out) 120ms;
+}
+.cv-topbar-fuse:hover > .glass-pill::before,
+.cv-topbar-fuse:hover > .cv-fuse::before {
+  transition: opacity var(--cv-motion-base) var(--cv-ease-out) 60ms;
+}
+.cv-topbar-fuse > .glass-pill::before {
+  border-radius: 999px 0 0 999px;
+  box-shadow:
+    inset 0 1px 0 0 var(--cv-glass-edge),
+    inset 0 -1px 0 0 var(--cv-glass-edge),
+    inset 1px 0 0 0 var(--cv-glass-edge);
+}
+.cv-topbar-fuse > .cv-fuse::before {
+  border-radius: 0 999px 999px 0;
+  box-shadow:
+    inset 0 1px 0 0 var(--cv-glass-edge),
+    inset 0 -1px 0 0 var(--cv-glass-edge),
+    inset -1px 0 0 0 var(--cv-glass-edge);
+}
+.cv-topbar-fuse:hover > .glass-pill::before,
+.cv-topbar-fuse:hover > .cv-fuse::before {
+  opacity: 1;
+}
+.cv-topbar-fuse:hover .glass-pill,
+.cv-topbar-fuse:hover .cv-fuse {
+  background: transparent;
+  box-shadow: none;
+  border-color: transparent;
+  /* blur(0) rather than none keeps the filter interpolable — the bubbles'
+     blur dissolves with their fill instead of popping off in one frame. */
+  backdrop-filter: blur(0px) saturate(1);
+  -webkit-backdrop-filter: blur(0px) saturate(1);
+}
+/* Reduced motion: the fusion end states are identical, but every step is
+   instant — no travel, no cross-fade. This block must sit AFTER the fusion
+   rules above: equal specificity means source order decides. */
+@media (prefers-reduced-motion: reduce) {
+  .cv-topbar-fuse,
+  .cv-fuse-gap::before,
+  .cv-fuse-gap::after,
+  .cv-topbar-fuse > .glass-pill,
+  .cv-topbar-fuse > .cv-fuse,
+  .cv-topbar-fuse > .glass-pill::before,
+  .cv-topbar-fuse > .cv-fuse::before {
+    transition: none;
+  }
+}
+@media (max-width: 1050px) {
+  .cv-topbar-control-label { display: none; }
+  .cv-topbar-labeled-control {
+    width: 34px !important;
+    padding: 0 !important;
+    justify-content: center;
+  }
+}
+
+/* The "Open on canvas" jump button is meaningless inside the board card
+   itself — the card IS on the canvas. It only belongs in the overlay. */
+.react-flow__node-panel .cv-canvas-jump {
+  display: none;
+}
+
+/* Toast entrance — slide in from the right edge, macOS-style. */
+@keyframes cv-toast-in-kf {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.cv-toast-in {
+  animation: cv-toast-in-kf var(--cv-motion-slow) var(--cv-ease-out);
 }

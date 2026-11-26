@@ -1,0 +1,1340 @@
+# Web Content from https://deska.dev
+
+[Skip to content][1]
+[deska][2]
+Product
+[Marketplace][3]
+[Teams][4][Pricing][5][Docs][6][Contact][7]
+Sign in
+[Download][8]
+
+# The workspace for your AI agents.
+
++5All of them on one infinite canvas, with an agent that coordinates them, a place that keeps what
+they make, and your team right there with you.
+
+[ Download][9][ See how it works][10]
+[Also in any browser at app.deska.dev][11]
+Loading the demo
+CanvasAll on one canvasEvery agent in its own panel, all working at once.DexDex coordinates themAsk
+once, and Dex hands each part to an agent.KeptWhat they make is keptSaved with its versions and a
+link, and an automation repeats it.TeamYour team right thereShared tasks, comments and a team
+computer that stays on.
+
+All on one canvasEvery agent in its own panel, all working at once.
+
+Dex coordinates themAsk once, and Dex hands each part to an agent.
+
+What they make is keptSaved with its versions and a link, and an automation repeats it.
+
+Your team right thereShared tasks, comments and a team computer that stays on.
+
+[ Download][12][ See how it works][13]
+[Also in any browser at app.deska.dev][14]
+* A git worktree per task, when you want one·
+* Your code stays on your machine·
+* Claude Code, Codex, OpenCode, Cursor, Antigravity, Pi, Hermes, Mistral Vibe, Kimi Code, and Deska
+  Harness·
+* Any other agent CLI, in a terminal·
+* Terminal, editor, browser, notes·
+* Mac, Windows, Linux·
+* Also in any browser at app.deska.dev·
+* Open another computer: its files, its git, its terminals·
+* Or one of ours, on when yours is off·
+* Free plan included·
+* A git worktree per task, when you want one·
+* Your code stays on your machine·
+* Claude Code, Codex, OpenCode, Cursor, Antigravity, Pi, Hermes, Mistral Vibe, Kimi Code, and Deska
+  Harness·
+* Any other agent CLI, in a terminal·
+* Terminal, editor, browser, notes·
+* Mac, Windows, Linux·
+* Also in any browser at app.deska.dev·
+* Open another computer: its files, its git, its terminals·
+* Or one of ours, on when yours is off·
+* Free plan included·
+
+## One place for everything your agents do.
+
+One canvasMulti-agentDexArtifactsAutomations
+
+### One canvas for the whole project
+
+Open a folder and every tool opens beside it: editor, terminal, browser, notes and your agents.
+Arrange them once and they stay put.
+
+[See the canvas][15]
+
+### Your agents, right next to your work
+
+Claude Code, Codex, OpenCode, Cursor, Antigravity, Pi, Hermes, Mistral Vibe, Kimi Code, and Deska
+Harness work inside your workspace, beside the files they change. When one needs something, it asks
+you right there.
+
+Your agents, one desk
+
+Claude Code, Codex, OpenCode, Cursor, Antigravity, Pi, Hermes, Mistral Vibe, Kimi Code, and Deska
+Harness run at the same time, each on the subscription you already pay for. Deska is where they work
+and where you answer them.
+* Claude Codeaccept edits on
+* Codexask before running
+* OpenCodeplanbuild
+* Cursoragentplanask
+* Antigravityagentplan
+* Pitools run ungated
+* Hermesasks before risky commands
+* Mistral Vibeaccept edits
+* Kimi Codeasks before acting
+* Deska Harnessasks before commands and edits
+
+[Meet the agents][16]
+
+### Dex coordinates your agents
+
+Tell Dex what you need, out loud or in writing. He splits the work, hands each part to the right
+agent, keeps track of it and tells you when something is ready or needs you.
+
+[See how Dex works][17]
+
+### What your agents make, kept
+
+Pages, documents, designs and notes are saved in one gallery, with every version. Share one with a
+link and the comments come back to the same place.
+
+[See artifacts][18]
+
+### What you repeat, Dex does for you
+
+Dex runs a piece of work at the time you say, every week, or when something changes. Every run is
+kept in its history, and it asks you when it needs you.
+
+[See automations][19]
+
+## Use the agents you already pay for.With every account you have.
+
+Sign in to the agents you already use with your own subscription. Add a second account of the same
+agent, one for work and one for you, and both take on tasks at the same time, each with its own name
+and color.
+
+[See all agents][20][How accounts work][21]
+
+### Agents that work in Deska
+* Deska HarnessDeska's own agent
+* Claude Code
+* Codex
+* Cursor
+* OpenCode
+* Antigravity
+* Hermes
+* Pi
+* Mistral Vibe
+* Kimi Code
+* Any other agentOpen it in a Deska terminal, on the same canvas and in the same project. It runs
+  the way it runs on your computer today.
+
+### One agent, three accounts, all at work
+
+Personal, Work and Client are the same Claude Code signed in three times. Each panel says which
+account is doing the work.
+
+DeskaThis MacSTstorefrontmain
+Phone
+Spaces
+Fix the flaky checkout testRunning
+PersonalChanges
+
+Fix the flaky checkout test
+
+Working…Stop esc
+Queue the next task, or steer the running turn…
+Claude CodeQueue ↵
+Add gift card codes at checkoutRunning
+WorkChanges
+
+Add gift card codes at checkout
+
+Working…Stop esc
+Queue the next task, or steer the running turn…
+Claude CodeQueue ↵
+Write the orders API guideRunning
+ClientChanges
+
+Write the orders API guide
+
+Thinking
+Working…Stop esc
+Queue the next task, or steer the running turn…
+Claude CodeQueue ↵
+Extras
+Ask DexHold to talk, tap to typeDictate
+Personal58%Work23%Client71%
+InboxWorking
+Usage leftAgents signed in on this computer
+PersonalMax
+Session58% left
+Resets in 2h 12m
+Week81% left
+Resets Thu 9:00 AM
+WorkPro
+Session21% left
+Resets in 2h 40mAt this pace, it runs out in 48 min
+ClientMax
+Session71% left
+Resets in 3h 05m
+Updated just now
+* **Each task keeps its account**A task stays on the account it started with, even when you change
+  the default.
+* **See what is left**One card shows how much each account has left and when it refills.
+* **You choose when to switch**If an account hits its limit, Deska offers to carry on with another
+  one and keeps the conversation.
+See the full table
+
+## Nine agents all the way in. Every other one in a terminal.
+
+Claude Code, Codex, OpenCode, Cursor, Antigravity, Pi, Hermes, Mistral Vibe, Kimi Code, and Deska
+Harness run as tasks here, with a rendered transcript and the Inbox, permission requests as buttons
+wherever the agent asks, and the models each one lists in its picker. Every other agent CLI runs in
+a Deska terminal on the same canvas, in the same project, and Deska still tells you when it is
+working, when it wants you and when it is done.
+* ### As a task or as a terminal
+  
+  The whole product
+  * Claude Code
+  * Codex
+  * OpenCode
+  * Cursor
+  * Antigravity
+  * Pi
+  * Hermes
+  * Mistral Vibe
+  * Kimi Code
+  * Deska Harness
+* ### Known by name in a terminal
+  
+  Badge, status and notifications
+  * Gemini CLI
+  * Aider
+  * Muse Code
+* ### Anything else with a TTY
+  
+  Runs the way it runs in your shell
+  * Goose
+  * Amp
+  * Copilot CLI
+  * Crush
+  * Qwen Code
+
+──────────────────────────────┬────────────────────────────────────────────────────────────┬────────
+What you get                  │As a task                                                   │In a    
+                              │                                                            │terminal
+──────────────────────────────┼────────────────────────────────────────────────────────────┼────────
+Runs on your machine, beside  │Included                                                    │Included
+the files it edits            │                                                            │        
+──────────────────────────────┼────────────────────────────────────────────────────────────┼────────
+Your own subscription and your│Included                                                    │Included
+own sign in                   │                                                            │        
+──────────────────────────────┼────────────────────────────────────────────────────────────┼────────
+On any computer you linked, or│IncludedA Cloud box comes with Claude Code, Codex, OpenCode,│Included
+on a Cloud box                │Cursor, Antigravity, and Deska Harness                      │        
+──────────────────────────────┼────────────────────────────────────────────────────────────┼────────
+Deska sees it working, waiting│Included                                                    │Included
+for you or done               │                                                            │        
+──────────────────────────────┼────────────────────────────────────────────────────────────┼────────
+Notifications on the desk and │Included                                                    │Included
+on your phone                 │                                                            │        
+──────────────────────────────┼────────────────────────────────────────────────────────────┼────────
+Open it from your phone and   │Included                                                    │Included
+answer it there               │                                                            │        
+──────────────────────────────┼────────────────────────────────────────────────────────────┼────────
+A transcript with diffs, plan │IncludedPlan steps and subagents when the agent reports them│Its own 
+steps and subagents           │                                                            │TUI     
+──────────────────────────────┼────────────────────────────────────────────────────────────┼────────
+Permission requests as buttons│Included never asks                                         │Its own 
+                              │                                                            │menu    
+──────────────────────────────┼────────────────────────────────────────────────────────────┼────────
+Models picked in Deska        │Included lists none yet and runs on its own default         │Its own 
+                              │                                                            │flags   
+──────────────────────────────┼────────────────────────────────────────────────────────────┼────────
+Several accounts of one agent │IncludedOne for now on Deska Harness                        │Its own 
+                              │                                                            │config  
+──────────────────────────────┼────────────────────────────────────────────────────────────┼────────
+Tasks, a git worktree each,   │Included                                                    │No      
+and the Inbox                 │                                                            │        
+──────────────────────────────┴────────────────────────────────────────────────────────────┴────────
+
+A Deska terminal is a real shell, so an agent that is not on this page runs there too. Gemini CLI,
+Aider, and Muse Code are recognized by name, which is what the badge and the status read from. [How
+agents run in Deska][22]
+
+Artifacts and automations
+
+## What your agents make stays.An automation keeps it up to date.
+
+A report, a page or a design an agent finishes is kept as an artifact: one place with every version,
+a link to share and the comments of the people who read it. Ask Dex to repeat it, and an automation
+does the same work on schedule and adds the new version to that same artifact.
+* Find it in the gallery instead of scrolling an old chat, with every version since the first.
+* Share a link that opens with your computer off. People with the link comment, and the agent makes
+  the change.
+* Automations run at a set time, on a repeating schedule or when something changes, keep every run
+  and tell you when they finish.
+
+Automations run on your computer while Deska is open, even with every window closed. Publishing is
+always a separate step: a new version is never public by itself.
+
+[Explore Artifacts][23][Explore automations][24]
+1An agent finishesThe sales report lands in the gallery as an artifact.2It is kept and sharedA link,
+a comment from Ana and a second version.3An automation repeats itEvery Monday at 9:00, the next
+version on its own.
+DeskaThis MacNOnorthwindmain
+Focus 17mPhone
+Spaces
+Weekly sales reportRunningWriting report/index.html
+Claude Code
+
+Build this week’s sales report from sales.csv and save it as an artifact.
+
+**Read**data/sales.csv
+**Ran**python summary.py
+**Wrote**report/index.html
+**Saved**the artifact “Weekly sales report”
+
+Done. The report is saved as an artifact: $48,320 in revenue, 12% more than last week.
+
+Northwind
+Weekly sales
+November 10 to 16
+Revenue
+$48,320+12%
+Orders
+1,284+6%
+Average order
+$37.63
+vs. last week
+Sales by region
+Center$18.2k
+South$11.9k
+West$10.4k
+Top products
+Cold brew, 1 L$6,940
+House blend, 500 g$5,210
+Ceramic mug$3,180
+Made with Claude Code in Deska
+Weekly sales reportPage, Version 1Open
+Working…
+Message this agent…
+Artifacts
+Artifacts
+All7Pages3Designs1Notes and documents2Apps1
+Make something new
+NoteDocumentPageDesignApp
+Recent
+Northwind landingPage, 2h ago
+Brand paletteDesign, yesterday
+Shipping calculatorApp, yesterday
+Q4 planDocument, Nov 12
+Pricing pagePage, Nov 11
+Weekly sales report
+Weekly sales report
+v2nowChatShareComments
+
+Build this week’s sales report from sales.csv and save it as an artifact.
+
+Done. The report is saved as an artifact: $48,320 in revenue, 12% more than last week.
+
+Northwind
+Weekly sales
+November 10 to 16
+Revenue
+$48,320+12%
+Orders
+1,284+6%
+Average order
+$37.63
+vs. last week
+Sales by region
+Center$18.2k
+South$11.9k
+West$10.4k
+Top products
+Cold brew, 1 L$6,940
+House blend, 500 g$5,210
+Ceramic mug$3,180
+Made with Claude Code in Deska
+**Version 1**nowShow
+AAna Ruiz
+
+Add what Ana asks for.
+
+I added the north region to the chart and the totals. That is version 2.
+
+Northwind
+Weekly sales
+November 10 to 16
+Revenue
+$48,320+12%
+Orders
+1,284+6%
+Average order
+$37.63
+vs. last week
+Sales by region
+Center$18.2k
+South$11.9k
+West$10.4k
+North$7.8k
+Top products
+Cold brew, 1 L$6,940
+House blend, 500 g$5,210
+Ceramic mug$3,180
+Made with Claude Code in Deska
+**Version 2**nowShown
+Ask for a change…
+Northwind
+Weekly sales
+November 10 to 16
+Revenue
+$48,320+12%
+Orders
+1,284+6%
+Average order
+$37.63
+vs. last week
+Sales by region
+Center$18.2k
+South$11.9k
+West$10.4k
+North$7.8k
+Top products
+Cold brew, 1 L$6,940
+House blend, 500 g$5,210
+Ceramic mug$3,180
+Made with Claude Code in Deska
+Version 2 is readySee what changed
+Comments
+Resolved
+A**Ana Ruiz**2m
+
+“Sales by region”
+
+Can you add the north region? I need it for Monday.
+
+Resolved in version 2
+Weekly sales report
+SharePeopleExport
+Who can open it
+**Anyone with the link**Not listed anywhere
+deska.dev/s/k7Qm2xPaCopy
+Comments on the link
+Shows version 1Newest
+ExpiresIn 30 days
+Version 1 publishedUnpublish
+Always show the newest
+Northwind
+Weekly sales
+November 10 to 16
+Revenue
+$48,320+12%
+Orders
+1,284+6%
+Average order
+$37.63
+vs. last week
+Sales by region
+Center$18.2k
+South$11.9k
+West$10.4k
+North$7.8k
+Top products
+Cold brew, 1 L$6,940
+House blend, 500 g$5,210
+Ceramic mug$3,180
+Made with Claude Code in Deska
+**Version 2**Agent, now
+Northwind
+Weekly sales
+November 10 to 16
+Revenue
+$48,320+12%
+Orders
+1,284+6%
+Average order
+$37.63
+vs. last week
+Sales by region
+Center$18.2k
+South$11.9k
+West$10.4k
+Top products
+Cold brew, 1 L$6,940
+House blend, 500 g$5,210
+Ceramic mug$3,180
+Made with Claude Code in Deska
+**Version 1**Agent, Dec 1
+Compare with version 1
+Weekly sales report
+
+### Weekly sales report
+
+Run now
+Monday at 9:00This computerClaude Code
+Active
+
+It has not run yet
+
+Next run: Monday, Nov 24, 9:00.
+
+#### It has not run yet
+
+
+#### Timeline
+* Next runMonday, Nov 24, 9:00Schedule on
+
+Weekly sales report
+v2now
+Northwind
+Weekly sales
+November 10 to 16
+Revenue
+$48,320+12%
+Orders
+1,284+6%
+Average order
+$37.63
+vs. last week
+Sales by region
+Center$18.2k
+South$11.9k
+West$10.4k
+North$7.8k
+Top products
+Cold brew, 1 L$6,940
+House blend, 500 g$5,210
+Ceramic mug$3,180
+Made with Claude Code in Deska
+A
+Version 2 is readySee what changed
+Comments
+Open
+A**Ana Ruiz**2m
+
+“Sales by region”
+
+Can you add the north region? I need it for Monday.
+
+Weekly sales report
+SharePeopleExport
+Who can open it
+**Anyone with the link**Not listed anywhere
+deska.dev/s/k7Qm2xPaCopy
+Comments on the link
+Shows version 1Newest
+ExpiresIn 30 days
+Version 1 publishedUnpublish
+Always show the newest
+Northwind
+Weekly sales
+November 10 to 16
+Revenue
+$48,320+12%
+Orders
+1,284+6%
+Average order
+$37.63
+vs. last week
+Sales by region
+Center$18.2k
+South$11.9k
+West$10.4k
+North$7.8k
+Top products
+Cold brew, 1 L$6,940
+House blend, 500 g$5,210
+Ceramic mug$3,180
+Made with Claude Code in Deska
+**Version 2**Agent, now
+Northwind
+Weekly sales
+November 10 to 16
+Revenue
+$48,320+12%
+Orders
+1,284+6%
+Average order
+$37.63
+vs. last week
+Sales by region
+Center$18.2k
+South$11.9k
+West$10.4k
+Top products
+Cold brew, 1 L$6,940
+House blend, 500 g$5,210
+Ceramic mug$3,180
+Made with Claude Code in Deska
+**Version 1**Agent, Dec 1
+Compare with version 1
+Monday, December 8, 9:00
+Extras
+DexAsk anything about this workspaceDictate
+Week41%Session86%
+InboxNothing waiting
+DeskanowWeekly sales reportSales up 8% on last week. Version 5 of the report is ready.
+
+## An infinite canvas.It looks the way you want.
+
+Everything is a panel you place where you want, and the desk around it is yours too: the theme, the
+accent, the wallpaper and the color of each window.
+* Change the look from the canvas and watch the desk change behind it
+* Give each window its own color to tell them apart
+* Install themes other people made
+
+[See appearance][25]
+DeskaThis MacSTstorefrontmain
+Phone
+Spaces
+cart.tssrc/lib
+TScart.ts×
+1
+2
+3
+4
+export function cartTotals(items, discount) {
+const subtotal = sum(items)
+return { subtotal, total: subtotal - off }
+}
+Dev server
+➜ storefront git:(main) pnpm dev
+▲ Next.js 16.1.6
+✓ Ready in 1.2s
+ThemeAdeberryAccentBackgroundDusk Moor
+None
+All appearance settings
+
+## The desk you left behind,answering from your pocket.
+
+Turn on Remote Access once and the machine at your desk is reachable from the phone app and from
+app.deska.dev. The same terminals, the same agents, the same files.
+* Drive any terminal on it, with the keys a shell needs one tap away
+* Read the code on that machine, folder by folder
+* Answer an agent that stopped to ask, and it carries on without you
+
+Encrypted in transit, with nothing to open on your network
+
+[See it on mobile][26]
+D
+Welcome back.
+0agents working now
+3
+panels open
+0
+waiting on you
+Workspaces
+deska-web2hShip the pricing pagefinished
+dropzone1dRetry failed uploadsfinished
+pitch-deck3dRefresh the remote framesfinished
+Computers
+studio3 panels open
+HomeComputersInboxWorkspaces
+14:26
+DEdeska-webmain
+iPhone
+Spaces
+Terminal 1~/deska-web
+➜ deska-web git:(main)
+Terminal 2Claude Code runningClaude Code
+> “Open my project, start Claude Code, and run the tests.”
+❯
+⏵⏵ accept edits on (shift+tab to cycle)81% context left
+DexHold to talk, tap to typeDictate
+Week41%Session86%
+
+## Close the laptop.The work keeps going.
+
+One dedicated computer of ours, $29 a month, that arrives with Claude Code, Codex, OpenCode, Cursor,
+Antigravity, and Deska Harness and the GitHub CLI already on it. It stands beside your own machines,
+your phone reaches it the same way, and it stays on when yours is off.
+* Not a server you configure: it arrives already being a Deska workspace
+* Sign your agents in from your phone, on the machine itself
+* Always on, with its own IP address and 40 GB of disk
+
+A dedicated machine with coding agents installed
+
+[See Deska Cloud][27]
+Your laptop is closedNothing running here.
+Deska CloudDedicated to you
+Claude CodeFix checkout shop / fix-checkout4 tests passed
+Continue from your phone
+
+Always on, with its own IP address.
+
+## Your team, right there with you.People and agents on the same work.
+
+With Deska Teams your people work in the same Deska: one board where each ticket belongs to a person
+or to an agent, comments on what the agents made, and a team computer that keeps working after
+everyone closes their laptop.
+* Give a ticket to a person or to an agent. Giving it to an agent starts the work.
+* Comment on what an agent made and send the comment to it. It answers with the next version.
+* A team computer, included and always on, where the whole team’s agents work.
+
+Seats from $29 per person a month, minimum 2 people. Invite by email or with a link, as Owner, Admin
+or Member.
+
+[See team plans][28]
+DeskaTienda LunaTItienda-lunamain
+Focus 17mPhone
+Dex TicketsTienda Luna
+TLTienda Luna
+Inbox3
+My tickets2
+
+Tienda Luna
+
+Tickets
+Cycles
+Projects
+Activity
+Approvals
+
+Views
+
+Tonight1
+Needs you1
+
+Agents
+
+Deska Harness
+Claude Code
+Codex
+
+Tickets
+
+AllActiveBacklog
+Todo2
+TL-27MV
+Seasonal landing page
+designNov 28
+TL-23LM
+Document the orders API
+docs
+In progress2
+TL-26
+Update dependenciesWorking
+maintenance
+TL-22
+Check the product searchWaits for your approval
+searchNov 20
+In review2
+TL-21
+Card checkoutPR #205 open
+paymentsNov 22
+TL-19MV
+Polish navigation on the phonePR #208 open
+design
+Shipping pageDeska Harness
+Deska Harness
+Shipping pageVersion 8Saved
+1 comment
+Take care of Luis’s comment.
+Worked for 48s
+
+I added an Express row for Mexico City: next day, $199. The other rows did not change.
+
+**Version 8**nowShown
+Message this agent…Send
+**Tienda Luna**HomeCategoriesCart (2)
+
+Shipping to all of Mexico
+
+Free shipping on orders over $800.
+
+────────────────────┬───────────┬─────
+Where               │When       │Price
+────────────────────┼───────────┼─────
+Mexico City         │1 to 2 days│$99  
+────────────────────┼───────────┼─────
+Guadalajara         │2 to 3 days│$129 
+────────────────────┼───────────┼─────
+Monterrey           │2 to 3 days│$129 
+────────────────────┼───────────┼─────
+Express, Mexico City│Next day   │$199 
+────────────────────┴───────────┴─────
+Comments1
+Resolved 1L**Luis**2m
+
+Shipping table
+
+Can we add express shipping with its price?
+
+Resolved in version 8
+Settings
+
+Your AI
+
+Dex
+Agents
+Computers
+Team
+
+Your space
+
+Appearance
+Canvas
+Notifications
+TL
+
+Tienda Luna
+
+4 people$156 a month1 computer
+Invite
+Members 4
+ARAna RuizYouPremiumOwner
+LMLuis MoraStandardAdmin
+MVMarta VegaStandardMember
+CDCamila DíazStandardMember
+Seats
+
+Tienda LunaTeam computer, 8 GB
+On, always on
+What each role can do
+
+
+## Made by the community.Installed in one click.
+
+The Marketplace is the door to what other people already made: skills for your agents, panels for
+your canvas and themes for your whole space.
+
+[Open the Marketplace][29]
+
+### Most installed
+
+[See all][30]
+1. 1[find-skills][31][vercel-labs][32]3.7M3.7M installs on skills.sh
+2. 2[grill-me][33][mattpocock][34]1.3M1.3M installs on skills.sh
+3. 3[grill-with-docs][35][mattpocock][36]1.1M1.1M installs on skills.sh
+4. 4[improve-codebase-architecture][37][mattpocock][38]1.1M1.1M installs on skills.sh
+5. 5[agent-browser][39][vercel-labs][40]1M1M installs on skills.sh
+6. 6[tdd][41][mattpocock][42]1M1M installs on skills.sh
+
+### Themes
+
+[See all][43]
+* Dark theme[Lord Sakura][44][by Jogan][45][11][46]
+* Dark theme[klaam][47][by Valak][48][9][49]
+* Dark theme[Vagabond peace][50][by andrew29dev][51][9][52]
+* Dark theme[Eris Lover][53][by Rihito][54][4][55]
+
+### Panels
+
+[See all][56]
+* [Pizarra][57][by Rihito][58]A compact whiteboard and diagram sketcher: pen, shapes, text, a
+  Mermaid subset compiler and base diagrams, saved as JSON.No networkProductivity4343
+  installs[7][59]
+* [Spotify Control][60][by xhopsiedev][61]Controla tu Spotify de escritorio (Windows). Instala un
+  programa que arranca con la sesión; título, artista y portada pasan por tu servidor.1
+  siteExtrasMedia2020 installs[4][62]
+* [Nivo][63][by Galavic][64]Listen to music and explore Nivo directly on your Deska canvas.No
+  networkExtrasMedia1414 installs[1][65]
+* [Chess][66][by Rihito][67]Ajedrez con salas privadas, retos, usuario y foto de perfil compartidos
+  mediante Deska.1 siteOther1313 installs[1][68]
+
+## One agent in a chat, a sidebar or a terminal.Or all of them, working in one place.
+
+The tools you already use are good at what they do. Give them and Deska the same task and watch what
+each one gets done, side by side.
+
+Deska vs a chat appDeska vs an editor with an agentDeska vs an agent in a terminal
+
+**Same task:** get the spring launch ready (the page, the pricing and the email).
+
+### Beyond this one task
+
+──────────────────────────────────┬───────────────────┬───────────────┬────────────────┬────────────
+What you can do                   │A chat app with an │An editor with │An agent in a   │Deska       
+                                  │AI                 │an agent       │terminal        │            
+──────────────────────────────────┼───────────────────┼───────────────┼────────────────┼────────────
+Your own subscriptions, and more  │NoIts own plan     │In partMostly  │In partOne      │YesPersonal,
+than one account of the same agent│                   │its own plan   │account at a    │Work, Client
+                                  │                   │               │time            │            
+──────────────────────────────────┼───────────────────┼───────────────┼────────────────┼────────────
+One agent that hands work to the  │No                 │No             │In partHelpers  │YesDex      
+others and follows it             │                   │               │of its own kind │            
+──────────────────────────────────┼───────────────────┼───────────────┼────────────────┼────────────
+What they make is kept, with      │In partInside the  │In partAs files│In partAs files │YesArtifacts
+versions and a link to share      │conversation       │in your project│in your project │            
+──────────────────────────────────┼───────────────────┼───────────────┼────────────────┼────────────
+Work that repeats on its own, on a│In partScheduled   │No             │In partIf you   │YesAutomatio
+schedule or when something changes│prompts in some    │               │set it up       │ns          
+                                  │apps               │               │yourself        │            
+──────────────────────────────────┼───────────────────┼───────────────┼────────────────┼────────────
+Your team and its agents on the   │In partShared      │NoEach person  │NoEach person on│YesDex      
+same board                        │projects on team   │on their own   │their own       │Tickets     
+                                  │plans              │               │                │            
+──────────────────────────────────┼───────────────────┼───────────────┼────────────────┼────────────
+Answer and approve from your phone│YesIts phone app   │No             │In partWith     │YesPhone and
+                                  │                   │               │extra setup     │browser     
+──────────────────────────────────┼───────────────────┼───────────────┼────────────────┼────────────
+A Marketplace of panels, skills   │In partAdd-ons and │YesExtensions  │In partPlugins, │YesMarketpla
+and themes, installed in one click│connectors         │               │added by hand   │ce          
+──────────────────────────────────┴───────────────────┴───────────────┴────────────────┴────────────
+
+Compared by kind of tool, not by product. Each of them changes often, and some do more than their
+kind usually does.
+
+## From download to buildingin three steps.
+
+Download Deska
+Deska
+macOSWindowsLinux
+Download DeskaReady to open
+01
+
+### Download Deska
+
+Desktop on macOS, Windows or Linux, plus a companion in any browser at app.deska.dev. Android is
+available as an APK today; iOS and store releases are coming. Free plan included.
+
+studio
+studio
+studio / src main
+Terminal
+`$ npm run dev``localhost:3000`
+Ready in 320ms`GET / **200** 24ms``GET /app.css **200**`
+›
+Coding agent
+Build the homepage
+page.tsx **+24** app.css **+18**
+Changes ready
+main 2 panels100%
+02
+
+### Open a folder
+
+Point Deska at any project. It becomes a canvas you shape however you think.
+
+studio
+`$ npm run dev``localhost:3000`
+Ready in 320ms`GET / **200** 24ms``GET /app.css **200**`
+›
+Remote Access
+studio
+Terminal
+`$ npm run dev``localhost:3000`
+Ready in 320ms`GET / **200** 24ms``GET /app.css **200**`
+›
+escctrl⌘↑↓
+Connected
+03
+
+### Work from anywhere
+
+Flip on Remote Access once and the same terminals are live on your phone. Start on one, continue on
+the other.
+
+IndividualTeam & Enterprise
+
+## Free on your computer.Pay to reach it from anywhere.
+
+The whole desktop app costs nothing on one computer. Deska Pro opens it from your phone and the
+browser. Deska Cloud adds a computer of ours that stays on when yours does not.
+
+### Free
+
+Your complete workspace, on your computer.
+
+**$0**/ month
+
+Free plan included.
+* Full infinite canvas, panels and workspaces
+* Your own coding agent: Claude Code, Codex, OpenCode, Cursor, Antigravity, Pi, Hermes, Mistral
+  Vibe, Kimi Code, and Deska Harness
+* Terminals, editor, browser and Git panels
+* 5 messages a day to Dex, the orchestrator that runs your agents
+
+[Download Deska][69]
+Recommended
+
+### Deska Pro
+
+Your computers, wherever you are.
+
+**$9**per month
+
+Billed monthly.
+* Everything in Free
+* Open your computer from the phone and the browser
+* Threads, terminals, files and Git, wherever you are
+* Approvals and push notifications from anywhere
+
+[See Deska Pro][70]
+
+### Deska Cloud
+
+Close the laptop. The work keeps going.
+
+**$29**per month
+
+Billed monthly.
+* Everything in Deska Pro
+* A computer of ours that stays on when yours does not
+* Yours alone: a dedicated machine, never shared with anyone
+* Your agents keep working while you are away
+
+[See Deska Cloud][71]
+
+Prices in USD, per person. Your coding agent subscription is separate. Pro works with your own
+computers; Cloud is optional.
+
+[Compare every plan][72]
+
+## A seat for every person
+
+Tokens, a team computer and one shared workspace. One monthly bill for the whole team.
+
+Mix Standard, Premium and Max seats in one team.
+
+### Standard
+
+**$29**per person / month
+
+$9 token plan included
+* Everything in Pro
+* For everyday work with agents
+
+Add one Standard seat
+
+### Premium
+
+**$69**per person / month
+
+$49 token plan included
+* Everything in Pro
+* More tokens for longer sessions
+
+Add one Premium seat
+
+### Max
+
+**$119**per person / month
+
+$99 token plan included
+* Everything in Pro
+* For people who rarely want to hit a usage limit
+
+Add one Max seat
+
+### Estimate your team
+
+Choose at least 2 people. Seat types can be mixed.
+
+Standard: $29
+2
+Premium: $69
+0
+Max: $119
+0
+Extra team computers: $29
+0
+
+One 8 GB team computer is included. $29 per extra computer / month
+
+Monthly total, 2 people**$58**
+[Create a team][73]
+
+You’ll review the seats and payment in the team setup.
+
+## Every seat includes
+
+### Everything in Pro
+
+Phone and browser access, unlimited linked computers, Dex and dictation.
+
+### Included tokens
+
+Each seat has its own token plan and usage limits.
+
+### Deska Harness
+
+Deska’s built-in coding agent, ready to use.
+
+### Dex Tickets
+
+A shared board where Dex creates and follows work.
+
+### Linked artifacts
+
+Private pages your team can open in a browser.
+
+### Team computer
+
+One always-on 8 GB computer for the team is included.
+
+### One team computer is included
+
+A shared 8 GB computer stays on while everyone’s laptops are closed. Add another for $29 a month.
+
+Coming soon
+
+### Dex Tag
+
+Tag @Dex in a comment, an artifact or a ticket to hand it work.
+
+Enterprise
+
+## Need more than one team or a custom agreement?
+
+Talk with us about volume pricing, a contract and invoicing for your organization.
+
+[Talk to sales][74]
+
+## Compare seats
+
+────────────────────────┬────────────────┬────────────────┬────────────────┬──────────────────
+Feature                 │Standard        │Premium         │Max             │Enterprise        
+────────────────────────┼────────────────┼────────────────┼────────────────┼──────────────────
+Price per person / month│$29             │$69             │$119            │Custom            
+────────────────────────┼────────────────┼────────────────┼────────────────┼──────────────────
+Included token plan     │$9 plan         │$49 plan        │$99 plan        │Custom            
+────────────────────────┼────────────────┼────────────────┼────────────────┼──────────────────
+Everything in Pro       │                │                │                │                  
+────────────────────────┼────────────────┼────────────────┼────────────────┼──────────────────
+Deska Harness           │                │                │                │                  
+────────────────────────┼────────────────┼────────────────┼────────────────┼──────────────────
+Dex Tickets             │                │                │                │                  
+────────────────────────┼────────────────┼────────────────┼────────────────┼──────────────────
+Team computer           │One included    │One included    │One included    │Discuss with sales
+────────────────────────┼────────────────┼────────────────┼────────────────┼──────────────────
+Extra team computers    │$29 / month each│$29 / month each│$29 / month each│Custom            
+────────────────────────┼────────────────┼────────────────┼────────────────┼──────────────────
+Dex Tag                 │Coming soon     │Coming soon     │Coming soon     │Coming soon       
+────────────────────────┴────────────────┴────────────────┴────────────────┴──────────────────
+
+## Frequently asked questions
+
+### Who pays for the seats?
+
+The team owner pays for every seat on one monthly bill.
+
+### Can seat types be mixed?
+
+Yes. One team can have any mix of Standard, Premium and Max seats.
+
+### How many people do I need?
+
+A team needs at least 2 seats.
+
+### What happens when a seat runs out of tokens?
+
+Each seat has its own token plan and usage limits.
+
+## Not ready to download?
+
+Get product updates and new-agent announcements. One email a month, no spam.
+
+Notify me
+
+## Everything else,answered.
+
+### What is an agentic development environment?
+
+### Do I need to know how to code?
+
+### Is it free?
+
+### What does it cost if I need more?
+
+### What is metered?
+
+### What counts as a message to Dex?
+
+### Can my agents keep working when my computer is off?
+
+### Which AI agents does it work with?
+
+### How is this different from Cursor, or from running an agent in a terminal?
+
+[See every question][75]
+
+## One canvas for everything you build.Free to start.
+
+The complete workspace on one computer, with 10 dictation minutes a month.
+
+### Mac
+
+[Download for Mac][76]
+Apple Silicon and Intel
+
+### Linux
+
+[Download for Linux][77]
+AppImage and Debian
+
+### Windows
+
+[Download for Windows][78]
+Windows 11 and 10, x64, ZIP
+[Also in any browser at app.deska.dev][79]iOS and Android soon
+deska
+
+One workspace for your project, your tools, and your AI agents. Together on a single canvas, on your
+own machine.
+
+English
+
+#### Workspace
+
+[Canvas][80][Panels][81][For developers][82][Terminal][83][Code editor][84][Source
+control][85][Browser][86][Artifacts][87][Publishing][88][Notes][89][Command
+palette][90][Appearance][91]
+
+#### Agents
+
+[AI agents][92][Tasks][93][Parallel tasks][94][Inbox][95][Issues][96][Approvals][97][Agent
+accounts][98][Usage][99]
+
+#### Dex and voice
+
+[Dex][100][Automations][101][Hands-free][102][Dictation][103]
+
+#### Where it runs
+
+[Local-first][104][Computers][105][Sharing][106][Deska Teams][107][Mobile][108][Deska Cloud][109]
+
+#### Resources
+
+[Documentation][110][Blog][111][FAQ][112][Community][113][Discord][114][Download][115]
+
+#### Company
+
+[Pricing][116][Talk to sales][117][Account][118][Contact][119][Partnerships][120][Affiliates][121]
+
+#### Legal
+
+[Terms][122][Privacy][123]
+(c) 2026 Deskayour workspace for building with AI
+[Get help on DiscordBugs, questions or ideas? Join Discord][124]
+
+[1]: #main-content
+[2]: /
+[3]: /skills
+[4]: /teams
+[5]: /pricing
+[6]: /docs
+[7]: /contact
+[8]: /download
+[9]: /download
+[10]: #workspace
+[11]: /download
+[12]: /download
+[13]: #workspace
+[14]: /download
+[15]: /canvas
+[16]: /agents
+[17]: /ask-deska
+[18]: /artifacts
+[19]: /automations
+[20]: /agents
+[21]: /agent-accounts
+[22]: /docs/coding-agents
+[23]: /artifacts
+[24]: /automations
+[25]: /appearance
+[26]: /mobile
+[27]: /cloud
+[28]: /pricing?tab=team
+[29]: /skills
+[30]: /skills
+[31]: /skills/vercel-labs/skills/find-skills
+[32]: /skills/makers/vercel-labs
+[33]: /skills/mattpocock/skills/grill-me
+[34]: /skills/makers/mattpocock
+[35]: /skills/mattpocock/skills/grill-with-docs
+[36]: /skills/makers/mattpocock
+[37]: /skills/mattpocock/skills/improve-codebase-architecture
+[38]: /skills/makers/mattpocock
+[39]: /skills/vercel-labs/agent-browser/agent-browser
+[40]: /skills/makers/vercel-labs
+[41]: /skills/mattpocock/skills/tdd
+[42]: /skills/makers/mattpocock
+[43]: /themes
+[44]: /themes/cmvaixu8103jhzwp92zty36ig
+[45]: /@jogan
+[46]: /sign-in?redirect_url=%2F
+[47]: /themes/cmvh161yr010bzw3gk8h2s4kp
+[48]: /@valak
+[49]: /sign-in?redirect_url=%2F
+[50]: /themes/cmuyljufr00yazwjk8fixxjci
+[51]: /@andrew29dev
+[52]: /sign-in?redirect_url=%2F
+[53]: /themes/cmv183w5100j9zwitd54dk2yp
+[54]: /@rih
+[55]: /sign-in?redirect_url=%2F
+[56]: /panels
+[57]: /panels/pizarra
+[58]: /@rih
+[59]: /sign-in?redirect_url=%2F
+[60]: /panels/spotify-desktop-control
+[61]: /@xhopsiedev
+[62]: /sign-in?redirect_url=%2F
+[63]: /panels/nivo-player
+[64]: /@galavic
+[65]: /sign-in?redirect_url=%2F
+[66]: /panels/chess
+[67]: /@rih
+[68]: /sign-in?redirect_url=%2F
+[69]: #download
+[70]: /pricing#seat
+[71]: /pricing#cloud
+[72]: /pricing#compare
+[73]: /teams/new?standard=2&premium=0&max=0&extraComputers=0
+[74]: /contact?topic=sales
+[75]: /faq
+[76]: /api/download?platform=mac-arm64
+[77]: /api/download?platform=linux
+[78]: /api/download?platform=win
+[79]: /download#get-started
+[80]: /canvas
+[81]: /panels
+[82]: /devs
+[83]: /terminal
+[84]: /editor
+[85]: /source-control
+[86]: /browser
+[87]: /artifacts
+[88]: /publishing
+[89]: /notes
+[90]: /command-palette
+[91]: /appearance
+[92]: /agents
+[93]: /tasks
+[94]: /parallel-tasks
+[95]: /inbox
+[96]: /issues
+[97]: /approvals
+[98]: /agent-accounts
+[99]: /usage
+[100]: /ask-deska
+[101]: /automations
+[102]: /hands-free
+[103]: /dictation
+[104]: /local-first
+[105]: /computers
+[106]: /sharing
+[107]: /teams
+[108]: /mobile
+[109]: /cloud
+[110]: /docs
+[111]: /blog
+[112]: /faq
+[113]: https://discord.gg/jV8WchQMb8
+[114]: https://discord.gg/jV8WchQMb8
+[115]: /download
+[116]: /pricing
+[117]: /contact?topic=sales
+[118]: /account
+[119]: /contact
+[120]: /partnerships
+[121]: /affiliates
+[122]: /terms
+[123]: /privacy
+[124]: https://discord.gg/jV8WchQMb8

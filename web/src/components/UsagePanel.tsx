@@ -1,12 +1,12 @@
 import { panelRoot } from "./panelChrome";
 import { useBoard, acctKey, agentAcctKey, acctLabel, DEFAULT_WEEK_CAP_KB } from "../store/board";
+import { CliMark } from "./CliMark";
+import { cliMeta } from "../board/nodes";
 
 const fmtBytes = (n: number) =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : n >= 1_000 ? `${(n / 1_000).toFixed(1)} KB` : `${n} B`;
 
-/** Juice — usage grouped per account: "<CLI> — <account>" rows with a
- * session column (bytes since this client connected) and a week column
- * (persisted ledger). Below, the per-agent rows of the active board. */
+/** Mission Map — active terminals, their CLI/account and usage at a glance. */
 export function UsagePanel() {
   const agents = useBoard((s) => s.agents);
   const accounts = useBoard((s) => s.accounts);
@@ -52,11 +52,8 @@ export function UsagePanel() {
     <div
       style={{ ...panelRoot, padding: "12px 10px" }}
     >
-      <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 8px", color: "var(--cv-ink)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        Juice
-      </div>
-      <div style={{ fontSize: 10, color: "var(--cv-ink-dim)", padding: "0 12px 10px" }}>
-        {boardAgents.length} agent{boardAgents.length === 1 ? "" : "s"} · {live} live ·{" "}
+      <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", padding: "0 12px 10px" }}>
+        {boardAgents.length} terminals · {live} active ·{" "}
         {fmtBytes(totalBytes)} output · {totalFiles} file{totalFiles === 1 ? "" : "s"} changed
       </div>
       <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
@@ -67,16 +64,15 @@ export function UsagePanel() {
             gridTemplateColumns: "1fr auto auto",
             gap: "0 10px",
             padding: "0 12px 4px",
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: 0.8,
-            textTransform: "uppercase",
+            fontSize: "var(--cv-text-xxs)",
+            fontWeight: 400,
+            letterSpacing: "0.02em",
             color: "var(--cv-ink-faint)",
           }}
         >
-          <span>account</span>
-          <span style={{ textAlign: "right" }}>session</span>
-          <span style={{ textAlign: "right" }}>week</span>
+          <span>Account</span>
+          <span style={{ textAlign: "right" }}>Session</span>
+          <span style={{ textAlign: "right" }}>Week</span>
         </div>
         {acctRows.map((r) => {
           const pct = Math.min(100, (r.week / 1024 / r.capKb) * 100);
@@ -100,7 +96,7 @@ export function UsagePanel() {
               >
                 <span
                   style={{
-                    fontSize: 11.5,
+                    fontSize: "var(--cv-text-xs)",
                     fontWeight: 600,
                     color: "var(--cv-ink)",
                     whiteSpace: "nowrap",
@@ -110,15 +106,15 @@ export function UsagePanel() {
                 >
                   {acctLabel(r.key)}
                   {r.agents > 0 && (
-                    <span style={{ fontWeight: 400, fontSize: 9.5, color: "var(--cv-ink-dim)" }}>
+                    <span style={{ fontWeight: 400, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
                       {" "}· {r.agents} live
                     </span>
                   )}
                 </span>
-                <span style={{ fontSize: 10, color: "var(--cv-ink)", textAlign: "right" }}>
+                <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)", textAlign: "right" }}>
                   {fmtBytes(r.session)}
                 </span>
-                <span style={{ fontSize: 10, color: "var(--cv-accent)", textAlign: "right" }}>
+                <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-accent)", textAlign: "right" }}>
                   {fmtBytes(r.week)}
                 </span>
               </div>
@@ -148,18 +144,17 @@ export function UsagePanel() {
         {/* per-agent rows for this board */}
         <div
           style={{
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: 0.8,
-            textTransform: "uppercase",
+            fontSize: "var(--cv-text-xxs)",
+            fontWeight: 400,
+            letterSpacing: "0.02em",
             color: "var(--cv-ink-faint)",
             padding: "8px 12px 2px",
           }}
         >
-          this board
+          This board
         </div>
         {boardAgents.length === 0 && (
-          <div style={{ fontSize: 11, color: "var(--cv-ink-dim)", padding: "2px 12px 8px" }}>
+          <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", padding: "2px 12px 8px" }}>
             No agents on this board — spawn one and watch its meter.
           </div>
         )}
@@ -192,7 +187,7 @@ export function UsagePanel() {
             <span style={{ minWidth: 0 }}>
               <div
                 style={{
-                  fontSize: 11.5,
+                  fontSize: "var(--cv-text-xs)",
                   fontWeight: 600,
                   color: "var(--cv-ink)",
                   whiteSpace: "nowrap",
@@ -201,15 +196,19 @@ export function UsagePanel() {
                 }}
               >
                 Terminal {boardAgents.indexOf(a) + 1}
-                {a.command ? ` · ${a.command}` : ""}
+                {a.name ? ` · ${a.name}` : ""}
               </div>
-              <div style={{ fontSize: 9.5, color: "var(--cv-ink-dim)" }}>
-                {a.status}
+              <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: cliMeta((a.command ?? "bash").split(/\s+/)[0]).color }}>
+                  <CliMark cli={(a.command ?? "bash").split(/\s+/)[0]} color={cliMeta((a.command ?? "bash").split(/\s+/)[0]).color} size={10} />
+                  {cliMeta((a.command ?? "bash").split(/\s+/)[0]).label}
+                </span>
+                {" · "}{a.status}
                 {a.permission ? ` · ${a.permission}` : ""}
                 {a.account_label ? ` · ${a.account_label}` : ""}
               </div>
             </span>
-            <span style={{ textAlign: "right", fontSize: 10, color: "var(--cv-ink)" }}>
+            <span style={{ textAlign: "right", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)" }}>
               <div>{fmtBytes(a.output_bytes ?? 0)}</div>
               {a.files ? <div style={{ color: "var(--cv-ink-dim)" }}>{a.files} files</div> : null}
             </span>
@@ -220,11 +219,11 @@ export function UsagePanel() {
             locally, so it is never invented. */}
         {Object.keys(cliIdentities).length > 0 && (
           <div style={{ padding: "10px 12px 2px", borderTop: "1px solid var(--cv-glass-edge)", marginTop: 8 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "var(--cv-ink-faint)", marginBottom: 5 }}>
-              detected setup
+            <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 400, letterSpacing: "0.02em", color: "var(--cv-ink-faint)", marginBottom: 5 }}>
+              Detected setup
             </div>
             {Object.entries(cliIdentities).map(([cli, id]) => (
-              <div key={cli} style={{ fontSize: 10, color: "var(--cv-ink-dim)", paddingBottom: 4 }} title={id.source ? `detected from ${id.source}` : undefined}>
+              <div key={cli} style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", paddingBottom: 4 }} title={id.source ? `detected from ${id.source}` : undefined}>
                 <span style={{ color: "var(--cv-ink)", fontWeight: 600 }}>{cli}</span>
                 {" — "}{id.account ?? "account unknown"}{" · default model: "}{id.model ?? "unknown"}{" · quota unknown"}
               </div>

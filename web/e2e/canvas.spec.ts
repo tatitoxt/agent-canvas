@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.mjs";
 import { readFileSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -11,6 +11,77 @@ async function boot(page: import("@playwright/test").Page) {
   await expect(page.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
   return { port, token, vault };
 }
+
+test("offline demo does not loop while React Flow reports selection", async ({ page }) => {
+  const updateDepthErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("Maximum update depth exceeded")) {
+      updateDepthErrors.push(message.text());
+    }
+  });
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(1200);
+  expect(updateDepthErrors, "selection updates must settle without a React render loop").toEqual([]);
+});
+
+test("agent card task reads as a distinct, legible row", async ({ page }) => {
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  const task = page.locator(".agent-card").first().getByTestId("agent-card-task");
+  await expect(task).toBeVisible({ timeout: 10_000 });
+  await expect(task.getByText("Task", { exact: true })).toBeVisible();
+  await expect(task).toContainText("Scaffold checkout API");
+  await expect(task.locator("span").last()).toHaveCSS("font-size", "14px");
+});
+
+test("agent cards resize when nested inside a workspace", async ({ page }) => {
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  const card = page.locator(".agent-card").first();
+  await expect(card).toBeVisible({ timeout: 10_000 });
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", bubbles: true })));
+  await page.waitForTimeout(350);
+  const before = await card.boundingBox();
+  await card.locator("[data-testid='agent-card-header']").click();
+  const handle = card.locator(".react-flow__resize-control.handle.bottom.right");
+  await expect(handle).toBeVisible({ timeout: 5_000 });
+  const grip = await handle.boundingBox();
+  expect(before).not.toBeNull();
+  expect(grip).not.toBeNull();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + grip!.width / 2 + 55, grip!.y + grip!.height / 2 + 45, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await card.boundingBox())?.width ?? 0).toBeGreaterThan(before!.width + 20);
+  await expect.poll(async () => (await card.boundingBox())?.height ?? 0).toBeGreaterThan(before!.height + 20);
+});
+
+test("resized agent card keeps its body scrollable", async ({ page }) => {
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  const card = page.locator(".agent-card").first();
+  await expect(card).toBeVisible({ timeout: 10_000 });
+  await card.locator("[data-testid='agent-card-header']").click();
+  const handle = card.locator(".react-flow__resize-control.handle.bottom.right");
+  const grip = await handle.boundingBox();
+  expect(grip).not.toBeNull();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + grip!.width / 2 - 90, grip!.y + grip!.height / 2 - 90, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await card.boundingBox())?.height ?? 0).toBeLessThan(220);
+  const body = card.locator("[data-testid='agent-card-body']");
+  await expect(body).toBeVisible();
+  expect(await body.evaluate((element) => getComputedStyle(element).overflowY)).toBe("auto");
+  await body.evaluate((element) => {
+    const filler = document.createElement("div");
+    filler.style.height = "600px";
+    element.appendChild(filler);
+  });
+  expect(await body.evaluate((element) => element.scrollHeight)).toBeGreaterThan(await body.evaluate((element) => element.clientHeight));
+});
 
 test("app boots connected against a live daemon", async ({ page }) => {
   await boot(page);
@@ -42,6 +113,50 @@ test("vault panel opens and a new note lands on disk", async ({ page }) => {
   await expect.poll(() => existsSync(join(vault, "e2e-check.md")), { timeout: 8_000 }).toBe(true);
 });
 
+test("Add to Board pins the active Obsidian note as a live canvas window", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title*='your real vault']").first().click();
+  await page.locator("button", { hasText: "+ note" }).first().click();
+  const name = `e2e-board-${Date.now()}`;
+  const input = page.locator("input[placeholder='folder/note name']").first();
+  await input.fill(name);
+  await input.press("Enter");
+  await page.getByRole("button", { name: "Source" }).click();
+  const source = page.locator("textarea").last();
+  await source.fill(`# ${name}\n\n**Live formatted note** with [[Missing target]].`);
+  await page.getByRole("button", { name: /save to vault/ }).click();
+  const add = page.locator("button", { hasText: "Add to Board" }).first();
+  await expect(add).toBeVisible({ timeout: 8_000 });
+  await add.click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='vault']")).toHaveCount(0, { timeout: 8_000 });
+  await expect(page.locator(".react-flow__node-md").filter({ hasText: name })).toBeVisible({ timeout: 8_000 });
+  const noteWindow = page.locator(".react-flow__node-md").filter({ hasText: name });
+  await expect(noteWindow.locator("strong", { hasText: "Live formatted note" })).toBeVisible();
+  await expect(noteWindow.locator('a[title="Missing target (not created yet)"]')).toBeVisible();
+
+  // Pinning the same note again focuses its existing canvas window instead
+  // of creating duplicate live views of one vault file. The pin requests a
+  // fitView; reopening the vault mid-animation would plant the panel at
+  // coordinates computed against a moving viewport (and virtualized nodes
+  // unmount while offscreen), so wait for the camera to settle first.
+  let stableSamples = 0;
+  let previousRect = "";
+  await expect.poll(async () => {
+    const rect = await page.locator(".react-flow__node-md").filter({ hasText: name }).boundingBox();
+    const current = rect ? `${rect.x.toFixed(1)}:${rect.y.toFixed(1)}` : "";
+    stableSamples = current && current === previousRect ? stableSamples + 1 : 0;
+    previousRect = current;
+    return stableSamples;
+  }, { intervals: [100, 100, 100, 100, 100, 100], timeout: 4_000 }).toBeGreaterThanOrEqual(4);
+  await page.locator("button[title*='your real vault']").first().click();
+  const reopen = page.locator(".react-flow__node-panel [data-panel='vault']").first();
+  await expect(reopen).toBeVisible({ timeout: 8_000 });
+  const repin = page.locator("button", { hasText: "Add to Board" }).first();
+  await expect(repin).toBeVisible({ timeout: 8_000 });
+  await repin.click();
+  await expect(page.locator(".react-flow__node-md").filter({ hasText: name })).toHaveCount(1);
+});
+
 test("panels mount as canvas nodes and close again", async ({ page }) => {
   await boot(page);
   const nodes = page.locator(".react-flow__node");
@@ -50,7 +165,9 @@ test("panels mount as canvas nodes and close again", async ({ page }) => {
   // The vault panel mounts as a canvas node of type panel.
   await expect(page.locator(".react-flow__node-panel").first()).toBeVisible({ timeout: 8_000 });
   expect(await nodes.count()).toBeGreaterThan(before);
-  // Its close button unmounts the node again.
+  // Its close button unmounts the node again. Panel chrome appears only
+  // once the card is selected — click the panel first, then close it.
+  await page.locator(".react-flow__node-panel").first().click();
   await page.locator(".react-flow__node-panel button[title*='close' i]").first().click();
   await expect(page.locator(".react-flow__node-panel")).toHaveCount(0, { timeout: 8_000 });
 });

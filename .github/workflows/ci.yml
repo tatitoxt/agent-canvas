@@ -17,6 +17,16 @@ jobs:
       - run: cargo test --workspace
       - run: cargo clippy --workspace -- -D warnings
 
+  # Compile-gate the daemon on Windows: unix signal usage and PTY shell
+  # setup are cfg-gated, and this job keeps them from regressing before
+  # the tag-only Windows release build.
+  canvasd-windows-check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check --workspace
+
   web:
     runs-on: ubuntu-latest
     steps:
@@ -54,6 +64,17 @@ jobs:
         working-directory: web
       - run: npm run e2e
         working-directory: web
+      # Failure forensics: playwright writes an error-context.md (page
+      # snapshot) plus screenshots per failed attempt into test-results.
+      # Without this upload the CI log is the only evidence and opaque
+      # 45s test timeouts are undebuggable.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-test-results
+          path: web/test-results
+          if-no-files-found: ignore
+          retention-days: 7
 
   # The Tauri shell needs a real GUI platform — verify it compiles for the
   # platforms we actually ship on (macOS first; windows/ubuntu follow).

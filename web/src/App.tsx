@@ -40,14 +40,14 @@ import { CommandPalette } from "./components/CommandPalette";
 import { DelegationPanel } from "./components/DelegationPanel";
 import { SearchPanel } from "./components/SearchPanel";
 import { Topbar } from "./components/Topbar";
-import { MissionStrip } from "./components/MissionStrip";
 import { ContextMenu } from "./components/ContextMenu";
 import { CardMenu } from "./components/CardMenu";
 import { isTauri } from "./daemon/tauriClient";
 import { PaneMenu } from "./components/PaneMenu";
 import { TermNode } from "./board/TermNode";
-import { useBoard } from "./store/board";
-import type { AgentStatus, BoardNodeData } from "./board/types";
+import { getAgentSpawnPositions, useBoard } from "./store/board";
+import { minimapNodeColor } from "./board/minimap";
+import type { BoardNodeData } from "./board/types";
 
 const nodeTypes = {
   agent: AgentNode,
@@ -136,14 +136,13 @@ function ViewportTracker() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
   useEffect(() => {
-    useBoard.setState({
-      viewportRect: {
-        left: -vpX / zoom,
-        top: -vpY / zoom,
-        right: -vpX / zoom + winSize.w / zoom,
-        bottom: -vpY / zoom + winSize.h / zoom,
-      },
-    });
+    const viewportRect = {
+      left: -vpX / zoom,
+      top: -vpY / zoom,
+      right: -vpX / zoom + winSize.w / zoom,
+      bottom: -vpY / zoom + winSize.h / zoom,
+    };
+    useBoard.setState({ viewportRect });
   }, [vpX, vpY, zoom, winSize]);
   useEffect(() => {
     useBoard.setState({ zoomPct: Math.round(zoom * 100) });
@@ -155,17 +154,23 @@ function Board() {
   const agents = useBoard((s) => s.agents);
   const liveEdges = useBoard((s) => s.edges);
   const workspaces = useBoard((s) => s.workspaces);
+  const workspaceSizes = useBoard((s) => s.workspaceSizes);
+  const agentSizes = useBoard((s) => s.agentSizes);
+  const resizingAgents = useBoard((s) => s.resizingAgents);
   const positions = useBoard((s) => s.positions);
+  const gatherMotion = useBoard((s) => s.gatherMotion);
   const moveNode = useBoard((s) => s.moveNode);
   const connected = useBoard((s) => s.connected);
   const activeBoard = useBoard((s) => s.activeBoard);
   const approvals = useBoard((s) => s.approvals);
   const attention = useBoard((s) => s.attention);
   const webNodes = useBoard((s) => s.webNodes);
+  const webNodeSizes = useBoard((s) => s.webNodeSizes);
   const orchestrators = useBoard((s) => s.orchestrators);
   const shapes = useBoard((s) => s.shapes);
   const moveShape = useBoard((s) => s.moveShape);
   const mdNodes = useBoard((s) => s.mdNodes);
+  const mdNodeSizes = useBoard((s) => s.mdNodeSizes);
   const panelNodes = useBoard((s) => s.panelNodes);
   const termNodes = useBoard((s) => s.termNodes);
   const cardZ = useBoard((s) => s.cardZ);
@@ -235,7 +240,15 @@ function Board() {
   }, [getNodes, composeShot]);
   const viewCmdN = useBoard((s) => s.viewCmdN);
   useEffect(() => {
-    if (viewCmdN > 0) fitView({ padding: 0.18, maxZoom: 1.1, duration: 250 });
+    if (viewCmdN > 0) {
+      // Undo-gather keeps its outgoing region mounted for a short dissolve.
+      // It is visual debris, not layout content — never let it participate
+      // in the overview bounds or the camera zooms out to empty canvas.
+      const leaving = useBoard.getState().leavingShapes;
+      const nodes = getNodes().filter((n) => !leaving[n.id]);
+      fitView({ ...(nodes.length ? { nodes } : {}), padding: 0.18, maxZoom: 1.1, duration: 180 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getNodes reads the current RF store when the command fires
   }, [viewCmdN, fitView]);
 
   const zoomN = useBoard((s) => s.zoomN);
@@ -250,12 +263,12 @@ function Board() {
   const [openTerms, setOpenTerms] = useState<Array<{ id: string; name: string }>>([]);
   // Re-opening an already-open terminal raises it to the front instead of
   // doing nothing (later entries render on top).
-  const openTerm = (t: { id: string; name: string }) =>
+  const openTerm = useCallback((t: { id: string; name: string }) =>
     setOpenTerms((ts) => {
       const rest = ts.filter((x) => x.id !== t.id);
       return rest.length === ts.length ? [...ts, t] : [...rest, t];
-    });
-  const closeTerm = (id: string) => setOpenTerms((ts) => ts.filter((x) => x.id !== id));
+    }), []);
+  const closeTerm = useCallback((id: string) => setOpenTerms((ts) => ts.filter((x) => x.id !== id)), []);
   const termRequest = useBoard((s) => s.termRequest);
   useEffect(() => {
     if (termRequest) openTerm({ id: termRequest.id, name: termRequest.name });
@@ -282,28 +295,40 @@ function Board() {
   // Tool panels live on the canvas as nodes (Deska "Add to board"):
   // clicking a rail/topbar icon opens or focuses its card; re-clicking
   // closes it. Non-panel keys (canvas) behave as before.
-  const navToggle = (k: string) => {
-    setNav((n) => {
-      if (n === k) {
-        useBoard.getState().closePanelNode(`panel-${k}`);
-        return "canvas";
+  const navToggle = useCallback((k: string) => {
+    // The zustand writes must NOT live inside a setNav updater: React runs
+    // state updaters during Board's render (and twice in StrictMode), so a
+    // store write there notifies subscribers — BottomDock among them — in
+    // the middle of the render pass ("Cannot update a component while
+    // rendering a different component"). navToggle is memoized for render
+    // cost but keyed on `nav`, so event handlers still see the current value.
+    if (nav === k) {
+      useBoard.getState().closePanelNode(`panel-${k}`);
+      setNav("canvas");
+      return;
+    }
+    if (PANEL_DEFS[k]) {
+      // openPanelNode focuses the card only when it already exists — a new
+      // card keeps the placement we give it (inbox docks right, Deska-style).
+      const b = useBoard.getState();
+      if (!b.panelNodes[b.activeBoard]?.[`panel-${k}`]) {
+        const def = PANEL_DEFS[k];
+        const sx = k === "inbox" ? window.innerWidth - def.w - 24 : window.innerWidth * 0.42;
+        const p = screenToFlowPosition({ x: sx, y: window.innerHeight * 0.1 });
+        b.openPanelNode(k, p, { w: def.w, h: def.h });
+      } else {
+        b.requestFocus(`panel-${k}`);
       }
-      if (PANEL_DEFS[k]) {
-        // openPanelNode focuses the card only when it already exists — a new
-        // card keeps the placement we give it (inbox docks right, Deska-style).
-        const b = useBoard.getState();
-        if (!b.panelNodes[b.activeBoard]?.[`panel-${k}`]) {
-          const def = PANEL_DEFS[k];
-          const sx = k === "inbox" ? window.innerWidth - def.w - 24 : window.innerWidth * 0.42;
-          const p = screenToFlowPosition({ x: sx, y: window.innerHeight * 0.1 });
-          b.openPanelNode(k, p, { w: def.w, h: def.h });
-        } else {
-          b.requestFocus(`panel-${k}`);
-        }
-      }
-      return k;
-    });
-  };
+    }
+    setNav(k);
+  }, [nav, screenToFlowPosition]);
+  const addPanelToBoard = useCallback((key: string) => {
+    if (!PANEL_DEFS[key]) return;
+    const def = PANEL_DEFS[key];
+    const p = screenToFlowPosition({ x: Math.max(24, window.innerWidth * 0.38), y: Math.max(72, window.innerHeight * 0.22) });
+    useBoard.getState().openPanelNode(key, p, { w: def.w, h: def.h });
+    setNav("canvas");
+  }, [screenToFlowPosition]);
   const [palette, setPalette] = useState(false);
   const edgeDetail = useBoard((s) => s.edgeDetail);
   const setEdgeDetail = useBoard((s) => s.setEdgeDetail);
@@ -312,21 +337,32 @@ function Board() {
   const [cardMenu, setCardMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
   const [shapeMenu, setShapeMenu] = useState<{ x: number; y: number; id: string } | null>(null);
-  const [mmSize, setMmSize] = useState({ w: 148, h: 96 });
+  const [mmSize, setMmSize] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("cv-minimap-size") ?? "null") ?? { w: 148, h: 96 }; }
+    catch { return { w: 148, h: 96 }; }
+  });
   const [sel, setSel] = useState<Array<{ id: string; x: number; y: number; w: number; h: number }>>([]);
-  const [missionOpen, setMissionOpen] = useState(false);
-  const missionCounts = useMemo(() => {
-    const c: Record<string, number> = { working: 0, waiting: 0, blocked: 0, done: 0 };
-    for (const a of Object.values(agents)) {
-      if ((a.board_id ?? "main") !== activeBoard) continue;
-      if (attention[a.id]) c.blocked++;
-      else if (a.status === "exited") c.done++;
-      else if (a.status === "working" || a.status === "waiting" || a.status === "blocked") c[a.status]++;
-    }
-    return c;
-  }, [agents, activeBoard, attention]);
   const selRef = useRef(sel);
   selRef.current = sel;
+  // React Flow can publish selection after internal node updates. Preserve the
+  // selection array when its values did not change, or each callback rerenders
+  // Board and re-triggers React Flow's selection effect indefinitely.
+  const onSelectionChange = useCallback(({ nodes }: { nodes: Node<BoardNodeData>[] }) => {
+    const next = nodes.map((n) => ({
+      id: n.id,
+      x: n.position.x,
+      y: n.position.y,
+      w: n.measured?.width ?? 460,
+      h: n.measured?.height ?? 220,
+    }));
+    setSel((previous) =>
+      previous.length === next.length && previous.every((item, i) => {
+        const candidate = next[i];
+        return item.id === candidate.id && item.x === candidate.x && item.y === candidate.y &&
+          item.w === candidate.w && item.h === candidate.h;
+      }) ? previous : next,
+    );
+  }, []);
   /** Deska "drop to place" ghost — dashed rect at the drop position
    * while a card is being dragged. */
   const [dragGhost, setDragGhost] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -384,6 +420,11 @@ function Board() {
       } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "p") {
         e.preventDefault();
         setPencil((m) => !m);
+      } else if (e.key === "Escape" && pencil) {
+        setDrawing(null);
+        setPencil(false);
+      } else if (e.key === "Escape" && shotMode) {
+        setShotMode(false);
       } else if ((e.metaKey || e.ctrlKey) && e.key === "`") {
         // Pop the selected agent's terminal out as a canvas card, or put an
         // existing card back into the drawer — one keystroke both ways.
@@ -419,7 +460,12 @@ function Board() {
         const t = e.target as HTMLElement;
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
         e.preventDefault();
-        useBoard.getState().undoMove();
+        const st = useBoard.getState();
+        // Gather is one atomic layout operation even though it moves many
+        // cards. Cmd+Z should reverse the grouping first, not minesweep the
+        // user's older one-card move history.
+        if (st.lastGather) st.undoGather();
+        else st.undoMove();
       } else if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) {
         e.preventDefault();
         const st = useBoard.getState();
@@ -453,9 +499,13 @@ function Board() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [pencil, shotMode]);
 
+  const motionClassFor = (id: string) => gatherMotion?.ids.includes(id) ? " cv-gather-motion" : "";
   const baseNodes = useMemo<Node<BoardNodeData>[]>(() => {
+    const fallbackWorkspaceAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard && a.workspace_id && !positions[a.id]);
+    const wsFallbackCount = new Map<string, number>();
+    for (const a of fallbackWorkspaceAgents) wsFallbackCount.set(a.workspace_id!, (wsFallbackCount.get(a.workspace_id!) ?? 0) + 1);
     const wsNodes: Node<BoardNodeData>[] = Object.values(workspaces)
       .filter((w) => (w.board_id ?? "main") === activeBoard)
       .map((w) => ({
@@ -463,7 +513,11 @@ function Board() {
       type: "workspace" as const,
       deletable: false,
       position: positions[w.id] ?? { x: 60, y: 60 },
-      style: { width: 900, height: 540 },
+      style: {
+        width: workspaceSizes[w.id]?.w ?? 900,
+        height: Math.max(workspaceSizes[w.id]?.h ?? 540, 100 + (wsFallbackCount.get(w.id) ?? 0) * 284),
+      },
+      className: "cv-workspace-node",
       data: { kind: "workspace" as const, name: w.name, repo: w.repo },
     }));
     // Nodes taking part in an in-flight delegation glow orange — the
@@ -473,20 +527,44 @@ function Board() {
         .filter((e) => e.state === "delegated")
         .flatMap((e) => [e.from, e.to]),
     );
-    let i = 0;
-    const live = Object.values(agents)
+    const boardAgents = Object.values(agents)
       .filter((a) => (a.board_id ?? "main") === activeBoard)
+      .sort((a, b) => (a.seenAt ?? 0) - (b.seenAt ?? 0));
+    const looseAgents = boardAgents.filter((a) => !a.workspace_id);
+    const explicitLoose = looseAgents.filter((a) => positions[a.id]);
+    const missingLoose = looseAgents.filter((a) => !positions[a.id]);
+    const looseFallbacks = getAgentSpawnPositions(
+      missingLoose.length,
+      useBoard.getState().viewportRect,
+      explicitLoose.map((a) => ({ ...positions[a.id], w: agentSizes[a.id]?.w ?? 460, h: agentSizes[a.id]?.h ?? 260 })),
+    );
+    const looseFallbackById = new Map(missingLoose.map((a, index) => [a.id, looseFallbacks[index]]));
+    const workspaceFallbackById = new Map<string, { x: number; y: number }>();
+    const workspaceOffsets = new Map<string, number>();
+    for (const a of boardAgents) {
+      if (!a.workspace_id || positions[a.id]) continue;
+      const offset = workspaceOffsets.get(a.workspace_id) ?? 0;
+      workspaceFallbackById.set(a.id, { x: 24, y: 64 + offset * 284 });
+      workspaceOffsets.set(a.workspace_id, offset + 1);
+    }
+    let i = 0;
+    const live = boardAgents
       .map((a) => {
       const ws = a.workspace_id ? workspaces[a.workspace_id] : undefined;
       const position = positions[a.id] ??
-        (ws ? { x: 60 + (i % 3) * 300, y: 80 + Math.floor(i / 3) * 190 } : { x: 1000 + (i % 2) * 500, y: 60 + Math.floor(i / 2) * 300 });
+        (ws
+          ? (workspaceFallbackById.get(a.id) ?? { x: 24, y: 64 })
+          : (positions[a.id] ?? looseFallbackById.get(a.id) ?? { x: 24, y: 64 }));
       i += 1;
+      const csz = agentSizes[a.id];
       return {
         id: a.id,
         type: "agent" as const,
       deletable: false,
         position,
+        ...(csz ? { style: { width: csz.w, ...(csz.h ? { height: csz.h } : {}) } } : {}),
         ...(ws ? { parentId: ws.id, extent: "parent" as const } : {}),
+        className: motionClassFor(a.id).trim() || undefined,
         data: {
           kind: "agent" as const,
           id: a.id,
@@ -503,7 +581,6 @@ function Board() {
             : attention[a.id]
               ? ("blocked" as const)
               : a.status,
-          task: a.status === "exited" ? "session ended — transcript" : (a.lastLine ?? "live PTY — click to open"),
           pendingApproval: approvals[a.id],
           branch: a.branch,
           restored: a.restored,
@@ -518,7 +595,9 @@ function Board() {
         type: "web" as const,
         deletable: true,
         position: positions[id] ?? { x: 600, y: 120 },
-        style: { width: 520, height: 340 },
+        style: { width: webNodeSizes[`${activeBoard}:${id}`]?.w ?? 520, height: webNodeSizes[`${activeBoard}:${id}`]?.h ?? 340 },
+        zIndex: cardZ[id] ?? 0,
+        className: motionClassFor(id).trim() || undefined,
         data: { kind: "web" as const, url },
       }),
     );
@@ -530,6 +609,7 @@ function Board() {
         type: "orchestrator" as const,
       deletable: false,
         position: positions[id] ?? { x: 420, y: 80 },
+        className: motionClassFor(id).trim() || undefined,
         data: {
           kind: "orchestrator" as const,
           id,
@@ -545,6 +625,7 @@ function Board() {
       deletable: true,
       position: { x: s.x, y: s.y },
       style: { width: s.w, height: s.h },
+      zIndex: cardZ[s.id] ?? 0,
       data: { kind: "shape" as const, shape: s },
     }));
     const mdNs: Node<BoardNodeData>[] = Object.entries(mdNodes[activeBoard] ?? {}).map(
@@ -553,7 +634,9 @@ function Board() {
         type: "md" as const,
         deletable: true,
         position: positions[id] ?? { x: 640, y: 160 },
-        style: { width: 340, height: 260 },
+        style: { width: (mdNodeSizes[`${activeBoard}:${id}`] ?? mdNodeSizes[id])?.w ?? 340, height: (mdNodeSizes[`${activeBoard}:${id}`] ?? mdNodeSizes[id])?.h ?? 260 },
+        zIndex: cardZ[id] ?? 0,
+        className: motionClassFor(id).trim() || undefined,
         data: { kind: "md" as const, id, path },
       }),
     );
@@ -566,6 +649,7 @@ function Board() {
         style: { width: n.w, height: n.h },
         draggable: !n.locked,
         zIndex: cardZ[id] ?? 0,
+        className: motionClassFor(id).trim() || undefined,
         data: { kind: "panel" as const, id },
       }),
     );
@@ -577,6 +661,7 @@ function Board() {
         style: { width: n.w, height: n.h },
         draggable: !n.locked,
         zIndex: cardZ[id] ?? 0,
+        className: motionClassFor(id).trim() || undefined,
         data: { kind: "term" as const, id },
       }),
     );
@@ -586,7 +671,7 @@ function Board() {
     return useMock
       ? [...initialNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs]
       : [...wsNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs];
-  }, [agents, positions, connected, workspaces, approvals, attention, activeBoard, webNodes, orchestrators, liveEdges, shapes, mdNodes, panelNodes, termNodes, cardZ]);
+  }, [agents, positions, connected, workspaces, workspaceSizes, approvals, attention, activeBoard, webNodes, webNodeSizes, orchestrators, liveEdges, shapes, mdNodes, mdNodeSizes, panelNodes, termNodes, cardZ, agentSizes, gatherMotion]);
 
   // Controlled React Flow needs change application for selection and drag to
   // stick. rfNodes is the rendered array: baseNodes is re-derived from the
@@ -597,13 +682,18 @@ function Board() {
   // write (activity flushes every 400ms while agents output), which made
   // React Flow re-render the whole canvas. Reuse the previous object when
   // the node's defining inputs are unchanged so unchanged cards don't
-  // re-render.
+  // re-render. React Flow also adds runtime fields (`measured`, selection and
+  // drag flags); strip those before comparing input signatures.
+  const nodeInputSig = (n: Node<BoardNodeData>) => {
+    const { selected: _selected, dragging: _dragging, measured: _measured, ...input } = n;
+    return JSON.stringify(input);
+  };
   const nodeSigCache = useRef(new Map<string, { sig: string; node: Node<BoardNodeData> }>());
   useEffect(() => {
     setRfNodes((prev) => {
       const byId = new Map(prev.map((n) => [n.id, n]));
       const out = baseNodes.map((b) => {
-        const sig = JSON.stringify(b);
+        const sig = nodeInputSig(b);
         const cached = nodeSigCache.current.get(b.id);
         let base = b;
         if (cached?.sig === sig) base = cached.node;
@@ -613,10 +703,23 @@ function Board() {
         if (p.dragging && activeDrags.current.has(b.id)) {
           return { ...base, selected: p.selected, dragging: true, position: p.position };
         }
-        // Unchanged base + no drag in flight → the previous object already
-        // carries the right selection flags and position: keep its identity
-        // so React Flow skips re-rendering this card entirely.
-        if (cached?.sig === sig) return p;
+        // Reuse the previous node only while its geometry still matches the
+        // store-derived node. A maximize/restore can update the store before
+        // React Flow has flushed its measured position and size; blindly
+        // reusing that stale object leaves restored cards at viewport size.
+        const hasControlledCardGeometry = /^(panel|term)-/.test(b.id) || (b.type === "agent" && !resizingAgents[b.id]);
+        const geometryMatches = !hasControlledCardGeometry || (
+          p.position.x === base.position.x &&
+          p.position.y === base.position.y &&
+          p.style?.width === base.style?.width &&
+          p.style?.height === base.style?.height
+        );
+        // A sig match alone is not enough: React can run this functional
+        // update twice before the first result commits (StrictMode/batched
+        // store writes), with `p` still being the previous render's node.
+        // Verify the previous node's own inputs too, otherwise class-only
+        // updates (gather motion cleanup) can be swallowed indefinitely.
+        if (cached?.sig === sig && geometryMatches && nodeInputSig(p) === sig) return p;
         return { ...base, selected: p.selected, dragging: p.dragging };
       });
       const alive = new Set(baseNodes.map((n) => n.id));
@@ -625,7 +728,7 @@ function Board() {
       }
       return out;
     });
-  }, [baseNodes, setRfNodes]);
+  }, [baseNodes, resizingAgents, setRfNodes]);
   // Drag lifecycle we track ourselves: React Flow's `dragging` flag can
   // get stuck when the window loses focus mid-drag (alt-tab, mouse
   // released outside the window) — the mouseup never reaches it and the
@@ -640,22 +743,25 @@ function Board() {
       if (!activeDrags.current.size) return;
       const ids = new Set(activeDrags.current);
       activeDrags.current.clear();
-      setRfNodes((ns) => {
-        const st = useBoard.getState();
-        for (const n of ns) {
-          if (!ids.has(n.id)) continue;
-          const { x, y } = n.position;
-          if (n.id.startsWith("shape-")) st.moveShape(n.id, x, y);
-          else if (n.id.startsWith("panel-")) st.movePanelNode(n.id, x, y);
-          else if (n.id.startsWith("term-")) st.moveTermNode(n.id, x, y);
-          else st.moveNode(n.id, x, y);
-        }
-        return ns.map((n) => (ids.has(n.id) ? { ...n, dragging: false } : n));
-      });
+      // Store writes stay OUT of the setRfNodes updater — updaters execute
+      // during Board's render pass, and a zustand write there mid-render is
+      // exactly the pattern React warns about. Positions are read
+      // imperatively instead; only the flag cleanup stays in the updater,
+      // and it is pure.
+      const st = useBoard.getState();
+      for (const n of getNodes()) {
+        if (!ids.has(n.id)) continue;
+        const { x, y } = n.position;
+        if (n.id.startsWith("shape-")) st.moveShape(n.id, x, y);
+        else if (n.id.startsWith("panel-")) st.movePanelNode(n.id, x, y);
+        else if (n.id.startsWith("term-")) st.moveTermNode(n.id, x, y);
+        else st.moveNode(n.id, x, y);
+      }
+      setRfNodes((ns) => ns.map((n) => (ids.has(n.id) ? { ...n, dragging: false } : n)));
     };
     window.addEventListener("blur", rescue);
     return () => window.removeEventListener("blur", rescue);
-  }, [setRfNodes]);
+  }, [setRfNodes, getNodes]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange<Node<BoardNodeData>>[]) =>
@@ -664,10 +770,15 @@ function Board() {
   );
 
   const onNodeClick: NodeMouseHandler = (e, node) => {
-    // Shift+click is multi-select — don't open terminals or rewire.
+    // Shift+click is multi-select — don't change the visual stacking order.
     if (e.shiftKey) return;
+    // Keep the active window above its siblings and floating rails. Every
+    // canvas window shares one persistent z-order regardless of its content.
+    if (["shape", "panel", "term", "web", "md"].includes(node.type ?? "")) {
+      useBoard.getState().bringCardToFront(node.id);
+    }
     // In Connect mode a click on an agent card wires/unwires it to the
-    // orchestrator instead of opening the terminal.
+    // orchestrator. Otherwise React Flow keeps the click as pure selection.
     if (wiringFrom && agents[node.id]) {
       toggleWire(wiringFrom, node.id);
       return;
@@ -677,7 +788,7 @@ function Board() {
     // bottom-right drawer never appears as a confusing duplicate.
   };
 
-  // Double-click focuses a node — single click already opens its terminal.
+  // Double-click opens an agent's terminal; single click remains selection.
   // A pinned card's double-click also reopens the panel it was pinned from.
   const onNodeDoubleClick: NodeMouseHandler = (_, node) => {
     const sh = shapes[activeBoard ?? "main"]?.[node.id];
@@ -719,18 +830,17 @@ function Board() {
     setMenu({ x: ev.clientX, y: ev.clientY, id });
   };
 
-  // Snap + alignment guides: a dragging card snaps when its edges/center
-  // come within 8px of another visible card's edges/center, with thin
-  // guide lines at the matched positions.
-  const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
-  const SNAP = 8;
+  // Alignment snap (opt-in, invisible): when the snapAlign mode is on, a
+  // dropped card magnetically aligns to another visible card's edge/center
+  // within 4px — weak on purpose, so any placement further away lands
+  // exactly where the pointer lets go. No guide lines are ever drawn.
+  const SNAP = 4;
   const snapFor = (node: { id: string; position: { x: number; y: number }; measured?: { width?: number; height?: number } }) => {
     const w = node.measured?.width ?? 240;
     const h = node.measured?.height ?? 120;
     const selfX = [node.position.x, node.position.x + w / 2, node.position.x + w];
     const selfY = [node.position.y, node.position.y + h / 2, node.position.y + h];
     let dx = 0, dy = 0, bestX = SNAP + 1, bestY = SNAP + 1;
-    const v: number[] = [], hh: number[] = [];
     for (const o of getNodes()) {
       if (o.id === node.id) continue;
       const ow = o.measured?.width ?? 240;
@@ -748,29 +858,9 @@ function Board() {
         }
       }
     }
-    if (bestX <= SNAP) {
-      for (const o of getNodes()) {
-        if (o.id === node.id) continue;
-        const ow = o.measured?.width ?? 240;
-        for (const tx of [o.position.x, o.position.x + ow / 2, o.position.x + ow]) {
-          for (const sx of selfX) if (Math.abs(tx - (sx + dx)) < 0.5 && !v.includes(tx)) v.push(tx);
-        }
-      }
-    }
-    if (bestY <= SNAP) {
-      for (const o of getNodes()) {
-        if (o.id === node.id) continue;
-        const oh = o.measured?.height ?? 120;
-        for (const ty of [o.position.y, o.position.y + oh / 2, o.position.y + oh]) {
-          for (const sy of selfY) if (Math.abs(ty - (sy + dy)) < 0.5 && !hh.includes(ty)) hh.push(ty);
-        }
-      }
-    }
-    return { dx: bestX <= SNAP ? dx : 0, dy: bestY <= SNAP ? dy : 0, v, h: hh };
+    return { dx: bestX <= SNAP ? dx : 0, dy: bestY <= SNAP ? dy : 0 };
   };
   const onNodeDrag: OnNodeDrag = (_, node) => {
-    const s = snapFor(node);
-    setGuides({ v: s.dx ? s.v : [], h: s.dy ? s.h : [] });
     setDragGhost({
       x: node.position.x,
       y: node.position.y,
@@ -843,7 +933,6 @@ function Board() {
     for (const n of dragged) activeDrags.current.delete(n.id);
     if (!tracked) {
       setDragGhost(null);
-      setGuides({ v: [], h: [] });
       return;
     }
     // Deska-style: dropping a card on a board tab moves it there.
@@ -883,8 +972,9 @@ function Board() {
       }
       if (movedAny) return;
     }
-    const s0 = snapFor(node);
-    setGuides({ v: [], h: [] });
+    // Snap is opt-in (settings → alignment snap, default off): when off
+    // the drop lands exactly where the pointer lets go.
+    const s0 = useBoard.getState().snapAlign ? snapFor(node) : { dx: 0, dy: 0 };
     // Every card in a multi-select drag lands with the same snap delta —
     // writing back only the primary used to lose the others' positions.
     for (const n of dragged) {
@@ -961,8 +1051,20 @@ function Board() {
     return [...delegEdges, ...wireEdges, ...termOwnEdges];
   }, [connected, liveEdges, agents, activeBoard, orchestrators, termNodes]);
 
+  const panelActions = useMemo(() => ({ openTerm, openEdgeDetail: setEdgeDetail }), [openTerm, setEdgeDetail]);
+  const topbarTools = useMemo(() => ({
+    onDigest: () => useBoard.getState().digestNow(),
+    onShot: () => void shotCanvas(),
+    onStudio: () => useBoard.getState().studioDocNow(),
+    onDraw: () => setPencil((m) => !m),
+    onRegion: () => setShotMode((m) => !m),
+    onAddToBoard: addPanelToBoard,
+    drawOn: pencil,
+    regionOn: shotMode,
+  }), [shotCanvas, addPanelToBoard, pencil, shotMode]);
+
   return (
-    <PanelActionsCtx.Provider value={{ openTerm, openEdgeDetail: setEdgeDetail }}>
+    <PanelActionsCtx.Provider value={panelActions}>
     <div className="relative h-full w-full">
       {!chromeHidden && (
         <>
@@ -978,21 +1080,7 @@ function Board() {
           <Topbar
             nav={nav}
             onNav={navToggle}
-            tools={{
-              onDigest: () => useBoard.getState().digestNow(),
-              onShot: () => void shotCanvas(),
-              onStudio: () => useBoard.getState().studioDocNow(),
-              onDraw: () => setPencil((m) => !m),
-              onRegion: () => setShotMode((m) => !m),
-              onMission: () => setMissionOpen((o) => !o),
-              drawOn: pencil,
-              regionOn: shotMode,
-            }}
-          />
-          <MissionStrip
-            counts={missionCounts}
-            open={missionOpen}
-            onToggle={() => setMissionOpen((o) => !o)}
+            tools={topbarTools}
           />
         </>
       )}
@@ -1019,10 +1107,25 @@ function Board() {
       )}
       {pencil && (
         <div
-          style={{ position: "absolute", inset: 0, zIndex: 29, cursor: "crosshair" }}
-          onMouseDown={(e) => setDrawing([{ x: e.clientX, y: e.clientY }])}
-          onMouseMove={(e) => { if (drawing) setDrawing([...drawing, { x: e.clientX, y: e.clientY }]); }}
+          /* The overlay must capture the pointer at all times — the old
+             `drawing ? auto : none` trick made it impossible to ever START a
+             stroke (mousedown always fell through to the canvas), so the mode
+             looked dead and felt like a trap. Modal draw surface: while the
+             pencil is on, the canvas below is intentionally not interactive. */
+          style={{ position: "absolute", inset: 0, zIndex: 29, cursor: "crosshair", pointerEvents: "auto" }}
+          onMouseDown={(e) => { if (e.button === 0) setDrawing([{ x: e.clientX, y: e.clientY }]); }}
+          onMouseMove={(e) => {
+            if (!drawing) return;
+            // Mouse released outside the window and re-entered — end the stroke.
+            if (e.buttons === 0) {
+              if (drawing.length > 1) setStrokes((st) => [...st, drawing]);
+              setDrawing(null);
+              return;
+            }
+            setDrawing([...drawing, { x: e.clientX, y: e.clientY }]);
+          }}
           onMouseUp={() => { if (drawing && drawing.length > 1) setStrokes((st) => [...st, drawing]); setDrawing(null); }}
+          onMouseLeave={() => { if (drawing && drawing.length > 1) setStrokes((st) => [...st, drawing]); setDrawing(null); }}
         >
           <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
             {[...strokes, ...(drawing ? [drawing] : [])].map((st, i) => (
@@ -1037,13 +1140,60 @@ function Board() {
               />
             ))}
           </svg>
-          <button
+          {/* Mode indicator + exits — without this there was no visible sign
+             the pencil was on or how to leave it. */}
+          <div
             className="glass-pill"
-            style={{ position: "absolute", right: 20, top: 52, fontSize: 10.5, padding: "5px 12px", cursor: "pointer", border: "none", color: "var(--cv-ink-dim)" }}
-            onClick={(e) => { e.stopPropagation(); setStrokes([]); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              top: 62,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 9,
+              padding: "5px 6px 5px 13px",
+              cursor: "default",
+              pointerEvents: "auto",
+            }}
           >
-            clear strokes
-          </button>
+            <Icon name="draw" size={13} color="var(--cv-accent)" />
+            <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600, color: "var(--cv-ink)" }}>Pencil</span>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", fontWeight: 500 }}>drag to mark up the canvas</span>
+            <span style={{ width: 1, height: 16, background: "var(--cv-glass-edge)" }} />
+            <button
+              title="Clear every stroke"
+              style={{ border: "none", background: "transparent", fontSize: "var(--cv-text-xxs)", padding: "4px 9px", cursor: "pointer", color: strokes.length ? "var(--cv-ink-dim)" : "var(--cv-ink-faint)", borderRadius: 999, fontWeight: 500 }}
+              onClick={(e) => { e.stopPropagation(); setStrokes([]); }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              clear
+            </button>
+            <button
+              title="Turn off pencil — same as Esc or the Pencil item in Tools"
+              style={{
+                border: "none",
+                background: "var(--cv-accent-dim)",
+                fontSize: "var(--cv-text-xxs)",
+                padding: "4px 10px",
+                cursor: "pointer",
+                color: "var(--cv-accent)",
+                borderRadius: 999,
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+              onClick={(e) => { e.stopPropagation(); setDrawing(null); setPencil(false); }}
+            >
+              done
+              <kbd style={{ fontSize: "var(--cv-text-xxs)", fontFamily: "inherit", opacity: 0.75, border: "1px solid color-mix(in srgb, var(--cv-accent) 45%, transparent)", borderRadius: 4, padding: "0 4px" }}>esc</kbd>
+            </button>
+          </div>
         </div>
       )}
       {shotMode && (
@@ -1078,7 +1228,7 @@ function Board() {
                 width: Math.abs(marquee.x2 - marquee.x1),
                 height: Math.abs(marquee.y2 - marquee.y1),
                 border: "1.5px solid var(--cv-accent)",
-                background: "rgba(201,162,107,0.08)",
+                background: "color-mix(in srgb, var(--cv-accent) 8%, transparent)",
                 borderRadius: 8,
               }}
             />
@@ -1126,7 +1276,10 @@ function Board() {
         panOnDrag={[1, 2]}
         panOnScroll
         zoomOnScroll={false}
-        onlyRenderVisibleElements
+        // Keep nodes mounted across panning. Terminal cards in particular are
+        // expensive to recreate (xterm measure/open/replay); visibility-aware
+        // write gates inside the cards pause their offscreen work instead.
+        onlyRenderVisibleElements={false}
         selectionKeyCode={null}
         multiSelectionKeyCode="Shift"
         deleteKeyCode={["Backspace", "Delete"]}
@@ -1139,17 +1292,7 @@ function Board() {
             else if (n.type === "panel") st.closePanelNode(n.id);
           }
         }}
-        onSelectionChange={({ nodes }) =>
-          setSel(
-            nodes.map((n) => ({
-              id: n.id,
-              x: n.position.x,
-              y: n.position.y,
-              w: n.measured?.width ?? 460,
-              h: n.measured?.height ?? 220,
-            })),
-          )
-        }
+        onSelectionChange={onSelectionChange}
         proOptions={{ hideAttribution: true }}
       >
         {/* resize grip at the minimap's top-left corner — drag to resize */}
@@ -1172,10 +1315,12 @@ function Board() {
             const sw = mmSize.w;
             const sh = mmSize.h;
             const move = (ev: PointerEvent) => {
-              setMmSize({
+              const next = {
                 w: Math.min(320, Math.max(96, sw + (sx - ev.clientX))),
                 h: Math.min(220, Math.max(64, sh + (sy - ev.clientY))),
-              });
+              };
+              setMmSize(next);
+              localStorage.setItem("cv-minimap-size", JSON.stringify(next));
             };
             const up = () => {
               window.removeEventListener("pointermove", move);
@@ -1189,29 +1334,18 @@ function Board() {
           position="bottom-right"
           pannable
           zoomable
-          style={{ width: mmSize.w, height: mmSize.h, marginRight: 184 }}
+          style={{
+            width: mmSize.w,
+            height: mmSize.h,
+            marginRight: 184,
+            "--xy-minimap-mask-background-color": "var(--cv-minimap-mask)",
+            "--xy-minimap-mask-stroke-color": "var(--cv-accent)",
+            "--xy-minimap-node-stroke-color": "var(--cv-minimap-node-stroke)",
+          } as React.CSSProperties}
           className="!bg-[var(--cv-base)]"
-          maskColor="rgba(14,14,16,0.55)"
-          maskStrokeColor="var(--cv-accent)"
           maskStrokeWidth={1.5}
-          nodeStrokeColor="rgba(255,255,255,0.25)"
           nodeStrokeWidth={1}
-          nodeColor={(n) => {
-            const data = n.data as Partial<BoardNodeData>;
-            if (data.kind === "orchestrator") return "#c9a26b";
-            if (data.kind === "workspace") return "#1d1d20";
-            if (data.kind === "agent" && data.status) {
-              const map: Record<AgentStatus, string> = {
-                working: "#3ddc84",
-                waiting: "#ffb224",
-                blocked: "#ff5d5d",
-                done: "#34d399",
-                idle: "#9aa0a6",
-              };
-              return map[data.status] ?? "#33333a";
-            }
-            return "#33333a";
-          }}
+          nodeColor={minimapNodeColor}
           onClick={(_e, pos) => setCenter(pos.x, pos.y, { zoom: getZoom(), duration: 250 })}
           onNodeClick={(_e, node) =>
             setCenter(node.position.x + (node.measured?.width ?? 0) / 2, node.position.y + (node.measured?.height ?? 0) / 2, { zoom: Math.max(getZoom(), 0.9), duration: 250 })
@@ -1219,14 +1353,6 @@ function Board() {
         />
         <ViewportTracker />
         <AnchorCables nav={nav} />
-              <ViewportPortal>
-          {guides.v.map((x) => (
-            <div key={`gv${x}`} style={{ position: "absolute", left: x, top: -100000, width: 0, height: 200000, borderLeft: "1px dashed var(--cv-accent)", pointerEvents: "none", opacity: 0.7 }} />
-          ))}
-          {guides.h.map((y) => (
-            <div key={`gh${y}`} style={{ position: "absolute", top: y, left: -100000, height: 0, width: 200000, borderTop: "1px dashed var(--cv-accent)", pointerEvents: "none", opacity: 0.7 }} />
-          ))}
-        </ViewportPortal>
         {dragGhost && (
           <ViewportPortal>
             <div
@@ -1237,7 +1363,7 @@ function Board() {
                 height: dragGhost.h,
                 border: "1.5px dashed var(--cv-accent)",
                 borderRadius: 14,
-                background: "rgba(201,162,107,0.08)",
+                background: "color-mix(in srgb, var(--cv-accent) 10%, transparent)",
                 pointerEvents: "none",
               }}
             />
@@ -1265,7 +1391,7 @@ function Board() {
             border: "none",
             cursor: "pointer",
             color: "var(--cv-ink)",
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             fontWeight: 600,
           }}
           onClick={() => {
@@ -1323,7 +1449,7 @@ function Board() {
               style={{
                 display: "flex", alignItems: "center", gap: 9, width: "100%",
                 textAlign: "left", border: "none", background: "transparent",
-                color: "var(--cv-ink-dim)", fontSize: 12, padding: "6px 10px",
+                color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-xs)", padding: "6px 10px",
                 borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap",
               }}
             >
@@ -1361,7 +1487,7 @@ function Board() {
           agentId={t.id}
           name={t.name}
           index={i}
-          onClose={() => closeTerm(t.id)}
+          onClose={closeTerm}
         />
       ))}
       {search && (
@@ -1377,6 +1503,17 @@ function Board() {
         <CommandPalette
           onClose={() => setPalette(false)}
           onNav={(k) => {
+            // Palette commands are explicit open/focus actions. Keep rail
+            // clicks as toggles, but never let a search result close its panel.
+            if (PANEL_DEFS[k]) {
+              const b = useBoard.getState();
+              if (b.panelNodes[b.activeBoard]?.[`panel-${k}`]) b.requestFocus(`panel-${k}`);
+              else {
+                const def = PANEL_DEFS[k];
+                const sx = k === "inbox" ? window.innerWidth - def.w - 24 : window.innerWidth * 0.42;
+                b.openPanelNode(k, screenToFlowPosition({ x: sx, y: window.innerHeight * 0.1 }), { w: def.w, h: def.h });
+              }
+            }
             setNav(k);
             setPalette(false);
           }}

@@ -1,16 +1,32 @@
-import { useEffect } from "react";
-import type { NodeProps, Node } from "@xyflow/react";
+import { useEffect, useRef, useState } from "react";
+import { NodeResizer, type NodeProps, type Node } from "@xyflow/react";
 import type { MdNodeData } from "../board/types";
+import { ReadingView, resolveNotePath } from "./VaultPanel";
 import { useBoard } from "../store/board";
+import { Icon } from "./icons";
 
-/** Symvibe's live markdown card — a vault file pinned on the board,
- * re-polled so an agent editing the file shows up live. */
+/** A live Obsidian vault note pinned as an interactive canvas window. */
 const POLL_MS = 4000;
+const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|ico)$/i;
 
-export function MdNode({ id, data }: NodeProps<Node<MdNodeData>>) {
+export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
   const text = useBoard((s) => s.mdContents[data.path]);
+  const entries = useBoard((s) => s.vaultEntries);
   const mdNodeRemove = useBoard((s) => s.mdNodeRemove);
+  const resizeMdNode = useBoard((s) => s.resizeMdNode);
+  const boardId = useBoard((s) => s.activeBoard);
+  const vaultWrite = useBoard((s) => s.vaultWrite);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(text ?? "");
+  const [conflict, setConflict] = useState(false);
+  const dirty = useRef(false);
+  const editBase = useRef(text ?? "");
   const basename = data.path.split("/").pop() ?? data.path;
+
+  useEffect(() => {
+    if (!dirty.current) setDraft(text ?? "");
+    else if (text !== undefined && text !== editBase.current) setConflict(true);
+  }, [text]);
 
   useEffect(() => {
     const tick = () => useBoard.getState().vaultRead(data.path);
@@ -19,79 +35,67 @@ export function MdNode({ id, data }: NodeProps<Node<MdNodeData>>) {
     return () => clearInterval(t);
   }, [data.path]);
 
+  const openLinkedNote = (name: string) => {
+    const base = name.split("#")[0].trim();
+    const path = resolveNotePath(entries, base);
+    if (path) useBoard.getState().vaultRead(path);
+  };
+  const resolveEmbed = (name: string) => {
+    const isImage = IMAGE_RE.test(name);
+    const path = entries.find((entry) => entry === name || entry.endsWith(`/${name}`) ||
+      (!isImage && (entry === `${name}.md` || entry.endsWith(`/${name}.md`) || entry.replace(/\.md$/, "") === name)));
+    return path ? { path, text: useBoard.getState().mdContents[path] } : null;
+  };
+
   return (
-    <div
-      className="glass-panel"
-      style={{
-        width: 340,
-        height: 260,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        borderRadius: 12,
-        border: "1px solid var(--cv-glass-edge)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "7px 10px",
-          borderBottom: "1px solid var(--cv-glass-edge)",
-          fontSize: 11,
-          color: "var(--cv-ink-dim)",
-        }}
-      >
-        <span style={{ color: "var(--cv-accent)" }}>▤</span>
-        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {basename}
-        </span>
-        <span style={{ fontSize: 9, color: "var(--cv-waiting)" }}>live</span>
-        <button
-          className="nodrag"
-          onClick={() => mdNodeRemove(id)}
-          style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 13 }}
-        >
-          ×
-        </button>
+    <div className="glass-panel" style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 12, border: "1px solid var(--cv-glass-edge)" }}>
+      <NodeResizer isVisible={selected} minWidth={260} minHeight={180} handleClassName="cv-node-resize-handle" lineClassName="cv-node-resize-line"
+        onResize={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), false, boardId, { x: p.x, y: p.y })}
+        onResizeEnd={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), true, boardId, { x: p.x, y: p.y })} />
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--cv-glass-edge)", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
+        <img src="/obsidian.svg" alt="" width={12} height={12} />
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{basename}</span>
+        {editing ? (
+          <>
+            <span role="status" style={{ fontSize: "var(--cv-text-xxs)", color: conflict ? "var(--cv-blocked)" : dirty.current ? "var(--cv-waiting)" : "var(--cv-ink-faint)" }}>
+              {conflict ? "CHANGED IN OBSIDIAN" : dirty.current ? "UNSAVED" : "EDITING"}
+            </span>
+            {conflict && <button className="nodrag" onClick={() => { setDraft(text ?? ""); editBase.current = text ?? ""; dirty.current = false; setConflict(false); }} style={toolButton}>Reload</button>}
+            <button className="nodrag" disabled={!dirty.current || conflict} onClick={() => { vaultWrite(data.path, draft); dirty.current = false; setConflict(false); setEditing(false); }} style={toolButton}>Save</button>
+            <button className="nodrag" onClick={() => { setDraft(text ?? ""); editBase.current = text ?? ""; dirty.current = false; setConflict(false); setEditing(false); }} style={toolButton}>Cancel</button>
+          </>
+        ) : (
+          <>
+            <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-waiting)" }}>LIVE VAULT</span>
+            <button className="nodrag" aria-label={`Edit ${basename}`} title="Edit this vault note" onClick={() => { setDraft(text ?? ""); editBase.current = text ?? ""; dirty.current = false; setConflict(false); setEditing(true); }} style={toolButton}>Edit</button>
+          </>
+        )}
+        <button className="nodrag cv-card-btn cv-card-close" aria-label={`Remove ${basename} from board`} title="Remove from board" onClick={() => mdNodeRemove(id)}
+          style={{ opacity: selected ? 1 : 0, pointerEvents: selected ? "auto" : "none" }}><Icon name="ph-x" size={12} /></button>
       </div>
-      <div
-        className="nodrag"
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "8px 12px",
-          fontSize: 11.5,
-          lineHeight: 1.5,
-          color: "var(--cv-ink)",
-          whiteSpace: "pre-wrap",
-          fontFamily: "inherit",
-        }}
-      >
-        {text == null
-          ? "…"
-          : text.split(/(!\[[^\]]*\]\([^)]+\))/g).map((part, i) => {
-              const m = part.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-              // Remote images stay links — auto-loading them would leak the
-              // viewer's IP and view time to the note author's server.
-              const remote = m && /^https?:\/\//i.test(m[2]);
-              return m && !remote ? (
-                <img
-                  key={i}
-                  src={m[2]}
-                  alt={m[1]}
-                  style={{ maxWidth: "100%", borderRadius: 8, display: "block", margin: "4px 0" }}
-                />
-              ) : m ? (
-                <a key={i} href={m[2]} target="_blank" rel="noreferrer" style={{ color: "var(--cv-accent)" }}>
-                  {m[1] || m[2]}
-                </a>
-              ) : (
-                <span key={i}>{part}</span>
-              );
-            })}
-      </div>
+      {text == null ? <div style={{ padding: 12, color: "var(--cv-ink-faint)", fontSize: "var(--cv-text-xxs)" }}>Loading note…</div> : editing ? (
+        <textarea
+          aria-label={`Edit ${basename}`}
+          className="nodrag nowheel"
+          value={draft}
+          spellCheck={false}
+          onChange={(event) => { setDraft(event.target.value); dirty.current = true; }}
+          onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "s") { event.preventDefault(); if (!conflict) { vaultWrite(data.path, draft); dirty.current = false; setEditing(false); } } if (event.key === "Escape") { setDraft(text); editBase.current = text ?? ""; dirty.current = false; setEditing(false); setConflict(false); } }}
+          style={{ flex: 1, minHeight: 0, width: "100%", boxSizing: "border-box", resize: "none", border: 0, outline: 0, padding: "14px 16px", background: "var(--cv-bg)", color: "var(--cv-text-main)", font: "13px/1.65 var(--cv-font-mono, ui-monospace, monospace)" }}
+        />
+      ) : (
+        <ReadingView text={text} entries={entries} onLink={openLinkedNote}
+          embedLookup={resolveEmbed}
+          embedFetch={(path) => useBoard.getState().vaultPeek(path)}
+          embedAsset={(path) => useBoard.getState().vaultAssets[path]}
+          embedAssetFetch={(path) => useBoard.getState().vaultAsset(path)} />
+      )}
     </div>
   );
 }
+
+const toolButton: React.CSSProperties = {
+  border: "1px solid var(--cv-glass-edge)", borderRadius: 6, padding: "3px 7px",
+  background: "var(--cv-glass-hi)", color: "var(--cv-text-main)", fontSize: "var(--cv-text-xxs)",
+  cursor: "pointer", whiteSpace: "nowrap",
+};

@@ -1,4 +1,5 @@
 import { useBoard } from "../store/board";
+import { Icon } from "./icons";
 
 /** Studios — the repo turned into material: a markdown dossier (tree,
  * README head, agents, notes, artifacts) you can copy or download. */
@@ -34,11 +35,11 @@ export function StudioPanel() {
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 650, color: "var(--cv-ink)" }}>studio doc</span>
+          <span style={{ fontSize: "var(--cv-text-sm)", fontWeight: 600, color: "var(--cv-ink)" }}>studio doc</span>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="glass-pill" style={{ border: "none", cursor: "pointer", fontSize: 11, padding: "5px 12px", color: "var(--cv-accent)" }} onClick={copy}>copy</button>
-            <button className="glass-pill" style={{ border: "none", cursor: "pointer", fontSize: 11, padding: "5px 12px", color: "var(--cv-accent)" }} onClick={download}>▤ .md</button>
-            <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 14 }} onClick={close}>×</button>
+            <button className="glass-pill" style={{ border: "none", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: "5px 12px", color: "var(--cv-accent)" }} onClick={copy}>copy</button>
+            <button className="glass-pill" style={{ border: "none", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: "5px 12px", color: "var(--cv-accent)" }} onClick={download}>▤ .md</button>
+            <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", display: "flex", padding: 2 }} onClick={close}><Icon name="ph-x" size={12} /></button>
           </div>
         </div>
         <pre
@@ -51,8 +52,8 @@ export function StudioPanel() {
             border: "1px solid var(--cv-glass-edge)",
             background: "var(--cv-glass-hi)",
             color: "var(--cv-ink)",
-            fontSize: 11,
-            fontFamily: "ui-monospace, monospace",
+            fontSize: "var(--cv-text-xxs)",
+            fontFamily: "var(--cv-font-mono)",
             lineHeight: 1.55,
             whiteSpace: "pre-wrap",
           }}

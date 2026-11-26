@@ -3,9 +3,9 @@ import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 
 const COLS = [
-  { key: "todo", label: "todo" },
-  { key: "doing", label: "doing" },
-  { key: "done", label: "done" },
+  { key: "todo", label: "Todo" },
+  { key: "doing", label: "Doing" },
+  { key: "done", label: "Done" },
 ] as const;
 
 /** Kanban notes for the active board — cards persist in SQLite and move
@@ -41,9 +41,6 @@ export function NotesPanel() {
       data-panel="notes"
       style={{ ...panelRoot, padding: "12px 10px" }}
     >
-      <div style={{ fontSize: 12.5, fontWeight: 650, padding: "0 12px 8px", color: "var(--cv-ink)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        Notes
-      </div>
       <form
         style={{ display: "flex", gap: 6, margin: "0 4px 10px" }}
         onSubmit={(e) => {
@@ -64,7 +61,7 @@ export function NotesPanel() {
             border: "1px solid var(--cv-glass-edge)",
             borderRadius: 999,
             padding: "6px 14px",
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             color: "var(--cv-ink)",
             outline: "none",
           }}
@@ -73,8 +70,8 @@ export function NotesPanel() {
       {upcoming.length > 0 && (
         <div style={{ margin: "0 4px 8px", display: "flex", flexDirection: "column", gap: 2, maxHeight: 90, overflowY: "auto" }}>
           {upcoming.map((n) => (
-            <div key={n.note_id} style={{ display: "flex", gap: 6, fontSize: 10.5, color: overdue(n) ? "var(--cv-waiting)" : "var(--cv-ink-dim)", alignItems: "baseline" }}>
-              <span style={{ fontFamily: "ui-monospace, monospace", flexShrink: 0 }}>{n.due}</span>
+            <div key={n.note_id} style={{ display: "flex", gap: 6, fontSize: "var(--cv-text-xxs)", color: overdue(n) ? "var(--cv-waiting)" : "var(--cv-ink-dim)", alignItems: "baseline" }}>
+              <span style={{ fontFamily: "var(--cv-font-mono)", flexShrink: 0 }}>{n.due}</span>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--cv-ink)" }}>{n.text}</span>
             </div>
           ))}
@@ -83,7 +80,7 @@ export function NotesPanel() {
       <div style={{ flex: 1, display: "flex", gap: 6, minHeight: 0 }}>
         {COLS.map((col) => (
           <div key={col.key} style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-            <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--cv-ink-dim)", padding: "0 6px 6px", textTransform: "uppercase", letterSpacing: 0.6 }}>
+            <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 400, color: "var(--cv-ink-dim)", padding: "0 6px 6px", letterSpacing: "0.02em" }}>
               {col.label} · {byCol(col.key).length}
             </div>
             <div style={{ flex: 1, overflowY: "auto" }}>
@@ -91,13 +88,13 @@ export function NotesPanel() {
                 <div
                   key={n.note_id}
                   className="glass"
-                  style={{ margin: "0 0 6px", padding: "8px 10px", fontSize: 11.5, color: "var(--cv-ink)", lineHeight: 1.4, outline: overdue(n) ? "1px solid var(--cv-waiting)" : "none" }}
+                  style={{ margin: "0 0 6px", padding: "8px 10px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink)", lineHeight: 1.4, outline: overdue(n) ? "1px solid var(--cv-waiting)" : "none" }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
                     <span style={{ flex: 1, wordBreak: "break-word" }}>{n.text}</span>
                     <button
                       title="delete card"
-                      style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 12, padding: 0 }}
+                      style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xs)", padding: 0 }}
                       onClick={() => noteDelete(n.note_id)}
                     >
                       ×
@@ -109,18 +106,18 @@ export function NotesPanel() {
                       value={n.due ?? ""}
                       onChange={(e) => noteUpsert(n.note_id, n.col, n.text, n.pos, e.target.value || undefined)}
                       title="due date"
-                      style={{ background: "none", border: "none", color: overdue(n) ? "var(--cv-waiting)" : "var(--cv-ink-dim)", fontSize: 10, fontFamily: "ui-monospace, monospace", width: 92, padding: 0 }}
+                      style={{ background: "none", border: "none", color: overdue(n) ? "var(--cv-waiting)" : "var(--cv-ink-dim)", fontSize: "var(--cv-text-xxs)", fontFamily: "var(--cv-font-mono)", width: 92, padding: 0 }}
                     />
                     <button
                       disabled={col.key === "todo"}
-                      style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11, padding: 0, opacity: col.key === "todo" ? 0.3 : 1 }}
+                      style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: 0, opacity: col.key === "todo" ? 0.3 : 1 }}
                       onClick={() => move(n, -1)}
                     >
                       ←
                     </button>
                     <button
                       disabled={col.key === "done"}
-                      style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11, padding: 0, opacity: col.key === "done" ? 0.3 : 1 }}
+                      style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: 0, opacity: col.key === "done" ? 0.3 : 1 }}
                       onClick={() => move(n, 1)}
                     >
                       →
@@ -134,12 +131,12 @@ export function NotesPanel() {
       </div>
       {earlier.length > 0 && (
         <div style={{ margin: "8px 4px 0", borderTop: "1px solid var(--cv-glass-edge)", paddingTop: 8, maxHeight: 110, overflowY: "auto" }}>
-          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--cv-ink-dim)", textTransform: "uppercase", letterSpacing: 0.6, padding: "0 6px 6px" }}>
-            from earlier tasks
+          <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 400, color: "var(--cv-ink-dim)", letterSpacing: "0.02em", padding: "0 6px 6px" }}>
+            From earlier tasks
           </div>
           {earlier.map((n) => (
-            <div key={n.note_id} style={{ display: "flex", gap: 6, fontSize: 11, color: "var(--cv-ink-dim)", padding: "2px 6px", alignItems: "baseline" }}>
-              <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 9.5, flexShrink: 0 }}>[{n.col}]</span>
+            <div key={n.note_id} style={{ display: "flex", gap: 6, fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", padding: "2px 6px", alignItems: "baseline" }}>
+              <span style={{ fontFamily: "var(--cv-font-mono)", fontSize: "var(--cv-text-xxs)", flexShrink: 0 }}>[{n.col}]</span>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--cv-ink)" }}>{n.text}</span>
             </div>
           ))}

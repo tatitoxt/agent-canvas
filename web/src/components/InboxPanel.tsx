@@ -16,10 +16,9 @@ const rowStyle: React.CSSProperties = {
 };
 
 const groupLabel: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: 0.8,
-  textTransform: "uppercase",
+  fontSize: "var(--cv-text-xxs)",
+  fontWeight: 400,
+  letterSpacing: "0.02em",
   color: "var(--cv-ink-faint)",
   padding: "10px 12px 4px",
 };
@@ -28,6 +27,7 @@ const groupLabel: React.CSSProperties = {
  * waiting on input, blocked runs, delegations still in flight. */
 export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void }) {
   const agents = useBoard((s) => s.agents);
+  const activityLines = useBoard((s) => s.activityLines);
   const edges = useBoard((s) => s.edges);
   const approvals = useBoard((s) => s.approvals);
   const attention = useBoard((s) => s.attention);
@@ -56,31 +56,18 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
       data-panel="inbox"
       style={{ ...panelRoot, padding: "12px 8px" }}
     >
-      <div
-        style={{
-          fontSize: 12.5,
-          fontWeight: 650,
-          padding: "0 12px 8px",
-          color: "var(--cv-ink)",
-          display: "flex",
-          alignItems: "center",
-        }}
-      >
-        Inbox
-        <span style={{ flex: 1 }} />
-      </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
         {empty && (
-          <div style={{ padding: "18px 12px", fontSize: 11.5, color: "var(--cv-ink-dim)" }}>
+          <div style={{ padding: "18px 12px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)" }}>
             Nothing needs you — agents are running or done.
           </div>
         )}
         {alerts.length > 0 && (
           <>
             <div style={{ ...groupLabel, color: "var(--cv-blocked)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span>automation alerts</span>
+              <span>Automation alerts</span>
               <button
-                style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", fontSize: 10, cursor: "pointer" }}
+                style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", fontSize: "var(--cv-text-xxs)", cursor: "pointer" }}
                 onClick={() => useBoard.getState().dismissAlert("*")}
               >
                 clear all
@@ -89,7 +76,7 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
             {alerts.map((a) => (
               <div key={a.id} style={{ ...rowStyle, cursor: "default", position: "relative" }}>
                 <button
-                  style={{ position: "absolute", right: 8, top: 8, background: "none", border: "none", color: "var(--cv-ink-faint)", fontSize: 11, cursor: "pointer" }}
+                  style={{ position: "absolute", right: 8, top: 8, background: "none", border: "none", color: "var(--cv-ink-faint)", fontSize: "var(--cv-text-xxs)", cursor: "pointer" }}
                   title="dismiss"
                   onClick={() => useBoard.getState().dismissAlert(a.id)}
                 >
@@ -100,8 +87,8 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                   className="inbox-row"
                   onClick={() => onOpenAgent(a.id)}
                 >
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>{a.name}</span>
-                  <span style={{ fontSize: 11, color: "var(--cv-ink-dim)", paddingRight: 14 }}>{a.reason}</span>
+                  <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600 }}>{a.name}</span>
+                  <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", paddingRight: 14 }}>{a.reason}</span>
                 </button>
               </div>
             ))}
@@ -110,19 +97,19 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
         {held.length > 0 && (
           <>
             <div style={{ ...groupLabel, color: "var(--cv-waiting)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              approve commands
+              Approve commands
               {held.length > 1 && (
                 <span style={{ display: "flex", gap: 8 }}>
                   <button
                     title="approve every held command"
-                    style={{ border: "none", background: "none", cursor: "pointer", fontSize: 10, fontWeight: 600, color: "var(--cv-done)" }}
+                    style={{ border: "none", background: "none", cursor: "pointer", fontSize: "var(--cv-text-xxs)", fontWeight: 600, color: "var(--cv-done)" }}
                     onClick={() => held.forEach((h) => useBoard.getState().approveInput(h.id))}
                   >
                     approve all
                   </button>
                   <button
                     title="deny every held command"
-                    style={{ border: "none", background: "none", cursor: "pointer", fontSize: 10, fontWeight: 600, color: "var(--cv-danger, #c66)" }}
+                    style={{ border: "none", background: "none", cursor: "pointer", fontSize: "var(--cv-text-xxs)", fontWeight: 600, color: "var(--cv-danger, #c66)" }}
                     onClick={() => held.forEach((h) => useBoard.getState().denyInput(h.id))}
                   >
                     deny all
@@ -138,17 +125,17 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                   title="open the terminal"
                   onClick={() => onOpenAgent(h.id)}
                 >
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>
+                  <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600 }}>
                     {h.name}
-                    <span style={{ fontSize: 9.5, fontWeight: 500, color: "var(--cv-ink-faint)", marginLeft: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                      {agents[h.id]?.permission ?? "supervised"}
+                    <span style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 500, color: "var(--cv-ink-faint)", marginLeft: 6, letterSpacing: "0.02em" }}>
+                      {(agents[h.id]?.permission ?? "supervised").replace(/_/g, " ")}
                     </span>
                   </span>
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: "var(--cv-text-xxs)",
                       color: "var(--cv-ink-dim)",
-                      fontFamily: "ui-monospace, SFMono-Regular, monospace",
+                      fontFamily: "var(--cv-font-mono)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -163,30 +150,30 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                 </button>
                 <span style={{ display: "flex", gap: 6, marginTop: 4 }}>
                   <button
-                    className="glass-pill"
+                    className="cv-mini-btn"
                     title="center the canvas on this agent's card"
-                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", color: "var(--cv-ink-dim)", cursor: "pointer", border: "none" }}
+                    style={{ padding: "2px 8px", color: "var(--cv-ink-dim)" }}
                     onClick={() => useBoard.getState().requestFocus(h.id)}
                   >
                     ⌖
                   </button>
                   <button
-                    className="glass-pill"
-                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 11px", color: "var(--cv-done)", cursor: "pointer", border: "none" }}
+                    className="cv-mini-btn"
+                    style={{ padding: "2px 11px", color: "var(--cv-done)" }}
                     onClick={() => useBoard.getState().approveInput(h.id)}
                   >
                     allow
                   </button>
                   <button
-                    className="glass-pill"
-                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 11px", color: "var(--cv-blocked)", cursor: "pointer", border: "none" }}
+                    className="cv-mini-btn"
+                    style={{ padding: "2px 11px", color: "var(--cv-blocked)" }}
                     onClick={() => useBoard.getState().denyInput(h.id)}
                   >
                     deny
                   </button>
                   <button
-                    className="glass-pill"
-                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 11px", color: "var(--cv-waiting)", cursor: "pointer", border: "none" }}
+                    className="cv-mini-btn"
+                    style={{ padding: "2px 11px", color: "var(--cv-waiting)" }}
                     title="Allow this one and stop asking — agent moves to auto"
                     onClick={() => useBoard.getState().approveAlways(h.id)}
                   >
@@ -199,19 +186,19 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
         )}
         {needsYou.length > 0 && (
           <>
-            <div style={groupLabel}>needs you</div>
+            <div style={groupLabel}>Needs you</div>
             {needsYou.map((a) => (
               <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <button style={{ ...rowStyle, flex: 1 }} className="inbox-row" onClick={() => onOpenAgent(a.id)}>
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>{a.name}</span>
-                  <span style={{ fontSize: 11, color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {a.lastLine ?? (a.status === "blocked" ? "blocked" : "waiting for input")}
+                  <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600 }}>{a.name}</span>
+                  <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {activityLines[a.id] ?? a.lastLine ?? (a.status === "blocked" ? "blocked" : "waiting for input")}
                   </span>
                 </button>
                 <button
-                  className="glass-pill"
+                  className="cv-mini-btn"
                   title="center the canvas on this agent's card"
-                  style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", color: "var(--cv-ink-dim)", cursor: "pointer", border: "none", flexShrink: 0 }}
+                  style={{ padding: "2px 8px", color: "var(--cv-ink-dim)", flexShrink: 0 }}
                   onClick={() => useBoard.getState().requestFocus(a.id)}
                 >
                   ⌖
@@ -219,9 +206,9 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                 {(["↵", "y", "n", "esc"] as const).map((k) => (
                   <button
                     key={k}
-                    className="glass-pill"
+                    className="cv-mini-btn"
                     title={`type ${k === "↵" ? "enter" : k === "esc" ? "escape" : `'${k}'`} into ${a.name}'s terminal`}
-                    style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", cursor: "pointer", border: "none", color: "var(--cv-ink-dim)", fontFamily: "ui-monospace, monospace", flexShrink: 0 }}
+                    style={{ padding: "2px 8px", color: "var(--cv-ink-dim)", fontFamily: "var(--cv-font-mono)", flexShrink: 0 }}
                     onClick={(ev) => {
                       ev.stopPropagation();
                       const seq = k === "↵" ? "\r" : k === "esc" ? "\x1b" : k;
@@ -237,7 +224,7 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
         )}
         {inFlight.length > 0 && (
           <>
-            <div style={groupLabel}>delegations in flight</div>
+            <div style={groupLabel}>Delegations in flight</div>
             {inFlight.map((e) => (
               <button
                 key={e.id}
@@ -246,8 +233,8 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                 title="Open this delegation's full record"
                 onClick={() => useBoard.getState().setEdgeDetail(e.id)}
               >
-                <span style={{ fontSize: 12, fontWeight: 600 }}>{e.task}</span>
-                <span style={{ fontSize: 11, color: "var(--cv-ink-dim)" }}>delegated</span>
+                <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600 }}>{e.task}</span>
+                <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>delegated</span>
               </button>
             ))}
           </>
@@ -255,9 +242,9 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
         {done.length > 0 && (
           <>
             <div style={{ ...groupLabel, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span>returned</span>
+              <span>Returned</span>
               <button
-                style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", fontSize: 10, cursor: "pointer" }}
+                style={{ background: "none", border: "none", color: "var(--cv-ink-faint)", fontSize: "var(--cv-text-xxs)", cursor: "pointer" }}
                 onClick={() => useBoard.getState().clearReturned()}
               >
                 clear
@@ -271,8 +258,8 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
                 title="Open this delegation's full record"
                 onClick={() => useBoard.getState().setEdgeDetail(e.id)}
               >
-                <span style={{ fontSize: 12, fontWeight: 600 }}>{e.task}</span>
-                <span style={{ fontSize: 11, color: "var(--cv-done)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600 }}>{e.task}</span>
+                <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-done)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {e.result ?? "returned"}
                 </span>
               </button>

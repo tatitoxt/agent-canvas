@@ -1,21 +1,50 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+
+import { TermHost } from "./TermHost";
+import { useBoard } from "../store/board";
+import { CliMark } from "./CliMark";
+import { announcedModel, STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "../board/nodes";
+import type { AgentStatus } from "../board/types";
 
 /** Where the floating terminal panel sits — default bottom-right (Deska-style
  * dock position) until the user pops it out by dragging the header. */
 const DEFAULT_POS = { x: -1, y: -1 }; // sentinel: anchored, not popped out
-import { TermHost } from "./TermHost";
-import { useBoard } from "../store/board";
-import { CliMark } from "./CliMark";
-import { STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "../board/nodes";
-import type { AgentStatus } from "../board/types";
+const DEFAULT_SIZE = { width: 576, height: 320 };
+const TERMINAL_SIZE_KEY = "cv-terminal-drawer-size";
+const ROLE_LABELS: Record<string, string> = {
+  review: "Review", reviewer: "Review", builder: "Builder", frontend: "Frontend",
+  backend: "Backend", test: "Test", tester: "Test", docs: "Docs", doc: "Docs",
+  design: "Design", security: "Security", general: "General",
+};
 
-type Props = { agentId: string; name: string; index?: number; onClose: () => void };
+export function terminalTitle(name: string, termNo: number): string {
+  const namedRole = name.match(/^([a-z][a-z _-]*?)[-_ ](\d+)$/i);
+  const roleKey = namedRole?.[1].toLowerCase().replace(/[ _-]/g, "");
+  if (namedRole && roleKey && ROLE_LABELS[roleKey]) return `${ROLE_LABELS[roleKey]} ${namedRole[2]}`;
+  if (/^terminal(?:[-_ ]?\d+)?$/i.test(name)) return `Terminal ${termNo > 0 ? termNo : ""}`.trim();
+  return name || `Terminal ${termNo > 0 ? termNo : ""}`.trim();
+}
 
-export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
+type Props = { agentId: string; name: string; index?: number; onClose: (agentId: string) => void };
+
+export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   const [confirmingKill, setConfirmingKill] = useState(false);
   const kill = useBoard((s) => s.kill);
   const [pos, setPos] = useState(DEFAULT_POS);
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+  const [size, setSize] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(TERMINAL_SIZE_KEY) ?? "null");
+      if (Number.isFinite(saved?.width) && Number.isFinite(saved?.height)) {
+        return {
+          width: Math.max(380, Math.min(1200, saved.width)),
+          height: Math.max(240, Math.min(900, saved.height)),
+        };
+      }
+    } catch { /* use the default size */ }
+    return DEFAULT_SIZE;
+  });
+  const resizeRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
   // Voice dictation — Web Speech API is free/on-device-ish, unlike
   // Deska's metered voice minutes. Dictates text into the PTY.
   const [listening, setListening] = useState(false);
@@ -35,6 +64,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   const agent = useBoard((s) => s.agents[agentId]);
   const activeBoard = useBoard((s) => s.activeBoard);
   const agentsMap = useBoard((s) => s.agents);
+  const ptyBuffer = useBoard((s) => s.ptyBuffers[agentId]);
   useEffect(() => {
     if (!pendingNew) return;
     // Only match shells spawned AFTER the request — a same-named terminal
@@ -55,10 +85,12 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
   const termNo = Object.keys(agentsMap)
     .filter((id) => (agentsMap[id].board_id ?? "main") === activeBoard)
     .indexOf(agentId) + 1;
+  const title = terminalTitle(name, termNo);
   const status = (agent?.status === "exited" ? "done" : agent?.status ?? "idle") as AgentStatus;
   const cli = (agent?.command ?? "bash").split(/\s+/)[0].toLowerCase();
   const meta = cliMeta(cli);
   const statusColor = STATUS_COLOR[status];
+  const model = announcedModel(ptyBuffer);
 
 
 
@@ -99,6 +131,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
       : { position: "absolute", bottom: 16 + index * 28, right: 16 + index * 28, zIndex: 20 };
 
   const onHeaderDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest("button, input, select")) return;
     const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
     dragRef.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
     const move = (ev: PointerEvent) => {
@@ -118,16 +151,47 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
     window.addEventListener("pointerup", up);
   };
 
+  const onResizeDown = (e: React.PointerEvent) => {
+    if (maxed) return;
+    e.preventDefault();
+    e.stopPropagation();
+    resizeRef.current = { x: e.clientX, y: e.clientY, width: size.width, height: size.height };
+    let nextSize = { width: size.width, height: size.height };
+    const move = (ev: PointerEvent) => {
+      const start = resizeRef.current;
+      if (!start) return;
+      nextSize = {
+        width: Math.max(380, Math.min(window.innerWidth * 0.92, start.width + ev.clientX - start.x)),
+        height: Math.max(240, Math.min(window.innerHeight * 0.88, start.height + ev.clientY - start.y)),
+      };
+      setSize(nextSize);
+    };
+    const up = () => {
+      resizeRef.current = null;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      try { localStorage.setItem(TERMINAL_SIZE_KEY, JSON.stringify(nextSize)); } catch { /* noop */ }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
   return (
     <div
-      className="glass group"
+      className="terminal-drawer group"
       style={{
         ...panelStyle,
         display: "flex",
         flexDirection: "column",
-        height: maxed ? undefined : 300,
-        width: maxed ? undefined : "36rem",
+        height: maxed ? undefined : size.height,
+        width: maxed ? undefined : size.width,
+        maxWidth: "92vw",
+        maxHeight: "88vh",
         overflow: "hidden",
+        background: "#0d0e10",
+        border: "1px solid rgba(255,255,255,.12)",
+        borderRadius: 12,
+        boxShadow: "0 18px 48px rgba(0,0,0,.42)",
       }}
     >
       <div
@@ -138,7 +202,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
           alignItems: "center",
           justifyContent: "space-between",
           padding: "8px 14px",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
+          borderBottom: "1px solid var(--cv-glass-edge)",
           cursor: "grab",
           userSelect: "none",
           touchAction: "none",
@@ -149,7 +213,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             display: "inline-flex",
             alignItems: "center",
             gap: 8,
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             fontWeight: 600,
             minWidth: 0,
           }}
@@ -164,21 +228,21 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
               borderRadius: 5,
               border: "1px solid rgba(120,150,190,0.45)",
               color: "#7cb9ff",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               flex: "none",
             }}
           >
             ›_
           </span>
           <span style={{ color: "var(--cv-ink)", whiteSpace: "nowrap" }}>
-            {termNo > 0 ? `Terminal ${termNo}` : name}
+            {title}
           </span>
           <span
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: 5,
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               fontWeight: 600,
               color: statusColor,
               whiteSpace: "nowrap",
@@ -187,13 +251,22 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             <StatusBars color={statusColor} />
             {STATUS_LABEL[status]}
           </span>
+          {model && (
+            <span
+              data-testid="terminal-model"
+              title="model announced by this CLI"
+              style={{ color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-xxs)", whiteSpace: "nowrap" }}
+            >
+              {model}
+            </span>
+          )}
           <span
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: 5,
               marginLeft: "auto",
-              fontSize: 11.5,
+              fontSize: "var(--cv-text-xs)",
               fontWeight: 600,
               color: "var(--cv-ink-dim)",
               whiteSpace: "nowrap",
@@ -220,7 +293,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             style={{
               border: "none",
               background: "transparent",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               cursor: "pointer",
               color: split === "right" ? "var(--cv-accent)" : "var(--cv-ink-dim)",
             }}
@@ -240,7 +313,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             style={{
               border: "none",
               background: "transparent",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               cursor: "pointer",
               color: split === "down" ? "var(--cv-accent)" : "var(--cv-ink-dim)",
             }}
@@ -251,12 +324,12 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             title="pop out onto the canvas as a card"
             onClick={() => {
               useBoard.getState().openTermNode(agentId);
-              onClose();
+              onClose(agentId);
             }}
             style={{
               border: "none",
               background: "transparent",
-              fontSize: 12,
+              fontSize: "var(--cv-text-xs)",
               cursor: "pointer",
               color: "var(--cv-ink-dim)",
             }}
@@ -269,7 +342,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             style={{
               border: "none",
               background: "transparent",
-              fontSize: 12,
+              fontSize: "var(--cv-text-xs)",
               cursor: "pointer",
               color: "var(--cv-ink-dim)",
             }}
@@ -286,7 +359,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
               const wsRepo = a?.workspace_id ? st.workspaces[a.workspace_id]?.repo : undefined;
               st.openExplorer(a?.worktree ?? wsRepo);
             }}
-            style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: 11 }}
+            style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-xxs)" }}
           >
             ⌸
           </button>
@@ -307,7 +380,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             style={{
               border: "none",
               background: "transparent",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               cursor: "pointer",
               color: "var(--cv-ink-dim)",
             }}
@@ -328,10 +401,10 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
               style={{
                 border: "none",
                 background: "transparent",
-                fontSize: 10.5,
+                fontSize: "var(--cv-text-xxs)",
                 cursor: "pointer",
                 color: "var(--cv-ink-dim)",
-                fontFamily: "ui-monospace, monospace",
+                fontFamily: "var(--cv-font-mono)",
                 padding: "0 2px",
               }}
             >
@@ -344,7 +417,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             style={{
               border: "none",
               background: "transparent",
-              fontSize: 11,
+              fontSize: "var(--cv-text-xxs)",
               cursor: "pointer",
               color: listening ? "var(--cv-blocked)" : "var(--cv-ink-dim)",
               animation: listening ? "pulse-dot 1.2s ease-in-out infinite" : "none",
@@ -360,7 +433,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
                 onClick={() => {
                   kill(agentId);
                   setConfirmingKill(false);
-                  onClose();
+                  onClose(agentId);
                 }}
               >
                 kill
@@ -380,7 +453,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
               kill
             </button>
           )}
-          <button className="text-xs text-[var(--cv-ink-dim)]" onClick={onClose}>
+          <button className="text-xs text-[var(--cv-ink-dim)]" onClick={() => onClose(agentId)}>
             ✕
           </button>
         </div>
@@ -407,7 +480,7 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
                 title="which agent this pane shows"
                 style={{
                   flex: 1,
-                  fontSize: 10.5,
+                  fontSize: "var(--cv-text-xxs)",
                   background: "transparent",
                   color: "var(--cv-ink)",
                   border: "none",
@@ -431,14 +504,14 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
                   setPendingNew({ name, since: Date.now() });
                   useBoard.getState().spawn(name, "bash");
                 }}
-                style={{ border: "none", background: "transparent", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11 }}
+                style={{ border: "none", background: "transparent", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xxs)" }}
               >
                 ＋
               </button>
               <button
                 title="close split"
                 onClick={() => setSplit(null)}
-                style={{ border: "none", background: "transparent", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 11 }}
+                style={{ border: "none", background: "transparent", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xxs)" }}
               >
                 ✕
               </button>
@@ -446,13 +519,34 @@ export function TerminalPanel({ agentId, name, index = 0, onClose }: Props) {
             {splitAgentValid ? (
               <TermHost agentId={splitAgentValid} />
             ) : (
-              <div className="flex-1" style={{ display: "grid", placeItems: "center", fontSize: 11, color: "var(--cv-ink-faint)" }}>
+              <div className="flex-1" style={{ display: "grid", placeItems: "center", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>
                 no second agent on this board yet
               </div>
             )}
           </div>
         )}
       </div>
+      {!maxed && (
+        <div
+          data-testid="terminal-resize-handle"
+          role="separator"
+          aria-label="Resize terminal"
+          onPointerDown={onResizeDown}
+          title="drag to resize terminal"
+          style={{
+            position: "absolute",
+            right: 1,
+            bottom: 1,
+            width: 18,
+            height: 18,
+            cursor: "nwse-resize",
+            touchAction: "none",
+            zIndex: 2,
+            background: "linear-gradient(135deg, transparent 45%, var(--cv-ink-faint) 47%, var(--cv-ink-faint) 51%, transparent 53%, transparent 65%, var(--cv-ink-faint) 67%, var(--cv-ink-faint) 71%, transparent 73%)",
+            opacity: 0.65,
+          }}
+        />
+      )}
     </div>
   );
-}
+});

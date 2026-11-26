@@ -67,7 +67,7 @@ export function CardMenu({
         border: "none",
         background: "transparent",
         color: opts?.danger ? "#e05d5d" : "var(--cv-ink-dim)",
-        fontSize: 12,
+        fontSize: "var(--cv-text-xs)",
         padding: "6px 10px",
         borderRadius: 8,
         cursor: "pointer",
@@ -76,7 +76,7 @@ export function CardMenu({
     >
       <Icon name={icon} size={13} color={opts?.danger ? "#e05d5d" : "var(--cv-ink-faint)"} />
       <span style={{ flex: 1 }}>{label}</span>
-      {opts?.checked && <span style={{ fontSize: 11, color: "var(--cv-accent)" }}>✓</span>}
+      {opts?.checked && <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-accent)" }}>✓</span>}
     </button>
   );
   const sep = (
@@ -163,7 +163,7 @@ export function CardMenu({
                   border: "none",
                   background: "transparent",
                   color: "var(--cv-ink-dim)",
-                  fontSize: 11,
+                  fontSize: "var(--cv-text-xxs)",
                   padding: "6px 10px",
                   borderRadius: 8,
                   cursor: "pointer",

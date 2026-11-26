@@ -1,22 +1,29 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "./icons";
 import { TeamBuilder } from "./TeamBuilder";
 import { WebLauncher } from "./WebLauncher";
 import { useBoard } from "../store/board";
 
 const PANEL_ITEMS = [
+  { key: "inbox", icon: "inbox", label: "Inbox", hint: "tasks and agent requests" },
+  { key: "sc", icon: "git", label: "Source Control", hint: "branches, changed files and push" },
+  { key: "prs", icon: "github", label: "Pull requests", hint: "review and merge requests" },
+  { key: "explorer", icon: "explorer", label: "Explorer", hint: "browse repository files and preview code" },
+  { key: "vault", icon: "vault", label: "Obsidian", hint: "browse and edit your live vault" },
+  { key: "tickets", icon: "ticket", label: "Dex Tickets", hint: "delegations and task outcomes" },
+  { key: "artifacts", icon: "artifacts", label: "Artifacts", hint: "saved notes and agent work" },
   { key: "thread", icon: "thread", label: "Thread", hint: "command the board in words" },
   { key: "automations", icon: "automations", label: "Automations" },
   { key: "loops", icon: "loops", label: "Loops", hint: "re-send instructions on a cadence" },
   { key: "presets", icon: "presets", label: "Presets", hint: "saved board layouts" },
   { key: "memory", icon: "memory", label: "Memory" },
-  { key: "notes", icon: "notes", label: "Notes" },
-  { key: "artifacts", icon: "artifacts", label: "Artifacts" },
-  { key: "vault", icon: "vault", label: "Vault" },
+  { key: "notes", icon: "notes", label: "Board Notes" },
   { key: "skills", icon: "skills", label: "Skills" },
   { key: "accounts", icon: "accounts", label: "Accounts" },
-  { key: "usage", icon: "juice", label: "Juice", hint: "per-agent output & files" },
+  { key: "usage", icon: "mission-map", label: "Mission Map", hint: "agents, terminals, models and accounts" },
   { key: "settings", icon: "settings", label: "Settings" },
+  { key: "issues", icon: "issue", label: "Issues", hint: "issues from the connected repo" },
 ] as const;
 
 const rowBtn: React.CSSProperties = {
@@ -24,24 +31,19 @@ const rowBtn: React.CSSProperties = {
   alignItems: "center",
   gap: 9,
   width: "100%",
-  padding: "6px 10px",
+  padding: "7px 10px",
   border: "none",
   background: "transparent",
   color: "var(--cv-ink)",
-  fontSize: 11.5,
-  fontWeight: 550,
+  fontSize: "var(--cv-text-sm)",
+  fontWeight: 500,
   textAlign: "left",
   cursor: "pointer",
   borderRadius: 8,
 };
 
 const sectionLabel: React.CSSProperties = {
-  fontSize: 8.5,
-  fontWeight: 700,
-  letterSpacing: 1,
-  textTransform: "uppercase",
-  color: "var(--cv-ink-faint)",
-  padding: "8px 10px 3px",
+  padding: "10px 10px 4px",
 };
 
 const miniInput: React.CSSProperties = {
@@ -50,7 +52,7 @@ const miniInput: React.CSSProperties = {
   borderRadius: 8,
   height: 26,
   padding: "0 9px",
-  fontSize: 11,
+  fontSize: "var(--cv-text-xxs)",
   color: "var(--cv-ink)",
   outline: "none",
   width: "100%",
@@ -62,13 +64,13 @@ export interface ToolsMenuActions {
   onStudio: () => void;
   onDraw: () => void;
   onRegion: () => void;
-  onMission: () => void;
+  onMission?: () => void;
+  onAddToBoard?: (key: string) => void;
   drawOn: boolean;
   regionOn: boolean;
 }
 
-/** Symvibe's "Tools" button — one dropdown top-right that holds every
- * panel, board op and capture action, instead of a crowded side rail. */
+/** Tools launcher for board actions and the complete set of canvas panels. */
 export function ToolsMenu({
   active,
   onSelect,
@@ -79,12 +81,19 @@ export function ToolsMenu({
   actions: ToolsMenuActions;
 }) {
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const [sub, setSub] = useState<"ws" | "shape" | null>(null);
   const [teamOpen, setTeamOpen] = useState(false);
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [wsName, setWsName] = useState("");
   const [wsRepo, setWsRepo] = useState("");
   const wrap = useRef<HTMLDivElement>(null);
+  const dock = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setPinned(localStorage.getItem("cv-tools-pinned") === "true");
+  }, []);
 
   const activeBoard = useBoard((s) => s.activeBoard);
   const spawnOrchestrator = useBoard((s) => s.spawnOrchestrator);
@@ -99,27 +108,29 @@ export function ToolsMenu({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (!wrap.current?.contains(target) && !dock.current?.contains(target) && !pinned) setOpen(false);
     };
     window.addEventListener("mousedown", onDown);
     return () => window.removeEventListener("mousedown", onDown);
-  }, [open]);
+  }, [open, pinned]);
 
-  const item = (icon: string, label: string, onClick: () => void, hint?: string, on?: boolean) => (
+  const dismiss = () => { if (!pinned) setOpen(false); };
+
+  const item = (icon: string, label: string, onClick: () => void, hint?: string, on?: boolean, keepSub = false) => (
     <button
       key={label}
       style={{ ...rowBtn, color: on ? "var(--cv-accent)" : "var(--cv-ink)" }}
       title={hint}
       onClick={() => {
         onClick();
-        setSub(null);
+        if (!keepSub) setSub(null);
       }}
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
       <Icon name={icon} size={14} color={on ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
       <span style={{ flex: 1 }}>{label}</span>
-      {hint && <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)" }}>{hint}</span>}
     </button>
   );
 
@@ -140,40 +151,63 @@ export function ToolsMenu({
       >
         <Icon name="tools" size={15} color={open ? "var(--cv-accent)" : "var(--cv-ink-dim)"} />
       </button>
-      {open && (
+      {open && createPortal(
         <div
-          className="cv-menu cv-menu-scroll"
+          ref={dock}
+          className="cv-menu"
+          role="dialog"
+          aria-label="Tools panel"
           style={{
-            position: "absolute",
-            top: "calc(100% + 8px)",
-            right: 0,
-            width: 236,
-            maxHeight: "72vh",
-            overflowY: "auto",
-            padding: "6px 6px 8px",
-            zIndex: 40,
+            position: "fixed", top: 76, right: 14, bottom: 18,
+            width: collapsed ? 54 : 292, maxWidth: "calc(100vw - 28px)",
+            display: "flex", flexDirection: "column", overflow: "hidden",
+            zIndex: 70, transition: "width 180ms ease",
           }}
         >
-          <div style={sectionLabel}>Board</div>
-          {item("automations", "New orchestrator", () => { spawnOrchestrator(); setOpen(false); }, "wire consoles, command all")}
-          {item("accounts", "Team builder", () => { setTeamOpen(true); setOpen(false); }, "roles × one CLI")}
-          {item("shape", "Add shape", () => setSub((s) => (s === "shape" ? null : "shape")), "whiteboard")}
+          <header style={{ display: "flex", flexDirection: collapsed ? "column" : "row", alignItems: "center", justifyContent: "center", gap: collapsed ? 6 : 8, minHeight: collapsed ? 112 : 48, padding: collapsed ? "8px 0" : "0 14px", borderBottom: "1px solid var(--cv-glass-edge)" }}>
+            {!collapsed && <strong style={{ flex: 1, fontSize: "var(--cv-text-sm)", fontWeight: 600 }}>Tools</strong>}
+            <button className="glass-pill" title={pinned ? "Unpin Tools panel" : "Pin Tools panel"} aria-label={pinned ? "Unpin Tools panel" : "Pin Tools panel"} onClick={() => { const next = !pinned; setPinned(next); localStorage.setItem("cv-tools-pinned", String(next)); }} style={{ width: 28, height: 28, display: "grid", placeItems: "center", color: pinned ? "var(--cv-accent)" : "var(--cv-ink-dim)" }}><Icon name="pin" size={14} /></button>
+            <button className="glass-pill" title={collapsed ? "Expand Tools panel" : "Collapse Tools panel"} aria-label={collapsed ? "Expand Tools panel" : "Collapse Tools panel"} onClick={() => setCollapsed((v) => !v)} style={{ width: 28, height: 28, display: "grid", placeItems: "center" }}><Icon name={collapsed ? "expand" : "collapse"} size={14} /></button>
+            {!pinned && <button className="glass-pill" title="Close Tools panel" aria-label="Close Tools panel" onClick={() => setOpen(false)} style={{ width: 28, height: 28, display: "grid", placeItems: "center" }}><Icon name="x" size={14} /></button>}
+          </header>
+          <div className="cv-menu-scroll" style={{ flex: 1, overflowY: "auto", padding: collapsed ? "6px 5px" : "6px 6px 10px" }}>
+          {!collapsed && <>
+          <div className="cv-section-label" style={sectionLabel}>Apps &amp; panels</div>
+          {PANEL_ITEMS.map((it) => (
+            <div key={it.key} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <div style={{ flex: 1 }}>{item(it.icon, it.label, () => { onSelect(it.key); dismiss(); }, "hint" in it ? it.hint : undefined, active === it.key)}</div>
+              <button
+                title={`Add ${it.label} to canvas`}
+                aria-label={`Add ${it.label} to canvas`}
+                onClick={() => {
+                  actions.onAddToBoard?.(it.key);
+                  setOpen(false);
+                }}
+                style={{ border: "none", background: "transparent", color: "var(--cv-ink-faint)", borderRadius: 7, cursor: "pointer", padding: "5px 7px", fontSize: "var(--cv-text-xs)" }}
+              >+</button>
+            </div>
+          ))}
+          <div style={{ height: 1, margin: "8px 10px", background: "var(--cv-glass-edge)" }} />
+          <div className="cv-section-label" style={sectionLabel}>Board</div>
+          {item("automations", "New orchestrator", () => { spawnOrchestrator(); dismiss(); }, "wire consoles, command all")}
+          {item("accounts", "Team builder", () => { setTeamOpen(true); dismiss(); }, "roles × one CLI")}
+          {item("shape", "Add shape", () => setSub((s) => (s === "shape" ? null : "shape")), "whiteboard", false, true)}
           {sub === "shape" && (
             <div style={{ display: "flex", gap: 6, padding: "4px 10px 6px" }}>
               {(["rect", "ellipse", "diamond", "sticky"] as const).map((k) => (
                 <button
                   key={k}
                   className="glass-pill"
-                  style={{ ...rowBtn, width: "auto", padding: "5px 10px", justifyContent: "center", fontSize: 12 }}
+                  style={{ ...rowBtn, width: "auto", padding: "5px 10px", justifyContent: "center", fontSize: "var(--cv-text-xs)" }}
                   title={k}
-                  onClick={() => { addShape(k); setSub(null); setOpen(false); }}
+                  onClick={() => { addShape(k); setSub(null); dismiss(); }}
                 >
                   {{ rect: "▢", ellipse: "◯", diamond: "◇", sticky: "▤" }[k]}
                 </button>
               ))}
             </div>
           )}
-          {item("ws", "New workspace", () => setSub((s) => (s === "ws" ? null : "ws")))}
+          {item("ws", "New workspace", () => setSub((s) => (s === "ws" ? null : "ws")), undefined, false, true)}
           {sub === "ws" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 5, padding: "4px 10px 6px" }}>
               <input style={miniInput} placeholder="workspace name" value={wsName} onChange={(e) => setWsName(e.target.value)} autoFocus />
@@ -181,27 +215,27 @@ export function ToolsMenu({
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && wsName.trim() && wsRepo.trim()) {
                     createWorkspace(wsName.trim(), wsRepo.trim());
-                    setSub(null); setOpen(false); setWsName(""); setWsRepo("");
+                    setSub(null); dismiss(); setWsName(""); setWsRepo("");
                   }
                 }} />
             </div>
           )}
-          {item("web", "Open a page", () => { setLauncherOpen(true); setOpen(false); }, "web nodes on canvas")}
+          {item("web", "Open a page", () => { setLauncherOpen(true); dismiss(); }, "web nodes on canvas")}
           {item("pause", "Pause all", () => pauseAll(activeBoard), "SIGSTOP every agent")}
           {item("play", "Resume all", () => resumeAll(activeBoard))}
-          {item("gather", "Gather loose windows", () => { gatherLoose(); setOpen(false); }, "into a group")}
+          {item("gather", "Gather loose windows", () => { gatherLoose(); dismiss(); }, "into a group")}
           {item("eye", "Panel summaries", () => togglePanelSummaries(), summaries ? "on" : "off", summaries)}
-          <div style={sectionLabel}>Capture</div>
-          {item("draw", "Pencil markups", () => { actions.onDraw(); setOpen(false); }, actions.drawOn ? "on" : "", actions.drawOn)}
-          {item("region", "Region shot", () => { actions.onRegion(); setOpen(false); }, "drag → PNG")}
-          {item("shot", "Canvas shot", () => { actions.onShot(); setOpen(false); }, "⌘⇧S")}
-          {item("digest", "Session digest", () => { actions.onDigest(); setOpen(false); }, "lose nothing")}
-          {item("studio", "Studio doc", () => { actions.onStudio(); setOpen(false); }, "repo → dossier")}
-          <div style={sectionLabel}>Panels</div>
-          {PANEL_ITEMS.map((it) =>
-            item(it.icon, it.label, () => { onSelect(it.key); setOpen(false); }, "hint" in it ? it.hint : undefined, active === it.key),
-          )}
-        </div>
+          <div className="cv-section-label" style={sectionLabel}>Capture</div>
+          {item("draw", "Pencil markups", () => { actions.onDraw(); dismiss(); }, actions.drawOn ? "on" : "", actions.drawOn)}
+          {item("region", "Region shot", () => { actions.onRegion(); dismiss(); }, "drag → PNG")}
+          {item("shot", "Canvas shot", () => { actions.onShot(); dismiss(); }, "⌘⇧S")}
+          {item("digest", "Session digest", () => { actions.onDigest(); dismiss(); }, "lose nothing")}
+          {item("studio", "Studio doc", () => { actions.onStudio(); dismiss(); }, "repo → dossier")}
+          </>}
+          {collapsed && PANEL_ITEMS.map((it) => <button key={it.key} title={it.label} aria-label={it.label} onClick={() => { onSelect(it.key); dismiss(); }} style={{ ...rowBtn, justifyContent: "center", padding: "9px 0", color: active === it.key ? "var(--cv-accent)" : "var(--cv-ink)" }}><Icon name={it.icon} size={16} /></button>)}
+          </div>
+        </div>,
+        document.body,
       )}
       {teamOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60 }}>

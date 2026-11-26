@@ -32,11 +32,13 @@ jobs:
         run: npm install -g @tauri-apps/cli@^2
 
       - name: sync version with tag
-        run: sed -i '' 's/"version": "[^"]*"/"version": "${GITHUB_REF_NAME#v}"/' src-tauri/tauri.conf.json && grep '"version"' src-tauri/tauri.conf.json | head -1
+        run: |
+          sed -i '' 's/"version": "[^"]*"/"version": "${GITHUB_REF_NAME#v}"/' src-tauri/tauri.conf.json && grep '"version"' src-tauri/tauri.conf.json | head -1
 
       - name: unsigned build fallback (no signing keys configured)
         if: ${{ env.SIGNING_PRIVATE_KEY == '' }}
-        run: sed -i '' 's/"createUpdaterArtifacts": true/"createUpdaterArtifacts": false/' src-tauri/tauri.conf.json
+        run: |
+          sed -i '' 's/"createUpdaterArtifacts": true/"createUpdaterArtifacts": false/' src-tauri/tauri.conf.json
 
       - name: build the app
         working-directory: src-tauri
@@ -84,3 +86,64 @@ jobs:
           print("latest.json written")
           PY
           if [ -f latest.json ]; then gh release upload "$TAG" latest.json --clobber; else echo "no updater manifest (unsigned build) — skipping"; fi
+
+
+  release-windows:
+    runs-on: windows-latest
+    env:
+      SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+    defaults:
+      run:
+        # The version-sed and artifact-upload steps are POSIX shell (for/do,
+        # [ -f ]); windows-latest defaults `run` to pwsh, where they are
+        # syntax errors. Git Bash is present on the runner as `bash`.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: install frontend deps + build
+        run: |
+          cd web
+          npm ci
+          npm run build
+
+      - name: install tauri cli
+        run: npm install -g @tauri-apps/cli@^2
+
+      - name: sync version with tag
+        # GNU sed on Git Bash — no backup-suffix argument needed
+        run: |
+          sed -i 's/"version": "[^"]*"/"version": "${GITHUB_REF_NAME#v}"/' src-tauri/tauri.conf.json && grep '"version"' src-tauri/tauri.conf.json | head -1
+
+      # Same fallback as the macOS job: without signing keys the updater
+      # artifacts cannot be signed and `tauri build` exits non-zero at the
+      # very end — after the installers are already written — failing the
+      # whole job for a cosmetic reason.
+      - name: unsigned build fallback (no signing keys configured)
+        if: ${{ env.SIGNING_PRIVATE_KEY == '' }}
+        run: |
+          sed -i 's/"createUpdaterArtifacts": true/"createUpdaterArtifacts": false/' src-tauri/tauri.conf.json
+
+      - name: build the app
+        working-directory: src-tauri
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: tauri build
+
+      - name: upload release artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          gh release create "$TAG" --title "$TAG" --generate-notes || true
+          BUNDLE="src-tauri/target/release/bundle"
+          for f in "$BUNDLE"/msi/*.msi "$BUNDLE"/nsis/*.exe "$BUNDLE"/nsis/*.exe.sig; do
+            [ -f "$f" ] && gh release upload "$TAG" "$f" --clobber
+          done

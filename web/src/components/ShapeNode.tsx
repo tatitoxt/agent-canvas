@@ -1,4 +1,4 @@
-import type { NodeProps, Node } from "@xyflow/react";
+import { NodeResizer, type NodeProps, type Node } from "@xyflow/react";
 import type { ShapeNodeData, ShapeDef } from "../board/types";
 import { useBoard } from "../store/board";
 
@@ -8,12 +8,16 @@ const PALETTE = [
 ];
 
 function ShapeSvg({ s }: { s: ShapeDef }) {
-  const sloppy = s.kind === "sticky" ? {} : { filter: "url(#cv-sloppy)" as const };
+  const isGroup = s.kind === "rect" && s.group;
+  // Gather regions are structural chrome, not whiteboard doodles: crisp
+  // geometry, a quiet 8% tint and a 1.25px hairline. Freehand shapes keep
+  // the Excalidraw wobble.
+  const sloppy = s.kind === "sticky" || isGroup ? {} : { filter: "url(#cv-sloppy)" as const };
   const common = {
     ...sloppy,
-    stroke: s.color,
-    strokeWidth: 2,
-    fill: s.kind === "sticky" ? s.color : `${s.color}26`,
+    stroke: isGroup ? `${s.color}b8` : s.color,
+    strokeWidth: isGroup ? 1.25 : 2,
+    fill: s.kind === "sticky" ? s.color : isGroup ? `${s.color}14` : `${s.color}26`,
   };
   if (s.kind === "ellipse") {
     return (
@@ -34,7 +38,7 @@ function ShapeSvg({ s }: { s: ShapeDef }) {
   }
   return (
     <svg width={s.w} height={s.h}>
-      <rect x={1} y={1} width={s.w - 2} height={s.h - 2} rx={s.kind === "rect" ? 10 : 0} {...common} />
+      <rect x={1} y={1} width={s.w - 2} height={s.h - 2} rx={s.kind === "rect" ? (s.group ? 14 : 10) : 0} {...common} />
     </svg>
   );
 }
@@ -46,7 +50,9 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
   const vaultDir = useBoard((st) => st.vaultDir);
   const vaultAppend = useBoard((st) => st.vaultAppend);
   const notify = useBoard((st) => st.notify);
+  const leaving = useBoard((st) => Boolean(st.leavingShapes[id]));
   const isSticky = s.kind === "sticky";
+  const isGroup = s.kind === "rect" && s.group;
 
   const saveToVault = () => {
     if (!vaultDir) {
@@ -61,26 +67,36 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
 
   if (s.kind === "pin") {
     return (
-      <div
-        style={{
-          position: "relative",
-          width: s.w,
-          height: s.h,
-          borderRadius: 12,
-          background: "color-mix(in srgb, var(--cv-bg, #101014) 72%, transparent)",
-          backdropFilter: "blur(18px) saturate(1.2)",
-          border: `1.5px solid ${s.anchor ? `${s.color}55` : "var(--cv-glass-edge)"}`,
-          boxShadow: "0 8px 28px rgba(0,0,0,0.4)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
+      <>
+        <NodeResizer
+          isVisible={selected}
+          minWidth={220}
+          minHeight={140}
+          handleClassName="cv-node-resize-handle"
+          lineClassName="cv-node-resize-line"
+          onResize={(_, p) => updateShape(id, { x: p.x, y: p.y, w: Math.round(p.width), h: Math.round(p.height) }, false)}
+          onResizeEnd={(_, p) => updateShape(id, { x: p.x, y: p.y, w: Math.round(p.width), h: Math.round(p.height) })}
+        />
         <div
           style={{
-            padding: "8px 12px 6px",
+            position: "relative",
+            width: s.w,
+            height: s.h,
+            borderRadius: 12,
+            background: "var(--cv-glass)",
+            backdropFilter: "blur(var(--cv-blur-popover))",
+            border: `1px solid ${s.anchor ? `${s.color}55` : "var(--cv-hairline)"}`,
+            boxShadow: "var(--cv-shadow-card)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+        <div
+          style={{
+            padding: "10px 14px 8px",
             borderBottom: "1px solid rgba(255,255,255,0.07)",
-            fontSize: 11,
+            fontSize: "var(--cv-text-sm)",
             fontWeight: 700,
             color: "var(--cv-ink)",
             display: "flex",
@@ -110,56 +126,70 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
           placeholder="…"
           style={{
             flex: 1,
-            padding: "8px 12px",
+            padding: "10px 14px",
             background: "transparent",
             border: "none",
             outline: "none",
             resize: "none",
-            fontSize: 11.5,
-            lineHeight: 1.5,
+            fontSize: "var(--cv-text-sm)",
+            lineHeight: 1.55,
             fontFamily: "inherit",
-            color: "var(--cv-ink-dim)",
+            color: "var(--cv-ink)",
           }}
         />
         {selected && (
           <button
-            className="nodrag"
+            className="nodrag cv-card-btn cv-card-close"
             onClick={() => deleteShape(id)}
             title="remove card"
             style={{
               position: "absolute",
               top: 6,
               right: 6,
-              background: "var(--cv-glass)",
-              border: "1px solid var(--cv-glass-edge)",
-              borderRadius: 999,
-              color: "var(--cv-ink-dim)",
-              cursor: "pointer",
-              fontSize: 11,
-              width: 18,
-              height: 18,
+              fontSize: "var(--cv-text-xxs)",
               lineHeight: 1,
             }}
           >
             ×
           </button>
         )}
-      </div>
+        </div>
+      </>
     );
   }
 
   return (
-    <div style={{ position: "relative", width: s.w, height: s.h }}>
+    <div
+      className={`${isGroup ? "cv-group-frame" : ""}${leaving ? " cv-group-frame-out" : ""}`.trim() || undefined}
+      style={{ position: "relative", width: s.w, height: s.h }}
+    >
       <ShapeSvg s={s} />
       {s.kind === "rect" && s.text != null && (
-        // Region label — Deska-style: small caption pinned just above the
-        // frame's top-left corner, not a floating centered blob.
+        // Freehand region labels sit above the frame. Gather regions reserve
+        // a real header band in the layout, so the label lives inside it and
+        // can never be clipped by the topbar or hidden under a window.
         <input
           className="nodrag"
           value={s.text}
           onChange={(e) => updateShape(id, { text: e.target.value })}
           placeholder="region"
-          style={{
+          style={isGroup ? {
+            position: "absolute",
+            top: 11,
+            left: 14,
+            width: Math.max(76, Math.min(220, s.w - 28, (s.text?.length ?? 0) * 7.4 + 30)),
+            height: 28,
+            padding: "0 10px",
+            borderRadius: 8,
+            background: `color-mix(in srgb, ${s.color} 12%, transparent)`,
+            border: `1px solid ${s.color}30`,
+            outline: "none",
+            fontSize: "var(--cv-text-xs)",
+            fontWeight: 700,
+            fontFamily: "inherit",
+            color: `color-mix(in srgb, ${s.color} 78%, var(--cv-ink))`,
+            letterSpacing: 0.25,
+          } : {
             position: "absolute",
             top: -24,
             left: 2,
@@ -167,8 +197,8 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
             background: "transparent",
             border: "none",
             outline: "none",
-            fontSize: 12,
-            fontWeight: 650,
+            fontSize: "var(--cv-text-xs)",
+            fontWeight: 600,
             fontFamily: "inherit",
             color: s.color,
             letterSpacing: 0.3,
@@ -188,7 +218,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
             border: "none",
             outline: "none",
             resize: "none",
-            fontSize: 12,
+            fontSize: "var(--cv-text-xs)",
             fontFamily: "inherit",
             color: isSticky ? "#1a1a1c" : "var(--cv-ink)",
             textAlign: isSticky ? "left" : "center",
@@ -228,7 +258,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
           ))}
           <button
             onClick={() => deleteShape(id)}
-            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: 13, marginLeft: 2 }}
+            style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-sm)", marginLeft: 2 }}
           >
             ×
           </button>

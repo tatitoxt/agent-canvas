@@ -16,6 +16,7 @@ export function SearchPanel({
 }) {
   const agents = useBoard((s) => s.agents);
   const ptyBuffers = useBoard((s) => s.ptyBuffers);
+  const activityLines = useBoard((s) => s.activityLines);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -29,17 +30,17 @@ export function SearchPanel({
       const buf = ptyBuffers[a.id];
       const text = buf ? clean(new TextDecoder().decode(buf)) : "";
       const at = text.toLowerCase().indexOf(q);
-      if (at === -1 && !a.name.toLowerCase().includes(q) && !(a.lastLine ?? "").toLowerCase().includes(q)) {
+      if (at === -1 && !a.name.toLowerCase().includes(q) && !((activityLines[a.id] ?? a.lastLine) ?? "").toLowerCase().includes(q)) {
         continue;
       }
       const snippet =
         at === -1
-          ? (a.lastLine ?? "")
+          ? ((activityLines[a.id] ?? a.lastLine) ?? "")
           : `…${text.slice(Math.max(0, at - 60), at + 90)}…`;
       out.push({ id: a.id, name: a.name, status: a.status, snippet });
     }
     return out;
-  }, [query, ptyBuffers, agents]);
+  }, [query, ptyBuffers, agents, activityLines]);
 
   return (
     <div
@@ -78,7 +79,7 @@ export function SearchPanel({
             border: "none",
             borderBottom: "1px solid rgba(255,255,255,0.08)",
             padding: "13px 16px",
-            fontSize: 13.5,
+            fontSize: "var(--cv-text-md)",
             color: "var(--cv-ink)",
             outline: "none",
             fontFamily: "inherit",
@@ -86,12 +87,12 @@ export function SearchPanel({
         />
         <div style={{ overflowY: "auto", padding: "6px" }}>
           {query.trim() && results.length === 0 && (
-            <div style={{ padding: "16px 14px", fontSize: 12, color: "var(--cv-ink-dim)" }}>
+            <div style={{ padding: "16px 14px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)" }}>
               no matches in live transcripts
             </div>
           )}
           {!query.trim() && (
-            <div style={{ padding: "16px 14px", fontSize: 12, color: "var(--cv-ink-dim)" }}>
+            <div style={{ padding: "16px 14px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)" }}>
               searches the last ~64KB of every agent's terminal — all local, nothing leaves this machine
             </div>
           )}
@@ -114,15 +115,15 @@ export function SearchPanel({
                 fontFamily: "inherit",
               }}
             >
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--cv-ink)" }}>
+              <div style={{ fontSize: "var(--cv-text-sm)", fontWeight: 600, color: "var(--cv-ink)" }}>
                 {r.name}
-                <span style={{ fontSize: 10, color: "var(--cv-ink-faint)", marginLeft: 8 }}>{r.status}</span>
+                <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", marginLeft: 8 }}>{r.status}</span>
               </div>
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: "var(--cv-text-xxs)",
                   color: "var(--cv-ink-dim)",
-                  fontFamily: "ui-monospace, monospace",
+                  fontFamily: "var(--cv-font-mono)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
