@@ -52,11 +52,17 @@ const PATHS: Record<string, string[]> = {
   git: ["M6 3v12", "M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M15 6a9 9 0 0 0-9 9"],
   pr: ["M18 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M6 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M13 6h3a2 2 0 0 1 2 2v7", "M6 9v12"],
   issue: ["M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z", "M4 22v-7"],
+  /* GitHub's issue-opened octicon as a line glyph — outer ring + center dot,
+     consistent with the thin stroke of the rest of the set. */
+  "issue-open": ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z", "M12 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"],
   windows: ["M3 5h9v9H3z", "M15 5h6v5h-6z", "M15 12h6v7h-6z", "M3 16h9v3H3z"],
   orchestrator: ["M9 3h6v5H9z", "M3 16h6v5H3z", "M15 16h6v5h-6z", "M12 8v3", "M12 11H6v3", "M12 11h6v3"],
   ticket: ["M3 9V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v3a2 2 0 0 0 0 6v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a2 2 0 0 0 0-6Z", "M13 5v2", "M13 11v2", "M13 17v2"],
   obsidian: ["M12 2l8 6-8 14L4 8z", "M4 8h16", "M12 2L8 8l4 14 4-14z"],
   collapse: ["M4 4h16v16H4z", "M9.5 4v16", "M15 9l-2.5 3 2.5 3"],
+  /* sidebar panel toggle — Deska's Tools header glyph: rounded frame with a
+     left pane division, no caret (crisp at small sizes) */
+  sidebar: ["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M9.5 3v18"],
   expand: ["M9 18l6-6-6-6"],
   download: ["M12 3v11", "M7 10l5 5 5-5", "M4 17v2a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-2"],
   openin: ["M14 4h6v6", "M20 4 10 14", "M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"],

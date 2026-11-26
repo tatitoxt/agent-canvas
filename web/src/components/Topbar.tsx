@@ -274,7 +274,10 @@ export function Topbar({
         // webview — push the bar right so they never sit on the buttons.
         left: isTauri() ? 96 : 58,
         right: 12,
-        zIndex: 15,
+        // Above the pencil (29) and region-shot (30) modal overlays — the
+        // Tools menu is an exit path out of those modes, so it must stay
+        // clickable while they own the canvas pointer.
+        zIndex: 31,
         display: "flex",
         alignItems: "flex-start",
         gap: 8,

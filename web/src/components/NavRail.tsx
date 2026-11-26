@@ -318,7 +318,7 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
     { img: "/obsidian.svg", label: "Obsidian", hint: "your real vault — 'obsidian <note>' in Dex writes to it", onClick: () => onSelect("vault"), key: "vault", color: "#8B5CF6" },
     ...(repoUrl ? [
       { icon: "github", label: "Pull requests", hint: "live list from the repo's GitHub", onClick: () => onSelect("prs"), key: "prs", fact: ghCounts.prs != null ? `${ghCounts.prs} open` : undefined },
-      { icon: "issue", label: "Issues", hint: "live list from the repo's GitHub", onClick: () => onSelect("issues"), key: "issues", fact: ghCounts.issues != null ? `${ghCounts.issues} open` : undefined },
+      { icon: "github", label: "Issues", hint: "live list from the repo's GitHub", onClick: () => onSelect("issues"), key: "issues", fact: ghCounts.issues != null ? `${ghCounts.issues} open` : undefined },
     ] as const : []),
     { icon: "ticket", label: "Dex Tickets", hint: "delegations, status, results and changed files", onClick: () => onSelect("tickets"), key: "tickets" },
     { icon: "notes", label: "Notes", hint: "notes and tasks on the board", onClick: () => onSelect("notes"), key: "notes", fact: noteCount ? `${noteCount}` : undefined },
@@ -332,17 +332,63 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
         key={t.label}
         title={t.hint}
         onClick={t.onClick}
-        style={menuRow}
-        onMouseEnter={(e) => hoverRow(e, true)}
-        onMouseLeave={(e) => hoverRow(e, false)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          width: "100%",
+          padding: "10px 10px",
+          border: "none",
+          background: "transparent",
+          color: t.key && active === t.key ? "var(--cv-ink)" : "color-mix(in srgb, var(--cv-ink) 78%, transparent)",
+          fontSize: 12.5,
+          fontWeight: 500,
+          letterSpacing: 0.1,
+          textAlign: "left",
+          cursor: "pointer",
+          borderRadius: 9,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "var(--cv-glass-hi)";
+          e.currentTarget.style.color = "var(--cv-ink)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "transparent";
+          e.currentTarget.style.color = t.key && active === t.key ? "var(--cv-ink)" : "color-mix(in srgb, var(--cv-ink) 78%, transparent)";
+        }}
       >
-        {t.img ? (
-          <img src={t.img} alt="" width={14} height={14} />
-        ) : (
-          <Icon name={t.icon!} size={15} color={t.color ?? (t.key && active === t.key ? "var(--cv-accent)" : "var(--cv-ink-dim)")} />
-        )}
+        {/* brand marks (github fill, obsidian img) are full-bleed artwork, so
+            they render a touch smaller than the thin line icons — same optical
+            weight, correct brand. Line icons stay phosphor-thin at 16. */}
+        <span style={{ width: 16, height: 16, display: "grid", placeItems: "center", flex: "none" }}>
+          {t.img ? (
+            <img src={t.img} alt="" width={14} height={14} style={{ display: "block" }} />
+          ) : (
+            <Icon
+              name={t.icon!}
+              size={t.icon === "github" ? 14 : 16}
+              color={t.color ?? (t.key && active === t.key ? "var(--cv-accent)" : "var(--cv-ink-dim)")}
+            />
+          )}
+        </span>
         <span style={{ flex: 1 }}>{t.label}</span>
-        {t.fact && <span style={{ fontSize: 9, color: "var(--cv-ink-dim)", fontWeight: 600 }}>{t.fact}</span>}
+        {t.fact && <span style={{ fontSize: 9.5, color: "var(--cv-ink-faint)", fontWeight: 550 }}>{t.fact}</span>}
+        {!t.fact && !!t.badgeN && (
+          <span
+            style={{
+              fontSize: 9.5,
+              fontWeight: 650,
+              color: "var(--cv-ink-dim)",
+              background: "var(--cv-glass-hi)",
+              borderRadius: 999,
+              padding: "1px 6px",
+              minWidth: 16,
+              textAlign: "center",
+            }}
+          >
+            {t.badgeN}
+          </span>
+        )}
       </button>
     ) : (
       <button key={t.label} title={t.hint} onClick={t.onClick} style={btn(!!t.key && active === t.key)}>
@@ -356,33 +402,51 @@ export function NavRail({ active, onSelect }: { active: string; onSelect: (key: 
     );
 
   return (
-    <div ref={railRef} style={{ ...railCol, alignItems: expanded ? "stretch" : "center", width: expanded ? 174 : undefined }}>
+    <div ref={railRef} style={{ ...railCol, alignItems: expanded ? "stretch" : "center", width: expanded ? 196 : undefined }}>
       <nav
-        className={expanded ? "glass cv-menu-scroll" : "glass"}
+        className={expanded ? "glass" : "glass"}
         style={{
           ...bubble,
           pointerEvents: "auto",
           alignItems: expanded ? "stretch" : "center",
-          padding: expanded ? "6px 4px" : bubble.padding,
-          gap: expanded ? 1 : bubble.gap,
-          maxHeight: expanded ? "70vh" : undefined,
-          overflowY: expanded ? "auto" : undefined,
+          padding: expanded ? 0 : bubble.padding,
+          gap: expanded ? 0 : bubble.gap,
+          overflow: expanded ? "hidden" : undefined,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: expanded ? "space-between" : "center", padding: expanded ? "2px 6px 6px" : "2px 0", width: expanded ? "100%" : undefined }}>
-          {expanded && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--cv-ink)" }}>Library</span>}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: expanded ? "space-between" : "center", padding: expanded ? "11px 8px 9px 14px" : "2px 0", width: expanded ? "100%" : undefined }}>
+          {expanded && <span style={{ fontSize: 13, fontWeight: 650, color: "var(--cv-ink)", letterSpacing: 0.2 }}>Library</span>}
           <button
             title={expanded ? "Collapse tools — icons only" : "Library — expand for panel names"}
             aria-label={expanded ? "Collapse Library" : "Expand Library"}
             aria-expanded={expanded}
             onClick={toggleExpanded}
-            style={{ ...tinyBtn(false), borderRadius: 999 }}
+            style={expanded ? { ...tinyBtn(false), width: 24, height: 24 } : { ...tinyBtn(false), borderRadius: 999 }}
           >
-            <Icon name={expanded ? "expand" : "collapse"} size={12} />
+            {/* affordance = the action: expanded shows Deska's sidebar-toggle
+                glyph, collapsed shows the chevron that opens the panel */}
+            <Icon name={expanded ? "sidebar" : "expand"} size={expanded ? 13 : 12} />
           </button>
         </div>
+        {expanded && <div style={{ height: 1, background: "var(--cv-glass-edge)", flex: "none" }} />}
 
-        {tools.map(renderTool)}
+        {expanded ? (
+          <div
+            className="cv-menu-scroll"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+              padding: "8px 8px 10px",
+              maxHeight: "70vh",
+              overflowY: "auto",
+            }}
+          >
+            {tools.map(renderTool)}
+          </div>
+        ) : (
+          tools.map(renderTool)
+        )}
       </nav>
       <div style={{ flex: 1 }} />
 

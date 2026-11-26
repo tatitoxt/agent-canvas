@@ -408,6 +408,8 @@ function Board() {
       } else if (e.key === "Escape" && pencil) {
         setDrawing(null);
         setPencil(false);
+      } else if (e.key === "Escape" && shotMode) {
+        setShotMode(false);
       } else if ((e.metaKey || e.ctrlKey) && e.key === "`") {
         // Pop the selected agent's terminal out as a canvas card, or put an
         // existing card back into the drawer — one keystroke both ways.
@@ -477,7 +479,7 @@ function Board() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pencil]);
+  }, [pencil, shotMode]);
 
   const baseNodes = useMemo<Node<BoardNodeData>[]>(() => {
     const fallbackWorkspaceAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard && a.workspace_id && !positions[a.id]);
@@ -1084,10 +1086,25 @@ function Board() {
       )}
       {pencil && (
         <div
-          style={{ position: "absolute", inset: 0, zIndex: 29, cursor: "crosshair", pointerEvents: drawing ? "auto" : "none" }}
-          onMouseDown={(e) => setDrawing([{ x: e.clientX, y: e.clientY }])}
-          onMouseMove={(e) => { if (drawing) setDrawing([...drawing, { x: e.clientX, y: e.clientY }]); }}
+          /* The overlay must capture the pointer at all times — the old
+             `drawing ? auto : none` trick made it impossible to ever START a
+             stroke (mousedown always fell through to the canvas), so the mode
+             looked dead and felt like a trap. Modal draw surface: while the
+             pencil is on, the canvas below is intentionally not interactive. */
+          style={{ position: "absolute", inset: 0, zIndex: 29, cursor: "crosshair", pointerEvents: "auto" }}
+          onMouseDown={(e) => { if (e.button === 0) setDrawing([{ x: e.clientX, y: e.clientY }]); }}
+          onMouseMove={(e) => {
+            if (!drawing) return;
+            // Mouse released outside the window and re-entered — end the stroke.
+            if (e.buttons === 0) {
+              if (drawing.length > 1) setStrokes((st) => [...st, drawing]);
+              setDrawing(null);
+              return;
+            }
+            setDrawing([...drawing, { x: e.clientX, y: e.clientY }]);
+          }}
           onMouseUp={() => { if (drawing && drawing.length > 1) setStrokes((st) => [...st, drawing]); setDrawing(null); }}
+          onMouseLeave={() => { if (drawing && drawing.length > 1) setStrokes((st) => [...st, drawing]); setDrawing(null); }}
         >
           <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
             {[...strokes, ...(drawing ? [drawing] : [])].map((st, i) => (
@@ -1102,21 +1119,60 @@ function Board() {
               />
             ))}
           </svg>
-          <button
+          {/* Mode indicator + exits — without this there was no visible sign
+             the pencil was on or how to leave it. */}
+          <div
             className="glass-pill"
-            style={{ position: "absolute", right: 20, top: 52, zIndex: 1, fontSize: 10.5, padding: "5px 12px", cursor: "pointer", border: "none", color: "var(--cv-ink-dim)", pointerEvents: "auto" }}
-            onClick={(e) => { e.stopPropagation(); setStrokes([]); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              top: 62,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 9,
+              padding: "5px 6px 5px 13px",
+              cursor: "default",
+              pointerEvents: "auto",
+            }}
           >
-            clear strokes
-          </button>
-          <button
-            className="glass-pill"
-            title="Turn off pencil (Esc)"
-            style={{ position: "absolute", right: 20, top: 84, zIndex: 1, fontSize: 10.5, padding: "5px 12px", cursor: "pointer", border: "none", color: "var(--cv-accent)", pointerEvents: "auto" }}
-            onClick={(e) => { e.stopPropagation(); setDrawing(null); setPencil(false); }}
-          >
-            done drawing
-          </button>
+            <Icon name="draw" size={13} color="var(--cv-accent)" />
+            <span style={{ fontSize: 11.5, fontWeight: 650, color: "var(--cv-ink)" }}>Pencil</span>
+            <span style={{ fontSize: 10, color: "var(--cv-ink-faint)", fontWeight: 500 }}>drag to mark up the canvas</span>
+            <span style={{ width: 1, height: 16, background: "var(--cv-glass-edge)" }} />
+            <button
+              title="Clear every stroke"
+              style={{ border: "none", background: "transparent", fontSize: 10.5, padding: "4px 9px", cursor: "pointer", color: strokes.length ? "var(--cv-ink-dim)" : "var(--cv-ink-faint)", borderRadius: 999, fontWeight: 550 }}
+              onClick={(e) => { e.stopPropagation(); setStrokes([]); }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--cv-glass-hi)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              clear
+            </button>
+            <button
+              title="Turn off pencil — same as Esc or the Pencil item in Tools"
+              style={{
+                border: "none",
+                background: "var(--cv-accent-dim)",
+                fontSize: 10.5,
+                padding: "4px 10px",
+                cursor: "pointer",
+                color: "var(--cv-accent)",
+                borderRadius: 999,
+                fontWeight: 650,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+              onClick={(e) => { e.stopPropagation(); setDrawing(null); setPencil(false); }}
+            >
+              done
+              <kbd style={{ fontSize: 9, fontFamily: "inherit", opacity: 0.75, border: "1px solid color-mix(in srgb, var(--cv-accent) 45%, transparent)", borderRadius: 4, padding: "0 4px" }}>esc</kbd>
+            </button>
+          </div>
         </div>
       )}
       {shotMode && (
