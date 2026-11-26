@@ -422,13 +422,14 @@ type BoardState = {
   /** PTY bytes produced per usage key since this client connected — the
    * UsagePanel's "session" column. */
   sessionUse: Record<string, number>;
-  /** agentId → transcript bytes still to skip metering after (re)connect. */
-  ptySkip: Record<string, number>;
   /** Weekly usage ledger persisted in localStorage (see AcctLedger). */
   acctLedger: AcctLedger;
   /** Meter PTY output into the session + weekly buckets for the
    * agent's account; fires a toast at each weekly-cap threshold. */
   meterOutput: (agentId: string, n: number) => void;
+  /** Ingest one PTY packet: fan out to live terminals immediately, batch the
+   * rolling transcript mirror for React state. */
+  receivePty: (agentId: string, bytes: Uint8Array) => void;
   /** Set a usage key's weekly cap in KB (null resets to the default). */
   setAcctCap: (key: string, kb: number | null) => void;
   /** node_id ("main" or a workspace id) → memory.md text. */
@@ -749,6 +750,51 @@ let client: DaemonTransport | null = null;
 let pendingActivity: Record<string, string> = {};
 let activityFlush: ReturnType<typeof setTimeout> | null = null;
 
+// PTY bytes are high-frequency input events, not UI state. Interactive
+// terminals receive every chunk synchronously through ptyListeners; the
+// zustand mirror used by previews/search/replays is flushed a few times per
+// second so one burst does not translate into one React render per packet.
+const PTY_STATE_FLUSH_MS = 150;
+const pendingPtyChunks = new Map<string, Uint8Array[]>();
+let ptyStateFlush: ReturnType<typeof setTimeout> | null = null;
+
+function mergedPtyBytes(prev: Uint8Array | undefined, chunks: Uint8Array[]): Uint8Array {
+  const pendingLength = chunks.reduce((n, chunk) => n + chunk.length, 0);
+  const merged = new Uint8Array((prev?.length ?? 0) + pendingLength);
+  let offset = 0;
+  if (prev) {
+    merged.set(prev, 0);
+    offset = prev.length;
+  }
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return merged.length > 65_536 ? merged.subarray(merged.length - 65_536) : merged;
+}
+
+function flushPendingPtyState(get: () => BoardState, apply: (patch: Partial<BoardState>) => void) {
+  if (ptyStateFlush) {
+    clearTimeout(ptyStateFlush);
+    ptyStateFlush = null;
+  }
+  if (pendingPtyChunks.size === 0) return;
+  const ptyBuffers = { ...get().ptyBuffers };
+  for (const [agentId, chunks] of pendingPtyChunks) {
+    ptyBuffers[agentId] = mergedPtyBytes(ptyBuffers[agentId], chunks);
+  }
+  pendingPtyChunks.clear();
+  apply({ ptyBuffers });
+}
+
+// Metering needs byte-accurate totals, not byte-accurate React state. Fold
+// packets into a half-second ledger flush and keep transcript-replay skips in
+// module memory (they are internal accounting state; nothing renders them).
+const METER_FLUSH_MS = 500;
+let pendingSessionUse: Record<string, number> = {};
+let meterFlush: ReturnType<typeof setTimeout> | null = null;
+const ptySkipBytes = new Map<string, number>();
+
 const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
   new URLSearchParams(location.search).get("token") ??
   "";
@@ -839,7 +885,6 @@ export const useBoard = create<BoardState>((set, get) => ({
   ptyBuffers: {},
   ptySize: {},
   sessionUse: {},
-  ptySkip: {},
   acctLedger: loadLedger(),
 
   connect: (token: string) => {
@@ -1261,8 +1306,11 @@ export const useBoard = create<BoardState>((set, get) => ({
             // them once instead of appending duplicate history. Exited-agent
             // transcripts are requested separately when their view mounts.
             const ptyBuffers = { ...get().ptyBuffers };
+            ptySkipBytes.clear();
             for (const a of msg.agents) {
+              ptySkipBytes.set(a.agent_id, replayedPtyBytes(a.output_bytes));
               if (a.status === "exited") continue;
+              pendingPtyChunks.delete(a.agent_id);
               delete ptyBuffers[a.agent_id];
               resetScreen(a.agent_id);
               get().ptyListeners[a.agent_id]?.forEach((cb) => cb(null));
@@ -1270,11 +1318,6 @@ export const useBoard = create<BoardState>((set, get) => ({
             set({
               agents,
               ptyBuffers,
-              // Scrollback replayed on (re)connect isn't new output —
-              // meterOutput skips up to each agent's transcript size.
-              ptySkip: Object.fromEntries(
-                msg.agents.map((a) => [a.agent_id, replayedPtyBytes(a.output_bytes)]),
-              ),
               positions,
               edges,
               workspaces,
@@ -1394,15 +1437,7 @@ export const useBoard = create<BoardState>((set, get) => ({
         }
       },
       onPty: (agentId: string, bytes: Uint8Array) => {
-        const prev = get().ptyBuffers[agentId];
-        const merged = new Uint8Array((prev?.length ?? 0) + bytes.length);
-        if (prev) merged.set(prev, 0);
-        merged.set(bytes, prev?.length ?? 0);
-        const capped =
-          merged.length > 65_536 ? merged.subarray(merged.length - 65_536) : merged;
-        set({ ptyBuffers: { ...get().ptyBuffers, [agentId]: capped } });
-        get().ptyListeners[agentId]?.forEach((cb) => cb(bytes));
-        get().meterOutput(agentId, bytes.length);
+        get().receivePty(agentId, bytes);
       },
       onClose: () => {
         client = null;
@@ -1492,6 +1527,20 @@ export const useBoard = create<BoardState>((set, get) => ({
   createAccount: (cli, label, env) => client?.createAccount(cli, label, env),
   deleteAccount: (accountId) => client?.deleteAccount(accountId),
 
+  receivePty: (agentId, bytes) => {
+    const chunks = pendingPtyChunks.get(agentId) ?? [];
+    chunks.push(bytes);
+    pendingPtyChunks.set(agentId, chunks);
+    if (!ptyStateFlush) {
+      ptyStateFlush = setTimeout(() => {
+        ptyStateFlush = null;
+        flushPendingPtyState(get, (patch) => set(patch));
+      }, PTY_STATE_FLUSH_MS);
+    }
+    get().ptyListeners[agentId]?.forEach((cb) => cb(bytes));
+    get().meterOutput(agentId, bytes.length);
+  },
+
   meterOutput: (agentId, n) => {
     const a = get().agents[agentId];
     // Exited agents only emit transcript replays — not new work.
@@ -1499,40 +1548,50 @@ export const useBoard = create<BoardState>((set, get) => ({
     // (Re)connect replays each running agent's scrollback through onPty
     // before live bytes — skip up to its transcript size so history
     // doesn't double-count toward usage.
-    const skip = get().ptySkip[agentId] ?? 0;
+    const skip = ptySkipBytes.get(agentId) ?? 0;
     if (skip > 0) {
       const rest = Math.max(0, n - skip);
-      set({ ptySkip: { ...get().ptySkip, [agentId]: Math.max(0, skip - n) } });
+      ptySkipBytes.set(agentId, Math.max(0, skip - n));
       if (rest === 0) return;
       n = rest;
     }
     const key = agentAcctKey(a, Object.values(get().accounts));
-    const ledger = get().acctLedger;
-    // Roll the bucket when the ISO week changed under a running session.
-    const l = ledger.week === isoWeek() ? ledger : { ...ledger, week: isoWeek(), bytes: {}, fired: {} };
-    const weekBytes = (l.bytes[key] ?? 0) + n;
-    const next: AcctLedger = {
-      ...l,
-      bytes: { ...l.bytes, [key]: weekBytes },
-    };
-    const capKb = l.caps[key] ?? DEFAULT_WEEK_CAP_KB;
-    const pct = (weekBytes / 1024 / capKb) * 100;
-    // Fire the highest unmet milestone and mark everything below it too —
-    // a burst that jumps 15%→60% toasts "50%" once, not four times.
-    let mask = l.fired[key] ?? 0;
-    for (let i = WEEK_MILESTONES.length - 1; i >= 0; i--) {
-      if (pct >= WEEK_MILESTONES[i] && !(mask & (1 << i))) {
-        mask |= (2 << i) - 1; // this milestone and every one below it
-        next.fired = { ...l.fired, [key]: mask };
-        get().notify(`${acctLabel(key)} hit ${WEEK_MILESTONES[i]}% of the week`);
-        break;
+    pendingSessionUse[key] = (pendingSessionUse[key] ?? 0) + n;
+    if (meterFlush) return;
+    meterFlush = setTimeout(() => {
+      meterFlush = null;
+      const pending = pendingSessionUse;
+      pendingSessionUse = {};
+      const ledger = get().acctLedger;
+      // Roll the bucket when the ISO week changed under a running session.
+      const l = ledger.week === isoWeek() ? ledger : { ...ledger, week: isoWeek(), bytes: {}, fired: {} };
+      const bytes = { ...l.bytes };
+      const fired = { ...l.fired };
+      const sessionUse = { ...get().sessionUse };
+      const notifications: string[] = [];
+      for (const [usageKey, count] of Object.entries(pending)) {
+        const weekBytes = (bytes[usageKey] ?? 0) + count;
+        bytes[usageKey] = weekBytes;
+        sessionUse[usageKey] = (sessionUse[usageKey] ?? 0) + count;
+        const capKb = l.caps[usageKey] ?? DEFAULT_WEEK_CAP_KB;
+        const pct = (weekBytes / 1024 / capKb) * 100;
+        // Fire the highest unmet milestone and mark everything below it too —
+        // a burst that jumps 15%→60% toasts "50%" once, not four times.
+        let mask = fired[usageKey] ?? 0;
+        for (let i = WEEK_MILESTONES.length - 1; i >= 0; i--) {
+          if (pct >= WEEK_MILESTONES[i] && !(mask & (1 << i))) {
+            mask |= (2 << i) - 1; // this milestone and every one below it
+            fired[usageKey] = mask;
+            notifications.push(`${acctLabel(usageKey)} hit ${WEEK_MILESTONES[i]}% of the week`);
+            break;
+          }
+        }
       }
-    }
-    saveLedger(next);
-    set({
-      acctLedger: next,
-      sessionUse: { ...get().sessionUse, [key]: (get().sessionUse[key] ?? 0) + n },
-    });
+      const next: AcctLedger = { ...l, bytes, fired };
+      saveLedger(next);
+      set({ acctLedger: next, sessionUse });
+      notifications.forEach((text) => get().notify(text));
+    }, METER_FLUSH_MS);
   },
   setAcctCap: (key, kb) => {
     const l = { ...get().acctLedger, caps: { ...get().acctLedger.caps } };
@@ -3248,7 +3307,10 @@ export const useBoard = create<BoardState>((set, get) => ({
     reply(r.startsWith("try:") ? `can't parse that — ${r}` : r);
   },
 
-  ptyBuffer: (agentId) => get().ptyBuffers[agentId],
+  ptyBuffer: (agentId) => {
+    flushPendingPtyState(get, (patch) => set(patch));
+    return get().ptyBuffers[agentId];
+  },
 
   attachPty: (agentId, cb) =>
     set((s) => {
