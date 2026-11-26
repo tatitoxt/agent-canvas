@@ -68,7 +68,7 @@ function IconBtn({ icon, label, text, onClick, active, size = 14 }: {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        width: 24,
+        width: 22,
         height: 22,
         flexShrink: 0,
         border: "none",
@@ -1003,7 +1003,7 @@ function FileTree({ entries, collapsed, toggle, vaultFile, onOpen, onPin, onBook
             textAlign: "left", border: "none",
             background: "transparent",
             color: vaultFile?.path === e ? "var(--cv-ink)" : "var(--cv-ink-dim)",
-            fontSize: 11.5, padding: "3px 6px", paddingLeft: pad + 12,
+            fontSize: 11.5, padding: "3px 6px", paddingLeft: pad + 15,
             borderRadius: 5, cursor: "pointer",
           }}
         >
@@ -1440,8 +1440,10 @@ export function VaultPanel() {
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          padding: "12px 10px 8px",
-          overflow: "hidden",
+          padding: "10px 6px 8px",
+          // no overflow hidden here — the tree scrollbox clips itself, and
+          // the header dropdowns must be free to overlap the reader pane
+          // (a narrower clip would cut their text off mid-row).
           borderRight: "1px solid var(--cv-glass-edge)",
         }}
       >
@@ -1449,12 +1451,16 @@ export function VaultPanel() {
       {/* Explorer header — the vault's name plus one compact row of icon
           actions, Obsidian-style. The actions group is a single flex item
           inside a wrapping row: when the column gets too narrow the whole
-          group drops to a second row — buttons never overlap the name. */}
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 2, rowGap: 3, padding: "0 4px 7px" }}>
+          group drops to a second row — buttons never overlap the name.
+          The dropdowns anchor to this wrapper's bottom edge (whatever the
+          wrap state) and open rightward over the reader pane, the way a
+          menu is meant to overlap — the column itself must not clip them. */}
+      <div style={{ position: "relative", flexShrink: 0 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 2, rowGap: 3, padding: "0 2px 7px" }}>
         <span
           title={vaultDir ? vaultDir : undefined}
           style={{
-            flex: "1 1 40px", minWidth: 0,
+            flex: "1 1 56px", minWidth: 0,
             fontSize: 12, fontWeight: 700, letterSpacing: 0.2,
             color: "var(--cv-ink)",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -1463,14 +1469,7 @@ export function VaultPanel() {
         >
           {vaultDir ? vaultName : "Vault"}
         </span>
-        <div style={{ position: "relative", flex: "0 0 auto", marginLeft: "auto", display: "flex", alignItems: "center", gap: 1 }}>
-          {(genOpen || newNote || moreOpen) && (
-            <div
-              style={{ position: "fixed", inset: 0, zIndex: 45 }}
-              onClick={() => { setGenOpen(false); setNewNote(false); setMoreOpen(false); }}
-              onContextMenu={(e) => e.preventDefault()}
-            />
-          )}
+        <div style={{ flex: "0 0 auto", marginLeft: "auto", display: "flex", alignItems: "center", gap: 1 }}>
           {vaultDir && (
             <IconBtn icon="ph-calendar" label="open today's daily note (creates Daily/YYYY-MM-DD.md)" text="today" size={13} onClick={openDaily} />
           )}
@@ -1502,54 +1501,62 @@ export function VaultPanel() {
               onClick={() => { setMoreOpen((o) => !o); setGenOpen(false); setNewNote(false); }}
             />
           )}
-          {genOpen && (
-            <div className="cv-menu" style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: 240, padding: 8, zIndex: 50 }}>
-              <GeneratePdfMenu onPick={generate} onAsk={askAnything} />
-            </div>
-          )}
-          {newNote && (
-            <form
-              className="cv-menu"
-              style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: 220, padding: 8, zIndex: 50, display: "flex", gap: 6 }}
-              onSubmit={(e) => { e.preventDefault(); createNote(); }}
-            >
-              <input
-                autoFocus
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="folder/note name"
-                style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 8, padding: "5px 9px", fontSize: 11, color: "var(--cv-ink)", outline: "none" }}
-              />
-              <button type="submit" style={{ fontSize: 10.5, color: "var(--cv-accent)", background: "none", border: "none", cursor: "pointer" }}>create</button>
-            </form>
-          )}
-          {moreOpen && (
-            <div className="cv-menu" style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", width: 210, padding: 5, zIndex: 50 }}>
-              {[
-                {
-                  label: switchOpen ? "Close vault switcher" : "Switch vault…",
-                  fn: () => { setSwitchOpen((o) => !o); setMoreOpen(false); },
-                },
-                ...(vaultDir && !activeVault
-                  ? [{ label: "Register in Obsidian's vault list", fn: () => { vaultRegister(vaultDir); notify("registered in Obsidian's vault list"); setMoreOpen(false); } }]
-                  : []),
-                {
-                  label: "Detect vaults on this machine",
-                  fn: () => { vaultDiscover(); setSwitchOpen(true); setMoreOpen(false); },
-                },
-              ].map((it) => (
-                <button
-                  key={it.label}
-                  onClick={it.fn}
-                  className="vp-menuitem"
-                  style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", color: "var(--cv-ink)", fontSize: 11.5, padding: "6px 10px", borderRadius: 8, cursor: "pointer" }}
-                >
-                  {it.label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
+      </div>
+      {(genOpen || newNote || moreOpen) && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 45 }}
+          onClick={() => { setGenOpen(false); setNewNote(false); setMoreOpen(false); }}
+          onContextMenu={(e) => e.preventDefault()}
+        />
+      )}
+      {genOpen && (
+        <div className="cv-menu" style={{ position: "absolute", left: 2, top: "calc(100% - 4px)", width: 240, padding: 8, zIndex: 50 }}>
+          <GeneratePdfMenu onPick={generate} onAsk={askAnything} />
+        </div>
+      )}
+      {newNote && (
+        <form
+          className="cv-menu"
+          style={{ position: "absolute", left: 2, top: "calc(100% - 4px)", width: 224, padding: 8, zIndex: 50, display: "flex", gap: 6 }}
+          onSubmit={(e) => { e.preventDefault(); createNote(); }}
+        >
+          <input
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="folder/note name"
+            style={{ flex: 1, minWidth: 0, background: "var(--cv-glass-hi)", border: "1px solid var(--cv-glass-edge)", borderRadius: 8, padding: "5px 9px", fontSize: 11, color: "var(--cv-ink)", outline: "none" }}
+          />
+          <button type="submit" style={{ fontSize: 10.5, color: "var(--cv-accent)", background: "none", border: "none", cursor: "pointer" }}>create</button>
+        </form>
+      )}
+      {moreOpen && (
+        <div className="cv-menu" style={{ position: "absolute", left: 2, top: "calc(100% - 4px)", width: 216, padding: 5, zIndex: 50 }}>
+          {[
+            {
+              label: switchOpen ? "Close vault switcher" : "Switch vault…",
+              fn: () => { setSwitchOpen((o) => !o); setMoreOpen(false); },
+            },
+            ...(vaultDir && !activeVault
+              ? [{ label: "Register in Obsidian's vault list", fn: () => { vaultRegister(vaultDir); notify("registered in Obsidian's vault list"); setMoreOpen(false); } }]
+              : []),
+            {
+              label: "Detect vaults on this machine",
+              fn: () => { vaultDiscover(); setSwitchOpen(true); setMoreOpen(false); },
+            },
+          ].map((it) => (
+            <button
+              key={it.label}
+              onClick={it.fn}
+              className="vp-menuitem"
+              style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", color: "var(--cv-ink)", fontSize: 11.5, padding: "6px 10px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}
+            >
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
       </div>
       {/* Vault setup — the path bar only earns permanent space while no
           vault is connected. With a live vault it unfolds on demand from
@@ -1669,7 +1676,7 @@ export function VaultPanel() {
                   textAlign: "left", border: "none",
                   background: "transparent",
                   color: vaultFile?.path === e ? "var(--cv-ink)" : "var(--cv-ink-dim)",
-                  fontSize: 11.5, padding: "3px 6px", paddingLeft: 16, borderRadius: 5, cursor: "pointer",
+                  fontSize: 11.5, padding: "3px 6px", paddingLeft: 19, borderRadius: 5, cursor: "pointer",
                 }}
               >
                 <Icon name="ph-file" size={12} color={vaultFile?.path === e ? "var(--cv-accent)" : "var(--cv-ink-faint)"} />
@@ -1702,7 +1709,7 @@ export function VaultPanel() {
                   textAlign: "left", border: "none",
                   background: "transparent",
                   color: vaultFile?.path === e ? "var(--cv-ink)" : "var(--cv-ink-dim)",
-                  fontSize: 11.5, padding: "3px 6px", paddingLeft: 16, borderRadius: 5, cursor: "pointer",
+                  fontSize: 11.5, padding: "3px 6px", paddingLeft: 19, borderRadius: 5, cursor: "pointer",
                 }}
               >
                 <Icon name="ph-file" size={12} color={vaultFile?.path === e ? "var(--cv-accent)" : "var(--cv-ink-faint)"} />
