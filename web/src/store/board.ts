@@ -2002,6 +2002,10 @@ export const useBoard = create<BoardState>((set, get) => ({
     set({ mdNodes: next });
     client?.moveNode(id, at?.x ?? 300 + Math.random() * 200, at?.y ?? 140 + Math.random() * 160);
     client?.vaultRead(get().vaultDir, path);
+    // Pinning a note is an explicit user action — the card must surface
+    // above the board instead of landing underneath existing agent cards,
+    // same as panel/term cards already do.
+    get().bringCardToFront(id);
   },
   mdNodeRemove: (id) => {
     const board = get().activeBoard;
@@ -2319,6 +2323,9 @@ export const useBoard = create<BoardState>((set, get) => ({
     } else {
       set({ shapes: next });
     }
+    // A pin is an explicit "put this in front of me" action — surface the
+    // card above whatever is already on the board, same as panel/term cards.
+    get().bringCardToFront(id);
   },
 
   moveShape: (id, x, y) => {
