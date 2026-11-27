@@ -697,14 +697,49 @@ export function VaultPanel() {
   );
   const tree = buildTree(filter ? shown : vaultEntries);
   const vaultName = activeVault?.name ?? vaultDir.replace(/\/+$/, "").split("/").pop() ?? "vault";
+  /** Heading currently at the top of the reading scrollport — the pin
+   * carries it so the canvas window opens scrolled to the same place the
+   * user was reading, like Deska's heading-anchored pins. */
+  const visibleHeading = (): string | null => {
+    const root = document.querySelector('.react-flow__node[data-id="panel-vault"]');
+    if (!root) return null;
+    const els = Array.from(root.querySelectorAll('[id^="vh-"]')) as HTMLElement[];
+    if (!els.length) return null;
+    let sc: HTMLElement | null = els[0].parentElement;
+    while (sc && sc !== root) {
+      const oy = getComputedStyle(sc).overflowY;
+      if ((oy === "auto" || oy === "scroll") && sc.scrollHeight > sc.clientHeight) break;
+      sc = sc.parentElement;
+    }
+    if (!sc || sc === (root as unknown as HTMLElement)) return null;
+    const top = sc.getBoundingClientRect().top;
+    let current: HTMLElement | null = null;
+    for (const el of els) {
+      if (el.getBoundingClientRect().top <= top + 8) current = el;
+      else break;
+    }
+    if (!current) return null;
+    const line = Number(current.id.slice(3));
+    const h = headings.find((x) => x.line === line);
+    return h ? h.title.trim().toLowerCase() : null;
+  };
+
   const pinCurrentNote = () => {
     if (!vaultFile) return;
     const state = useBoard.getState();
+    const board = state.activeBoard;
+    // Anchor-adjacent placement: the pinned window lands just right of the
+    // vault card it came from (slightly below its top edge), falling back to
+    // a viewport-relative spot when the panel isn't on the canvas.
+    const panel = state.panelNodes[board]?.["panel-vault"];
     const viewport = state.viewportRect;
-    const position = viewport
-      ? { x: viewport.left + (viewport.right - viewport.left) * 0.34, y: viewport.top + (viewport.bottom - viewport.top) * 0.24 }
-      : undefined;
-    mdNodeAdd(vaultFile.path, undefined, position);
+    const position = panel
+      ? { x: panel.x + panel.w + 40, y: panel.y + 48 }
+      : viewport
+        ? { x: viewport.left + (viewport.right - viewport.left) * 0.34, y: viewport.top + (viewport.bottom - viewport.top) * 0.24 }
+        : undefined;
+    const heading = visibleHeading() ?? undefined;
+    mdNodeAdd(vaultFile.path, undefined, position, heading);
     state.closePanelNode("panel-vault");
     state.requestNav("canvas");
     state.requestView();

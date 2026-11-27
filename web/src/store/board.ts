@@ -563,8 +563,11 @@ type BoardState = {
   mdContents: Record<string, string>;
   /** Binary vault assets (images) as data URLs — filled by vault_asset. */
   vaultAssets: Record<string, string>;
-  mdNodeAdd: (path: string, anchor?: string, at?: { x: number; y: number }) => void;
+  mdNodeAdd: (path: string, anchor?: string, at?: { x: number; y: number }, heading?: string) => void;
   mdNodeRemove: (id: string) => void;
+  /** Heading anchor (normalized lowercase title) a markdown window was
+   * pinned at — the window scrolls there on mount. Keyed board -> node id. */
+  mdHeadings: Record<string, Record<string, string>>;
   /** Tool panels living ON the canvas as nodes (Deska "Add to board") —
    * each renders the live panel UI inside a card: movable, resizable,
    * closable. Keyed per board; node id is `panel-<key>`. */
@@ -1750,6 +1753,9 @@ export const useBoard = create<BoardState>((set, get) => ({
   mdNodeSizes: (() => {
     try { return JSON.parse(localStorage.getItem("cv-mdnodesizes") ?? "{}"); } catch { return {}; }
   })(),
+  mdHeadings: (() => {
+    try { return JSON.parse(localStorage.getItem("cv-mdheadings") ?? "{}"); } catch { return {}; }
+  })(),
   resizeMdNode: (id, w, h, persist = true, boardId = get().activeBoard, pos) => {
     const next = { ...get().mdNodeSizes, [`${boardId}:${id}`]: { w: Math.max(260, w), h: Math.max(180, h) } };
     if (persist) localStorage.setItem("cv-mdnodesizes", JSON.stringify(next));
@@ -2025,7 +2031,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   anchors: (() => {
     try { return JSON.parse(localStorage.getItem("cv-anchors") ?? "{}"); } catch { return {}; }
   })(),
-  mdNodeAdd: (path, anchor, at) => {
+  mdNodeAdd: (path, anchor, at, heading) => {
     const board = get().activeBoard;
     const existing = Object.entries(get().mdNodes[board] ?? {}).find(([, notePath]) => notePath === path)?.[0];
     if (existing) {
@@ -2040,8 +2046,18 @@ export const useBoard = create<BoardState>((set, get) => ({
       localStorage.setItem("cv-anchors", JSON.stringify(a));
       set({ anchors: a });
     }
-    set({ mdNodes: next });
-    client?.moveNode(id, at?.x ?? 300 + Math.random() * 200, at?.y ?? 140 + Math.random() * 160);
+    if (heading) {
+      const hs = { ...get().mdHeadings, [board]: { ...(get().mdHeadings[board] ?? {}), [id]: heading } };
+      localStorage.setItem("cv-mdheadings", JSON.stringify(hs));
+      set({ mdHeadings: hs });
+    }
+    // Echo the position locally the same instant — web nodes already do this;
+    // waiting for the daemon's layout replay left pinned notes at the fallback
+    // spot until a reload.
+    const px = at?.x ?? 300 + Math.random() * 200;
+    const py = at?.y ?? 140 + Math.random() * 160;
+    set({ mdNodes: next, positions: { ...get().positions, [id]: { x: px, y: py } } });
+    client?.moveNode(id, px, py);
     client?.vaultRead(get().vaultDir, path);
     // Pinning a note is an explicit user action — the card must surface
     // above the board instead of landing underneath existing agent cards,
@@ -2054,6 +2070,13 @@ export const useBoard = create<BoardState>((set, get) => ({
     delete m[id];
     const next = { ...get().mdNodes, [board]: m };
     localStorage.setItem("cv-mdnodes", JSON.stringify(next));
+    if (get().mdHeadings[board]?.[id]) {
+      const hb = { ...(get().mdHeadings[board] ?? {}) };
+      delete hb[id];
+      const hs = { ...get().mdHeadings, [board]: hb };
+      localStorage.setItem("cv-mdheadings", JSON.stringify(hs));
+      set({ mdHeadings: hs });
+    }
     set({ mdNodes: next });
   },
   artifactCreate: (kind, title, path, text) =>
