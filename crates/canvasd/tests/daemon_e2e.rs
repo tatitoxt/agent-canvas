@@ -1317,6 +1317,69 @@ async fn deny_dropped_prompt_does_not_retry_on_fallback() {
     );
 }
 
+/// Long-prompt regression: input written while the PTY is still in
+/// canonical mode is subject to the kernel's ~4KB canonical line buffer —
+/// a long prompt written that early would silently truncate even though
+/// write() reports success. The injection defers the bytes until the
+/// launcher's stty has reconfigured the terminal, so a 6000-byte prompt
+/// must arrive intact. Chain of one: no fallback involved.
+#[cfg(unix)]
+#[tokio::test]
+async fn long_automation_prompt_arrives_untruncated() {
+    let d = Daemon::start();
+    let prompt_log = d.home.join("long-prompt.log");
+    install_fake_clis(&d.home, &[("claude", stdin_logger_script(&prompt_log))]);
+
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .expect("ws connect");
+    let _ = next_ctrl(&mut ws, Duration::from_secs(5)).await;
+    let ws_id = workspace_with_chain(&mut ws, &d, &["claude"]).await;
+
+    // 6000 bytes of prompt — past the 4095-byte canonical line cap.
+    let long_prompt = format!("sum{}rise", "x".repeat(6000));
+    ws.send(Message::Text(
+        json!({
+            "cmd": "create_automation",
+            "name": "long-runner",
+            "prompt": long_prompt,
+            "command": "claude",
+            "workspace_id": ws_id,
+            "permission": "auto",
+            "idle_secs": 300,
+            "on_approval": "hold"
+        })
+        .to_string()
+        .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(4), |m| {
+        m["type"] == "automation_saved"
+    })
+    .await;
+    let auto_id = seen
+        .iter()
+        .find(|m| m["type"] == "automation_saved")
+        .unwrap()["automation"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    ws.send(Message::Text(
+        json!({"cmd":"run_automation","automation_id":auto_id})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    let _ = collect_until(&mut ws, Duration::from_secs(5), |m| m["type"] == "spawned").await;
+
+    assert!(
+        file_contains(&prompt_log, &long_prompt, Duration::from_secs(6)).await,
+        "long prompt must arrive untruncated — canonical-mode truncation is silent"
+    );
+}
+
 /// Held input keyed to a dead agent can never be approved — the exit
 /// watcher drops it. Chain of one here (no fallback): the supervised
 /// agent's held input must be gone once the process exits, so a late

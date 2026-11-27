@@ -3062,12 +3062,21 @@ fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
                 }
             }
             if write_prompt {
-                if let Err(e) = state.agents.write(&agent_id, bytes.as_bytes()) {
-                    // A write failure this early means the PTY is already
-                    // dying — the chain fallback owns the retry, so this
-                    // only needs the log trail.
-                    warn!(error = %e, agent_id, "automation prompt write failed");
-                }
+                // The disposition is decided synchronously (the gate needs
+                // it), but the bytes themselves wait for the launcher's
+                // `stty -icanon` to reconfigure the PTY: input written
+                // while the terminal is still in canonical mode is subject
+                // to the kernel's ~4KB canonical line buffer — a long
+                // prompt would silently truncate even though write()
+                // reports success. The delay is ordering-only: if the CLI
+                // dies in the meantime the write simply fails and the
+                // fallback copy owns the retry.
+                let st = state.clone();
+                let target = agent_id.clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+                    gated_write(&st, &target, &bytes.into_bytes());
+                });
             }
             // Prompt disposition vs. fallback retry:
             // - written or held: the fallback-state copy STAYS — fallback
