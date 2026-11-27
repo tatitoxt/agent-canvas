@@ -74,4 +74,40 @@ describe("Tauri PTY startup replay", () => {
     await vi.waitFor(() => expect(errors).toHaveLength(1));
     expect(errors[0]).toBe("pty open failed");
   });
+
+  it("forwards setAgentChain to the native command with the workspace's chain", async () => {
+    tauriMocks.listen.mockImplementation(async () => () => {});
+    tauriMocks.invoke.mockImplementation((cmd: string) => {
+      if (cmd === "snapshot") return Promise.resolve({ type: "snapshot" });
+      return Promise.resolve(null);
+    });
+    const client = new TauriCanvasClient({ onControl: () => {}, onPty: () => {} });
+
+    client.setAgentChain("ws-1", ["claude", "codex"]);
+    await vi.waitFor(() =>
+      expect(tauriMocks.invoke).toHaveBeenCalledWith("set_agent_chain", {
+        workspaceId: "ws-1",
+        chain: ["claude", "codex"],
+      }),
+    );
+  });
+
+  it("surfaces a rejected set_agent_chain invoke through onError", async () => {
+    tauriMocks.listen.mockImplementation(async () => () => {});
+    tauriMocks.invoke.mockImplementation((cmd: string) => {
+      if (cmd === "snapshot") return Promise.resolve({ type: "snapshot" });
+      if (cmd === "set_agent_chain") return Promise.reject("no such workspace");
+      return Promise.resolve(null);
+    });
+    const errors: string[] = [];
+    const client = new TauriCanvasClient({
+      onControl: () => {},
+      onPty: () => {},
+      onError: (message) => errors.push(message),
+    });
+
+    client.setAgentChain("ws-gone", ["codex"]);
+    await vi.waitFor(() => expect(errors).toHaveLength(1));
+    expect(errors[0]).toBe("no such workspace");
+  });
 });

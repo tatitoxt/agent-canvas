@@ -53,9 +53,10 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
     setItems(null);
     setErr(null);
     // canvasd proxies api.github.com (gh CLI auth when installed) — no
-    // anonymous rate limit and private repos work too. No daemon → direct.
-    const base =
-      location.port === "5174" ? "http://127.0.0.1:4242" : location.origin;
+    // anonymous rate limit and private repos work too. The origin reaches
+    // it directly (canvasd-served build) or through the vite dev proxy;
+    // no daemon backing this page (Tauri shell) → direct anonymous API.
+    const base = location.origin;
     const gh = (rest: string) =>
       fetch(`${base}/api/github/${rest}`, {
         headers: { Authorization: `Bearer ${TOKEN}` },
