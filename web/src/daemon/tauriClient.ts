@@ -89,8 +89,11 @@ export class TauriCanvasClient {
     );
   }
 
-  resize(agentId: string, cols: number, rows: number) {
-    return invoke("pty_resize", { agentId, cols, rows }).then(() => true, (error) => {
+  resize(agentId: string, cols: number, rows: number, requestId?: string): Promise<boolean> {
+    return invoke("pty_resize", { agentId, cols, rows }).then(() => {
+      if (requestId) this.handlers.onControl({ type: "pty_resized", agent_id: agentId, request_id: requestId });
+      return true;
+    }, (error) => {
       console.error(error);
       return false;
     });

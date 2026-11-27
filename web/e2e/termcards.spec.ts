@@ -429,7 +429,11 @@ test("reconnecting rebuilds a live terminal from scrollback without duplicate hi
   await expect.poll(markerCount).toBeGreaterThan(0);
   const beforeReconnect = await markerCount();
 
-  await page.evaluate(() => (window as any).__canvasSockets[0].close());
+  await page.evaluate(() => {
+    const socket = (window as any).__canvasSockets[0] as WebSocket;
+    socket.onclose = null;
+    socket.close();
+  });
   await page.waitForFunction(() => (window as any).__canvasSockets.length >= 2, { timeout: 12_000 });
   await expect(page.locator("[data-testid='daemon-status']")).toHaveAttribute("aria-label", "Canvas daemon connected", { timeout: 12_000 });
   await expect.poll(markerCount).toBe(beforeReconnect);

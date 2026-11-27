@@ -1399,14 +1399,21 @@ fn handle_client_msg(text: &str, state: &Arc<AppState>, send_control: &impl Fn(S
             agent_id,
             cols,
             rows,
-        } => {
-            if let Err(e) = state.agents.resize(&agent_id, cols, rows) {
-                send_control(ServerMsg::Error {
-                    agent_id: Some(agent_id),
-                    message: e.to_string(),
-                });
+            request_id,
+        } => match state.agents.resize(&agent_id, cols, rows) {
+            Ok(()) => {
+                if let Some(request_id) = request_id {
+                    send_control(ServerMsg::PtyResized {
+                        agent_id,
+                        request_id,
+                    });
+                }
             }
-        }
+            Err(e) => send_control(ServerMsg::Error {
+                agent_id: Some(agent_id),
+                message: e.to_string(),
+            }),
+        },
         ClientMsg::ConfirmDestructive { agent_id, action } => {
             // The ONLY path to destructive actions — never prompt text.
             match action.as_str() {

@@ -232,6 +232,8 @@ pub enum ClientMsg {
         agent_id: String,
         cols: u16,
         rows: u16,
+        #[serde(default)]
+        request_id: Option<String>,
     },
     KillAgent {
         agent_id: String,
@@ -450,6 +452,10 @@ pub enum ServerMsg {
     Error {
         agent_id: Option<String>,
         message: String,
+    },
+    PtyResized {
+        agent_id: String,
+        request_id: String,
     },
     Delegation {
         edge_id: String,

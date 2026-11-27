@@ -503,7 +503,7 @@ type BoardState = {
   /** Last known PTY size per agent (daemon default 80×24). */
   ptySize: Record<string, { cols: number; rows: number }>;
   /** Latest resize not accepted by the transport yet; only these are replayed after reconnect. */
-  pendingPtyResize: Record<string, { cols: number; rows: number }>;
+  pendingPtyResize: Record<string, { cols: number; rows: number; requestId: string }>;
   connect: (token: string) => void;
   setActiveBoard: (boardId: string) => void;
   createBoard: (name: string) => void;
@@ -1092,6 +1092,11 @@ export const useBoard = create<BoardState>((set, get) => ({
           }
           case "status":
             if (agents[msg.agent_id]) {
+              if (msg.status === "exited") {
+                const pendingPtyResize = { ...get().pendingPtyResize };
+                delete pendingPtyResize[msg.agent_id];
+                set({ pendingPtyResize });
+              }
               set({
                 agents: {
                   ...agents,
@@ -1278,6 +1283,9 @@ export const useBoard = create<BoardState>((set, get) => ({
                 },
               ]),
             );
+            const pendingPtyResize = Object.fromEntries(
+              Object.entries(get().pendingPtyResize).filter(([agentId]) => agents[agentId]),
+            );
             const accounts = Object.fromEntries(
               (msg.accounts ?? []).map((a) => [a.account_id, a]),
             );
@@ -1353,6 +1361,7 @@ export const useBoard = create<BoardState>((set, get) => ({
             }
             set({
               agents,
+              pendingPtyResize,
               ptyBuffers,
               positions,
               edges,
@@ -1468,6 +1477,15 @@ export const useBoard = create<BoardState>((set, get) => ({
             get().notify(`error — ${msg.message}`);
             console.error("[canvasd]", msg.message);
             break;
+          case "pty_resized": {
+            const pending = get().pendingPtyResize[msg.agent_id];
+            if (pending?.requestId === msg.request_id) {
+              const pendingPtyResize = { ...get().pendingPtyResize };
+              delete pendingPtyResize[msg.agent_id];
+              set({ pendingPtyResize });
+            }
+            break;
+          }
           default:
             break;
         }
@@ -1505,9 +1523,32 @@ export const useBoard = create<BoardState>((set, get) => ({
       const state = get();
       const pending = state.pendingPtyResize;
       for (const [agentId, size] of Object.entries(pending)) {
-        if (state.agents[agentId]?.status !== "exited") void openingClient.resize(agentId, size.cols, size.rows);
+        const requestId = crypto.randomUUID();
+        if (!state.agents[agentId] || state.agents[agentId].status === "exited") {
+          const rest = { ...get().pendingPtyResize };
+          delete rest[agentId];
+          set({ pendingPtyResize: rest });
+          continue;
+        }
+        const accepted = openingClient.resize(agentId, size.cols, size.rows, requestId);
+        if (accepted instanceof Promise) {
+          void accepted.then((ok) => {
+            const latest = get().pendingPtyResize[agentId];
+            if (ok && latest?.requestId === requestId) {
+              const rest = { ...get().pendingPtyResize };
+              delete rest[agentId];
+              set({ pendingPtyResize: rest });
+            }
+          });
+        } else if (accepted) {
+          const latest = get().pendingPtyResize[agentId];
+          if (latest?.requestId === requestId) {
+            const rest = { ...get().pendingPtyResize };
+            delete rest[agentId];
+            set({ pendingPtyResize: rest });
+          }
+        }
       }
-      set({ pendingPtyResize: {} });
       // Re-mount the saved vault after (re)connect — a vaultList() sent
       // before the socket opens would be silently dropped.
       const dir = get().vaultDir || (() => {
@@ -3403,13 +3444,28 @@ export const useBoard = create<BoardState>((set, get) => ({
     const size = { cols, rows };
     const current = client;
     set({ ptySize: { ...get().ptySize, [agentId]: size } });
-    if (!current || !current.resize(agentId, cols, rows)) {
-      set({ pendingPtyResize: { ...get().pendingPtyResize, [agentId]: size } });
+    const requestId = crypto.randomUUID();
+    set({ pendingPtyResize: { ...get().pendingPtyResize, [agentId]: { ...size, requestId } } });
+    if (!current) {
       return;
     }
-    const pendingPtyResize = { ...get().pendingPtyResize };
-    delete pendingPtyResize[agentId];
-    set({ pendingPtyResize });
+    const accepted = current.resize(agentId, cols, rows, requestId);
+    if (accepted instanceof Promise) {
+      void accepted.then((ok) => {
+        const latest = get().pendingPtyResize[agentId];
+        if (ok && latest?.requestId === requestId) {
+          const pendingPtyResize = { ...get().pendingPtyResize };
+          delete pendingPtyResize[agentId];
+          set({ pendingPtyResize });
+        }
+      });
+    } else if (!accepted) {
+      return;
+    } else {
+      const pendingPtyResize = { ...get().pendingPtyResize };
+      delete pendingPtyResize[agentId];
+      set({ pendingPtyResize });
+    }
   },
 
   requestTranscript: (agentId) => client?.transcript(agentId),
