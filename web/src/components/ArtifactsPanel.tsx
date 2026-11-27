@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 import { useReactFlow } from "@xyflow/react";
@@ -8,6 +8,11 @@ import { shareArtifactPdf } from "../lib/share";
 import { buildDoc, buildAskDoc } from "../lib/boardDocs";
 import { GeneratePdfMenu } from "./GeneratePdfMenu";
 import { Icon } from "./icons";
+
+/** Markdown reader for inline artifact previews — lazy, same as the vault. */
+const ReadingView = lazy(() =>
+  import("./noteView").then((m) => ({ default: m.ReadingView })),
+);
 
 /** Each artifact kind gets its own symbol + muted color (Deska-style
  * deliverable templates). */
@@ -48,6 +53,7 @@ export function ArtifactsPanel() {
   const [query, setQuery] = useState("");
   const [shared, setShared] = useState<Record<string, string>>({});
   const [genOpen, setGenOpen] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   // Generate-PDF lives here too (not only in the vault panel): same
   // templates, same "ask for anything", saved straight into this list.
@@ -276,7 +282,7 @@ export function ArtifactsPanel() {
     return (
             <div
               key={a.artifact_id}
-              style={{ margin: "0 4px 6px", padding: "9px 12px", borderRadius: 14, background: "var(--cv-glass-hi)", display: "flex", alignItems: "center", gap: 10 }}
+              style={{ margin: "0 4px 6px", padding: "9px 12px", borderRadius: 14, background: "var(--cv-glass-hi)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}
             >
               <span
                 style={{
@@ -294,7 +300,16 @@ export function ArtifactsPanel() {
               >
                 {meta.mark}
               </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                role="button"
+                aria-expanded={expanded === a.artifact_id}
+                title={a.text ? (expanded === a.artifact_id ? "close preview" : "read preview") : "no stored contents"}
+                style={{ flex: 1, minWidth: 0, cursor: a.text ? "pointer" : "default" }}
+                onClick={() => {
+                  if (!a.text) return;
+                  setExpanded((cur) => (cur === a.artifact_id ? null : a.artifact_id));
+                }}
+              >
                 <div style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600, color: "var(--cv-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {a.title}
                 </div>
@@ -302,6 +317,9 @@ export function ArtifactsPanel() {
                   <span style={{ color: meta.color }}>{a.kind}</span>
                   {a.agent_name && ` · ${a.agent_name}`}
                   {a.created_at && ` · ${a.created_at.slice(5, 16)}`}
+                  {a.text && (
+                    <span style={{ marginLeft: 6, color: "var(--cv-ink-faint)" }}>{expanded === a.artifact_id ? "▾" : "▸"}</span>
+                  )}
                 </div>
               </div>
               <button
@@ -386,6 +404,25 @@ export function ArtifactsPanel() {
               >
                 ×
               </button>
+              {expanded === a.artifact_id && a.text && (
+                <div
+                  data-artifact-preview
+                  className="nowheel"
+                  style={{
+                    flexBasis: "100%",
+                    maxHeight: 260,
+                    overflowY: "auto",
+                    marginTop: 8,
+                    padding: "8px 10px",
+                    borderTop: "1px solid var(--cv-glass-edge)",
+                    fontSize: "var(--cv-text-xs)",
+                  }}
+                >
+                  <Suspense fallback={<div style={{ color: "var(--cv-ink-faint)", fontSize: "var(--cv-text-xxs)" }}>Loading preview…</div>}>
+                    <ReadingView text={a.text} />
+                  </Suspense>
+                </div>
+              )}
             </div>
     );
   }
