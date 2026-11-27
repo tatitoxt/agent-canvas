@@ -383,8 +383,13 @@ pub enum ServerMsg {
     /// git push finished for an agent's worktree.
     GitPushed { agent_id: String, output: String },
     /// Vault file listing (VaultList answer): "sub/path.md" entries.
+    /// Vault/repo-relative paths are always forward-slash joined on the
+    /// wire (Obsidian convention) regardless of the daemon's platform —
+    /// the client splits and matches on `/`, so a Windows daemon must
+    /// never leak `\` separators here.
     VaultListing { dir: String, entries: Vec<String> },
-    /// Repo explorer: flat file tree of a root.
+    /// Repo explorer: flat file tree of a root. Same forward-slash wire
+    /// contract as VaultListing.
     RepoListing { dir: String, entries: Vec<String> },
     /// Repo viewer: file contents (utf-8 text, size-capped).
     RepoFile { dir: String, path: String, text: String },

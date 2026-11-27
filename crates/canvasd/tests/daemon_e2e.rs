@@ -62,6 +62,10 @@ impl Daemon {
             .env("CANVASD_PORT", port.to_string())
             .env("CANVAS_REPO", &repo)
             .env("HOME", &home)
+            // Keep user-config resolution inside the temp home too: on a
+            // Linux dev machine with XDG_CONFIG_HOME set, vault writes
+            // would otherwise escape into the real config dir.
+            .env("XDG_CONFIG_HOME", home.join(".config"))
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()

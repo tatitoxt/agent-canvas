@@ -58,12 +58,15 @@ struct AppState {
 /// never the checkout: a cloned repo must never be able to grant
 /// itself access to the operator's disk.
 fn allowed_roots_list_path(repo_root: &std::path::Path) -> PathBuf {
-    std::env::var("HOME")
-        .map(|h| PathBuf::from(h).join(".config").join("canvas").join("allowed-roots"))
-        .unwrap_or_else(|_| repo_root.join(".canvas").join("allowed-roots.local"))
+    canvasd::paths::canvas_config_dir()
+        .map(|d| d.join("allowed-roots"))
+        .unwrap_or_else(|| repo_root.join(".canvas").join("allowed-roots.local"))
 }
 
+#[cfg(not(windows))]
 const SANDBOX_HINT: &str = " — open the vault from the Vault panel to grant access, or add its path to ~/.config/canvas/allowed-roots (one per line)";
+#[cfg(windows)]
+const SANDBOX_HINT: &str = " — open the vault from the Vault panel to grant access, or add its path to %APPDATA%\\canvas\\allowed-roots (one per line)";
 
 /// Is `canon_root` inside an allowed root?
 fn root_allowed(state: &AppState, canon_root: &std::path::Path) -> bool {
@@ -80,19 +83,16 @@ fn persist_allowed_root(state: &AppState, canon_root: &std::path::Path) {
         if roots.iter().any(|ar| canon_root.starts_with(ar)) { return; }
         roots.push(canon_root.to_path_buf());
     }
-    // Persistence requires the operator's HOME — the fallback path lives
-    // inside the checkout, and a repo-controlled symlink there would
-    // redirect the write into an unrelated user file. No HOME → the
-    // grant stays in-memory for this boot only.
-    let home = match std::env::var("HOME") {
-        Ok(h) if !h.is_empty() => h,
-        _ => return,
-    };
+    // Persistence requires the operator's user config dir — the fallback
+    // path lives inside the checkout, and a repo-controlled symlink there
+    // would redirect the write into an unrelated user file. No resolvable
+    // config dir → the grant stays in-memory for this boot only.
+    let Some(config) = canvasd::paths::canvas_config_dir() else { return };
     // A newline in the path would smuggle extra grant lines into the
     // config on the next boot — pathological, but cheap to refuse.
     let line = canon_root.to_string_lossy().to_string();
     if line.contains('\n') || line.contains('\r') { return; }
-    let list = PathBuf::from(home).join(".config").join("canvas").join("allowed-roots");
+    let list = config.join("allowed-roots");
     if let Some(parent) = list.parent() { let _ = std::fs::create_dir_all(parent); }
     let prev = std::fs::read_to_string(&list).unwrap_or_default();
     let already = prev.lines().any(|l| l.trim() == line);
@@ -121,7 +121,15 @@ fn vault_sandbox_resolve(state: &AppState, dir: &str, path: &str) -> Result<Path
     if rel.is_absolute() {
         return Err("access denied: absolute paths are not allowed".into());
     }
-    if rel.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+    // Reject roots/prefixes component-wise too, not just `..`: on Windows
+    // `\foo` carries a RootDir without being `is_absolute` (no drive
+    // prefix), and `C:` is a drive-relative Prefix — both would bend the
+    // probe away from the vault root before the final containment check
+    // caught them. Same rule sanitize_relpath already applies to cwd.
+    if rel.components().any(|c| matches!(
+        c,
+        std::path::Component::Prefix(_) | std::path::Component::RootDir | std::path::Component::ParentDir
+    )) {
         return Err("access denied: path escapes the vault".into());
     }
     let canon_root = canon_through_missing(std::path::Path::new(dir))
@@ -192,27 +200,15 @@ fn vault_sandbox_dir(state: &AppState, dir: &str) -> Result<PathBuf, String> {
 /// intentionally broader than writable repository roots, so write access is
 /// limited to the board repo and repos explicitly registered as workspaces.
 fn registered_repo_dir(repo_root: &std::path::Path, store: &store::Store, dir: &str) -> Result<PathBuf, String> {
-    let requested = if dir == "~" || dir.starts_with("~/") {
-        std::env::var("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_default()
-            .join(dir.strip_prefix("~/").unwrap_or(""))
-    } else {
-        PathBuf::from(dir)
-    };
+    // Tilde expansion is portable: HOME is typically unset on Windows,
+    // where the profile folder is the home — see paths::expand_tilde.
+    let requested = canvasd::paths::expand_tilde(dir);
     let mut roots = vec![repo_root.to_path_buf()];
     let workspaces = store
         .workspaces_snapshot()
         .map_err(|e| e.to_string())?;
     roots.extend(workspaces.into_iter().map(|(_, _, repo, _)| {
-        if repo == "~" || repo.starts_with("~/") {
-            std::env::var("HOME")
-                .map(PathBuf::from)
-                .unwrap_or_default()
-                .join(repo.strip_prefix("~/").unwrap_or(""))
-        } else {
-            PathBuf::from(repo)
-        }
+        canvasd::paths::expand_tilde(&repo)
     }));
 
     for root in roots {
@@ -442,7 +438,9 @@ fn vault_list_entries(root: &PathBuf) -> Vec<String> {
                     stack.push(p);
                 } else if name.ends_with(".md") || is_vault_image(&name) {
                     if let Ok(rel) = p.strip_prefix(root) {
-                        entries.push(rel.to_string_lossy().to_string());
+                        // Wire format is forward-slash on every platform —
+                        // the client splits/matches on `/` (Obsidian style).
+                        entries.push(canvasd::paths::wire_rel_path(rel));
                     }
                 }
             }
@@ -476,7 +474,7 @@ fn repo_tree_entries(root: &PathBuf) -> Vec<String> {
                     stack.push(p);
                 } else if p.is_file() {
                     if let Ok(rel) = p.strip_prefix(root) {
-                        entries.push(rel.to_string_lossy().to_string());
+                        entries.push(canvasd::paths::wire_rel_path(rel));
                     }
                 }
             }
@@ -564,22 +562,13 @@ fn substitute_cli(command: &str, cli: &str) -> String {
     }
 }
 
-/// Binary lookup in PATH — no `which` crate needed for a flat scan.
-fn binary_on_path(bin: &str) -> bool {
-    std::env::var("PATH")
-        .unwrap_or_default()
-        .split(':')
-        .any(|dir| {
-            let p = std::path::Path::new(dir).join(bin);
-            p.is_file()
-        })
-}
-
 /// Global default chain: known CLIs actually installed, in preference order.
+/// The PATH scan itself is portable (platform separators + Windows
+/// PATHEXT) and lives in the library so the logic is unit-testable.
 fn detected_chain() -> Vec<String> {
     KNOWN_CLIS
         .iter()
-        .filter(|c| binary_on_path(c))
+        .filter(|c| canvasd::paths::binary_on_path(c))
         .map(|c| c.to_string())
         .collect()
 }
@@ -2088,7 +2077,7 @@ fn handle_client_msg(
                             let Ok(rel) = p.strip_prefix(&root) else {
                                 continue;
                             };
-                            let rel = rel.to_string_lossy().to_string();
+                            let rel = canvasd::paths::wire_rel_path(rel);
                             for (i, line) in text.lines().enumerate() {
                                 if line.to_lowercase().contains(&needle) {
                                     hits.push(protocol::VaultHit {
@@ -2571,9 +2560,11 @@ async fn main() -> Result<()> {
                 for line in text.lines() {
                     let line = line.trim();
                     if line.is_empty() || line.starts_with('#') { continue; }
-                    let expanded = if let Some(rest) = line.strip_prefix("~/") {
-                        std::env::var("HOME").map(|h| format!("{h}/{rest}")).unwrap_or_else(|_| line.to_string())
-                    } else { line.to_string() };
+                    // `~/` lines expand against the operator's home —
+                    // portably (the file is operator-written, so tilde
+                    // paths are expected input). Non-tilde lines pass
+                    // through unchanged.
+                    let expanded = canvasd::paths::expand_tilde(line);
                     if let Ok(c) = std::fs::canonicalize(&expanded) {
                         if !roots.contains(&c) { roots.push(c); }
                     }
@@ -2630,7 +2621,9 @@ async fn main() -> Result<()> {
     // One binary serves UI+ws: CANVASD_WEB_DIR points at a built `web/dist`
     // so a phone on the LAN just opens http://<host>:<port>/?token=….
     if let Ok(dir) = std::env::var("CANVASD_WEB_DIR") {
-        let index = format!("{}/index.html", dir.trim_end_matches('/'));
+        // Joined as a path, not formatted — a literal "/" separator is a
+        // Unix assumption (and a trailing separator would double it).
+        let index = std::path::Path::new(&dir).join("index.html");
         app = app.fallback_service(
             tower_http::services::ServeDir::new(&dir)
                 .append_index_html_on_directories(true)
@@ -2940,5 +2933,53 @@ mod repo_write_authorization_tests {
 
         std::fs::remove_dir_all(repo).unwrap();
         std::fs::remove_dir_all(vault).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod wire_path_tests {
+    use super::{repo_tree_entries, vault_list_entries};
+
+    fn temp_vault(tag: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "canvas-wire-path-test-{}-{}",
+            tag,
+            uuid::Uuid::new_v4().simple()
+        ));
+        std::fs::create_dir_all(root.join("sub").join("deep")).unwrap();
+        std::fs::write(root.join("top.md"), "top").unwrap();
+        std::fs::write(root.join("sub").join("mid.md"), "mid").unwrap();
+        std::fs::write(root.join("sub").join("deep").join("note.md"), "note").unwrap();
+        root
+    }
+
+    #[test]
+    fn vault_entries_are_forward_slash_joined_on_the_wire() {
+        // Protocol contract: the client splits/matches entries on `/`.
+        // On Unix this falls out of to_string_lossy naturally, but the
+        // wire_rel_path normalization is what keeps it true when the
+        // daemon runs on Windows — pin the contract either way.
+        let root = temp_vault("vault");
+        let entries = vault_list_entries(&root);
+        assert!(entries.contains(&"top.md".to_string()), "{entries:?}");
+        assert!(entries.contains(&"sub/mid.md".to_string()), "{entries:?}");
+        assert!(entries.contains(&"sub/deep/note.md".to_string()), "{entries:?}");
+        assert!(
+            entries.iter().all(|e| !e.contains('\\')),
+            "a backslash must never reach the wire: {entries:?}"
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn repo_tree_entries_follow_the_same_wire_contract() {
+        let root = temp_vault("repo");
+        let entries = repo_tree_entries(&root);
+        assert!(entries.contains(&"sub/deep/note.md".to_string()), "{entries:?}");
+        assert!(
+            entries.iter().all(|e| !e.contains('\\')),
+            "a backslash must never reach the wire: {entries:?}"
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

@@ -357,6 +357,7 @@ dependencies = [
  "anyhow",
  "axum",
  "base64 0.22.1",
+ "dirs",
  "futures-util",
  "libc",
  "portable-pty",
