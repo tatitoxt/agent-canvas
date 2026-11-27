@@ -35,12 +35,12 @@ fn usage() -> ! {
     std::process::exit(2);
 }
 
-type Ws = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+type Ws =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 async fn connect() -> Result<Ws> {
-    let port = std::env::var("CANVAS_PORT").context("CANVAS_PORT not set (not inside a canvas PTY?)")?;
+    let port =
+        std::env::var("CANVAS_PORT").context("CANVAS_PORT not set (not inside a canvas PTY?)")?;
     let token = std::env::var("CANVAS_TOKEN").context("CANVAS_TOKEN not set")?;
     let url = format!("ws://127.0.0.1:{port}/ws?token={token}");
     let (ws, _) = connect_async(url).await.context("cannot reach canvasd")?;
@@ -50,7 +50,8 @@ async fn connect() -> Result<Ws> {
 /// Read frames until `pred` matches a text JSON message (skips binary PTY
 /// frames), with an overall timeout.
 async fn wait_for(
-    ws: &mut (impl StreamExt<Item = std::result::Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin),
+    ws: &mut (impl StreamExt<Item = std::result::Result<Message, tokio_tungstenite::tungstenite::Error>>
+              + Unpin),
     timeout: Duration,
     pred: impl Fn(&Value) -> bool,
 ) -> Result<Value> {
@@ -119,8 +120,7 @@ async fn main() -> Result<()> {
             // canvas targets; Windows gets cmd (bash only exists there as
             // an optional git-bash install).
             let default_shell = if cfg!(windows) { "cmd" } else { "bash" };
-            let command = flag(rest, cmd_flag)
-                .unwrap_or_else(|| default_shell.into());
+            let command = flag(rest, cmd_flag).unwrap_or_else(|| default_shell.into());
             let cwd = flag(rest, "--cwd").unwrap_or_else(|| ".".into());
             let mut msg = json!({
                 "cmd": if is_delegate { "delegate" } else { "spawn_agent" },
@@ -168,8 +168,7 @@ async fn main() -> Result<()> {
         "artifact" => {
             let mut ws = connect().await?;
             let kind = flag(rest, "--kind").unwrap_or_else(|| "note".into());
-            let title = flag(rest, "--title")
-                .unwrap_or_else(|| usage());
+            let title = flag(rest, "--title").unwrap_or_else(|| usage());
             let mut msg = json!({
                 "cmd": "artifact_create",
                 "kind": kind,
@@ -192,7 +191,10 @@ async fn main() -> Result<()> {
             if reply["type"] == "error" {
                 anyhow::bail!("{}", reply["message"].as_str().unwrap_or("error"));
             }
-            println!("artifact {}", reply["artifact"]["artifact_id"].as_str().unwrap_or(""));
+            println!(
+                "artifact {}",
+                reply["artifact"]["artifact_id"].as_str().unwrap_or("")
+            );
         }
         _ => usage(),
     }

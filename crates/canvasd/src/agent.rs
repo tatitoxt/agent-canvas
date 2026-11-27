@@ -81,12 +81,22 @@ fn looks_like_waiting_prompt(tail: &str) -> bool {
     // like an actual question/action gate; ordinary output can mention these
     // words without waiting for input.
     let asks_for_approval = [
-        "(y/n)", "[y/n]", "[y]", "(yes/no)", "do you want to proceed",
-        "would you like to proceed", "needs your approval", "press enter to",
+        "(y/n)",
+        "[y/n]",
+        "[y]",
+        "(yes/no)",
+        "do you want to proceed",
+        "would you like to proceed",
+        "needs your approval",
+        "press enter to",
     ];
-    asks_for_approval.iter().any(|phrase| lower.contains(phrase))
+    asks_for_approval
+        .iter()
+        .any(|phrase| lower.contains(phrase))
         || ((lower.contains("allow") || lower.contains("approve") || lower.contains("permission"))
-            && (line.ends_with('?') || lower.starts_with("allow ") || lower.starts_with("approve ")))
+            && (line.ends_with('?')
+                || lower.starts_with("allow ")
+                || lower.starts_with("approve ")))
 }
 
 impl Agent {
@@ -176,7 +186,11 @@ const TRANSCRIPT_CAP: u64 = 1_048_576;
 /// fails the read loop.
 fn append_transcript(path: &Path, chunk: &[u8]) {
     use std::io::Seek;
-    let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) else {
+    let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    else {
         return;
     };
     let len = f.metadata().map(|m| m.len()).unwrap_or(0);
@@ -241,10 +255,15 @@ pub fn ensure_initial_commit(repo_root: &Path) {
     // blocking on a key prompt. The commit is empty — no content authorship.
     let _ = std::process::Command::new("git")
         .args([
-            "-c", "user.name=Canvas",
-            "-c", "user.email=canvas@localhost",
-            "commit", "--allow-empty", "--no-gpg-sign",
-            "-m", "canvas: initial commit",
+            "-c",
+            "user.name=Canvas",
+            "-c",
+            "user.email=canvas@localhost",
+            "commit",
+            "--allow-empty",
+            "--no-gpg-sign",
+            "-m",
+            "canvas: initial commit",
         ])
         .current_dir(repo_root)
         .output();
@@ -290,10 +309,7 @@ fn ensure_worktree(repo_root: &Path, agent_id: &str, branch: &str) -> Result<Pat
 fn shell_command(command: &str) -> CommandBuilder {
     let mut cmd = CommandBuilder::new("/bin/bash");
     cmd.arg("-lc");
-    cmd.arg(format!(
-        "stty -echo -icanon 2>/dev/null; exec {}",
-        command
-    ));
+    cmd.arg(format!("stty -echo -icanon 2>/dev/null; exec {}", command));
     cmd
 }
 
@@ -465,7 +481,10 @@ impl AgentManager {
                             }
                         }
                         append_transcript(&transcript_path, &buf[..n]);
-                        if out_tx.send((id_for_reader.clone(), buf[..n].to_vec())).is_err() {
+                        if out_tx
+                            .send((id_for_reader.clone(), buf[..n].to_vec()))
+                            .is_err()
+                        {
                             break;
                         }
                     }
@@ -534,7 +553,11 @@ impl AgentManager {
     pub fn set_automation(&self, id: &str, idle_secs: u64, deny_approvals: bool) {
         self.automation_meta.lock().unwrap().insert(
             id.to_string(),
-            AutoMeta { idle_secs, deny_approvals, hang_notified: false },
+            AutoMeta {
+                idle_secs,
+                deny_approvals,
+                hang_notified: false,
+            },
         );
     }
 
@@ -566,7 +589,11 @@ impl AgentManager {
         if let Some(a) = self.agents.lock().unwrap().get(id) {
             return Some(a.tail.lock().unwrap().clone());
         }
-        let path = self.transcript_dir.lock().unwrap().join(format!("{}.bin", id));
+        let path = self
+            .transcript_dir
+            .lock()
+            .unwrap()
+            .join(format!("{}.bin", id));
         let data = std::fs::read(&path).ok()?;
         let start = data.len().saturating_sub(65_536);
         Some(data[start..].to_vec())
@@ -575,7 +602,12 @@ impl AgentManager {
     /// Agent ids that carry automation guardrails — the hang ticker scans
     /// only these.
     pub fn automation_ids(&self) -> Vec<AgentId> {
-        self.automation_meta.lock().unwrap().keys().cloned().collect()
+        self.automation_meta
+            .lock()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect()
     }
 
     #[allow(dead_code)]
@@ -608,11 +640,19 @@ impl AgentManager {
     /// Agent's worktree path — for the diff ticker (`git status`).
     /// Permission level for a live agent — `None` if it already exited.
     pub fn permission(&self, id: &str) -> Option<String> {
-        self.agents.lock().unwrap().get(id).map(|a| a.permission.clone())
+        self.agents
+            .lock()
+            .unwrap()
+            .get(id)
+            .map(|a| a.permission.clone())
     }
 
     pub fn worktree(&self, id: &str) -> Option<PathBuf> {
-        self.agents.lock().unwrap().get(id).map(|a| a.worktree.clone())
+        self.agents
+            .lock()
+            .unwrap()
+            .get(id)
+            .map(|a| a.worktree.clone())
     }
 
     /// Rolling PTY tail as text, for the CANVAS_RESULT scanner.
@@ -684,15 +724,32 @@ pub fn canvas_result_line(tail: &str) -> Option<String> {
 /// these, the daemon holds it and asks for explicit approval instead of
 /// writing it to the PTY. Supervised means supervised.
 const SENSITIVE_PATTERNS: &[&str] = &[
-    "rm -rf", "rm -fr", "rm -r ",
-    "sudo ", "su -",
-    "git push -f", "git push --force", "git reset --hard", "git clean -f",
-    "drop table", "drop database", "truncate table",
-    "mkfs", "dd if=", "> /dev/",
-    "chmod -r", "chown -r",
-    "kill -9", "pkill -9", "killall",
-    "npm publish", "cargo publish", "gh release",
-    "shutdown", "reboot", ":(){ :|:& };:",
+    "rm -rf",
+    "rm -fr",
+    "rm -r ",
+    "sudo ",
+    "su -",
+    "git push -f",
+    "git push --force",
+    "git reset --hard",
+    "git clean -f",
+    "drop table",
+    "drop database",
+    "truncate table",
+    "mkfs",
+    "dd if=",
+    "> /dev/",
+    "chmod -r",
+    "chown -r",
+    "kill -9",
+    "pkill -9",
+    "killall",
+    "npm publish",
+    "cargo publish",
+    "gh release",
+    "shutdown",
+    "reboot",
+    ":(){ :|:& };:",
 ];
 
 /// Returns the offending line (trimmed, ≤160 chars) when a PTY-input
@@ -768,7 +825,11 @@ pub fn dirty_files(worktree: &Path) -> Vec<String> {
         .filter_map(|l| {
             let path = l.get(3..)?.trim();
             let path = path.split(" -> ").last().unwrap_or(path).trim_matches('"');
-            if path.is_empty() { None } else { Some(path.to_string()) }
+            if path.is_empty() {
+                None
+            } else {
+                Some(path.to_string())
+            }
         })
         .take(200)
         .collect()
@@ -843,7 +904,8 @@ mod tests {
     #[test]
     fn canvas_result_survives_pty_escapes() {
         // Real PTYs wrap output: bracketed-paste end + \r precede the line.
-        let tail = "$ echo 'CANVAS_RESULT: shipped it'\r\n\u{1b}[?2004l\rCANVAS_RESULT: shipped it\r\n$ ";
+        let tail =
+            "$ echo 'CANVAS_RESULT: shipped it'\r\n\u{1b}[?2004l\rCANVAS_RESULT: shipped it\r\n$ ";
         assert_eq!(canvas_result_line(tail).as_deref(), Some("shipped it"));
         // A real shell prints its prompt, then \r-overwrites with output —
         // the visible line is only what follows the last carriage return.
@@ -855,7 +917,10 @@ mod tests {
         assert_eq!(canvas_result_line(tail).as_deref(), Some("shipped it"));
         // Result-looking text overwritten by later output on the same
         // line is not a result — the screen no longer shows it.
-        assert_eq!(canvas_result_line("x \rCANVAS_RESULT: stale\rnext output"), None);
+        assert_eq!(
+            canvas_result_line("x \rCANVAS_RESULT: stale\rnext output"),
+            None
+        );
         assert_eq!(
             canvas_result_line("bash-3.2$ CANVAS_RESULT: shipped it\rbash-3.2$ "),
             Some("shipped it".to_string())
@@ -866,7 +931,10 @@ mod tests {
             "\u{1b}[?1034hbash-3.2$ CANVAS_RESULT: shipped it\r\n",
             "bash-3.2$ "
         );
-        assert_eq!(canvas_result_line(macos_bash_tail).as_deref(), Some("shipped it"));
+        assert_eq!(
+            canvas_result_line(macos_bash_tail).as_deref(),
+            Some("shipped it")
+        );
         assert_eq!(canvas_result_line("$ echo hi\r\nhi\r\n$ "), None);
     }
 
@@ -895,9 +963,13 @@ mod tests {
         assert!(looks_like_waiting_prompt("\u{1b}[32m❯\u{1b}[0m "));
         assert!(looks_like_waiting_prompt("\u{1b}[34m›\u{1b}[0m "));
         assert!(looks_like_waiting_prompt("user@box:~/repo$ "));
-        assert!(looks_like_waiting_prompt("working…\r\u{1b}[33mAllow this action?\u{1b}[0m "));
+        assert!(looks_like_waiting_prompt(
+            "working…\r\u{1b}[33mAllow this action?\u{1b}[0m "
+        ));
         assert!(looks_like_waiting_prompt("Continue? [Y/n]"));
-        assert!(!looks_like_waiting_prompt("The agent will allow this when ready"));
+        assert!(!looks_like_waiting_prompt(
+            "The agent will allow this when ready"
+        ));
         assert!(!looks_like_waiting_prompt("Implemented approval handling."));
         assert!(!looks_like_waiting_prompt("working…"));
     }
@@ -911,7 +983,10 @@ mod tests {
     }
 
     fn git_temp_root() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("canvas-agent-test-{}", uuid::Uuid::new_v4().simple()));
+        let dir = std::env::temp_dir().join(format!(
+            "canvas-agent-test-{}",
+            uuid::Uuid::new_v4().simple()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -925,7 +1000,9 @@ mod tests {
     }
 
     fn head_resolves(repo: &Path) -> bool {
-        git(&["rev-parse", "--verify", "HEAD"], repo).status.success()
+        git(&["rev-parse", "--verify", "HEAD"], repo)
+            .status
+            .success()
     }
 
     #[test]

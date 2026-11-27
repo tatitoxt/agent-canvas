@@ -47,7 +47,8 @@ pub fn expand_tilde_for(platform: Platform, input: &str, home: Option<&Path>) ->
     let is_sep = |c: char| c == '/' || (platform == Platform::Windows && c == '\\');
     let tail: Option<&str> = if input == "~" {
         Some("")
-    } else if input.starts_with("~/") || (platform == Platform::Windows && input.starts_with("~\\")) {
+    } else if input.starts_with("~/") || (platform == Platform::Windows && input.starts_with("~\\"))
+    {
         // Swallow the whole separator run, not just the first slash:
         // `~//vault` must stay inside home — `Path::join` with a tail
         // that is still absolute (`/vault`) would REPLACE the base
@@ -184,19 +185,19 @@ pub fn executable_extensions_for(platform: Platform, pathext: Option<&str>) -> V
 /// `codex.cmd` — so each PATHEXT extension is tried in both cases (the
 /// filesystem is case-insensitive in practice, but checking both keeps
 /// the lookup deterministic on any filesystem).
-pub fn binary_in_dir_for(
-    platform: Platform,
-    dir: &Path,
-    bin: &str,
-    pathext: Option<&str>,
-) -> bool {
+pub fn binary_in_dir_for(platform: Platform, dir: &Path, bin: &str, pathext: Option<&str>) -> bool {
     if dir.join(bin).is_file() {
         return true;
     }
-    executable_extensions_for(platform, pathext).iter().any(|ext| {
-        dir.join(format!("{}{}", bin, ext.to_ascii_lowercase())).is_file()
-            || dir.join(format!("{}{}", bin, ext.to_ascii_uppercase())).is_file()
-    })
+    executable_extensions_for(platform, pathext)
+        .iter()
+        .any(|ext| {
+            dir.join(format!("{}{}", bin, ext.to_ascii_lowercase()))
+                .is_file()
+                || dir
+                    .join(format!("{}{}", bin, ext.to_ascii_uppercase()))
+                    .is_file()
+        })
 }
 
 /// Binary lookup in PATH — `std::env::split_paths` honors the platform
@@ -339,7 +340,10 @@ mod tests {
             canvas_config_dir_for(Platform::Windows, Some(home), Some(roaming)),
             Some(PathBuf::from("C:/Users/op/AppData/Roaming/canvas"))
         );
-        assert_eq!(canvas_config_dir_for(Platform::Windows, Some(home), None), None);
+        assert_eq!(
+            canvas_config_dir_for(Platform::Windows, Some(home), None),
+            None
+        );
     }
 
     // ---------- home scan bases ----------
@@ -357,7 +361,12 @@ mod tests {
         );
         // XDG-style document locations never leak into the Unix scan.
         assert_eq!(
-            home_scan_bases_for(Platform::Unix, Some(home), Some(Path::new("/home/op/docs")), None),
+            home_scan_bases_for(
+                Platform::Unix,
+                Some(home),
+                Some(Path::new("/home/op/docs")),
+                None
+            ),
             vec![
                 PathBuf::from("/home/op/Documents"),
                 PathBuf::from("/home/op/Desktop"),
@@ -450,7 +459,12 @@ mod tests {
         assert!(!binary_in_dir_for(Platform::Unix, &dir, "wincli", None));
         assert!(binary_in_dir_for(Platform::Windows, &dir, "wincli", None));
         // .EXE absent from PATHEXT — must NOT match.
-        assert!(!binary_in_dir_for(Platform::Windows, &dir, "wincli", Some(".BAT;.CMD")));
+        assert!(!binary_in_dir_for(
+            Platform::Windows,
+            &dir,
+            "wincli",
+            Some(".BAT;.CMD")
+        ));
 
         std::fs::remove_dir_all(&dir).unwrap();
     }
