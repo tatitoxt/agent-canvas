@@ -70,8 +70,16 @@ test("agent card terminal preview emphasizes the latest visible row", async ({ p
   await card.locator("[data-testid='agent-card-header']").click();
   await expect(card.locator("[title='Open terminal']")).toBeVisible();
   await card.locator("[title='Open terminal']").click();
+  // Staged assertions: the drawer opening is synchronous store state, but
+  // the xterm element hangs off two chained lazy chunks (TerminalPanel
+  // itself is React.lazy with a null fallback, then LazyTermHost inside
+  // it) — the only unbounded, load-sensitive part of the path. Asserting
+  // the drawer frame first keeps "drawer never opened" distinct from
+  // "xterm chunk slow under suite load", and the emulator gets a generous
+  // budget for the cold chunk fetch on a fresh page.
+  await expect(page.locator(".terminal-drawer").first()).toBeVisible({ timeout: 5_000 });
   const terminal = page.locator(".terminal-drawer .xterm").first();
-  await expect(terminal).toBeVisible({ timeout: 5_000 });
+  await expect(terminal).toBeVisible({ timeout: 15_000 });
   await terminal.click();
   await page.keyboard.type("printf '\\033[1;32mpreview-latest-row\\033[0m\\n'");
   await page.keyboard.press("Enter");
@@ -166,10 +174,22 @@ test("pop out creates a canvas term card; put back returns it to the drawer", as
   // put back — the card closes and the terminal lives in the drawer again.
   // Card chrome is only interactive while the card is selected; the header
   // strip left of the title selects without triggering a control.
-  await termCard.click({ position: { x: 200, y: 15 } });
-  await termCard.locator("button[title*='Put back']").first().click();
-  await page.waitForTimeout(700);
-  expect(await page.locator(".react-flow__node-term").count()).toBe(0);
+  // The put-back control is only interactive while the card is selected.
+  // Under suite load a single strip click can land on chrome still
+  // mid-transition (the maximize/restore round-trip just re-rendered it)
+  // and the card never gets selected — then put-back no-ops and the card
+  // stays open. Retry the selection click until the state actually lands,
+  // and poll the close assertion instead of a fixed 700ms wait + count.
+  await expect(async () => {
+    if (!(await termCard.evaluate((el) => el.classList.contains("selected")))) {
+      await termCard.click({ position: { x: 200, y: 15 } });
+    }
+    expect(await termCard.evaluate((el) => el.classList.contains("selected"))).toBe(true);
+  }).toPass({ timeout: 6_000 });
+  const putBack = termCard.locator("button[title*='Put back']").first();
+  await expect(putBack).toBeVisible({ timeout: 5_000 });
+  await putBack.click();
+  await expect(page.locator(".react-flow__node-term")).toHaveCount(0, { timeout: 5_000 });
 });
 
 test("shift+click multi-select selects two nodes", async ({ page }) => {
