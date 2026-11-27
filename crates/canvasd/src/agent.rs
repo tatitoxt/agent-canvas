@@ -1124,35 +1124,39 @@ mod tests {
         payload.extend_from_slice(marker);
         payload.push(b'\n');
 
-        let mgr_addr = &mgr as *const AgentManager as usize;
-        let id2 = id.clone();
-        let payload2 = payload.clone();
         let write_done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let write_done2 = write_done.clone();
-        let handle = std::thread::spawn(move || {
-            let mgr = unsafe { &*(mgr_addr as *const AgentManager) };
-            mgr.write(&id2, &payload2).unwrap();
-            write_done2.store(true, std::sync::atomic::Ordering::SeqCst);
+        // Scoped threads borrow the manager directly — no unsafe, and the
+        // scope join at the end guarantees the writer thread is done before
+        // the manager drops.
+        std::thread::scope(|scope| {
+            let write_done2 = write_done.clone();
+            let id2 = id.clone();
+            let payload2 = payload.clone();
+            let mgr_ref = &mgr;
+            scope.spawn(move || {
+                mgr_ref.write(&id2, &payload2).unwrap();
+                write_done2.store(true, std::sync::atomic::Ordering::SeqCst);
+            });
+
+            std::thread::sleep(Duration::from_secs(2));
+            assert!(
+                write_done.load(std::sync::atomic::Ordering::SeqCst),
+                "write() must return immediately even with a stopped child — \
+                 before the fix it blocked inside write_all holding the map lock"
+            );
+
+            // The exact deadlock from the issue: the writer thread is now
+            // parked on PTY capacity while the child is stopped. Resume All
+            // MUST still return — before the fix it waited on the same
+            // agents-map lock.
+            let t = Instant::now();
+            let n = mgr.resume_many(&[id.clone()]);
+            assert_eq!(n, 1);
+            assert!(
+                t.elapsed() < Duration::from_secs(2),
+                "resume_many wedged behind the in-flight write — the deadlock"
+            );
         });
-
-        std::thread::sleep(Duration::from_secs(2));
-        assert!(
-            write_done.load(std::sync::atomic::Ordering::SeqCst),
-            "write() must return immediately even with a stopped child — \
-             before the fix it blocked inside write_all holding the map lock"
-        );
-
-        // The exact deadlock from the issue: the writer thread is now parked
-        // on PTY capacity while the child is stopped. Resume All MUST still
-        // return — before the fix it waited on the same agents-map lock.
-        let t = Instant::now();
-        let n = mgr.resume_many(&[id.clone()]);
-        assert_eq!(n, 1);
-        assert!(
-            t.elapsed() < Duration::from_secs(2),
-            "resume_many wedged behind the in-flight write — the deadlock"
-        );
-        handle.join().unwrap();
 
         // Payload integrity: once the child drains, cat echoes everything and
         // the end marker lands in the rolling tail.
