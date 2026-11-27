@@ -1954,80 +1954,100 @@ fn handle_client_msg(
             }
         }
         ClientMsg::VaultWriteAsset { dir, path, data } => {
-            let root = PathBuf::from(&dir);
             if dir.is_empty() {
                 send_control(ServerMsg::Error { agent_id: None, message: "vault write-asset refused: no vault dir".to_string() });
-            } else if path.contains("..") || path.is_empty() || path.ends_with('/') {
+            } else if path.is_empty() || path.ends_with('/') {
                 send_control(ServerMsg::Error { agent_id: None, message: format!("vault write-asset refused: {path}") });
             } else {
-                match base64::engine::general_purpose::STANDARD.decode(&data) {
-                    Ok(bytes) if bytes.len() <= 8 * 1024 * 1024 => {
-                        // Never clobber: foo.png → foo-2.png. symlink_metadata
-                        // (not exists()) so a dangling symlink also counts as
-                        // taken — writing through it would escape the vault.
-                        let result = (|| -> Result<(), String> {
-                            // Never clobber: foo.png → foo-2.png. Open with
-                            // create_new (O_EXCL) per candidate — atomic, so
-                            // concurrent drops can't race a check-then-write
-                            // into an overwrite, and a dangling symlink fails
-                            // EEXIST instead of being written through.
-                            let file = root.join(&path);
-                            if let Some(parent) = file.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
-                            let stem = file.file_stem().unwrap_or_default().to_string_lossy().to_string();
-                            let ext = file.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
-                            let parent = file.parent().map(|p| p.to_path_buf()).unwrap_or_default();
-                            let mut wrote = false;
-                            for cand in std::iter::once(file.clone()).chain(
-                                (2..100).map(|i| parent.join(format!("{stem}-{i}{ext}")))
-                            ) {
-                                match std::fs::OpenOptions::new().write(true).create_new(true).open(&cand) {
-                                    Ok(f) => {
-                                        // Reserve the name atomically, write the
-                                        // bytes to a sibling tmp file, then rename
-                                        // over the reservation — a failed write
-                                        // never leaves a truncated final file.
-                                        drop(f);
-                                        let tmp = cand.parent().unwrap_or(&root).join(format!(
-                                            ".{}.tmp-{}",
-                                            cand.file_name().unwrap_or_default().to_string_lossy(),
-                                            std::process::id(),
-                                        ));
-                                        // create_new on the tmp too — a vault file that
-                                        // happens to share the tmp name must never be
-                                        // truncated; cleanup only removes files we made.
-                                        let outcome = match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
-                                            Ok(mut f) => {
-                                                let r = std::io::Write::write_all(&mut f, &bytes);
+                // Assets obey the exact same sandbox as every other vault
+                // operation: the destination is resolved through the canonical,
+                // allowed vault root before any directory is created or byte is
+                // written. In particular `root.join(path)` must never see the
+                // client-supplied path directly — an absolute path would replace
+                // the root, and an intermediate symlink could point outside it.
+                let file = vault_sandbox_resolve(state, &dir, &path);
+                let root = vault_sandbox_dir(state, &dir);
+                match (file, root) {
+                    (Err(e), _) => send_control(ServerMsg::Error { agent_id: None, message: e }),
+                    (_, Err(e)) => send_control(ServerMsg::Error { agent_id: None, message: e }),
+                    (Ok(file), Ok(root)) if file == root => {
+                        // Unlike markdown writes, assets have no extension gate.
+                        // `.` (or a link back to the vault root) resolves to the
+                        // root directory itself; treating that as a file would make
+                        // the dedupe parent the vault's PARENT and invent names like
+                        // `vault-2` outside the sandbox.
+                        send_control(ServerMsg::Error { agent_id: None, message: format!("vault write-asset refused: {path}") });
+                    }
+                    (Ok(file), Ok(root)) => {
+                        match base64::engine::general_purpose::STANDARD.decode(&data) {
+                            Ok(bytes) if bytes.len() <= 8 * 1024 * 1024 => {
+                                // Never clobber: foo.png → foo-2.png. symlink_metadata
+                                // (not exists()) so a dangling symlink also counts as
+                                // taken — writing through it would escape the vault.
+                                let result = (|| -> Result<(), String> {
+                                    // Never clobber: foo.png → foo-2.png. Open with
+                                    // create_new (O_EXCL) per candidate — atomic, so
+                                    // concurrent drops can't race a check-then-write
+                                    // into an overwrite, and a dangling symlink fails
+                                    // EEXIST instead of being written through.
+                                    if let Some(parent) = file.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+                                    let stem = file.file_stem().unwrap_or_default().to_string_lossy().to_string();
+                                    let ext = file.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+                                    let parent = file.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+                                    let mut wrote = false;
+                                    for cand in std::iter::once(file.clone()).chain(
+                                        (2..100).map(|i| parent.join(format!("{stem}-{i}{ext}")))
+                                    ) {
+                                        match std::fs::OpenOptions::new().write(true).create_new(true).open(&cand) {
+                                            Ok(f) => {
+                                                // Reserve the name atomically, write the
+                                                // bytes to a sibling tmp file, then rename
+                                                // over the reservation — a failed write
+                                                // never leaves a truncated final file.
                                                 drop(f);
-                                                r.and_then(|()| std::fs::rename(&tmp, &cand))
-                                                    .inspect_err(|_| { let _ = std::fs::remove_file(&tmp); })
+                                                let tmp = cand.parent().unwrap_or(&root).join(format!(
+                                                    ".{}.tmp-{}",
+                                                    cand.file_name().unwrap_or_default().to_string_lossy(),
+                                                    std::process::id(),
+                                                ));
+                                                // create_new on the tmp too — a vault file that
+                                                // happens to share the tmp name must never be
+                                                // truncated; cleanup only removes files we made.
+                                                let outcome = match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
+                                                    Ok(mut f) => {
+                                                        let r = std::io::Write::write_all(&mut f, &bytes);
+                                                        drop(f);
+                                                        r.and_then(|()| std::fs::rename(&tmp, &cand))
+                                                            .inspect_err(|_| { let _ = std::fs::remove_file(&tmp); })
+                                                    }
+                                                    Err(e) => Err(e), // preexisting tmp — never touch it
+                                                };
+                                                if let Err(e) = outcome {
+                                                    let _ = std::fs::remove_file(&cand); // our empty reservation
+                                                    return Err(e.to_string());
+                                                }
+                                                wrote = true;
+                                                break;
                                             }
-                                            Err(e) => Err(e), // preexisting tmp — never touch it
-                                        };
-                                        if let Err(e) = outcome {
-                                            let _ = std::fs::remove_file(&cand); // our empty reservation
-                                            return Err(e.to_string());
+                                            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                                            Err(e) => return Err(e.to_string()),
                                         }
-                                        wrote = true;
-                                        break;
                                     }
-                                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-                                    Err(e) => return Err(e.to_string()),
+                                    if !wrote { return Err(format!("no free name for {path}")); }
+                                    Ok(())
+                                })();
+                                match result {
+                                    Ok(()) => {
+                                        let mut entries = vault_list_entries(&root);
+                                        entries.truncate(2000);
+                                        send_control(ServerMsg::VaultListing { dir, entries });
+                                    }
+                                    Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault write-asset failed: {e}") }),
                                 }
                             }
-                            if !wrote { return Err(format!("no free name for {path}")); }
-                            Ok(())
-                        })();
-                        match result {
-                            Ok(()) => {
-                                let mut entries = vault_list_entries(&root);
-                                entries.truncate(2000);
-                                send_control(ServerMsg::VaultListing { dir, entries });
-                            }
-                            Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault write-asset failed: {e}") }),
+                            _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault write-asset refused: {path}") }),
                         }
                     }
-                    _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault write-asset refused: {path}") }),
                 }
             }
         }
@@ -2981,5 +3001,227 @@ mod wire_path_tests {
             "a backslash must never reach the wire: {entries:?}"
         );
         std::fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod vault_write_asset_sandbox_tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    struct Fixture {
+        // Drop order is field order: close the SQLite store before TempDir
+        // tries to delete it (Windows refuses to unlink open files).
+        state: Arc<AppState>,
+        vault: PathBuf,
+        tmp: tempfile::TempDir,
+    }
+
+    fn state_for_repo(repo: &Path) -> Arc<AppState> {
+        let (events, _) = broadcast::channel(16);
+        Arc::new(AppState {
+            token: "test".into(),
+            events,
+            agents: Arc::new(AgentManager::new()),
+            store: Arc::new(store::Store::open(repo).unwrap()),
+            repo_root: repo.to_path_buf(),
+            repo_url: None,
+            pending_results: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            pending_fallbacks: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            pending_inputs: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            shares: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            allowed_roots: Arc::new(std::sync::Mutex::new(vec![std::fs::canonicalize(repo).unwrap()])),
+        })
+    }
+
+    /// A vault two levels below the temp root: `../../etc/passwd` from it
+    /// lands at `<tmp>/etc/passwd`, so a vulnerable write is observable
+    /// without ever touching the host's real `/etc`.
+    fn fixture(allow_vault: bool) -> Fixture {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        let vault = tmp.path().join("sandbox").join("vault");
+        std::fs::create_dir_all(&vault).unwrap();
+        let state = state_for_repo(&repo);
+        if allow_vault {
+            state
+                .allowed_roots
+                .lock()
+                .unwrap()
+                .push(std::fs::canonicalize(&vault).unwrap());
+        }
+        Fixture { state, vault, tmp }
+    }
+
+    /// Drive the real control-message handler. `cG5n` is the base64 for
+    /// the bytes `png`; using one payload keeps the filesystem assertions
+    /// focused on path handling rather than encoding.
+    fn write_asset(state: &Arc<AppState>, dir: &Path, path: &str) -> Vec<ServerMsg> {
+        let messages = std::sync::Mutex::new(Vec::new());
+        {
+            let send_control = |msg: ServerMsg| messages.lock().unwrap().push(msg);
+            let cmd = serde_json::json!({
+                "cmd": "vault_write_asset",
+                "dir": dir.to_string_lossy().to_string(),
+                "path": path,
+                "data": "cG5n",
+            });
+            handle_client_msg(&cmd.to_string(), state, &send_control);
+        }
+        messages.into_inner().unwrap()
+    }
+
+    fn error_messages(messages: &[ServerMsg]) -> Vec<&str> {
+        messages
+            .iter()
+            .filter_map(|m| match m {
+                ServerMsg::Error { message, .. } => Some(message.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn assert_access_denied(messages: &[ServerMsg], needle: &str) {
+        let errors = error_messages(messages);
+        assert!(
+            errors.iter().any(|e| e.contains(needle)),
+            "expected an access-denied error containing {needle:?}; got {messages:?}"
+        );
+        assert!(
+            !messages.iter().any(|m| matches!(m, ServerMsg::VaultListing { .. })),
+            "a refused write must not emit a successful vault listing: {messages:?}"
+        );
+    }
+
+    #[test]
+    fn rejects_parent_traversal_before_creating_anything() {
+        let f = fixture(true);
+        let messages = write_asset(&f.state, &f.vault, "../../etc/passwd");
+        assert_access_denied(&messages, "path escapes the vault");
+        assert!(
+            !f.tmp.path().join("etc").join("passwd").exists(),
+            "parent traversal must not create a file outside the vault"
+        );
+    }
+
+    #[test]
+    fn rejects_absolute_paths_even_inside_the_scratch_area() {
+        let f = fixture(true);
+        let target = f.tmp.path().join("outside").join("absolute.png");
+        let absolute = target.to_string_lossy().to_string();
+        let messages = write_asset(&f.state, &f.vault, &absolute);
+        assert_access_denied(&messages, "absolute paths are not allowed");
+        assert!(!target.exists(), "an absolute target outside the vault must not be written");
+    }
+
+    #[test]
+    fn rejects_the_vault_root_itself_as_a_file_target() {
+        let f = fixture(true);
+        let sibling_escape = f.vault.parent().unwrap().join("vault-2");
+        let messages = write_asset(&f.state, &f.vault, ".");
+        assert!(
+            error_messages(&messages)
+                .iter()
+                .any(|e| e.contains("vault write-asset refused")),
+            "expected the root target to be refused; got {messages:?}"
+        );
+        assert!(
+            !sibling_escape.exists(),
+            "dedupe must never invent a sibling outside the vault root"
+        );
+    }
+
+    #[cfg(unix)]
+    fn symlink_dir(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_dir(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_dir(target, link)
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    fn symlink_dir(_target: &Path, _link: &Path) -> std::io::Result<()> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "directory symlinks are unsupported on this platform",
+        ))
+    }
+
+    #[test]
+    fn rejects_symlinked_directories_that_escape_the_vault() {
+        let f = fixture(true);
+        let outside = f.tmp.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let link = f.vault.join("linked");
+        if let Err(e) = symlink_dir(&outside, &link) {
+            // Windows may require Developer Mode or elevation for symlink
+            // creation. That does not weaken coverage where symlinks exist;
+            // it only keeps the portable test suite runnable in restricted CI.
+            assert!(
+                matches!(e.kind(), std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::Unsupported),
+                "test symlink setup failed unexpectedly: {e}"
+            );
+            eprintln!("skipping symlink assertion: {e}");
+            return;
+        }
+
+        let messages = write_asset(&f.state, &f.vault, "linked/escape.png");
+        assert_access_denied(&messages, "outside allowed directories");
+        assert!(
+            !outside.join("escape.png").exists(),
+            "a symlinked directory must not carry the write outside the vault"
+        );
+
+        // A link back to the vault root is containment-valid as a path, but it
+        // is not a file target: without a root-target guard the dedupe step
+        // would look for `vault-2` beside the vault, outside the sandbox.
+        let root_link = f.vault.join("root-link");
+        symlink_dir(&f.vault, &root_link).unwrap();
+        let messages = write_asset(&f.state, &f.vault, "root-link");
+        assert!(
+            error_messages(&messages)
+                .iter()
+                .any(|e| e.contains("vault write-asset refused")),
+            "a symlink resolving to the vault root must be refused as a file target: {messages:?}"
+        );
+        assert!(
+            !f.vault.parent().unwrap().join("vault-2").exists(),
+            "root-resolving symlink must not create a sibling outside the vault"
+        );
+    }
+
+    #[test]
+    fn rejects_a_vault_root_that_was_never_granted() {
+        let f = fixture(false);
+        let messages = write_asset(&f.state, &f.vault, "pic.png");
+        assert_access_denied(&messages, "outside allowed directories");
+        assert!(
+            !f.vault.join("pic.png").exists(),
+            "an ungranted vault root must not become writable just because it exists"
+        );
+    }
+
+    #[test]
+    fn legitimate_nested_write_still_lands_in_the_vault_and_dedupes() {
+        let f = fixture(true);
+        let messages = write_asset(&f.state, &f.vault, "attachments/pic.png");
+        assert!(
+            messages.iter().any(|m| matches!(m, ServerMsg::VaultListing { .. })),
+            "a valid write should emit the refreshed vault listing: {messages:?}"
+        );
+        assert!(error_messages(&messages).is_empty(), "valid write errored: {messages:?}");
+        assert_eq!(std::fs::read(f.vault.join("attachments").join("pic.png")).unwrap(), b"png");
+
+        let messages = write_asset(&f.state, &f.vault, "attachments/pic.png");
+        assert!(error_messages(&messages).is_empty(), "deduped write errored: {messages:?}");
+        assert_eq!(std::fs::read(f.vault.join("attachments").join("pic-2.png")).unwrap(), b"png");
+        assert_eq!(
+            std::fs::read(f.vault.join("attachments").join("pic.png")).unwrap(),
+            b"png",
+            "the original file must never be clobbered"
+        );
     }
 }
