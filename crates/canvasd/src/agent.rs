@@ -320,6 +320,7 @@ fn unix_shell_script(command: &str) -> String {
     )
 }
 
+#[cfg(unix)]
 fn shell_command(command: &str) -> CommandBuilder {
     let mut cmd = CommandBuilder::new("/bin/bash");
     cmd.arg("-lc");
