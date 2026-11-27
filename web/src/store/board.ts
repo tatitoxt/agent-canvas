@@ -563,11 +563,11 @@ type BoardState = {
   mdContents: Record<string, string>;
   /** Binary vault assets (images) as data URLs — filled by vault_asset. */
   vaultAssets: Record<string, string>;
-  mdNodeAdd: (path: string, anchor?: string, at?: { x: number; y: number }, heading?: string) => void;
+  mdNodeAdd: (path: string, anchor?: string, at?: { x: number; y: number }, heading?: { line: number; title: string }) => void;
   mdNodeRemove: (id: string) => void;
   /** Heading anchor (normalized lowercase title) a markdown window was
    * pinned at — the window scrolls there on mount. Keyed board -> node id. */
-  mdHeadings: Record<string, Record<string, string>>;
+  mdHeadings: Record<string, Record<string, { line: number; title: string }>>;
   /** Tool panels living ON the canvas as nodes (Deska "Add to board") —
    * each renders the live panel UI inside a card: movable, resizable,
    * closable. Keyed per board; node id is `panel-<key>`. */

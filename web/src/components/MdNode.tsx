@@ -39,14 +39,14 @@ export const MdNode = memo(function MdNode({ id, data, selected }: NodeProps<Nod
   const basename = data.path.split("/").pop() ?? data.path;
   const heading = useBoard((s) => s.mdHeadings[s.activeBoard]?.[id]);
   const rootRef = useRef<HTMLDivElement>(null);
-  const scrolledFor = useRef<string | null>(null);
+  const scrolledFor = useRef<number | null>(null);
 
   // Pinned-at-heading: scroll the reading view to the heading the user was
   // reading when they pinned the note. Runs once per mount — the 4s poll
   // must never yank the scroll back while the user reads elsewhere.
   useEffect(() => {
     if (!heading || text == null || editing) return;
-    if (scrolledFor.current === heading) return;
+    if (scrolledFor.current != null) return;
     const line = headingLineFor(text, heading);
     if (line == null) return;
     let tries = 0;
@@ -54,7 +54,7 @@ export const MdNode = memo(function MdNode({ id, data, selected }: NodeProps<Nod
       const el = rootRef.current?.querySelector(`#vh-${line}`);
       if (el) {
         el.scrollIntoView({ block: "start" });
-        scrolledFor.current = heading;
+        scrolledFor.current = line;
         clearInterval(t);
       } else if (++tries > 20) clearInterval(t);
     }, 100);
