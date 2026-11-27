@@ -65,11 +65,11 @@ test("permission lifecycle: supervised gate approve/deny, ladder cycle, daemon s
 
   // Sensitive input IS held: no execution, and the daemon's own snapshot
   // records the held line under approvals.
-  await steer(`rm -rf /tmp/ac-x1; echo gated-one-${uniq}`);
+  await steer(`sudo -n true; echo gated-one-${uniq}`);
   await page.waitForTimeout(1_500);
   await expect(rows).not.toContainText(`gated-one-${uniq}`);
   let snap = await snapshotOf();
-  expect(snap?.approvals?.[agentId!], "daemon must hold the sensitive input").toContain("rm -rf");
+  expect(snap?.approvals?.[agentId!], "daemon must hold the sensitive input").toContain("sudo");
 
   // Approve through the live Inbox panel — the stashed payload executes.
   await page.locator("button[title^='Tools —']").click();
@@ -77,15 +77,15 @@ test("permission lifecycle: supervised gate approve/deny, ladder cycle, daemon s
   await dock.getByRole("button", { name: "Add Inbox to canvas" }).click();
   const inbox = page.locator(".react-flow__node-panel [data-panel='inbox']").first();
   await expect(inbox).toBeVisible();
-  await expect(inbox).toContainText("rm -rf", { timeout: 8_000 });
+  await expect(inbox).toContainText("sudo", { timeout: 8_000 });
   await inbox.getByRole("button", { name: "allow", exact: true }).click();
   await expect(rows).toContainText(`gated-one-${uniq}`, { timeout: 8_000 });
   snap = await snapshotOf();
   expect(snap?.approvals?.[agentId!], "approval consumed the held input").toBeUndefined();
 
   // Deny: the stashed payload is dropped — it never reaches the PTY.
-  await steer(`rm -rf /tmp/ac-x2; echo gated-two-${uniq}`);
-  await expect(inbox).toContainText("rm -rf", { timeout: 8_000 });
+  await steer(`sudo -n true; echo gated-two-${uniq}`);
+  await expect(inbox).toContainText("sudo", { timeout: 8_000 });
   await inbox.getByRole("button", { name: "deny", exact: true }).click();
   await page.waitForTimeout(1_500);
   await expect(rows).not.toContainText(`gated-two-${uniq}`);
@@ -106,7 +106,7 @@ test("permission lifecycle: supervised gate approve/deny, ladder cycle, daemon s
   await expectLevel("auto");
 
   // At auto the same sensitive input runs immediately — no approval roundtrip.
-  await steer(`rm -rf /tmp/ac-x3; echo free-three-${uniq}`);
+  await steer(`sudo -n true; echo free-three-${uniq}`);
   await expect(rows).toContainText(`free-three-${uniq}`, { timeout: 8_000 });
   snap = await snapshotOf();
   expect(snap?.approvals?.[agentId!]).toBeUndefined();
@@ -117,9 +117,9 @@ test("permission lifecycle: supervised gate approve/deny, ladder cycle, daemon s
   // Back down the ladder — the gate re-engages.
   await pill.click(); // full → supervised (cycles)
   await expectLevel("supervised");
-  await steer(`rm -rf /tmp/ac-x4; echo gated-four-${uniq}`);
+  await steer(`sudo -n true; echo gated-four-${uniq}`);
   await page.waitForTimeout(1_500);
   await expect(rows).not.toContainText(`gated-four-${uniq}`);
   snap = await snapshotOf();
-  expect(snap?.approvals?.[agentId!], "gate re-engaged after cycling back").toContain("rm -rf");
+  expect(snap?.approvals?.[agentId!], "gate re-engaged after cycling back").toContain("sudo");
 });
