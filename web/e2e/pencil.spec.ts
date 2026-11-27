@@ -60,4 +60,33 @@ test("Pencil color selection is reflected in canvas markups", async ({ page }) =
   await page.mouse.move(box.x + 140, box.y + 190, { steps: 4 });
   await page.mouse.up();
   await expect(page.locator("svg polyline").last()).toHaveAttribute("stroke", "#58d6bd");
+
+  await page.keyboard.press("Escape");
+  await page.locator("button[title*='Tools —']").click();
+  const toolsAfter = page.getByRole("dialog", { name: "Tools panel" });
+  const downloadPromise = page.waitForEvent("download");
+  await toolsAfter.getByRole("button", { name: "Canvas shot" }).click();
+  const download = await downloadPromise;
+  const path = await download.path();
+  if (!path) throw new Error("Canvas shot did not produce a downloadable file");
+  const downloaded = await import("node:fs/promises").then(({ readFile }) => readFile(path));
+  expect(downloaded.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+  const mintPixels = await page.evaluate(async (base64) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${base64}`;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext("2d");
+    if (!context) return 0;
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let count = 0;
+    for (let i = 0; i < pixels.length; i += 4) {
+      if (pixels[i] === 88 && pixels[i + 1] === 214 && pixels[i + 2] === 189 && pixels[i + 3] > 0) count++;
+    }
+    return count;
+  }, downloaded.toString("base64"));
+  expect(mintPixels, "PNG export should contain the selected mint annotation").toBeGreaterThan(0);
 });

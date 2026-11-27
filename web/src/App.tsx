@@ -210,7 +210,7 @@ function Board() {
   const [drawing, setDrawing] = useState<Array<{ x: number; y: number }> | null>(null);
 
   const composeShot = useCallback(
-    async (dataUrl: string, screenRect: { x1: number; y1: number; x2: number; y2: number }, name: string) => {
+    async (dataUrl: string, viewport: { x: number; y: number; zoom: number }, name: string) => {
       const img = new Image();
       img.src = dataUrl;
       await img.decode();
@@ -219,23 +219,25 @@ function Board() {
       const ctx = cv.getContext("2d");
       if (!ctx) return;
       ctx.drawImage(img, 0, 0);
-      const sx = img.width / (screenRect.x2 - screenRect.x1);
-      const sy = img.height / (screenRect.y2 - screenRect.y1);
       ctx.strokeStyle = pencilColor;
       ctx.lineWidth = 3;
       ctx.lineJoin = ctx.lineCap = "round";
       for (const st of strokes) {
         if (st.length < 2) continue;
         ctx.beginPath();
-        ctx.moveTo((st[0].x - screenRect.x1) * sx, (st[0].y - screenRect.y1) * sy);
-        for (const p of st.slice(1)) ctx.lineTo((p.x - screenRect.x1) * sx, (p.y - screenRect.y1) * sy);
+        const first = screenToFlowPosition({ x: st[0].x, y: st[0].y });
+        ctx.moveTo(first.x * viewport.zoom + viewport.x, first.y * viewport.zoom + viewport.y);
+        for (const p of st.slice(1)) {
+          const flow = screenToFlowPosition({ x: p.x, y: p.y });
+          ctx.lineTo(flow.x * viewport.zoom + viewport.x, flow.y * viewport.zoom + viewport.y);
+        }
         ctx.stroke();
       }
       const a = document.createElement("a");
       a.download = name;
       a.href = cv.toDataURL("image/png");
       a.click();
-    }, [strokes, pencilColor]);
+    }, [strokes, pencilColor, screenToFlowPosition]);
   const shotCanvas = useCallback(async () => {
     const ns = getNodes();
     if (ns.length === 0) return;
@@ -256,10 +258,7 @@ function Board() {
         transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})`,
       },
     });
-    const a = document.createElement("a");
-    a.download = `canvas-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
-    a.href = dataUrl;
-    a.click();
+    void composeShot(dataUrl, vp, `canvas-${new Date().toISOString().replace(/[:.]/g, "-")}.png`);
   }, [getNodes, composeShot]);
   const viewCmdN = useBoard((s) => s.viewCmdN);
   useEffect(() => {
@@ -418,9 +417,9 @@ function Board() {
       height: h,
       style: { width: `${w}px`, height: `${h}px`, transform: `translate(${v.x}px, ${v.y}px) scale(${v.zoom})` },
     });
-    void composeShot(dataUrl, r, `canvas-region-${Date.now()}.png`);
+    void composeShot(dataUrl, v, `canvas-region-${Date.now()}.png`);
     useBoard.getState().notify(`region shot — ${picked.length} node(s)`);
-  }, [getNodes]);
+  }, [getNodes, composeShot]);
   // Connect on load when a token is present — no manual "connect" click.
   useEffect(() => {
     useBoard.getState().connect("");
