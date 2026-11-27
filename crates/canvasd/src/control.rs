@@ -1043,14 +1043,14 @@ fn handle_client_msg(text: &str, state: &ControlSocketState, identity: &ControlI
             let n = orchestrator
                 .agents
                 .suspend_many(&live_targets(orchestrator, &board));
-            orchestrator.emit_error(None, format!("paused {n} agents"));
+            orchestrator.emit_notice(format!("paused {n} agents"));
         }
         ClientMsg::ResumeAll { board_id } => {
             let board = board_id.unwrap_or_else(|| "main".to_string());
             let n = orchestrator
                 .agents
                 .resume_many(&live_targets(orchestrator, &board));
-            orchestrator.emit_error(None, format!("resumed {n} agents"));
+            orchestrator.emit_notice(format!("resumed {n} agents"));
         }
 
         // Deliberately out of the native control-socket v1 scope. These are
@@ -1151,6 +1151,38 @@ mod tests {
                     );
                 }
                 other => panic!("expected unsupported error, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn pause_and_resume_successes_emit_neutral_notices() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = std::sync::Arc::new(Store::open(&tmp.path().join("c.db")).unwrap());
+        let orchestrator = Orchestrator::new(
+            store,
+            std::sync::Arc::new(crate::agent::AgentManager::new()),
+            tmp.path().to_path_buf(),
+            crate::orchestrate::tokio_task_spawner(),
+        );
+        let state = ControlSocketState {
+            orchestrator: orchestrator.clone(),
+            auth: ControlAuth::new("operator-token".to_string()),
+        };
+        let mut rx = orchestrator.subscribe_control();
+
+        for (cmd, expected) in [
+            ("pause_all", "paused 0 agents"),
+            ("resume_all", "resumed 0 agents"),
+        ] {
+            handle_client_msg(
+                &serde_json::json!({"cmd": cmd, "board_id": "main"}).to_string(),
+                &state,
+                &ControlIdentity::Operator,
+            );
+            match rx.try_recv() {
+                Ok(ServerMsg::Notice { message }) => assert_eq!(message, expected),
+                other => panic!("expected neutral notice, got {other:?}"),
             }
         }
     }

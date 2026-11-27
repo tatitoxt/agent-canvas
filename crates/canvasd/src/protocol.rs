@@ -451,6 +451,10 @@ pub enum ServerMsg {
         agent_id: Option<String>,
         message: String,
     },
+    /// Neutral operator feedback for successful actions, distinct from errors.
+    Notice {
+        message: String,
+    },
     Delegation {
         edge_id: String,
         from: String,

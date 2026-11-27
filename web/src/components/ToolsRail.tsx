@@ -223,8 +223,8 @@ export function ToolsMenu({
             </div>
           )}
           {item("web", "Open a page", () => { setLauncherOpen(true); dismiss(); }, "web nodes on canvas")}
-          {item("pause", "Pause all", () => pauseAll(activeBoard), "SIGSTOP every agent")}
-          {item("play", "Resume all", () => resumeAll(activeBoard))}
+          {item("pause", "Pause all", () => { pauseAll(activeBoard); dismiss(); }, "SIGSTOP every agent")}
+          {item("play", "Resume all", () => { resumeAll(activeBoard); dismiss(); })}
           {item("gather", "Gather loose windows", () => { gatherLoose(); dismiss(); }, "into a group")}
           {item("eye", "Panel summaries", () => togglePanelSummaries(), summaries ? "on" : "off", summaries)}
           <div className="cv-section-label" style={sectionLabel}>Capture</div>

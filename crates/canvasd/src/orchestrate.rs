@@ -184,6 +184,12 @@ impl Orchestrator {
         });
     }
 
+    pub fn emit_notice(&self, message: impl Into<String>) {
+        self.emit_control(ServerMsg::Notice {
+            message: message.into(),
+        });
+    }
+
     pub fn emit_pty(&self, agent_id: &str, bytes: &[u8]) {
         let _ = self.pty_events.send((agent_id.to_string(), bytes.to_vec()));
     }

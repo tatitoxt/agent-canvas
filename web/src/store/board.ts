@@ -908,6 +908,9 @@ export const useBoard = create<BoardState>((set, get) => ({
       onControl: (msg: ServerMsg) => {
         const { agents, edges } = get();
         switch (msg.type) {
+          case "notice":
+            get().notify(msg.message);
+            break;
           case "spawned": {
             // Chain fallback replacements arrive with "(fallback: cli)" in
             // the name — surface the substitution so a silent CLI swap never

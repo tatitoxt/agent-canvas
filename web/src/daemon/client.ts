@@ -50,6 +50,7 @@ export type SnapshotAccount = {
 };
 
 export type ServerMsg =
+  | { type: "notice"; message: string }
   | { type: "spawned"; agent_id: string; name: string; command?: string; permission?: string; workspace_id?: string | null; board_id?: string | null; fallback_from?: string | null; worktree?: string | null }
   | { type: "workspace_created"; workspace_id: string; name: string; repo: string; board_id?: string | null }
   | { type: "board_created"; board_id: string; name: string }
