@@ -277,16 +277,45 @@ test("topbar labels Panels and opens Mission Map from its live summary", async (
   await expect(page.locator("button[title='Automations']")).toHaveCSS("width", "34px");
 });
 
-test("Tools Add shape opens its choices and creates a canvas shape", async ({ page }) => {
+test("Tools can add each of the four canvas shape types", async ({ page }) => {
   await boot(page);
-  await page.locator("button[title^='Tools —']").click();
-  const dock = page.getByRole("dialog", { name: "Tools panel" });
-  await dock.getByRole("button", { name: "Add shape" }).click();
-  const rect = dock.locator("button[title='rect']");
-  await expect(rect).toBeVisible();
-  await rect.click();
-  await expect(dock).toBeHidden();
-  await expect(page.locator(".react-flow__node-shape")).toBeVisible();
+  for (const kind of ["rect", "ellipse", "diamond", "sticky"]) {
+    await page.locator("button[title^='Tools —']").click();
+    const dock = page.getByRole("dialog", { name: "Tools panel" });
+    await dock.getByRole("button", { name: "Add shape" }).click();
+    await dock.locator(`button[title='${kind}']`).click();
+    await expect(dock).toBeHidden();
+  }
+  await expect(page.locator(".react-flow__node-shape")).toHaveCount(4);
+  const savedKinds = await page.evaluate(() => {
+    const all = JSON.parse(localStorage.getItem("cv-shapes") ?? "{}");
+    return Object.values(all.main ?? {}).map((shape: any) => shape.kind).sort();
+  });
+  expect(savedKinds).toEqual(["diamond", "ellipse", "rect", "sticky"]);
+});
+
+test("Tools Panel summaries toggle exposes state and persists after reload", async ({ page }) => {
+  await boot(page);
+  await page.evaluate(() => localStorage.setItem("cv-panel-summaries", "false"));
+  await page.reload();
+
+  const openTools = async () => {
+    await page.locator("button[title^='Tools —']").click();
+    return page.getByRole("dialog", { name: "Tools panel" });
+  };
+
+  let dock = await openTools();
+  let summaries = dock.getByRole("button", { name: "Panel summaries" });
+  await expect(summaries).toHaveAttribute("aria-pressed", "false");
+  await summaries.click();
+  await expect(dock.getByRole("button", { name: "Panel summaries" })).toHaveAttribute("aria-pressed", "true");
+
+  await page.reload();
+  dock = await openTools();
+  summaries = dock.getByRole("button", { name: "Panel summaries" });
+  await expect(summaries).toHaveAttribute("aria-pressed", "true");
+  await summaries.click();
+  await expect(summaries).toHaveAttribute("aria-pressed", "false");
 });
 
 test("Pencil and Region shot modes have working visible and Escape exits", async ({ page }) => {
