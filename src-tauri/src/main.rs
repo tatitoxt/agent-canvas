@@ -8,8 +8,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use base64::Engine;
-use canvasd::agent::{canvas_result_line, dirty_diff, dirty_file_count, dirty_files, sensitive_line, worktree_branch, AgentManager};
-use canvasd::protocol::{AgentStatus, ServerMsg, SnapshotAgent, SnapshotAutomation, SnapshotDelegation};
+use canvasd::agent::{
+    canvas_result_line, dirty_diff, dirty_file_count, dirty_files, sensitive_line, worktree_branch,
+    AgentManager,
+};
+use canvasd::protocol::{
+    AgentStatus, ServerMsg, SnapshotAgent, SnapshotAutomation, SnapshotDelegation,
+};
 use canvasd::store::Store;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -124,7 +129,14 @@ fn spawn_wired(
                 for edge_id in edges {
                     if let Some(summary) = summary.clone() {
                         let _ = store2.delegation_resolved(&edge_id, &summary, files);
-                        emit_control(&app2, &ServerMsg::Result { edge_id, summary, files });
+                        emit_control(
+                            &app2,
+                            &ServerMsg::Result {
+                                edge_id,
+                                summary,
+                                files,
+                            },
+                        );
                     } else {
                         let _ = store2.delegation_failed(&edge_id, files);
                         emit_control(&app2, &ServerMsg::DelegationFailed { edge_id });
@@ -141,9 +153,7 @@ fn spawn_wired(
         }
     });
 
-    let repo_root = match workspace_id
-        .and_then(|w| state.store.workspace_repo(w).ok().flatten())
-    {
+    let repo_root = match workspace_id.and_then(|w| state.store.workspace_repo(w).ok().flatten()) {
         Some(repo) => PathBuf::from(repo),
         None => state.repo_root.clone(),
     };
@@ -169,17 +179,20 @@ fn spawn_wired(
         let _ = std::fs::write(&mem_path, "");
     }
     let mut pty_env = pty_env;
-    pty_env.push(("CANVAS_MEMORY".to_string(), mem_path.to_string_lossy().to_string()));
+    pty_env.push((
+        "CANVAS_MEMORY".to_string(),
+        mem_path.to_string_lossy().to_string(),
+    ));
     let id = state
         .agents
-        .spawn(name, command, cwd, &repo_root, permission, out_tx, exit_tx, &pty_env)
+        .spawn(
+            name, command, cwd, &repo_root, permission, out_tx, exit_tx, &pty_env,
+        )
         .map_err(|e| e.to_string())?;
     // Board: explicit, else the workspace's board, else 'main'.
     let board = board_id
         .map(|b| b.to_string())
-        .or_else(|| {
-            workspace_id.and_then(|w| state.store.workspace_board(w).ok().flatten())
-        });
+        .or_else(|| workspace_id.and_then(|w| state.store.workspace_board(w).ok().flatten()));
     if let Err(e) = state.store.agent_spawned(
         &id,
         name,
@@ -210,7 +223,17 @@ fn spawn_agent(
     initial_input: Option<String>,
 ) -> Result<String, String> {
     let level = canvasd::protocol::normalize_permission(permission.as_deref());
-    let (id, board) = spawn_wired(&app, state.inner(), &name, &command, &cwd, workspace_id.as_deref(), level, board_id.as_deref(), account_id.as_deref())?;
+    let (id, board) = spawn_wired(
+        &app,
+        state.inner(),
+        &name,
+        &command,
+        &cwd,
+        workspace_id.as_deref(),
+        level,
+        board_id.as_deref(),
+        account_id.as_deref(),
+    )?;
     if let Some(text) = initial_input {
         // Quick request: type the task once the CLI has booted.
         let app2 = app.clone();
@@ -223,8 +246,24 @@ fn spawn_agent(
             let _ = st.agents.write(&target, &data);
         });
     }
-    let wt = app.state::<CanvasState>().agents.worktree(&id).map(|p| p.to_string_lossy().to_string());
-    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None, worktree: wt });
+    let wt = app
+        .state::<CanvasState>()
+        .agents
+        .worktree(&id)
+        .map(|p| p.to_string_lossy().to_string());
+    emit_control(
+        &app,
+        &ServerMsg::Spawned {
+            agent_id: id.clone(),
+            name,
+            command,
+            permission: level.to_string(),
+            workspace_id,
+            board_id: board,
+            fallback_from: None,
+            worktree: wt,
+        },
+    );
     Ok(id)
 }
 
@@ -239,7 +278,13 @@ fn create_board(
         .store
         .board_created(&id, &name)
         .map_err(|e| e.to_string())?;
-    emit_control(&app, &ServerMsg::BoardCreated { board_id: id.clone(), name });
+    emit_control(
+        &app,
+        &ServerMsg::BoardCreated {
+            board_id: id.clone(),
+            name,
+        },
+    );
     Ok(id)
 }
 
@@ -258,7 +303,15 @@ fn create_account(
         .store
         .account_created(&account_id, &cli, &label, &dir, env.as_deref())
         .map_err(|e| e.to_string())?;
-    emit_control(&app, &ServerMsg::AccountCreated { account_id: account_id.clone(), cli, label, env });
+    emit_control(
+        &app,
+        &ServerMsg::AccountCreated {
+            account_id: account_id.clone(),
+            cli,
+            label,
+            env,
+        },
+    );
     Ok(account_id)
 }
 
@@ -356,22 +409,41 @@ fn delete_delegation(
 }
 
 #[tauri::command]
-fn studio_doc(app: AppHandle, state: State<'_, CanvasState>, board_id: Option<String>) -> Result<(), String> {
+fn studio_doc(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    board_id: Option<String>,
+) -> Result<(), String> {
     let board = board_id.unwrap_or_else(|| "main".to_string());
-    let mut md = String::from("# Studio — repo dossier
+    let mut md = String::from(
+        "# Studio — repo dossier
 
-");
+",
+    );
     let repo = &state.repo_root;
     md.push_str(&format!("## Tree — {}\n\n```\n", repo.display()));
     fn walk(d: &std::path::Path, depth: usize, prefix: &str, out: &mut String) {
-        if depth > 2 { return; }
-        let mut entries: Vec<_> = std::fs::read_dir(d).map(|rd| rd.flatten().collect()).unwrap_or_default();
+        if depth > 2 {
+            return;
+        }
+        let mut entries: Vec<_> = std::fs::read_dir(d)
+            .map(|rd| rd.flatten().collect())
+            .unwrap_or_default();
         entries.sort_by_key(|e| e.file_name());
         for e in entries {
             let name = e.file_name().to_string_lossy().to_string();
-            if name.starts_with('.') || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build") { continue; }
-            out.push_str(&format!("{prefix}{name}{}\n", if e.path().is_dir() { "/" } else { "" }));
-            if e.path().is_dir() { walk(&e.path(), depth + 1, &format!("{prefix}  "), out); }
+            if name.starts_with('.')
+                || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build")
+            {
+                continue;
+            }
+            out.push_str(&format!(
+                "{prefix}{name}{}\n",
+                if e.path().is_dir() { "/" } else { "" }
+            ));
+            if e.path().is_dir() {
+                walk(&e.path(), depth + 1, &format!("{prefix}  "), out);
+            }
         }
     }
     walk(repo, 0, "", &mut md);
@@ -383,15 +455,27 @@ fn studio_doc(app: AppHandle, state: State<'_, CanvasState>, board_id: Option<St
     let agents = state.store.agents_snapshot().unwrap_or_default();
     md.push_str("## Agents\n\n");
     for (_id, name, command, _wt, status, _ws, _perm, bd, acct) in &agents {
-        if bd.as_deref().unwrap_or("main") != board { continue; }
-        md.push_str(&format!("- **{name}** (`{command}`) — {status}{}\n", acct.as_ref().map(|l| format!(" · @{l}")).unwrap_or_default()));
+        if bd.as_deref().unwrap_or("main") != board {
+            continue;
+        }
+        md.push_str(&format!(
+            "- **{name}** (`{command}`) — {status}{}\n",
+            acct.as_ref()
+                .map(|l| format!(" · @{l}"))
+                .unwrap_or_default()
+        ));
     }
     let notes = state.store.all_notes().unwrap_or_default();
     let board_notes: Vec<_> = notes.iter().filter(|n| n.1 == board).collect();
     if !board_notes.is_empty() {
         md.push_str("\n## Notes\n\n");
         for (_id, _b, col, text, _pos, due) in &board_notes {
-            md.push_str(&format!("- [{col}] {text}{}\n", due.as_ref().map(|d| format!(" (due {d})")).unwrap_or_default()));
+            md.push_str(&format!(
+                "- [{col}] {text}{}\n",
+                due.as_ref()
+                    .map(|d| format!(" (due {d})"))
+                    .unwrap_or_default()
+            ));
         }
     }
     let arts = state.store.artifacts_snapshot().unwrap_or_default();
@@ -399,7 +483,10 @@ fn studio_doc(app: AppHandle, state: State<'_, CanvasState>, board_id: Option<St
     if !board_arts.is_empty() {
         md.push_str("\n## Artifacts\n\n");
         for (id, _bd, agent, kind, title, _p, _t, at) in &board_arts {
-            md.push_str(&format!("- `{kind}` **{title}** — {} ({at}, `{id}`)\n", agent.as_deref().unwrap_or("-")));
+            md.push_str(&format!(
+                "- `{kind}` **{title}** — {} ({at}, `{id}`)\n",
+                agent.as_deref().unwrap_or("-")
+            ));
         }
     }
     emit_control(&app, &ServerMsg::StudioDocMd { text: md });
@@ -410,7 +497,11 @@ fn studio_doc(app: AppHandle, state: State<'_, CanvasState>, board_id: Option<St
 /// the notes so `![[img.png]]` embeds can resolve them.
 fn is_vault_image(name: &str) -> bool {
     matches!(
-        name.rsplit('.').next().unwrap_or("").to_ascii_lowercase().as_str(),
+        name.rsplit('.')
+            .next()
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .as_str(),
         "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "ico"
     )
 }
@@ -452,14 +543,22 @@ fn repo_tree_entries(root: &PathBuf) -> Vec<String> {
     let mut entries = Vec::new();
     let mut stack = vec![root.clone()];
     while let Some(dir) = stack.pop() {
-        let Ok(read_dir) = std::fs::read_dir(&dir) else { continue };
+        let Ok(read_dir) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for entry in read_dir.flatten() {
             let path = entry.path();
             let name = entry.file_name().to_string_lossy().to_string();
-            if name.starts_with('.') || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build") {
+            if name.starts_with('.')
+                || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build")
+            {
                 continue;
             }
-            if entry.file_type().map(|kind| kind.is_symlink()).unwrap_or(true) {
+            if entry
+                .file_type()
+                .map(|kind| kind.is_symlink())
+                .unwrap_or(true)
+            {
                 continue;
             }
             if path.is_dir() && stack.len() + entries.len() < 6000 {
@@ -481,13 +580,16 @@ fn read_repo_file(root: &PathBuf, path: &str) -> Result<String, String> {
         || rel.components().any(|c| {
             matches!(
                 c,
-                std::path::Component::Prefix(_) | std::path::Component::RootDir | std::path::Component::ParentDir
+                std::path::Component::Prefix(_)
+                    | std::path::Component::RootDir
+                    | std::path::Component::ParentDir
             )
         })
     {
         return Err("access denied: path escapes the repository".into());
     }
-    let canonical = std::fs::canonicalize(root.join(rel)).map_err(|_| format!("read failed: {path}"))?;
+    let canonical =
+        std::fs::canonicalize(root.join(rel)).map_err(|_| format!("read failed: {path}"))?;
     let root = std::fs::canonicalize(root).map_err(|e| e.to_string())?;
     if !canonical.starts_with(&root) || !canonical.is_file() {
         return Err("access denied: path is outside the repository".into());
@@ -507,15 +609,27 @@ fn atomic_replace_file(path: &std::path::Path, text: &str) -> Result<(), String>
     use std::io::Write;
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
-    let parent = path.parent().ok_or_else(|| "write failed: missing parent directory".to_string())?;
-    let name = path.file_name().ok_or_else(|| "write failed: missing file name".to_string())?.to_string_lossy();
-    let permissions = std::fs::metadata(path).map_err(|e| format!("write failed: {e}"))?.permissions();
+    let parent = path
+        .parent()
+        .ok_or_else(|| "write failed: missing parent directory".to_string())?;
+    let name = path
+        .file_name()
+        .ok_or_else(|| "write failed: missing file name".to_string())?
+        .to_string_lossy();
+    let permissions = std::fs::metadata(path)
+        .map_err(|e| format!("write failed: {e}"))?
+        .permissions();
     let mut last_error = None;
     for _ in 0..8 {
-        let temp = parent.join(format!(".{name}.canvas-save-{}-{}", std::process::id(), NEXT_TEMP.fetch_add(1, Ordering::Relaxed)));
+        let temp = parent.join(format!(
+            ".{name}.canvas-save-{}-{}",
+            std::process::id(),
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+        ));
         let mut options = std::fs::OpenOptions::new();
         options.write(true).create_new(true);
-        #[cfg(unix)] {
+        #[cfg(unix)]
+        {
             use std::os::unix::fs::OpenOptionsExt;
             use std::os::unix::fs::PermissionsExt;
             options.mode(permissions.mode());
@@ -523,19 +637,30 @@ fn atomic_replace_file(path: &std::path::Path, text: &str) -> Result<(), String>
         match options.open(&temp) {
             Ok(mut file) => {
                 let result = (|| {
-                    file.write_all(text.as_bytes()).map_err(|e| format!("write failed: {e}"))?;
+                    file.write_all(text.as_bytes())
+                        .map_err(|e| format!("write failed: {e}"))?;
                     file.sync_all().map_err(|e| format!("write failed: {e}"))?;
-                    std::fs::set_permissions(&temp, permissions).map_err(|e| format!("write failed: {e}"))?;
+                    std::fs::set_permissions(&temp, permissions)
+                        .map_err(|e| format!("write failed: {e}"))?;
                     std::fs::rename(&temp, path).map_err(|e| format!("write failed: {e}"))
                 })();
-                if result.is_err() { let _ = std::fs::remove_file(&temp); }
+                if result.is_err() {
+                    let _ = std::fs::remove_file(&temp);
+                }
                 return result;
             }
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => last_error = Some(error),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                last_error = Some(error)
+            }
             Err(error) => return Err(format!("write failed: {error}")),
         }
     }
-    Err(format!("write failed: {}", last_error.map(|e| e.to_string()).unwrap_or_else(|| "could not allocate temporary file".into())))
+    Err(format!(
+        "write failed: {}",
+        last_error
+            .map(|e| e.to_string())
+            .unwrap_or_else(|| "could not allocate temporary file".into())
+    ))
 }
 
 fn write_repo_file(root: &PathBuf, path: &str, text: &str, base_text: &str) -> Result<(), String> {
@@ -543,9 +668,14 @@ fn write_repo_file(root: &PathBuf, path: &str, text: &str, base_text: &str) -> R
         return Err("file exceeds the 256 KiB text editor limit".into());
     }
     let current = read_repo_file(root, path)?;
-    if current != base_text { return Err(format!("file changed on disk; reload before saving: {path}")); }
+    if current != base_text {
+        return Err(format!(
+            "file changed on disk; reload before saving: {path}"
+        ));
+    }
     let rel = std::path::Path::new(path);
-    let canonical = std::fs::canonicalize(root.join(rel)).map_err(|_| format!("write failed: {path}"))?;
+    let canonical =
+        std::fs::canonicalize(root.join(rel)).map_err(|_| format!("write failed: {path}"))?;
     let canonical_root = std::fs::canonicalize(root).map_err(|e| e.to_string())?;
     if !canonical.starts_with(&canonical_root) || !canonical.is_file() {
         return Err("access denied: path is outside the repository".into());
@@ -652,7 +782,11 @@ fn persist_allowed_root(allowed_roots: &Mutex<Vec<PathBuf>>, canon_root: &Path) 
     }
     addition.push_str(&line);
     addition.push('\n');
-    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&list) {
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&list)
+    {
         let _ = file.write_all(addition.as_bytes());
     }
 }
@@ -717,7 +851,9 @@ fn vault_sandbox_resolve(
     if rel.components().any(|c| {
         matches!(
             c,
-            std::path::Component::Prefix(_) | std::path::Component::RootDir | std::path::Component::ParentDir
+            std::path::Component::Prefix(_)
+                | std::path::Component::RootDir
+                | std::path::Component::ParentDir
         )
     }) {
         return Err("access denied: path escapes the vault".into());
@@ -725,7 +861,9 @@ fn vault_sandbox_resolve(
     let canon_root = canon_through_missing(Path::new(dir))
         .ok_or_else(|| format!("access denied: vault root not found: {dir}"))?;
     if !root_allowed(allowed_roots, &canon_root) {
-        return Err(format!("access denied: path is outside allowed directories{SANDBOX_HINT}"));
+        return Err(format!(
+            "access denied: path is outside allowed directories{SANDBOX_HINT}"
+        ));
     }
     // Walk the components that exist: any symlink in the chain must resolve
     // inside the vault. `symlink_metadata` (lstat) sees dangling links that
@@ -759,31 +897,46 @@ fn vault_sandbox_dir(allowed_roots: &Mutex<Vec<PathBuf>>, dir: &str) -> Result<P
     if root_allowed(allowed_roots, &canon_root) {
         Ok(canon_root)
     } else {
-        Err(format!("access denied: path is outside allowed directories{SANDBOX_HINT}"))
+        Err(format!(
+            "access denied: path is outside allowed directories{SANDBOX_HINT}"
+        ))
     }
 }
 
 fn resolve_registered_repo_dir(dir: &str, roots: &[PathBuf]) -> Result<PathBuf, String> {
     let requested_path = expand_home_path(dir);
     for root_path in roots {
-        let Ok(root) = std::fs::canonicalize(root_path) else { continue };
+        let Ok(root) = std::fs::canonicalize(root_path) else {
+            continue;
+        };
         let candidate = if requested_path.is_absolute() {
             requested_path.clone()
         } else {
             root.join(&requested_path)
         };
-        let Ok(requested) = std::fs::canonicalize(candidate) else { continue };
+        let Ok(requested) = std::fs::canonicalize(candidate) else {
+            continue;
+        };
         if requested.starts_with(&root) && requested.is_dir() {
             return Ok(requested);
         }
     }
-    Err(format!("access denied: repository is not registered or not found: {dir}"))
+    Err(format!(
+        "access denied: repository is not registered or not found: {dir}"
+    ))
 }
 
 fn registered_repo_root(state: &CanvasState, dir: &str) -> Result<PathBuf, String> {
     let mut registered = vec![state.repo_root.clone()];
-    let workspaces = state.store.workspaces_snapshot().map_err(|e| e.to_string())?;
-    registered.extend(workspaces.into_iter().map(|(_, _, repo, _)| expand_home_path(&repo)));
+    let workspaces = state
+        .store
+        .workspaces_snapshot()
+        .map_err(|e| e.to_string())?;
+    registered.extend(
+        workspaces
+            .into_iter()
+            .map(|(_, _, repo, _)| expand_home_path(&repo)),
+    );
     // Restored snapshots can carry a repository-relative worktree such as
     // `.canvas-worktrees/<id>`. Resolve it against each registered workspace,
     // then canonicalize before checking containment so symlinks cannot escape.
@@ -795,7 +948,13 @@ fn repo_tree(app: AppHandle, state: State<'_, CanvasState>, dir: String) -> Resu
     let root = match registered_repo_root(state.inner(), &dir) {
         Ok(root) => root,
         Err(message) => {
-            emit_control(&app, &ServerMsg::Error { agent_id: None, message });
+            emit_control(
+                &app,
+                &ServerMsg::Error {
+                    agent_id: None,
+                    message,
+                },
+            );
             return Ok(());
         }
     };
@@ -806,12 +965,24 @@ fn repo_tree(app: AppHandle, state: State<'_, CanvasState>, dir: String) -> Resu
 }
 
 #[tauri::command]
-fn repo_read(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String) -> Result<(), String> {
-    let result = registered_repo_root(state.inner(), &dir).and_then(|root| read_repo_file(&root, &path));
+fn repo_read(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    dir: String,
+    path: String,
+) -> Result<(), String> {
+    let result =
+        registered_repo_root(state.inner(), &dir).and_then(|root| read_repo_file(&root, &path));
     let text = match result {
         Ok(text) => text,
         Err(message) => {
-            emit_control(&app, &ServerMsg::Error { agent_id: None, message });
+            emit_control(
+                &app,
+                &ServerMsg::Error {
+                    agent_id: None,
+                    message,
+                },
+            );
             return Ok(());
         }
     };
@@ -820,11 +991,24 @@ fn repo_read(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: S
 }
 
 #[tauri::command]
-fn repo_write(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String, text: String, base_text: String) -> Result<(), String> {
+fn repo_write(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    dir: String,
+    path: String,
+    text: String,
+    base_text: String,
+) -> Result<(), String> {
     let result = registered_repo_root(state.inner(), &dir)
         .and_then(|root| write_repo_file(&root, &path, &text, &base_text));
     if let Err(message) = result {
-        emit_control(&app, &ServerMsg::Error { agent_id: None, message });
+        emit_control(
+            &app,
+            &ServerMsg::Error {
+                agent_id: None,
+                message,
+            },
+        );
         return Ok(());
     }
     emit_control(&app, &ServerMsg::RepoFile { dir, path, text });
@@ -833,7 +1017,10 @@ fn repo_write(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: 
 
 #[cfg(test)]
 mod repo_explorer_tests {
-    use super::{expand_home_path, read_repo_file, repo_tree_entries, resolve_registered_repo_dir, uri_component, write_repo_file};
+    use super::{
+        expand_home_path, read_repo_file, repo_tree_entries, resolve_registered_repo_dir,
+        uri_component, write_repo_file,
+    };
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -876,9 +1063,15 @@ mod repo_explorer_tests {
         std::fs::write(root.join("large.txt"), vec![b'x'; 256 * 1024 + 1]).unwrap();
 
         assert_eq!(read_repo_file(&root, "README.md").unwrap(), "hello");
-        assert!(read_repo_file(&root, "../outside").unwrap_err().contains("access denied"));
-        assert!(read_repo_file(&root, "binary.dat").unwrap_err().contains("binary"));
-        assert!(read_repo_file(&root, "large.txt").unwrap_err().contains("too large"));
+        assert!(read_repo_file(&root, "../outside")
+            .unwrap_err()
+            .contains("access denied"));
+        assert!(read_repo_file(&root, "binary.dat")
+            .unwrap_err()
+            .contains("binary"));
+        assert!(read_repo_file(&root, "large.txt")
+            .unwrap_err()
+            .contains("too large"));
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -888,8 +1081,12 @@ mod repo_explorer_tests {
         std::fs::write(root.join("README.md"), "before").unwrap();
         write_repo_file(&root, "README.md", "after", "before").unwrap();
         assert_eq!(read_repo_file(&root, "README.md").unwrap(), "after");
-        assert!(write_repo_file(&root, "README.md", "clobber", "before").unwrap_err().contains("changed on disk"));
-        assert!(write_repo_file(&root, "../outside", "x", "").unwrap_err().contains("access denied"));
+        assert!(write_repo_file(&root, "README.md", "clobber", "before")
+            .unwrap_err()
+            .contains("changed on disk"));
+        assert!(write_repo_file(&root, "../outside", "x", "")
+            .unwrap_err()
+            .contains("access denied"));
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -898,7 +1095,9 @@ mod repo_explorer_tests {
         let root = temp_root();
         let original = [0x66, 0x80, 0x6f];
         std::fs::write(root.join("README.md"), original).unwrap();
-        assert!(read_repo_file(&root, "README.md").unwrap_err().contains("UTF-8"));
+        assert!(read_repo_file(&root, "README.md")
+            .unwrap_err()
+            .contains("UTF-8"));
         assert!(write_repo_file(&root, "README.md", "replacement", "foo").is_err());
         assert_eq!(std::fs::read(root.join("README.md")).unwrap(), original);
         std::fs::remove_dir_all(root).unwrap();
@@ -907,8 +1106,14 @@ mod repo_explorer_tests {
     #[test]
     fn expands_home_workspace_paths_and_keeps_relative_paths_relative() {
         let home = std::env::var("HOME").unwrap();
-        assert_eq!(expand_home_path("~/projects/demo"), PathBuf::from(home).join("projects/demo"));
-        assert_eq!(expand_home_path("relative/worktree"), PathBuf::from("relative/worktree"));
+        assert_eq!(
+            expand_home_path("~/projects/demo"),
+            PathBuf::from(home).join("projects/demo")
+        );
+        assert_eq!(
+            expand_home_path("relative/worktree"),
+            PathBuf::from("relative/worktree")
+        );
     }
 
     #[test]
@@ -936,13 +1141,22 @@ mod repo_explorer_tests {
         // Finder/launchd launches (cwd is the filesystem root) and random
         // folders fall to the per-user default — the launch crash this
         // resolution order prevents.
-        assert_eq!(pick_repo_root(None, Path::new("/"), &home), home.join("Canvas"));
-        assert_eq!(pick_repo_root(None, Path::new("/usr/local/bin"), &home), home.join("Canvas"));
+        assert_eq!(
+            pick_repo_root(None, Path::new("/"), &home),
+            home.join("Canvas")
+        );
+        assert_eq!(
+            pick_repo_root(None, Path::new("/usr/local/bin"), &home),
+            home.join("Canvas")
+        );
     }
 
     #[test]
     fn obsidian_uri_components_encode_spaces_unicode_and_query_delimiters() {
-        assert_eq!(uri_component("Team Notes/visión & plan"), "Team%20Notes%2Fvisi%C3%B3n%20%26%20plan");
+        assert_eq!(
+            uri_component("Team Notes/visión & plan"),
+            "Team%20Notes%2Fvisi%C3%B3n%20%26%20plan"
+        );
     }
 
     #[test]
@@ -953,7 +1167,9 @@ mod repo_explorer_tests {
         std::fs::write(worktree.join("README.md"), "worktree").unwrap();
 
         let canonical_root = std::fs::canonicalize(&root).unwrap();
-        let candidate = resolve_registered_repo_dir(".canvas-worktrees/agent-1", std::slice::from_ref(&root)).unwrap();
+        let candidate =
+            resolve_registered_repo_dir(".canvas-worktrees/agent-1", std::slice::from_ref(&root))
+                .unwrap();
         assert!(candidate.starts_with(&canonical_root));
         assert!(candidate.is_dir());
         assert!(resolve_registered_repo_dir("../", std::slice::from_ref(&root)).is_err());
@@ -968,7 +1184,9 @@ mod repo_explorer_tests {
         std::fs::write(outside.join("secret.txt"), "secret").unwrap();
         std::os::unix::fs::symlink(outside.join("secret.txt"), root.join("secret.txt")).unwrap();
 
-        assert!(read_repo_file(&root, "secret.txt").unwrap_err().contains("access denied"));
+        assert!(read_repo_file(&root, "secret.txt")
+            .unwrap_err()
+            .contains("access denied"));
         std::fs::remove_dir_all(root).unwrap();
         std::fs::remove_dir_all(outside).unwrap();
     }
@@ -981,7 +1199,9 @@ fn vault_links(text: &str) -> Vec<String> {
         let inner = &rest[start + 2..];
         let Some(end) = inner.find("]]") else { break };
         let name = inner[..end].split('|').next().unwrap_or("").trim();
-        if !name.is_empty() { out.push(name.to_string()); }
+        if !name.is_empty() {
+            out.push(name.to_string());
+        }
         rest = &inner[end + 2..];
     }
     let mut rest = text;
@@ -989,7 +1209,9 @@ fn vault_links(text: &str) -> Vec<String> {
         let inner = &rest[pos + 2..];
         let Some(end) = inner.find(')') else { break };
         let target = inner[..end].trim();
-        if target.ends_with(".md") { out.push(target.to_string()); }
+        if target.ends_with(".md") {
+            out.push(target.to_string());
+        }
         rest = &inner[end..];
     }
     out
@@ -1000,19 +1222,32 @@ fn vault_links(text: &str) -> Vec<String> {
 #[tauri::command]
 fn default_vault_dir() -> Option<String> {
     let home = std::env::var("HOME").ok()?;
-    [format!("{home}/Documents/Orkelya-Memory"), format!("{home}/Documents"), home]
-        .into_iter()
-        .find(|cand| PathBuf::from(cand.as_str()).is_dir())
+    [
+        format!("{home}/Documents/Orkelya-Memory"),
+        format!("{home}/Documents"),
+        home,
+    ]
+    .into_iter()
+    .find(|cand| PathBuf::from(cand.as_str()).is_dir())
 }
 
 #[tauri::command]
 fn vault_discover(app: AppHandle) -> Result<(), String> {
-    emit_control(&app, &ServerMsg::VaultDiscovered { vaults: canvasd::vault::discover() });
+    emit_control(
+        &app,
+        &ServerMsg::VaultDiscovered {
+            vaults: canvasd::vault::discover(),
+        },
+    );
     Ok(())
 }
 
 #[tauri::command]
-fn vault_register(app: AppHandle, state: State<'_, CanvasState>, dir: String) -> Result<(), String> {
+fn vault_register(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    dir: String,
+) -> Result<(), String> {
     // Registration creates `.obsidian` inside the target folder, so it is a
     // filesystem write and must not become a way to write into an ungranted
     // directory. The Vault panel mount gesture (`vault_list`) is what grants
@@ -1037,7 +1272,11 @@ fn uri_component(value: &str) -> String {
 }
 
 #[tauri::command]
-fn open_obsidian(state: State<'_, CanvasState>, vault_dir: String, path: String) -> Result<(), String> {
+fn open_obsidian(
+    state: State<'_, CanvasState>,
+    vault_dir: String,
+    path: String,
+) -> Result<(), String> {
     let root = vault_sandbox_dir(&state.allowed_roots, &vault_dir)
         .map_err(|_| "Obsidian vault folder is unavailable or not mounted".to_string())?;
     if !root.is_dir() {
@@ -1049,7 +1288,10 @@ fn open_obsidian(state: State<'_, CanvasState>, vault_dir: String, path: String)
             return Err("note path must stay inside the selected vault".into());
         }
     }
-    let vault_name = root.file_name().and_then(|n| n.to_str()).filter(|n| !n.is_empty())
+    let vault_name = root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty())
         .ok_or_else(|| "could not determine the Obsidian vault name".to_string())?;
     let mut uri = format!("obsidian://open?vault={}", uri_component(vault_name));
     if !path.trim().is_empty() {
@@ -1068,7 +1310,9 @@ fn open_obsidian(state: State<'_, CanvasState>, vault_dir: String, path: String)
         std::io::ErrorKind::Unsupported,
         "opening Obsidian links is unsupported on this platform",
     ));
-    result.map(|_| ()).map_err(|e| format!("could not open Obsidian: {e}"))
+    result
+        .map(|_| ())
+        .map_err(|e| format!("could not open Obsidian: {e}"))
 }
 
 /// Emit a vault listing after treating the list request as the Vault panel's
@@ -1087,7 +1331,13 @@ fn emit_vault_listing(app: &AppHandle, state: &CanvasState, dir: String) {
             entries.truncate(2000);
             emit_control(app, &ServerMsg::VaultListing { dir, entries });
         }
-        Err(message) => emit_control(app, &ServerMsg::Error { agent_id: None, message }),
+        Err(message) => emit_control(
+            app,
+            &ServerMsg::Error {
+                agent_id: None,
+                message,
+            },
+        ),
     }
 }
 
@@ -1102,26 +1352,37 @@ fn vault_graph(app: AppHandle, state: State<'_, CanvasState>, dir: String) -> Re
     let root = match vault_sandbox_dir(&state.allowed_roots, &dir) {
         Ok(root) => root,
         Err(message) => {
-            emit_control(&app, &ServerMsg::Error { agent_id: None, message });
+            emit_control(
+                &app,
+                &ServerMsg::Error {
+                    agent_id: None,
+                    message,
+                },
+            );
             return Ok(());
         }
     };
     let nodes = vault_list_entries(&root);
     let resolve = |name: &str| -> Option<String> {
         let n = name.trim();
-        nodes.iter().find(|e| {
-            e.as_str() == n
-                || **e == format!("{n}.md")
-                || e.ends_with(&format!("/{n}.md"))
-                || e.trim_end_matches(".md") == n
-        }).cloned()
+        nodes
+            .iter()
+            .find(|e| {
+                e.as_str() == n
+                    || **e == format!("{n}.md")
+                    || e.ends_with(&format!("/{n}.md"))
+                    || e.trim_end_matches(".md") == n
+            })
+            .cloned()
     };
     let mut edges: Vec<(String, String)> = Vec::new();
     for e in &nodes {
         if let Ok(text) = std::fs::read_to_string(root.join(e)) {
             for name in vault_links(&text) {
                 if let Some(t) = resolve(&name) {
-                    if t != *e { edges.push((e.clone(), t)); }
+                    if t != *e {
+                        edges.push((e.clone(), t));
+                    }
                 }
             }
         }
@@ -1133,11 +1394,22 @@ fn vault_graph(app: AppHandle, state: State<'_, CanvasState>, dir: String) -> Re
 }
 
 #[tauri::command]
-fn vault_search(app: AppHandle, state: State<'_, CanvasState>, dir: String, query: String) -> Result<(), String> {
+fn vault_search(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    dir: String,
+    query: String,
+) -> Result<(), String> {
     let root = match vault_sandbox_dir(&state.allowed_roots, &dir) {
         Ok(root) => root,
         Err(message) => {
-            emit_control(&app, &ServerMsg::Error { agent_id: None, message });
+            emit_control(
+                &app,
+                &ServerMsg::Error {
+                    agent_id: None,
+                    message,
+                },
+            );
             return Ok(());
         }
     };
@@ -1201,7 +1473,12 @@ fn vault_search(app: AppHandle, state: State<'_, CanvasState>, dir: String, quer
 }
 
 #[tauri::command]
-fn vault_read(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String) -> Result<(), String> {
+fn vault_read(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    dir: String,
+    path: String,
+) -> Result<(), String> {
     if !path.ends_with(".md") {
         return Err("not a markdown file in the vault".into());
     }
@@ -1216,7 +1493,12 @@ fn vault_read(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: 
 
 /// Read a vault file without making it the open note — powers `![[embeds]]`.
 #[tauri::command]
-fn vault_peek(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String) -> Result<(), String> {
+fn vault_peek(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    dir: String,
+    path: String,
+) -> Result<(), String> {
     if !path.ends_with(".md") {
         return Err("not a markdown file in the vault".into());
     }
@@ -1231,7 +1513,12 @@ fn vault_peek(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: 
 
 /// Read a binary vault asset (image) as base64 — powers `![[image.png]]`.
 #[tauri::command]
-fn vault_asset(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String) -> Result<(), String> {
+fn vault_asset(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    dir: String,
+    path: String,
+) -> Result<(), String> {
     let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
     let mime = match ext.as_str() {
         "png" => "image/png",
@@ -1246,7 +1533,10 @@ fn vault_asset(app: AppHandle, state: State<'_, CanvasState>, dir: String, path:
     if !file.is_file() {
         return Err("not a file in the vault".into());
     }
-    if std::fs::metadata(&file).map(|m| m.len() > 8 * 1024 * 1024).unwrap_or(false) {
+    if std::fs::metadata(&file)
+        .map(|m| m.len() > 8 * 1024 * 1024)
+        .unwrap_or(false)
+    {
         return Err("asset too large".into());
     }
     let bytes = std::fs::read(&file).map_err(|e| e.to_string())?;
@@ -1254,12 +1544,25 @@ fn vault_asset(app: AppHandle, state: State<'_, CanvasState>, dir: String, path:
         return Err("asset too large".into());
     }
     let data = base64::engine::general_purpose::STANDARD.encode(bytes);
-    emit_control(&app, &ServerMsg::VaultAssetData { path, mime: mime.to_string(), data });
+    emit_control(
+        &app,
+        &ServerMsg::VaultAssetData {
+            path,
+            mime: mime.to_string(),
+            data,
+        },
+    );
     Ok(())
 }
 
 #[tauri::command]
-fn vault_append(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String, text: String) -> Result<(), String> {
+fn vault_append(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    dir: String,
+    path: String,
+    text: String,
+) -> Result<(), String> {
     if !path.ends_with(".md") {
         return Err("vault append refused".into());
     }
@@ -1268,7 +1571,11 @@ fn vault_append(app: AppHandle, state: State<'_, CanvasState>, dir: String, path
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     use std::io::Write;
-    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&file).map_err(|e| e.to_string())?;
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&file)
+        .map_err(|e| e.to_string())?;
     writeln!(f, "{text}").map_err(|e| e.to_string())?;
     let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
     emit_control(&app, &ServerMsg::VaultFile { path, text });
@@ -1276,7 +1583,12 @@ fn vault_append(app: AppHandle, state: State<'_, CanvasState>, dir: String, path
 }
 
 #[tauri::command]
-fn vault_delete(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String) -> Result<(), String> {
+fn vault_delete(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    dir: String,
+    path: String,
+) -> Result<(), String> {
     if !path.ends_with(".md") {
         return Err("vault delete refused".into());
     }
@@ -1289,7 +1601,10 @@ fn vault_delete(app: AppHandle, state: State<'_, CanvasState>, dir: String, path
     // A `.trash` symlink would move notes outside the vault — refuse the
     // delete rather than follow it.
     let trash = root.join(".trash");
-    if std::fs::symlink_metadata(&trash).map(|m| m.file_type().is_symlink()).unwrap_or(false) {
+    if std::fs::symlink_metadata(&trash)
+        .map(|m| m.file_type().is_symlink())
+        .unwrap_or(false)
+    {
         return Err("vault delete refused: .trash is a symlink".into());
     }
     let base = file.file_name().ok_or("bad name")?;
@@ -1309,7 +1624,13 @@ fn vault_delete(app: AppHandle, state: State<'_, CanvasState>, dir: String, path
 }
 
 #[tauri::command]
-fn vault_rename(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String, new_path: String) -> Result<(), String> {
+fn vault_rename(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    dir: String,
+    path: String,
+    new_path: String,
+) -> Result<(), String> {
     if !path.ends_with(".md") || !new_path.ends_with(".md") {
         return Err("vault rename refused".into());
     }
@@ -1329,13 +1650,25 @@ fn vault_rename(app: AppHandle, state: State<'_, CanvasState>, dir: String, path
     }
     std::fs::rename(&from, &to).map_err(|e| e.to_string())?;
     let text = std::fs::read_to_string(&to).map_err(|e| e.to_string())?;
-    emit_control(&app, &ServerMsg::VaultFile { path: new_path, text });
+    emit_control(
+        &app,
+        &ServerMsg::VaultFile {
+            path: new_path,
+            text,
+        },
+    );
     emit_vault_listing(&app, state.inner(), dir);
     Ok(())
 }
 
 #[tauri::command]
-fn vault_write(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String, text: String) -> Result<(), String> {
+fn vault_write(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    dir: String,
+    path: String,
+    text: String,
+) -> Result<(), String> {
     if !path.ends_with(".md") {
         return Err("vault write refused".into());
     }
@@ -1393,15 +1726,25 @@ fn write_vault_asset_sandboxed(
     if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let stem = file.file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let stem = file
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
     let ext = file
         .extension()
         .map(|e| format!(".{}", e.to_string_lossy()))
         .unwrap_or_default();
     let parent = file.parent().map(|p| p.to_path_buf()).unwrap_or_default();
     let mut wrote = false;
-    for cand in std::iter::once(file.clone()).chain((2..100).map(|i| parent.join(format!("{stem}-{i}{ext}")))) {
-        match std::fs::OpenOptions::new().write(true).create_new(true).open(&cand) {
+    for cand in std::iter::once(file.clone())
+        .chain((2..100).map(|i| parent.join(format!("{stem}-{i}{ext}"))))
+    {
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&cand)
+        {
             Ok(f) => {
                 // Reserve the name atomically, write the bytes to a sibling tmp
                 // file, then rename over the reservation — a failed write never
@@ -1415,12 +1758,18 @@ fn write_vault_asset_sandboxed(
                 // create_new on the tmp too — a vault file that happens to
                 // share the tmp name must never be truncated; cleanup only
                 // removes files we made.
-                let outcome = match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
+                let outcome = match std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&tmp)
+                {
                     Ok(mut f) => {
                         let r = std::io::Write::write_all(&mut f, &bytes);
                         drop(f);
                         r.and_then(|()| std::fs::rename(&tmp, &cand))
-                            .inspect_err(|_| { let _ = std::fs::remove_file(&tmp); })
+                            .inspect_err(|_| {
+                                let _ = std::fs::remove_file(&tmp);
+                            })
                     }
                     Err(e) => Err(e), // preexisting tmp — never touch it
                 };
@@ -1442,7 +1791,13 @@ fn write_vault_asset_sandboxed(
 }
 
 #[tauri::command]
-fn vault_write_asset(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String, data: String) -> Result<(), String> {
+fn vault_write_asset(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    dir: String,
+    path: String,
+    data: String,
+) -> Result<(), String> {
     write_vault_asset_sandboxed(&state.allowed_roots, &dir, &path, &data)?;
     emit_vault_listing(&app, state.inner(), dir);
     Ok(())
@@ -1563,7 +1918,10 @@ mod vault_write_asset_sandbox_tests {
             // creation. That does not weaken coverage where symlinks exist;
             // it only keeps the portable test suite runnable in restricted CI.
             assert!(
-                matches!(e.kind(), std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::Unsupported),
+                matches!(
+                    e.kind(),
+                    std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::Unsupported
+                ),
                 "test symlink setup failed unexpectedly: {e}"
             );
             eprintln!("skipping symlink assertion: {e}");
@@ -1652,10 +2010,13 @@ fn git_push(app: AppHandle, state: State<'_, CanvasState>, agent_id: String) -> 
         .output()
         .map_err(|e| e.to_string())?;
     if out.status.success() {
-        emit_control(&app, &ServerMsg::GitPushed {
-            agent_id,
-            output: String::from_utf8_lossy(&out.stderr).trim().to_string(),
-        });
+        emit_control(
+            &app,
+            &ServerMsg::GitPushed {
+                agent_id,
+                output: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+            },
+        );
         Ok(())
     } else {
         Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
@@ -1676,27 +2037,56 @@ fn artifact_create(
 ) -> Result<(), String> {
     let id = format!("art-{}", &uuid_v4ish()[..8]);
     let board = board_id
-        .or_else(|| agent_id.as_deref().and_then(|a| state.store.agent_board(a).ok().flatten()))
+        .or_else(|| {
+            agent_id
+                .as_deref()
+                .and_then(|a| state.store.agent_board(a).ok().flatten())
+        })
         .unwrap_or_else(|| "main".to_string());
     let agent_name = agent_id
         .as_deref()
         .and_then(|a| state.store.agent_name(a).ok().flatten());
     state
         .store
-        .artifact_created(&id, &board, agent_id.as_deref(), &kind, &title, path.as_deref(), text.as_deref())
+        .artifact_created(
+            &id,
+            &board,
+            agent_id.as_deref(),
+            &kind,
+            &title,
+            path.as_deref(),
+            text.as_deref(),
+        )
         .map_err(|e| e.to_string())?;
-    emit_control(&app, &ServerMsg::ArtifactCreated {
-        artifact: canvasd::protocol::SnapshotArtifact {
-            artifact_id: id, board_id: board, agent_id, agent_name, kind, title, path, text,
-            created_at: String::new(),
+    emit_control(
+        &app,
+        &ServerMsg::ArtifactCreated {
+            artifact: canvasd::protocol::SnapshotArtifact {
+                artifact_id: id,
+                board_id: board,
+                agent_id,
+                agent_name,
+                kind,
+                title,
+                path,
+                text,
+                created_at: String::new(),
+            },
         },
-    });
+    );
     Ok(())
 }
 
 #[tauri::command]
-fn artifact_delete(app: AppHandle, state: State<'_, CanvasState>, artifact_id: String) -> Result<(), String> {
-    state.store.artifact_deleted(&artifact_id).map_err(|e| e.to_string())?;
+fn artifact_delete(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    artifact_id: String,
+) -> Result<(), String> {
+    state
+        .store
+        .artifact_deleted(&artifact_id)
+        .map_err(|e| e.to_string())?;
     emit_control(&app, &ServerMsg::ArtifactDeleted { artifact_id });
     Ok(())
 }
@@ -1717,18 +2107,41 @@ fn note_upsert(
     let board = board_id.unwrap_or_else(|| "main".to_string());
     let p = match pos {
         Some(p) => p,
-        None => state.store.note_next_pos(&board, &col).map_err(|e| e.to_string())?,
+        None => state
+            .store
+            .note_next_pos(&board, &col)
+            .map_err(|e| e.to_string())?,
     };
-    state.store.note_upsert(&id, &board, &col, &text, p, due.as_deref()).map_err(|e| e.to_string())?;
-    emit_control(&app, &ServerMsg::NoteUpserted {
-        note: canvasd::protocol::SnapshotNote { note_id: id, board_id: board, col, text, pos: p, due },
-    });
+    state
+        .store
+        .note_upsert(&id, &board, &col, &text, p, due.as_deref())
+        .map_err(|e| e.to_string())?;
+    emit_control(
+        &app,
+        &ServerMsg::NoteUpserted {
+            note: canvasd::protocol::SnapshotNote {
+                note_id: id,
+                board_id: board,
+                col,
+                text,
+                pos: p,
+                due,
+            },
+        },
+    );
     Ok(())
 }
 
 #[tauri::command]
-fn note_delete(app: AppHandle, state: State<'_, CanvasState>, note_id: String) -> Result<(), String> {
-    state.store.note_deleted(&note_id).map_err(|e| e.to_string())?;
+fn note_delete(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    note_id: String,
+) -> Result<(), String> {
+    state
+        .store
+        .note_deleted(&note_id)
+        .map_err(|e| e.to_string())?;
     emit_control(&app, &ServerMsg::NoteDeleted { note_id });
     Ok(())
 }
@@ -1768,7 +2181,12 @@ fn memory_read(state: State<'_, CanvasState>, node_id: String) -> Result<String,
 }
 
 #[tauri::command]
-fn memory_write(app: AppHandle, state: State<'_, CanvasState>, node_id: String, text: String) -> Result<(), String> {
+fn memory_write(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    node_id: String,
+    text: String,
+) -> Result<(), String> {
     let path = memory_path(state.inner(), &node_id);
     if let Some(p) = path.parent() {
         let _ = std::fs::create_dir_all(p);
@@ -1816,7 +2234,12 @@ fn create_workspace(
         .map_err(|e| e.to_string())?;
     emit_control(
         &app,
-        &ServerMsg::WorkspaceCreated { workspace_id: id.clone(), name, repo, board_id },
+        &ServerMsg::WorkspaceCreated {
+            workspace_id: id.clone(),
+            name,
+            repo,
+            board_id,
+        },
     );
     Ok(id)
 }
@@ -1853,7 +2276,17 @@ fn delegate(
     // The child lands on the requested board, else its parent's
     // (orchestrator nodes aren't agents — they carry theirs over).
     let parent_board = board_id.or(state.store.agent_board(&from).ok().flatten());
-    let (id, board) = spawn_wired(&app, state.inner(), &name, &command, &cwd, workspace_id.as_deref(), level, parent_board.as_deref(), account_id.as_deref())?;
+    let (id, board) = spawn_wired(
+        &app,
+        state.inner(),
+        &name,
+        &command,
+        &cwd,
+        workspace_id.as_deref(),
+        level,
+        parent_board.as_deref(),
+        account_id.as_deref(),
+    )?;
     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
     let _ = state.store.delegation_created(&edge_id, &from, &id, &task);
     state
@@ -1873,22 +2306,59 @@ fn delegate(
             let _ = st.agents.write(&target, &data);
         });
     }
-    let wt = app.state::<CanvasState>().agents.worktree(&id).map(|p| p.to_string_lossy().to_string());
-    emit_control(&app, &ServerMsg::Spawned { agent_id: id.clone(), name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None, worktree: wt });
+    let wt = app
+        .state::<CanvasState>()
+        .agents
+        .worktree(&id)
+        .map(|p| p.to_string_lossy().to_string());
     emit_control(
         &app,
-        &ServerMsg::Delegation { edge_id, from, to: id.clone(), task },
+        &ServerMsg::Spawned {
+            agent_id: id.clone(),
+            name,
+            command,
+            permission: level.to_string(),
+            workspace_id,
+            board_id: board,
+            fallback_from: None,
+            worktree: wt,
+        },
+    );
+    emit_control(
+        &app,
+        &ServerMsg::Delegation {
+            edge_id,
+            from,
+            to: id.clone(),
+            task,
+        },
     );
     Ok(id)
 }
 
 fn loop_to_snapshot(
-    (loop_id, board_id, target, instruction, trigger, interval_secs, pattern, enabled, last_fired_at): canvasd::store::LoopRow,
+    (
+        loop_id,
+        board_id,
+        target,
+        instruction,
+        trigger,
+        interval_secs,
+        pattern,
+        enabled,
+        last_fired_at,
+    ): canvasd::store::LoopRow,
 ) -> canvasd::protocol::SnapshotLoop {
     canvasd::protocol::SnapshotLoop {
-        loop_id, board_id, target, instruction, trigger,
+        loop_id,
+        board_id,
+        target,
+        instruction,
+        trigger,
         interval_secs: interval_secs.map(|v| v.max(0) as u64),
-        pattern, enabled, last_fired_at,
+        pattern,
+        enabled,
+        last_fired_at,
     }
 }
 
@@ -1904,7 +2374,10 @@ fn loop_targets(state: &CanvasState, board_id: &str, target: &str) -> Vec<String
             .map(|a| a.0)
             .collect()
     } else {
-        live.contains(target).then(|| target.to_string()).into_iter().collect()
+        live.contains(target)
+            .then(|| target.to_string())
+            .into_iter()
+            .collect()
     }
 }
 
@@ -1922,7 +2395,11 @@ fn fire_loop(app: &AppHandle, state: &CanvasState, row: &canvasd::store::LoopRow
             && sensitive_line(bytes.as_bytes()).is_some();
         if gated {
             if let Some(line) = sensitive_line(bytes.as_bytes()) {
-                state.pending_inputs.lock().unwrap().insert(id.clone(), bytes.into_bytes());
+                state
+                    .pending_inputs
+                    .lock()
+                    .unwrap()
+                    .insert(id.clone(), bytes.into_bytes());
                 emit_control(app, &ServerMsg::NeedsApproval { agent_id: id, line });
                 continue;
             }
@@ -1952,24 +2429,37 @@ fn create_loop(
     let id = uuid_v4ish();
     state
         .store
-        .loop_insert(&id, &board_id, &target, &instruction, trigger, interval, pattern.as_deref())
+        .loop_insert(
+            &id,
+            &board_id,
+            &target,
+            &instruction,
+            trigger,
+            interval,
+            pattern.as_deref(),
+        )
         .map_err(|e| e.to_string())?;
-    emit_control(&app, &ServerMsg::LoopSaved {
-        l: canvasd::protocol::SnapshotLoop {
-            loop_id: id.clone(), board_id, target, instruction,
-            trigger: trigger.to_string(), interval_secs: interval,
-            pattern, enabled: true, last_fired_at: None,
+    emit_control(
+        &app,
+        &ServerMsg::LoopSaved {
+            l: canvasd::protocol::SnapshotLoop {
+                loop_id: id.clone(),
+                board_id,
+                target,
+                instruction,
+                trigger: trigger.to_string(),
+                interval_secs: interval,
+                pattern,
+                enabled: true,
+                last_fired_at: None,
+            },
         },
-    });
+    );
     Ok(id)
 }
 
 #[tauri::command]
-fn run_loop(
-    app: AppHandle,
-    state: State<'_, CanvasState>,
-    loop_id: String,
-) -> Result<(), String> {
+fn run_loop(app: AppHandle, state: State<'_, CanvasState>, loop_id: String) -> Result<(), String> {
     let row = state
         .store
         .loops_snapshot()
@@ -1997,26 +2487,23 @@ fn delete_loop(
     state: State<'_, CanvasState>,
     loop_id: String,
 ) -> Result<(), String> {
-    state.store.loop_deleted(&loop_id).map_err(|e| e.to_string())?;
+    state
+        .store
+        .loop_deleted(&loop_id)
+        .map_err(|e| e.to_string())?;
     emit_control(&app, &ServerMsg::LoopDeleted { loop_id });
     Ok(())
 }
 
 #[tauri::command]
-fn pause_all(
-    state: State<'_, CanvasState>,
-    board_id: Option<String>,
-) -> Result<usize, String> {
+fn pause_all(state: State<'_, CanvasState>, board_id: Option<String>) -> Result<usize, String> {
     let board = board_id.unwrap_or_else(|| "main".to_string());
     let ids = loop_targets(&state, &board, "*");
     Ok(state.agents.suspend_many(&ids))
 }
 
 #[tauri::command]
-fn resume_all(
-    state: State<'_, CanvasState>,
-    board_id: Option<String>,
-) -> Result<usize, String> {
+fn resume_all(state: State<'_, CanvasState>, board_id: Option<String>) -> Result<usize, String> {
     let board = board_id.unwrap_or_else(|| "main".to_string());
     let ids = loop_targets(&state, &board, "*");
     Ok(state.agents.resume_many(&ids))
@@ -2061,29 +2548,46 @@ fn create_automation(
     interval_secs: Option<u64>,
 ) -> Result<String, String> {
     let level = canvasd::protocol::normalize_permission(permission.as_deref());
-    let policy = if on_approval.as_deref() == Some("deny") { "deny" } else { "hold" };
+    let policy = if on_approval.as_deref() == Some("deny") {
+        "deny"
+    } else {
+        "hold"
+    };
     let idle = idle_secs.unwrap_or(300).clamp(10, 86_400);
     let interval = interval_secs.map(|v| v.clamp(60, 86_400));
     let id = uuid_v4ish();
     state
         .store
-        .automation_created(&id, &name, &prompt, &command, workspace_id.as_deref(), level, idle, policy, interval)
+        .automation_created(
+            &id,
+            &name,
+            &prompt,
+            &command,
+            workspace_id.as_deref(),
+            level,
+            idle,
+            policy,
+            interval,
+        )
         .map_err(|e| e.to_string())?;
-    emit_control(&app, &ServerMsg::AutomationSaved {
-        automation: SnapshotAutomation {
-            id: id.clone(),
-            name,
-            prompt,
-            command,
-            workspace_id,
-            permission: level.to_string(),
-            idle_secs: idle,
-            on_approval: policy.to_string(),
-            last_run_at: None,
-            interval_secs: interval,
-            next_run_at: None,
+    emit_control(
+        &app,
+        &ServerMsg::AutomationSaved {
+            automation: SnapshotAutomation {
+                id: id.clone(),
+                name,
+                prompt,
+                command,
+                workspace_id,
+                permission: level.to_string(),
+                idle_secs: idle,
+                on_approval: policy.to_string(),
+                last_run_at: None,
+                interval_secs: interval,
+                next_run_at: None,
+            },
         },
-    });
+    );
     Ok(id)
 }
 
@@ -2107,23 +2611,51 @@ fn run_automation_row(
     state: &CanvasState,
     row: canvasd::store::AutomationRow,
 ) -> Result<String, String> {
-    let (automation_id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, _, _, _) = row;
-    let (id, run_board) = spawn_wired(app, state, &name, &command, ".", workspace_id.as_deref(), &permission, None, None)?;
+    let (
+        automation_id,
+        name,
+        prompt,
+        command,
+        workspace_id,
+        permission,
+        idle_secs,
+        on_approval,
+        _,
+        _,
+        _,
+    ) = row;
+    let (id, run_board) = spawn_wired(
+        app,
+        state,
+        &name,
+        &command,
+        ".",
+        workspace_id.as_deref(),
+        &permission,
+        None,
+        None,
+    )?;
     state
         .agents
         .set_automation(&id, idle_secs.max(0) as u64, on_approval == "deny");
     let _ = state.store.automation_ran(&automation_id);
-    let wt = state.agents.worktree(&id).map(|p| p.to_string_lossy().to_string());
-    emit_control(app, &ServerMsg::Spawned {
-        agent_id: id.clone(),
-        name,
-        command,
-        permission,
-        workspace_id,
-        board_id: run_board,
-        fallback_from: None,
-        worktree: wt,
-    });
+    let wt = state
+        .agents
+        .worktree(&id)
+        .map(|p| p.to_string_lossy().to_string());
+    emit_control(
+        app,
+        &ServerMsg::Spawned {
+            agent_id: id.clone(),
+            name,
+            command,
+            permission,
+            workspace_id,
+            board_id: run_board,
+            fallback_from: None,
+            worktree: wt,
+        },
+    );
     // Inject the saved prompt — the kernel PTY buffer holds it until the
     // CLI reads stdin, gated like operator input.
     let bytes = format!("{prompt}\n");
@@ -2145,17 +2677,29 @@ fn run_automation_row(
                     .lock()
                     .unwrap()
                     .insert(id.clone(), bytes.into_bytes());
-                emit_control(app, &ServerMsg::NeedsApproval { agent_id: id.clone(), line });
+                emit_control(
+                    app,
+                    &ServerMsg::NeedsApproval {
+                        agent_id: id.clone(),
+                        line,
+                    },
+                );
                 return Ok(id);
             }
-            emit_control(app, &ServerMsg::NeedsAttention {
-                agent_id: id.clone(),
-                reason: format!("automation policy denied: {line}"),
-            });
+            emit_control(
+                app,
+                &ServerMsg::NeedsAttention {
+                    agent_id: id.clone(),
+                    reason: format!("automation policy denied: {line}"),
+                },
+            );
             return Ok(id);
         }
     }
-    state.agents.write(&id, bytes.as_bytes()).map_err(|e| e.to_string())?;
+    state
+        .agents
+        .write(&id, bytes.as_bytes())
+        .map_err(|e| e.to_string())?;
     Ok(id)
 }
 
@@ -2174,7 +2718,12 @@ fn delete_automation(
 }
 
 #[tauri::command]
-fn pty_input(app: AppHandle, state: State<'_, CanvasState>, agent_id: String, data: String) -> Result<(), String> {
+fn pty_input(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    agent_id: String,
+    data: String,
+) -> Result<(), String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&data)
         .map_err(|e| e.to_string())?;
@@ -2194,10 +2743,13 @@ fn pty_input(app: AppHandle, state: State<'_, CanvasState>, agent_id: String, da
                 .map(|m| m.deny_approvals)
                 .unwrap_or(false)
             {
-                emit_control(&app, &ServerMsg::NeedsAttention {
-                    agent_id,
-                    reason: format!("automation policy denied: {line}"),
-                });
+                emit_control(
+                    &app,
+                    &ServerMsg::NeedsAttention {
+                        agent_id,
+                        reason: format!("automation policy denied: {line}"),
+                    },
+                );
                 return Ok(());
             }
             state
@@ -2209,7 +2761,10 @@ fn pty_input(app: AppHandle, state: State<'_, CanvasState>, agent_id: String, da
             return Ok(());
         }
     }
-    state.agents.write(&agent_id, &bytes).map_err(|e| e.to_string())
+    state
+        .agents
+        .write(&agent_id, &bytes)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -2257,7 +2812,10 @@ fn pty_resize(
     cols: u16,
     rows: u16,
 ) -> Result<(), String> {
-    state.agents.resize(&agent_id, cols, rows).map_err(|e| e.to_string())
+    state
+        .agents
+        .resize(&agent_id, cols, rows)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -2274,16 +2832,25 @@ fn confirm_destructive(
             state.pending_results.lock().unwrap().remove(&agent_id);
             emit_control(
                 &app,
-                &ServerMsg::Status { agent_id, status: AgentStatus::Exited },
+                &ServerMsg::Status {
+                    agent_id,
+                    status: AgentStatus::Exited,
+                },
             );
             Ok(())
         }
         "forget" => {
             let _ = state.agents.kill(&agent_id); // no-op if already gone
-            state.store.remove_agent(&agent_id).map_err(|e| e.to_string())?;
+            state
+                .store
+                .remove_agent(&agent_id)
+                .map_err(|e| e.to_string())?;
             emit_control(
                 &app,
-                &ServerMsg::Status { agent_id, status: AgentStatus::Exited },
+                &ServerMsg::Status {
+                    agent_id,
+                    status: AgentStatus::Exited,
+                },
             );
             Ok(())
         }
@@ -2292,8 +2859,16 @@ fn confirm_destructive(
 }
 
 #[tauri::command]
-fn move_node(state: State<'_, CanvasState>, agent_id: String, x: f64, y: f64) -> Result<(), String> {
-    state.store.save_node_position(&agent_id, x, y).map_err(|e| e.to_string())
+fn move_node(
+    state: State<'_, CanvasState>,
+    agent_id: String,
+    x: f64,
+    y: f64,
+) -> Result<(), String> {
+    state
+        .store
+        .save_node_position(&agent_id, x, y)
+        .map_err(|e| e.to_string())
 }
 
 /// Stream an exited agent's on-disk transcript back as PTY frames —
@@ -2319,20 +2894,23 @@ fn diff_detail(
     state: State<'_, CanvasState>,
     agent_id: String,
 ) -> Result<(), String> {
-    let wt = state
-        .agents
-        .worktree(&agent_id)
-        .or_else(|| {
-            state
-                .store
-                .agent_worktree(&agent_id)
-                .ok()
-                .flatten()
-                .map(std::path::PathBuf::from)
-        });
+    let wt = state.agents.worktree(&agent_id).or_else(|| {
+        state
+            .store
+            .agent_worktree(&agent_id)
+            .ok()
+            .flatten()
+            .map(std::path::PathBuf::from)
+    });
     match wt {
         Some(wt) => {
-            emit_control(&app, &ServerMsg::DiffDetail { agent_id, diff: dirty_diff(&wt) });
+            emit_control(
+                &app,
+                &ServerMsg::DiffDetail {
+                    agent_id,
+                    diff: dirty_diff(&wt),
+                },
+            );
             Ok(())
         }
         None => Err("no such agent".into()),
@@ -2340,10 +2918,7 @@ fn diff_detail(
 }
 
 #[tauri::command]
-fn snapshot(
-    app: AppHandle,
-    state: State<'_, CanvasState>,
-) -> Result<serde_json::Value, String> {
+fn snapshot(app: AppHandle, state: State<'_, CanvasState>) -> Result<serde_json::Value, String> {
     // Transcript replay: buffered PTY scrollback so a reopened terminal
     // shows history instead of a blank screen.
     for id in state.agents.list() {
@@ -2366,46 +2941,62 @@ fn snapshot(
         .agents_snapshot()
         .map_err(|e| e.to_string())?
         .into_iter()
-        .map(|(id, name, command, worktree, status, workspace_id, permission, board_id, account_id)| {
-            let ob = state
-                .repo_root
-                .join(".canvas")
-                .join("transcripts")
-                .join(format!("{id}.bin"))
-                .metadata()
-                .map(|m| m.len())
-                .unwrap_or(0);
-            // Same diff-state replay as the daemon's snapshot — a fresh
-            // client shouldn't show a dirty worktree as clean.
-            let wt = state.agents.worktree(&id).or_else(|| {
-                state
-                    .store
-                    .agent_worktree_abs(&id, &state.repo_root)
-                    .ok()
-                    .flatten()
-            });
-            let (files, paths, branch) = wt
-                .map(|w| {
-                    let paths = dirty_files(&w);
-                    (paths.len() as u32, paths, worktree_branch(&w))
-                })
-                .unwrap_or_default();
-            SnapshotAgent {
-            status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
-            account_label: account_id.and_then(|a| acct_labels.get(&a).cloned()),
-            agent_id: id,
-            name,
-            command,
-            worktree,
-            permission,
-            workspace_id,
-            board_id,
-            output_bytes: ob,
-            files,
-            paths,
-            branch,
-        }
-        })
+        .map(
+            |(
+                id,
+                name,
+                command,
+                worktree,
+                status,
+                workspace_id,
+                permission,
+                board_id,
+                account_id,
+            )| {
+                let ob = state
+                    .repo_root
+                    .join(".canvas")
+                    .join("transcripts")
+                    .join(format!("{id}.bin"))
+                    .metadata()
+                    .map(|m| m.len())
+                    .unwrap_or(0);
+                // Same diff-state replay as the daemon's snapshot — a fresh
+                // client shouldn't show a dirty worktree as clean.
+                let wt = state.agents.worktree(&id).or_else(|| {
+                    state
+                        .store
+                        .agent_worktree_abs(&id, &state.repo_root)
+                        .ok()
+                        .flatten()
+                });
+                let (files, paths, branch) = wt
+                    .map(|w| {
+                        let paths = dirty_files(&w);
+                        (paths.len() as u32, paths, worktree_branch(&w))
+                    })
+                    .unwrap_or_default();
+                SnapshotAgent {
+                    status: live
+                        .get(&id)
+                        .copied()
+                        .unwrap_or(status.as_str())
+                        .to_string(),
+                    account_label: account_id.and_then(|a| acct_labels.get(&a).cloned()),
+                    agent_id: id,
+                    name,
+                    command,
+                    worktree,
+                    permission,
+                    workspace_id,
+                    board_id,
+                    output_bytes: ob,
+                    files,
+                    paths,
+                    branch,
+                }
+            },
+        )
         .collect();
     let workspaces: Vec<canvasd::protocol::SnapshotWorkspace> = state
         .store
@@ -2435,28 +3026,55 @@ fn snapshot(
         .delegations_snapshot()
         .unwrap_or_default()
         .into_iter()
-        .map(|(edge_id, from, to, task, result, state, files, created_at, resolved_at)| SnapshotDelegation {
-            edge_id, from, to, task, result, files: files.unwrap_or(0) as u32, state, created_at, resolved_at,
-        })
+        .map(
+            |(edge_id, from, to, task, result, state, files, created_at, resolved_at)| {
+                SnapshotDelegation {
+                    edge_id,
+                    from,
+                    to,
+                    task,
+                    result,
+                    files: files.unwrap_or(0) as u32,
+                    state,
+                    created_at,
+                    resolved_at,
+                }
+            },
+        )
         .collect();
     let accts: Vec<canvasd::protocol::SnapshotAccount> = state
         .store
         .accounts_snapshot()
         .unwrap_or_default()
         .into_iter()
-        .map(|(account_id, cli, label, env)| canvasd::protocol::SnapshotAccount { account_id, cli, label, env })
+        .map(
+            |(account_id, cli, label, env)| canvasd::protocol::SnapshotAccount {
+                account_id,
+                cli,
+                label,
+                env,
+            },
+        )
         .collect();
     let layout = state.store.layout_map().unwrap_or_default();
     // Same remote normalization as canvasd's Snapshot::repo_url.
     let repo_url = std::process::Command::new("git")
-        .args(["-C", &state.repo_root.to_string_lossy(), "remote", "get-url", "origin"])
+        .args([
+            "-C",
+            &state.repo_root.to_string_lossy(),
+            "remote",
+            "get-url",
+            "origin",
+        ])
         .output()
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .filter(|u| !u.is_empty())
         .map(|u| {
-            let inner = u.rfind("github.com/").map(|i| format!("https://{}", &u[i..]));
+            let inner = u
+                .rfind("github.com/")
+                .map(|i| format!("https://{}", &u[i..]));
             let u = inner.unwrap_or_else(|| {
                 u.replace("git@github.com:", "https://github.com/")
                     .replace("ssh://git@", "https://")
@@ -2475,12 +3093,22 @@ fn snapshot(
         .artifacts_snapshot()
         .unwrap_or_default()
         .into_iter()
-        .map(|(artifact_id, board_id, agent_id, kind, title, path, text, created_at)| {
-            let agent_name = agent_id.as_ref().and_then(|a| agent_names.get(a).cloned());
-            canvasd::protocol::SnapshotArtifact {
-                artifact_id, board_id, agent_id, agent_name, kind, title, path, text, created_at,
-            }
-        })
+        .map(
+            |(artifact_id, board_id, agent_id, kind, title, path, text, created_at)| {
+                let agent_name = agent_id.as_ref().and_then(|a| agent_names.get(a).cloned());
+                canvasd::protocol::SnapshotArtifact {
+                    artifact_id,
+                    board_id,
+                    agent_id,
+                    agent_name,
+                    kind,
+                    title,
+                    path,
+                    text,
+                    created_at,
+                }
+            },
+        )
         .collect::<Vec<_>>();
     Ok(serde_json::json!({
         "type": "snapshot",
@@ -2541,7 +3169,11 @@ struct ChromeBookmark {
     folder: Option<String>,
 }
 
-fn collect_bookmarks(node: &serde_json::Value, folder: Option<&str>, out: &mut Vec<ChromeBookmark>) {
+fn collect_bookmarks(
+    node: &serde_json::Value,
+    folder: Option<&str>,
+    out: &mut Vec<ChromeBookmark>,
+) {
     if out.len() >= 40 {
         return;
     }
@@ -2673,7 +3305,8 @@ fn main() {
                     .or_else(|_| std::env::var("USERPROFILE"))
                     .map(PathBuf::from)
                     .unwrap_or_else(|_| cwd.clone());
-                let root = pick_repo_root(std::env::var("CANVAS_REPO").ok().as_deref(), &cwd, &home);
+                let root =
+                    pick_repo_root(std::env::var("CANVAS_REPO").ok().as_deref(), &cwd, &home);
                 if root == home.join("Canvas") {
                     // The per-user default: create it, and make it a git
                     // repo so the main board can spawn worktree agents out
@@ -2681,7 +3314,10 @@ fn main() {
                     // not stop the app.
                     let _ = std::fs::create_dir_all(&root);
                     if !root.join(".git").exists() {
-                        let _ = std::process::Command::new("git").arg("init").arg(&root).output();
+                        let _ = std::process::Command::new("git")
+                            .arg("init")
+                            .arg(&root)
+                            .output();
                     }
                     // `git init` alone leaves the repo commitless — no HEAD
                     // for `git worktree add` to branch from, so every spawn
@@ -2781,7 +3417,11 @@ fn main() {
                         let _ = state.store.delegation_resolved(&edge_id, &summary, files);
                         emit_control(
                             &handle,
-                            &ServerMsg::Result { edge_id, summary, files },
+                            &ServerMsg::Result {
+                                edge_id,
+                                summary,
+                                files,
+                            },
                         );
                     }
 
@@ -2796,7 +3436,12 @@ fn main() {
                                     last_diff.insert(id.clone(), (paths.clone(), branch.clone()));
                                     emit_control(
                                         &handle,
-                                        &ServerMsg::Diff { agent_id: id, files, paths, branch },
+                                        &ServerMsg::Diff {
+                                            agent_id: id,
+                                            files,
+                                            paths,
+                                            branch,
+                                        },
                                     );
                                 }
                             }
@@ -2806,17 +3451,19 @@ fn main() {
                     // Automation guardrail pass: alert once when a run goes
                     // silent past its idle limit (clears on fresh output).
                     for id in state.agents.automation_ids() {
-                        if let (Some(meta), Some(silent)) = (
-                            state.agents.automation(&id),
-                            state.agents.silent_for(&id),
-                        ) {
+                        if let (Some(meta), Some(silent)) =
+                            (state.agents.automation(&id), state.agents.silent_for(&id))
+                        {
                             if silent >= meta.idle_secs && !meta.hang_notified {
                                 state.agents.set_hang_notified(&id, true);
                                 emit_control(
                                     &handle,
                                     &ServerMsg::NeedsAttention {
                                         agent_id: id,
-                                        reason: format!("silent {}s (limit {}s)", silent, meta.idle_secs),
+                                        reason: format!(
+                                            "silent {}s (limit {}s)",
+                                            silent, meta.idle_secs
+                                        ),
                                     },
                                 );
                             } else if silent < 5 && meta.hang_notified {
@@ -2831,18 +3478,24 @@ fn main() {
                             Ok(rows) => {
                                 for row in rows {
                                     if let Err(e) = run_automation_row(&handle, &state, row) {
-                                        emit_control(&handle, &ServerMsg::Error {
-                                            agent_id: None,
-                                            message: e,
-                                        });
+                                        emit_control(
+                                            &handle,
+                                            &ServerMsg::Error {
+                                                agent_id: None,
+                                                message: e,
+                                            },
+                                        );
                                     }
                                 }
                             }
                             Err(e) => {
-                                emit_control(&handle, &ServerMsg::Error {
-                                    agent_id: None,
-                                    message: e.to_string(),
-                                });
+                                emit_control(
+                                    &handle,
+                                    &ServerMsg::Error {
+                                        agent_id: None,
+                                        message: e.to_string(),
+                                    },
+                                );
                             }
                         }
                         // Loops pass: interval loops due + 'match' loops
@@ -2857,8 +3510,12 @@ fn main() {
                                 if row.4 != "match" {
                                     continue;
                                 }
-                                let Some(pat) = row.6.as_deref() else { continue };
-                                if pat.is_empty() { continue; }
+                                let Some(pat) = row.6.as_deref() else {
+                                    continue;
+                                };
+                                if pat.is_empty() {
+                                    continue;
+                                }
                                 for id in loop_targets(&state, &row.1, &row.2) {
                                     let key = format!("{}:{}", row.0, id);
                                     let hit = state
@@ -2884,9 +3541,10 @@ fn main() {
                             // the next instruction.
                             if prev == Some("working") && status == "idle" {
                                 if let Ok(rows) = state.store.loops_enabled() {
-                                    for row in rows.iter().filter(|r| {
-                                        r.4 == "idle" && (r.2 == id || r.2 == "*")
-                                    }) {
+                                    for row in rows
+                                        .iter()
+                                        .filter(|r| r.4 == "idle" && (r.2 == id || r.2 == "*"))
+                                    {
                                         if row.2 == "*"
                                             && !loop_targets(&state, &row.1, "*").contains(&id)
                                         {
@@ -2907,7 +3565,10 @@ fn main() {
                             };
                             emit_control(
                                 &handle,
-                                &ServerMsg::Status { agent_id: id, status: s },
+                                &ServerMsg::Status {
+                                    agent_id: id,
+                                    status: s,
+                                },
                             );
                         }
                     }

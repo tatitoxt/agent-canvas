@@ -9,8 +9,8 @@ use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::MaybeTlsStream;
+use tokio_tungstenite::WebSocketStream;
 
 type Ws = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
@@ -45,9 +45,17 @@ impl Daemon {
         std::fs::create_dir_all(&home).unwrap();
         let _ = std::fs::remove_dir_all(&repo);
         std::fs::create_dir_all(&repo).unwrap();
-        Command::new("git").args(["init", "-q"]).current_dir(&repo).output().unwrap();
+        Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(&repo)
+            .output()
+            .unwrap();
         std::fs::write(repo.join("seed.txt"), "seed").unwrap();
-        Command::new("git").args(["add", "."]).current_dir(&repo).output().unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(&repo)
+            .output()
+            .unwrap();
         Command::new("git")
             .args(["commit", "-qm", "seed"])
             .current_dir(&repo)
@@ -82,7 +90,13 @@ impl Daemon {
             }
         }
         assert!(!token.is_empty(), "canvasd never printed its session token");
-        Self { child, port, token, repo, home }
+        Self {
+            child,
+            port,
+            token,
+            repo,
+            home,
+        }
     }
 
     fn ws_url(&self, token: &str) -> String {
@@ -106,7 +120,7 @@ async fn next_ctrl(ws: &mut Ws, timeout: Duration) -> Option<Value> {
     while Instant::now() < deadline {
         let remaining = deadline.saturating_duration_since(Instant::now());
         let msg = match tokio::time::timeout(remaining, ws.next()).await {
-            Err(_) => return None, // timed out, no frame in the whole window
+            Err(_) => return None,   // timed out, no frame in the whole window
             Ok(None) => return None, // stream ended
             Ok(Some(Err(_))) => return None,
             Ok(Some(Ok(m))) => m,
@@ -175,7 +189,8 @@ async fn end_to_end_agent_lifecycle() {
     // Create a workspace; agents spawned into it run in ITS repo.
     ws.send(Message::Text(
         json!({"cmd":"create_workspace","name":"e2e-ws","repo":d.repo.to_str().unwrap()})
-            .to_string().into(),
+            .to_string()
+            .into(),
     ))
     .await
     .unwrap();
@@ -197,49 +212,64 @@ async fn end_to_end_agent_lifecycle() {
             "cmd": "spawn_agent", "name": "e2e-agent", "command": "bash",
             "cwd": ".", "workspace_id": ws_id, "permission": "auto"
         })
-        .to_string().into(),
+        .to_string()
+        .into(),
     ))
     .await
     .unwrap();
     let seen = collect_until(&mut ws, Duration::from_secs(5), |m| m["type"] == "spawned").await;
-    let agent_id = seen
-        .iter()
-        .find(|m| m["type"] == "spawned")
-        .unwrap()["agent_id"]
+    let agent_id = seen.iter().find(|m| m["type"] == "spawned").unwrap()["agent_id"]
         .as_str()
         .unwrap()
         .to_string();
 
     // Write a file inside the agent's PTY; the diff ticker should report it.
-    ws.send(Message::Binary(pty_frame(&agent_id, b"echo x > made.txt\n").into()))
-        .await
-        .unwrap();
+    ws.send(Message::Binary(
+        pty_frame(&agent_id, b"echo x > made.txt\n").into(),
+    ))
+    .await
+    .unwrap();
     let seen = collect_until(&mut ws, Duration::from_secs(12), |m| {
         m["type"] == "diff" && m["files"].as_u64().unwrap_or(0) >= 1
     })
     .await;
     assert!(
-        seen.iter().any(|m| m["type"] == "diff" && m["files"].as_u64().unwrap_or(0) >= 1),
+        seen.iter()
+            .any(|m| m["type"] == "diff" && m["files"].as_u64().unwrap_or(0) >= 1),
         "expected a diff event reporting the file the agent created; saw {seen:?}"
     );
     // The file must exist inside the agent's own worktree, not the repo root.
     let worktree = d.repo.join(".canvas-worktrees").join(&agent_id);
-    assert!(worktree.join("made.txt").exists(), "agent wrote outside its worktree?");
+    assert!(
+        worktree.join("made.txt").exists(),
+        "agent wrote outside its worktree?"
+    );
 
     // Kill is gated: bare kill_agent is refused, confirm_destructive executes.
     ws.send(Message::Text(
-        json!({"cmd":"kill_agent","agent_id":agent_id}).to_string().into(),
+        json!({"cmd":"kill_agent","agent_id":agent_id})
+            .to_string()
+            .into(),
     ))
     .await
     .unwrap();
     let seen = collect_until(&mut ws, Duration::from_secs(3), |m| {
-        m["type"] == "error" && m["message"].as_str().unwrap_or("").contains("confirm_destructive")
+        m["type"] == "error"
+            && m["message"]
+                .as_str()
+                .unwrap_or("")
+                .contains("confirm_destructive")
     })
     .await;
-    assert!(seen.iter().any(|m| m["type"] == "error"), "bare kill must be refused");
+    assert!(
+        seen.iter().any(|m| m["type"] == "error"),
+        "bare kill must be refused"
+    );
 
     ws.send(Message::Text(
-        json!({"cmd":"confirm_destructive","agent_id":agent_id,"action":"kill"}).to_string().into(),
+        json!({"cmd":"confirm_destructive","agent_id":agent_id,"action":"kill"})
+            .to_string()
+            .into(),
     ))
     .await
     .unwrap();
@@ -248,7 +278,8 @@ async fn end_to_end_agent_lifecycle() {
     })
     .await;
     assert!(
-        seen.iter().any(|m| m["type"] == "status" && m["status"] == "exited"),
+        seen.iter()
+            .any(|m| m["type"] == "status" && m["status"] == "exited"),
         "confirmed kill must exit the agent"
     );
 }
@@ -272,42 +303,63 @@ async fn repo_write_requires_a_registered_repository_not_only_a_vault_grant() {
     // An explicit Vault grant makes the path accessible to vault features,
     // but must not authorize repository editor writes.
     ws.send(Message::Text(
-        json!({"cmd":"vault_register","dir":vault.to_str().unwrap()}).to_string().into(),
+        json!({"cmd":"vault_register","dir":vault.to_str().unwrap()})
+            .to_string()
+            .into(),
     ))
     .await
     .unwrap();
-    collect_until(&mut ws, Duration::from_secs(3), |m| m["type"] == "vault_discovered").await;
+    collect_until(&mut ws, Duration::from_secs(3), |m| {
+        m["type"] == "vault_discovered"
+    })
+    .await;
     ws.send(Message::Text(
         json!({
             "cmd":"repo_write", "dir":vault.to_str().unwrap(), "path":"private.md",
             "text":"overwritten", "base_text":"original vault contents"
         })
-        .to_string().into(),
+        .to_string()
+        .into(),
     ))
     .await
     .unwrap();
     let seen = collect_until(&mut ws, Duration::from_secs(3), |m| {
-        m["type"] == "error" && m["message"].as_str().unwrap_or("").contains("repository is not registered")
+        m["type"] == "error"
+            && m["message"]
+                .as_str()
+                .unwrap_or("")
+                .contains("repository is not registered")
     })
     .await;
-    assert!(seen.iter().any(|m| m["type"] == "error"), "Vault grant must not grant repo-write access: {seen:?}");
-    assert_eq!(std::fs::read_to_string(vault.join("private.md")).unwrap(), "original vault contents");
+    assert!(
+        seen.iter().any(|m| m["type"] == "error"),
+        "Vault grant must not grant repo-write access: {seen:?}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(vault.join("private.md")).unwrap(),
+        "original vault contents"
+    );
 
     // Registering a workspace is the explicit action that grants the Code
     // Editor write path for that repository.
     ws.send(Message::Text(
         json!({"cmd":"create_workspace","name":"writable","repo":workspace.to_str().unwrap()})
-            .to_string().into(),
+            .to_string()
+            .into(),
     ))
     .await
     .unwrap();
-    collect_until(&mut ws, Duration::from_secs(3), |m| m["type"] == "workspace_created").await;
+    collect_until(&mut ws, Duration::from_secs(3), |m| {
+        m["type"] == "workspace_created"
+    })
+    .await;
     ws.send(Message::Text(
         json!({
             "cmd":"repo_write", "dir":workspace.to_str().unwrap(), "path":"README.md",
             "text":"workspace updated", "base_text":"workspace original"
         })
-        .to_string().into(),
+        .to_string()
+        .into(),
     ))
     .await
     .unwrap();
@@ -315,8 +367,14 @@ async fn repo_write_requires_a_registered_repository_not_only_a_vault_grant() {
         m["type"] == "repo_file" && m["path"] == "README.md"
     })
     .await;
-    assert!(seen.iter().any(|m| m["type"] == "repo_file"), "registered workspace should remain editable: {seen:?}");
-    assert_eq!(std::fs::read_to_string(workspace.join("README.md")).unwrap(), "workspace updated");
+    assert!(
+        seen.iter().any(|m| m["type"] == "repo_file"),
+        "registered workspace should remain editable: {seen:?}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(workspace.join("README.md")).unwrap(),
+        "workspace updated"
+    );
 
     let _ = std::fs::remove_dir_all(vault);
     let _ = std::fs::remove_dir_all(workspace);
@@ -337,11 +395,15 @@ async fn delegation_resolves_on_canvas_result() {
             "command": "bash", "task": "prove it", "cwd": ".",
             "workspace_id": null, "permission": "full"
         })
-        .to_string().into(),
+        .to_string()
+        .into(),
     ))
     .await
     .unwrap();
-    let seen = collect_until(&mut ws, Duration::from_secs(5), |m| m["type"] == "delegation").await;
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |m| {
+        m["type"] == "delegation"
+    })
+    .await;
     let child = seen
         .iter()
         .find(|m| m["type"] == "spawned")
@@ -349,10 +411,7 @@ async fn delegation_resolves_on_canvas_result() {
         .as_str()
         .unwrap()
         .to_string();
-    let edge_id = seen
-        .iter()
-        .find(|m| m["type"] == "delegation")
-        .unwrap()["edge_id"]
+    let edge_id = seen.iter().find(|m| m["type"] == "delegation").unwrap()["edge_id"]
         .as_str()
         .unwrap()
         .to_string();
@@ -370,9 +429,11 @@ async fn delegation_resolves_on_canvas_result() {
     );
 
     // Child prints the protocol line; the tail scanner resolves the edge.
-    ws.send(Message::Binary(pty_frame(&child, b"echo 'CANVAS_RESULT: shipped it'\r").into()))
-        .await
-        .unwrap();
+    ws.send(Message::Binary(
+        pty_frame(&child, b"echo 'CANVAS_RESULT: shipped it'\r").into(),
+    ))
+    .await
+    .unwrap();
     let seen = collect_until(&mut ws, Duration::from_secs(8), |m| m["type"] == "result").await;
     let result = seen.iter().find(|m| m["type"] == "result").unwrap_or_else(|| {
         let transcript = std::fs::read(d.repo.join(".canvas/transcripts").join(format!("{child}.bin")))
@@ -407,7 +468,9 @@ async fn collect_pty_until(ws: &mut Ws, timeout: Duration, needle: &[u8]) -> boo
 #[tokio::test]
 async fn supervised_input_is_gated_until_approved() {
     let d = Daemon::start();
-    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token)).await.unwrap();
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .unwrap();
     // Drain the snapshot.
     let _ = next_ctrl(&mut ws, Duration::from_secs(3)).await;
 
@@ -418,44 +481,73 @@ async fn supervised_input_is_gated_until_approved() {
     .await
     .unwrap();
     let seen = collect_until(&mut ws, Duration::from_secs(5), |m| m["type"] == "spawned").await;
-    let agent_id = seen
-        .iter()
-        .find(|m| m["type"] == "spawned")
-        .unwrap()["agent_id"]
+    let agent_id = seen.iter().find(|m| m["type"] == "spawned").unwrap()["agent_id"]
         .as_str()
         .unwrap()
         .to_string();
 
     // Destructive input is held, not written.
-    ws.send(Message::Binary(pty_frame(&agent_id, b"rm -rf nope.txt\n").into()))
-        .await
-        .unwrap();
-    let seen = collect_until(&mut ws, Duration::from_secs(4), |m| m["type"] == "needs_approval").await;
+    ws.send(Message::Binary(
+        pty_frame(&agent_id, b"rm -rf nope.txt\n").into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(4), |m| {
+        m["type"] == "needs_approval"
+    })
+    .await;
     let held = seen.iter().find(|m| m["type"] == "needs_approval");
-    assert!(held.is_some(), "supervised agent must gate destructive input");
+    assert!(
+        held.is_some(),
+        "supervised agent must gate destructive input"
+    );
     assert!(held.unwrap()["line"].as_str().unwrap().contains("rm -rf"));
 
     // Denied input never reaches the PTY; approving after a deny is a no-op.
-    ws.send(Message::Text(json!({"cmd":"deny_input","agent_id":agent_id}).to_string().into()))
-        .await
-        .unwrap();
-    ws.send(Message::Text(json!({"cmd":"approve_input","agent_id":agent_id}).to_string().into()))
-        .await
-        .unwrap();
+    ws.send(Message::Text(
+        json!({"cmd":"deny_input","agent_id":agent_id})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    ws.send(Message::Text(
+        json!({"cmd":"approve_input","agent_id":agent_id})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
     let seen = collect_until(&mut ws, Duration::from_secs(3), |m| {
-        m["type"] == "error" && m["message"].as_str().unwrap_or("").contains("no pending input")
+        m["type"] == "error"
+            && m["message"]
+                .as_str()
+                .unwrap_or("")
+                .contains("no pending input")
     })
     .await;
-    assert!(seen.iter().any(|m| m["type"] == "error"), "deny must drop the stashed input");
+    assert!(
+        seen.iter().any(|m| m["type"] == "error"),
+        "deny must drop the stashed input"
+    );
 
     // Approved input is released to the PTY — bash echoes it back.
-    ws.send(Message::Binary(pty_frame(&agent_id, b"rm -rf nope.txt\n").into()))
-        .await
-        .unwrap();
-    let _ = collect_until(&mut ws, Duration::from_secs(4), |m| m["type"] == "needs_approval").await;
-    ws.send(Message::Text(json!({"cmd":"approve_input","agent_id":agent_id}).to_string().into()))
-        .await
-        .unwrap();
+    ws.send(Message::Binary(
+        pty_frame(&agent_id, b"rm -rf nope.txt\n").into(),
+    ))
+    .await
+    .unwrap();
+    let _ = collect_until(&mut ws, Duration::from_secs(4), |m| {
+        m["type"] == "needs_approval"
+    })
+    .await;
+    ws.send(Message::Text(
+        json!({"cmd":"approve_input","agent_id":agent_id})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
     assert!(
         collect_pty_until(&mut ws, Duration::from_secs(5), b"rm -rf nope.txt").await,
         "approved input must reach the agent's PTY"
@@ -465,7 +557,9 @@ async fn supervised_input_is_gated_until_approved() {
 #[tokio::test]
 async fn automation_guardrails_fire() {
     let d = Daemon::start();
-    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token)).await.unwrap();
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .unwrap();
     let _ = next_ctrl(&mut ws, Duration::from_secs(3)).await;
 
     // Save an automation: deny policy for gated input, 10s hang limit.
@@ -499,23 +593,24 @@ async fn automation_guardrails_fire() {
 
     // Run it → agent spawns under automation meta.
     ws.send(Message::Text(
-        json!({"cmd":"run_automation","automation_id":auto_id}).to_string().into(),
+        json!({"cmd":"run_automation","automation_id":auto_id})
+            .to_string()
+            .into(),
     ))
     .await
     .unwrap();
     let seen = collect_until(&mut ws, Duration::from_secs(5), |m| m["type"] == "spawned").await;
-    let agent_id = seen
-        .iter()
-        .find(|m| m["type"] == "spawned")
-        .unwrap()["agent_id"]
+    let agent_id = seen.iter().find(|m| m["type"] == "spawned").unwrap()["agent_id"]
         .as_str()
         .unwrap()
         .to_string();
 
     // Deny policy: gated input surfaces as needs_attention, never needs_approval.
-    ws.send(Message::Binary(pty_frame(&agent_id, b"sudo rm -rf /\n").into()))
-        .await
-        .unwrap();
+    ws.send(Message::Binary(
+        pty_frame(&agent_id, b"sudo rm -rf /\n").into(),
+    ))
+    .await
+    .unwrap();
     let seen = collect_until(&mut ws, Duration::from_secs(4), |m| {
         m["type"] == "needs_attention" || m["type"] == "needs_approval"
     })
@@ -529,7 +624,8 @@ async fn automation_guardrails_fire() {
     })
     .await;
     assert!(
-        seen.iter().any(|m| m["reason"].as_str().unwrap_or("").contains("silent")),
+        seen.iter()
+            .any(|m| m["reason"].as_str().unwrap_or("").contains("silent")),
         "idle agent must raise a hang alert"
     );
 }

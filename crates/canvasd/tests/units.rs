@@ -58,7 +58,11 @@ fn gate_catches_destructive_shapes() {
         b"npm publish\n",
         b"shutdown now\n",
     ] {
-        assert!(sensitive_line(payload).is_some(), "should gate: {:?}", payload);
+        assert!(
+            sensitive_line(payload).is_some(),
+            "should gate: {:?}",
+            payload
+        );
     }
 }
 
@@ -108,9 +112,17 @@ fn boards_rename_delete_rules() {
     let dir = temp_repo("boards");
     let store = Store::open(&dir).unwrap();
     store.board_created("b1", "QA").unwrap();
-    assert!(store.boards_snapshot().unwrap().iter().any(|(id, n)| id == "b1" && n == "QA"));
+    assert!(store
+        .boards_snapshot()
+        .unwrap()
+        .iter()
+        .any(|(id, n)| id == "b1" && n == "QA"));
     assert!(store.board_renamed("b1", "QA2").unwrap());
-    assert!(store.boards_snapshot().unwrap().iter().any(|(_, n)| n == "QA2"));
+    assert!(store
+        .boards_snapshot()
+        .unwrap()
+        .iter()
+        .any(|(_, n)| n == "QA2"));
 
     // an occupied board refuses deletion
     store
@@ -133,7 +145,9 @@ fn node_rename_hits_agents_and_workspaces() {
     store
         .agent_spawned("a1", "old", "bash", "/tmp/wt", None, "auto", None, None)
         .unwrap();
-    store.workspace_created("w1", "ws-old", "/tmp/repo", None).unwrap();
+    store
+        .workspace_created("w1", "ws-old", "/tmp/repo", None)
+        .unwrap();
     assert!(store.node_renamed("a1", "new").unwrap());
     assert!(store.node_renamed("w1", "ws-new").unwrap());
     assert!(!store.node_renamed("ghost", "x").unwrap());

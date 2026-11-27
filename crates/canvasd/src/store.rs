@@ -9,7 +9,17 @@ use std::sync::Mutex;
 /// Row of the agents table: (id, name, command, worktree, status,
 /// workspace_id, permission).
 /// (id, name, command, worktree, status, workspace_id, permission, board_id)
-pub type AgentRow = (String, String, String, String, String, Option<String>, String, Option<String>, Option<String>);
+pub type AgentRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    String,
+    Option<String>,
+    Option<String>,
+);
 /// Row of the accounts table: (id|cli, cli|label, label|config_dir, env) —
 /// the snapshot form carries (id, cli, label, env), the spawn form
 /// (cli, label, config_dir, env).
@@ -239,8 +249,10 @@ impl Store {
         // v9 → v10: optional due date on notes — the calendar dimension
         // of the kanban.
         if version < 10 {
-            conn.execute_batch("ALTER TABLE notes ADD COLUMN due TEXT;
-                 PRAGMA user_version = 10;")?;
+            conn.execute_batch(
+                "ALTER TABLE notes ADD COLUMN due TEXT;
+                 PRAGMA user_version = 10;",
+            )?;
         }
         // v10 → v11: loops — a saved instruction the daemon re-sends to a
         // live console on a trigger (interval / agent-went-idle / output
@@ -276,7 +288,9 @@ impl Store {
             }
             conn.execute_batch("PRAGMA user_version = 12;")?;
         }
-        Ok(Self { conn: Mutex::new(conn) })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -298,7 +312,13 @@ impl Store {
         Ok(())
     }
 
-    pub fn workspace_created(&self, id: &str, name: &str, repo: &str, board_id: Option<&str>) -> Result<()> {
+    pub fn workspace_created(
+        &self,
+        id: &str,
+        name: &str,
+        repo: &str,
+        board_id: Option<&str>,
+    ) -> Result<()> {
         self.conn.lock().unwrap().execute(
             "INSERT INTO workspaces (id, name, repo, board_id) VALUES (?1, ?2, ?3, COALESCE(?4, 'main'))",
             (id, name, repo, board_id),
@@ -307,10 +327,10 @@ impl Store {
     }
 
     pub fn board_created(&self, id: &str, name: &str) -> Result<()> {
-        self.conn.lock().unwrap().execute(
-            "INSERT INTO boards (id, name) VALUES (?1, ?2)",
-            (id, name),
-        )?;
+        self.conn
+            .lock()
+            .unwrap()
+            .execute("INSERT INTO boards (id, name) VALUES (?1, ?2)", (id, name))?;
         Ok(())
     }
 
@@ -338,13 +358,11 @@ impl Store {
     /// Rename an agent or workspace node.
     pub fn node_renamed(&self, node_id: &str, name: &str) -> Result<bool> {
         let conn = self.conn.lock().unwrap();
-        let n = conn.execute(
-            "UPDATE agents SET name = ?2 WHERE id = ?1",
-            (node_id, name),
-        )? + conn.execute(
-            "UPDATE workspaces SET name = ?2 WHERE id = ?1",
-            (node_id, name),
-        )?;
+        let n = conn.execute("UPDATE agents SET name = ?2 WHERE id = ?1", (node_id, name))?
+            + conn.execute(
+                "UPDATE workspaces SET name = ?2 WHERE id = ?1",
+                (node_id, name),
+            )?;
         Ok(n > 0)
     }
 
@@ -469,7 +487,11 @@ impl Store {
     pub fn workspace_chain(&self, id: &str) -> Result<Option<Vec<String>>> {
         let conn = self.conn.lock().unwrap();
         let raw: Option<String> = conn
-            .query_row("SELECT agent_chain FROM workspaces WHERE id = ?1", [id], |r| r.get(0))
+            .query_row(
+                "SELECT agent_chain FROM workspaces WHERE id = ?1",
+                [id],
+                |r| r.get(0),
+            )
             .ok()
             .flatten();
         Ok(raw.and_then(|j| serde_json::from_str(&j).ok()))
@@ -487,7 +509,8 @@ impl Store {
     /// Tuple: (id, name, repo, board_id).
     pub fn workspaces_snapshot(&self) -> Result<Vec<WorkspaceRow>> {
         let conn = self.conn.lock().unwrap();
-        let mut st = conn.prepare("SELECT id, name, repo, board_id FROM workspaces ORDER BY created_at")?;
+        let mut st =
+            conn.prepare("SELECT id, name, repo, board_id FROM workspaces ORDER BY created_at")?;
         let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
@@ -538,13 +561,7 @@ impl Store {
     }
 
     #[allow(dead_code)]
-    pub fn delegation_created(
-        &self,
-        id: &str,
-        from: &str,
-        to: &str,
-        task: &str,
-    ) -> Result<()> {
+    pub fn delegation_created(&self, id: &str, from: &str, to: &str, task: &str) -> Result<()> {
         self.conn.lock().unwrap().execute(
             "INSERT INTO delegations (id, from_node, to_node, task) VALUES (?1, ?2, ?3, ?4)",
             (id, from, to, task),
@@ -580,7 +597,14 @@ impl Store {
         Ok(n > 0)
     }
 
-    pub fn account_created(&self, id: &str, cli: &str, label: &str, config_dir: &str, env: Option<&str>) -> Result<()> {
+    pub fn account_created(
+        &self,
+        id: &str,
+        cli: &str,
+        label: &str,
+        config_dir: &str,
+        env: Option<&str>,
+    ) -> Result<()> {
         self.conn.lock().unwrap().execute(
             "INSERT INTO accounts (id, cli, label, config_dir, env) VALUES (?1, ?2, ?3, ?4, ?5)",
             (id, cli, label, config_dir, env),
@@ -590,7 +614,10 @@ impl Store {
 
     pub fn account_deleted(&self, id: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.execute("UPDATE agents SET account_id = NULL WHERE account_id = ?1", (id,))?;
+        conn.execute(
+            "UPDATE agents SET account_id = NULL WHERE account_id = ?1",
+            (id,),
+        )?;
         conn.execute("DELETE FROM accounts WHERE id = ?1", (id,))?;
         Ok(())
     }
@@ -605,7 +632,16 @@ impl Store {
         )?;
         let rows = st
             .query_map([], |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?))
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                    r.get(7)?,
+                ))
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows)
@@ -638,7 +674,10 @@ impl Store {
     }
 
     pub fn artifact_deleted(&self, id: &str) -> Result<()> {
-        self.conn.lock().unwrap().execute("DELETE FROM artifacts WHERE id = ?1", [id])?;
+        self.conn
+            .lock()
+            .unwrap()
+            .execute("DELETE FROM artifacts WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -649,7 +688,16 @@ impl Store {
             "SELECT id, board_id, col, text, pos, due FROM notes WHERE board_id = ?1 ORDER BY col, pos",
         )?;
         let rows = st
-            .query_map([board_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)))?
+            .query_map([board_id], |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                ))
+            })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows)
     }
@@ -662,12 +710,29 @@ impl Store {
             "SELECT id, board_id, col, text, pos, due FROM notes ORDER BY board_id, col, pos",
         )?;
         let rows = st
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)))?
+            .query_map([], |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                ))
+            })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows)
     }
 
-    pub fn note_upsert(&self, id: &str, board_id: &str, col: &str, text: &str, pos: i64, due: Option<&str>) -> Result<()> {
+    pub fn note_upsert(
+        &self,
+        id: &str,
+        board_id: &str,
+        col: &str,
+        text: &str,
+        pos: i64,
+        due: Option<&str>,
+    ) -> Result<()> {
         self.conn.lock().unwrap().execute(
             "INSERT INTO notes (id, board_id, col, text, pos, due) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
              ON CONFLICT(id) DO UPDATE SET board_id=excluded.board_id, col=excluded.col, text=excluded.text, pos=excluded.pos, due=excluded.due",
@@ -677,7 +742,10 @@ impl Store {
     }
 
     pub fn note_deleted(&self, id: &str) -> Result<()> {
-        self.conn.lock().unwrap().execute("DELETE FROM notes WHERE id = ?1", [id])?;
+        self.conn
+            .lock()
+            .unwrap()
+            .execute("DELETE FROM notes WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -694,7 +762,8 @@ impl Store {
 
     pub fn accounts_snapshot(&self) -> Result<Vec<AccountRow>> {
         let conn = self.conn.lock().unwrap();
-        let mut st = conn.prepare("SELECT id, cli, label, env FROM accounts ORDER BY created_at")?;
+        let mut st =
+            conn.prepare("SELECT id, cli, label, env FROM accounts ORDER BY created_at")?;
         let rows = st
             .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -704,7 +773,8 @@ impl Store {
     /// (cli, label, config_dir, env override) for a spawn that uses this account.
     pub fn account_record(&self, id: &str) -> Result<Option<AccountRow>> {
         let conn = self.conn.lock().unwrap();
-        let mut st = conn.prepare("SELECT cli, label, config_dir, env FROM accounts WHERE id = ?1")?;
+        let mut st =
+            conn.prepare("SELECT cli, label, config_dir, env FROM accounts WHERE id = ?1")?;
         Ok(st
             .query_row((id,), |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
             .optional()?)
@@ -723,8 +793,8 @@ impl Store {
     /// startup sweep to resolve results that landed before a restart.
     pub fn unresolved_delegations(&self) -> Result<Vec<(String, String)>> {
         let conn = self.conn.lock().unwrap();
-        let mut q = conn
-            .prepare("SELECT id, to_node FROM delegations WHERE state = 'delegated'")?;
+        let mut q =
+            conn.prepare("SELECT id, to_node FROM delegations WHERE state = 'delegated'")?;
         let rows = q
             .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -743,23 +813,29 @@ impl Store {
     /// Agents seen by this board, newest last — replayed to new clients so
     /// the canvas shows pre-existing agents, not just ones spawned live.
     /// Tuple: (id, name, command, worktree, status, workspace_id, permission).
-    pub fn agents_snapshot(
-        &self,
-    ) -> Result<Vec<AgentRow>> {
+    pub fn agents_snapshot(&self) -> Result<Vec<AgentRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
             "SELECT id, name, command, worktree, status, workspace_id, permission, board_id, account_id FROM agents ORDER BY created_at",
         )?;
         let rows = st.query_map([], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?))
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+                r.get(7)?,
+                r.get(8)?,
+            ))
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     /// Delegation edges seen by this board — replayed on connect.
-    pub fn delegations_snapshot(
-        &self,
-    ) -> Result<Vec<DelegationRow>> {
+    pub fn delegations_snapshot(&self) -> Result<Vec<DelegationRow>> {
         let conn = self.conn.lock().unwrap();
         let mut st = conn.prepare(
             "SELECT id, from_node, to_node, task, result, state, files_changed, created_at, resolved_at FROM delegations ORDER BY created_at",

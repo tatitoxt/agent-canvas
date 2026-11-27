@@ -3,9 +3,6 @@
 //! Binds to 127.0.0.1 only. Every connection requires the per-launch session
 //! token (`?token=` on /ws, `Authorization: Bearer` on /api/*).
 
-use canvasd::agent::{canvas_result_line, dirty_diff, dirty_file_count, dirty_files, last_visible_line, sensitive_line, worktree_branch, AgentManager};
-use canvasd::protocol;
-use canvasd::store;
 use anyhow::Result;
 use axum::{
     extract::{
@@ -18,6 +15,12 @@ use axum::{
     Json, Router,
 };
 use base64::Engine;
+use canvasd::agent::{
+    canvas_result_line, dirty_diff, dirty_file_count, dirty_files, last_visible_line,
+    sensitive_line, worktree_branch, AgentManager,
+};
+use canvasd::protocol;
+use canvasd::store;
 use protocol::{decode_pty_frame, encode_pty_frame, AgentStatus, ClientMsg, ServerMsg};
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
@@ -53,7 +56,6 @@ struct AppState {
     allowed_roots: std::sync::Arc<std::sync::Mutex<Vec<PathBuf>>>,
 }
 
-
 /// Where extra sandbox roots are persisted — the USER's config dir,
 /// never the checkout: a cloned repo must never be able to grant
 /// itself access to the operator's disk.
@@ -70,7 +72,12 @@ const SANDBOX_HINT: &str = " — open the vault from the Vault panel to grant ac
 
 /// Is `canon_root` inside an allowed root?
 fn root_allowed(state: &AppState, canon_root: &std::path::Path) -> bool {
-    state.allowed_roots.lock().unwrap().iter().any(|ar| canon_root.starts_with(ar))
+    state
+        .allowed_roots
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|ar| canon_root.starts_with(ar))
 }
 
 /// Persist a newly mounted vault root: append to the user config file
@@ -80,25 +87,35 @@ fn root_allowed(state: &AppState, canon_root: &std::path::Path) -> bool {
 fn persist_allowed_root(state: &AppState, canon_root: &std::path::Path) {
     {
         let mut roots = state.allowed_roots.lock().unwrap();
-        if roots.iter().any(|ar| canon_root.starts_with(ar)) { return; }
+        if roots.iter().any(|ar| canon_root.starts_with(ar)) {
+            return;
+        }
         roots.push(canon_root.to_path_buf());
     }
     // Persistence requires the operator's user config dir — the fallback
     // path lives inside the checkout, and a repo-controlled symlink there
     // would redirect the write into an unrelated user file. No resolvable
     // config dir → the grant stays in-memory for this boot only.
-    let Some(config) = canvasd::paths::canvas_config_dir() else { return };
+    let Some(config) = canvasd::paths::canvas_config_dir() else {
+        return;
+    };
     // A newline in the path would smuggle extra grant lines into the
     // config on the next boot — pathological, but cheap to refuse.
     let line = canon_root.to_string_lossy().to_string();
-    if line.contains('\n') || line.contains('\r') { return; }
+    if line.contains('\n') || line.contains('\r') {
+        return;
+    }
     let list = config.join("allowed-roots");
-    if let Some(parent) = list.parent() { let _ = std::fs::create_dir_all(parent); }
+    if let Some(parent) = list.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
     let prev = std::fs::read_to_string(&list).unwrap_or_default();
     let already = prev.lines().any(|l| l.trim() == line);
     if !already {
         let mut text = prev;
-        if !text.is_empty() && !text.ends_with('\n') { text.push('\n'); }
+        if !text.is_empty() && !text.ends_with('\n') {
+            text.push('\n');
+        }
         text.push_str(&line);
         text.push('\n');
         let _ = std::fs::write(&list, text);
@@ -126,16 +143,22 @@ fn vault_sandbox_resolve(state: &AppState, dir: &str, path: &str) -> Result<Path
     // prefix), and `C:` is a drive-relative Prefix — both would bend the
     // probe away from the vault root before the final containment check
     // caught them. Same rule sanitize_relpath already applies to cwd.
-    if rel.components().any(|c| matches!(
-        c,
-        std::path::Component::Prefix(_) | std::path::Component::RootDir | std::path::Component::ParentDir
-    )) {
+    if rel.components().any(|c| {
+        matches!(
+            c,
+            std::path::Component::Prefix(_)
+                | std::path::Component::RootDir
+                | std::path::Component::ParentDir
+        )
+    }) {
         return Err("access denied: path escapes the vault".into());
     }
     let canon_root = canon_through_missing(std::path::Path::new(dir))
         .ok_or_else(|| format!("access denied: vault root not found: {dir}"))?;
     if !root_allowed(state, &canon_root) {
-        return Err(format!("access denied: path is outside allowed directories{SANDBOX_HINT}"));
+        return Err(format!(
+            "access denied: path is outside allowed directories{SANDBOX_HINT}"
+        ));
     }
     // Walk the components that exist: any symlink in the chain must
     // resolve inside the vault. `symlink_metadata` (lstat) sees dangling
@@ -172,7 +195,9 @@ fn canon_through_missing(path: &std::path::Path) -> Option<PathBuf> {
     let mut probe = path.to_path_buf();
     let mut tail: Vec<std::ffi::OsString> = Vec::new();
     loop {
-        if std::fs::symlink_metadata(&probe).is_ok() { break; }
+        if std::fs::symlink_metadata(&probe).is_ok() {
+            break;
+        }
         match (probe.file_name(), probe.parent()) {
             (Some(name), Some(parent)) => {
                 tail.push(name.to_os_string());
@@ -182,7 +207,9 @@ fn canon_through_missing(path: &std::path::Path) -> Option<PathBuf> {
         }
     }
     let mut resolved = std::fs::canonicalize(&probe).ok()?;
-    for comp in tail.iter().rev() { resolved.push(comp); }
+    for comp in tail.iter().rev() {
+        resolved.push(comp);
+    }
     Some(resolved)
 }
 
@@ -192,40 +219,51 @@ fn vault_sandbox_dir(state: &AppState, dir: &str) -> Result<PathBuf, String> {
     if root_allowed(state, &canon_root) {
         Ok(canon_root)
     } else {
-        Err(format!("access denied: path is outside allowed directories{SANDBOX_HINT}"))
+        Err(format!(
+            "access denied: path is outside allowed directories{SANDBOX_HINT}"
+        ))
     }
 }
 
 /// Resolve a repository directory for Code Editor writes. Vault roots are
 /// intentionally broader than writable repository roots, so write access is
 /// limited to the board repo and repos explicitly registered as workspaces.
-fn registered_repo_dir(repo_root: &std::path::Path, store: &store::Store, dir: &str) -> Result<PathBuf, String> {
+fn registered_repo_dir(
+    repo_root: &std::path::Path,
+    store: &store::Store,
+    dir: &str,
+) -> Result<PathBuf, String> {
     // Tilde expansion is portable: HOME is typically unset on Windows,
     // where the profile folder is the home — see paths::expand_tilde.
     let requested = canvasd::paths::expand_tilde(dir);
     let mut roots = vec![repo_root.to_path_buf()];
-    let workspaces = store
-        .workspaces_snapshot()
-        .map_err(|e| e.to_string())?;
-    roots.extend(workspaces.into_iter().map(|(_, _, repo, _)| {
-        canvasd::paths::expand_tilde(&repo)
-    }));
+    let workspaces = store.workspaces_snapshot().map_err(|e| e.to_string())?;
+    roots.extend(
+        workspaces
+            .into_iter()
+            .map(|(_, _, repo, _)| canvasd::paths::expand_tilde(&repo)),
+    );
 
     for root in roots {
-        let Ok(root) = std::fs::canonicalize(root) else { continue };
+        let Ok(root) = std::fs::canonicalize(root) else {
+            continue;
+        };
         let candidate = if requested.is_absolute() {
             requested.clone()
         } else {
             root.join(&requested)
         };
-        let Ok(candidate) = std::fs::canonicalize(candidate) else { continue };
+        let Ok(candidate) = std::fs::canonicalize(candidate) else {
+            continue;
+        };
         if candidate.starts_with(&root) && candidate.is_dir() {
             return Ok(candidate);
         }
     }
-    Err(format!("access denied: repository is not registered or not found: {dir}"))
+    Err(format!(
+        "access denied: repository is not registered or not found: {dir}"
+    ))
 }
-
 
 /// Write PTY input honoring the supervised-input gate: `supervised`
 /// agents hold destructive-looking input until the operator approves.
@@ -287,7 +325,10 @@ struct Health {
 }
 
 async fn health() -> Json<Health> {
-    Json(Health { status: "ok", version: env!("CARGO_PKG_VERSION") })
+    Json(Health {
+        status: "ok",
+        version: env!("CARGO_PKG_VERSION"),
+    })
 }
 
 /// GET /api/github/{*rest}?query — proxies the GitHub REST API so the web
@@ -355,9 +396,21 @@ async fn share_create(
         Err(_) => return (StatusCode::BAD_REQUEST, "bad base64").into_response(),
     };
     let id = uuid::Uuid::new_v4().simple().to_string()[..16].to_string();
-    let title = if input.title.trim().is_empty() { "artifact".to_string() } else { input.title };
-    let mime = if input.mime.trim().is_empty() { "application/octet-stream".to_string() } else { input.mime };
-    state.shares.lock().unwrap().insert(id.clone(), (title, mime, body));
+    let title = if input.title.trim().is_empty() {
+        "artifact".to_string()
+    } else {
+        input.title
+    };
+    let mime = if input.mime.trim().is_empty() {
+        "application/octet-stream".to_string()
+    } else {
+        input.mime
+    };
+    state
+        .shares
+        .lock()
+        .unwrap()
+        .insert(id.clone(), (title, mime, body));
     Json(serde_json::json!({ "id": id, "url": format!("/share/{id}") })).into_response()
 }
 
@@ -392,15 +445,21 @@ async fn share_get(
                 (header::CONTENT_TYPE, mime),
                 (
                     header::CONTENT_DISPOSITION,
-                    format!("inline; filename=\"{}.{}\"",
+                    format!(
+                        "inline; filename=\"{}.{}\"",
                         title.replace('"', ""),
-                        if title.ends_with(".pdf") { "" } else { "pdf" }),
+                        if title.ends_with(".pdf") { "" } else { "pdf" }
+                    ),
                 ),
             ],
             axum::body::Body::from(body),
         )
             .into_response(),
-        None => (StatusCode::NOT_FOUND, "share not found — it lives only while the app runs").into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            "share not found — it lives only while the app runs",
+        )
+            .into_response(),
     }
 }
 
@@ -408,7 +467,11 @@ async fn share_get(
 /// the notes so `![[img.png]]` embeds can resolve them.
 fn is_vault_image(name: &str) -> bool {
     matches!(
-        name.rsplit('.').next().unwrap_or("").to_ascii_lowercase().as_str(),
+        name.rsplit('.')
+            .next()
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .as_str(),
         "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "ico"
     )
 }
@@ -450,7 +513,6 @@ fn vault_list_entries(root: &PathBuf) -> Vec<String> {
     entries
 }
 
-
 /// Recursively list ALL files under a repo root for the explorer panel.
 /// Same discipline as the vault walker: no dotfiles, no heavy build
 /// dirs, never follow symlinks, capped.
@@ -488,14 +550,26 @@ fn atomic_replace_repo_file(path: &std::path::Path, text: &str) -> Result<(), St
     use std::io::Write;
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
-    let parent = path.parent().ok_or_else(|| "write failed: missing parent directory".to_string())?;
-    let name = path.file_name().ok_or_else(|| "write failed: missing file name".to_string())?.to_string_lossy();
-    let permissions = std::fs::metadata(path).map_err(|e| format!("write failed: {e}"))?.permissions();
+    let parent = path
+        .parent()
+        .ok_or_else(|| "write failed: missing parent directory".to_string())?;
+    let name = path
+        .file_name()
+        .ok_or_else(|| "write failed: missing file name".to_string())?
+        .to_string_lossy();
+    let permissions = std::fs::metadata(path)
+        .map_err(|e| format!("write failed: {e}"))?
+        .permissions();
     for _ in 0..8 {
-        let temp = parent.join(format!(".{name}.canvas-save-{}-{}", std::process::id(), NEXT_TEMP.fetch_add(1, Ordering::Relaxed)));
+        let temp = parent.join(format!(
+            ".{name}.canvas-save-{}-{}",
+            std::process::id(),
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+        ));
         let mut options = std::fs::OpenOptions::new();
         options.write(true).create_new(true);
-        #[cfg(unix)] {
+        #[cfg(unix)]
+        {
             use std::os::unix::fs::OpenOptionsExt;
             use std::os::unix::fs::PermissionsExt;
             options.mode(permissions.mode());
@@ -503,12 +577,16 @@ fn atomic_replace_repo_file(path: &std::path::Path, text: &str) -> Result<(), St
         match options.open(&temp) {
             Ok(mut file) => {
                 let result = (|| {
-                    file.write_all(text.as_bytes()).map_err(|e| format!("write failed: {e}"))?;
+                    file.write_all(text.as_bytes())
+                        .map_err(|e| format!("write failed: {e}"))?;
                     file.sync_all().map_err(|e| format!("write failed: {e}"))?;
-                    std::fs::set_permissions(&temp, permissions).map_err(|e| format!("write failed: {e}"))?;
+                    std::fs::set_permissions(&temp, permissions)
+                        .map_err(|e| format!("write failed: {e}"))?;
                     std::fs::rename(&temp, path).map_err(|e| format!("write failed: {e}"))
                 })();
-                if result.is_err() { let _ = std::fs::remove_file(&temp); }
+                if result.is_err() {
+                    let _ = std::fs::remove_file(&temp);
+                }
                 return result;
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -525,9 +603,11 @@ fn vault_links(text: &str) -> Vec<String> {
     let mut rest = text;
     while let Some(start) = rest.find("[[") {
         let inner = &rest[start + 2..];
-        let Some(end) = inner.find("]]" ) else { break };
+        let Some(end) = inner.find("]]") else { break };
         let name = inner[..end].split('|').next().unwrap_or("").trim();
-        if !name.is_empty() { out.push(name.to_string()); }
+        if !name.is_empty() {
+            out.push(name.to_string());
+        }
         rest = &inner[end + 2..];
     }
     let mut rest = text;
@@ -535,7 +615,9 @@ fn vault_links(text: &str) -> Vec<String> {
         let inner = &rest[pos + 2..];
         let Some(end) = inner.find(')') else { break };
         let target = inner[..end].trim();
-        if target.ends_with(".md") { out.push(target.to_string()); }
+        if target.ends_with(".md") {
+            out.push(target.to_string());
+        }
         rest = &inner[end..];
     }
     out
@@ -544,7 +626,14 @@ fn vault_links(text: &str) -> Vec<String> {
 /// Spawn a PTY agent wired to the event bus + store. Used by both
 /// CLIs the daemon knows how to fall back between, in preference order.
 const KNOWN_CLIS: &[&str] = &[
-    "claude", "codex", "gemini", "aider", "goose", "amp", "opencode", "cursor-agent",
+    "claude",
+    "codex",
+    "gemini",
+    "aider",
+    "goose",
+    "amp",
+    "opencode",
+    "cursor-agent",
 ];
 
 /// First token of a spawn command — the CLI being launched.
@@ -554,7 +643,9 @@ fn command_cli(command: &str) -> &str {
 
 /// Swap the leading CLI token of a command, keeping every argument.
 fn substitute_cli(command: &str, cli: &str) -> String {
-    let rest = command.trim_start_matches(command_cli(command)).trim_start();
+    let rest = command
+        .trim_start_matches(command_cli(command))
+        .trim_start();
     if rest.is_empty() {
         cli.to_string()
     } else {
@@ -579,7 +670,11 @@ fn detected_chain() -> Vec<String> {
 fn chain_for(state: &Arc<AppState>, workspace_id: Option<&str>, cli: &str) -> Vec<String> {
     if !KNOWN_CLIS.contains(&cli) {
         // Not an agent CLI (bash, sh, editors…) — nothing to fall back to.
-        return if cli.is_empty() { Vec::new() } else { vec![cli.to_string()] };
+        return if cli.is_empty() {
+            Vec::new()
+        } else {
+            vec![cli.to_string()]
+        };
     }
     let configured = workspace_id
         .and_then(|w| state.store.workspace_chain(w).ok().flatten())
@@ -721,15 +816,28 @@ fn spawn_agent(
                             // since spawn — its exit runs on a different watcher,
                             // so a ticket keyed to it would strand in flight.
                             // Already dead: fail the ticket now instead.
-                            let replacement_live = state_fb.agents.statuses().iter().any(|(aid, st)| aid == &new_id && *st != "exited");
+                            let replacement_live = state_fb
+                                .agents
+                                .statuses()
+                                .iter()
+                                .any(|(aid, st)| aid == &new_id && *st != "exited");
                             if replacement_live {
-                                state_fb.pending_results.lock().unwrap().insert(new_id.clone(), edge);
+                                state_fb
+                                    .pending_results
+                                    .lock()
+                                    .unwrap()
+                                    .insert(new_id.clone(), edge);
                             } else {
                                 let _ = store2.delegation_failed(&edge, 0);
-                                let _ = ev2.send(Event::Control(ServerMsg::DelegationFailed { edge_id: edge }));
+                                let _ = ev2.send(Event::Control(ServerMsg::DelegationFailed {
+                                    edge_id: edge,
+                                }));
                             }
                         }
-                        let wt = state_fb.agents.worktree(&new_id).map(|p| p.to_string_lossy().to_string());
+                        let wt = state_fb
+                            .agents
+                            .worktree(&new_id)
+                            .map(|p| p.to_string_lossy().to_string());
                         let _ = state_fb.events.send(Event::Control(ServerMsg::Spawned {
                             agent_id: new_id,
                             name: fb_nm,
@@ -806,10 +914,14 @@ fn spawn_agent(
         let _ = std::fs::write(&mem_path, "");
     }
     let mut pty_env = pty_env;
-    pty_env.push(("CANVAS_MEMORY".to_string(), mem_path.to_string_lossy().to_string()));
+    pty_env.push((
+        "CANVAS_MEMORY".to_string(),
+        mem_path.to_string_lossy().to_string(),
+    ));
     // Fallback chain: sync spawn failures (missing binary, bad exec) retry
     // with the next CLI; early PTY deaths retry from the exit watcher.
-    let chain = chain_override.unwrap_or_else(|| chain_for(state, workspace_id, command_cli(command)));
+    let chain =
+        chain_override.unwrap_or_else(|| chain_for(state, workspace_id, command_cli(command)));
     let mut remaining: Vec<String> = chain.iter().skip(1).cloned().collect();
     let mut cmd_attempt = command.to_string();
     let id = loop {
@@ -858,9 +970,7 @@ fn spawn_agent(
     // Board: explicit, else the workspace's board, else 'main'.
     let board = board_id
         .map(|b| b.to_string())
-        .or_else(|| {
-            workspace_id.and_then(|w| state.store.workspace_board(w).ok().flatten())
-        });
+        .or_else(|| workspace_id.and_then(|w| state.store.workspace_board(w).ok().flatten()));
     if let Err(e) = state.store.agent_spawned(
         &id,
         name,
@@ -909,21 +1019,29 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .map(|(board_id, name)| protocol::SnapshotBoard { board_id, name })
                 .collect(),
             artifacts: {
-                let names: std::collections::HashMap<String, String> = agents
-                    .iter()
-                    .map(|a| (a.0.clone(), a.1.clone()))
-                    .collect();
+                let names: std::collections::HashMap<String, String> =
+                    agents.iter().map(|a| (a.0.clone(), a.1.clone())).collect();
                 state
                     .store
                     .artifacts_snapshot()
                     .unwrap_or_default()
                     .into_iter()
-                    .map(|(artifact_id, board_id, agent_id, kind, title, path, text, created_at)| {
-                        let agent_name = agent_id.as_ref().and_then(|a| names.get(a).cloned());
-                        protocol::SnapshotArtifact {
-                            artifact_id, board_id, agent_id, agent_name, kind, title, path, text, created_at,
-                        }
-                    })
+                    .map(
+                        |(artifact_id, board_id, agent_id, kind, title, path, text, created_at)| {
+                            let agent_name = agent_id.as_ref().and_then(|a| names.get(a).cloned());
+                            protocol::SnapshotArtifact {
+                                artifact_id,
+                                board_id,
+                                agent_id,
+                                agent_name,
+                                kind,
+                                title,
+                                path,
+                                text,
+                                created_at,
+                            }
+                        },
+                    )
                     .collect()
             },
             agents: {
@@ -936,53 +1054,66 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                     .collect();
                 agents
                     .into_iter()
-                    .map(|(id, name, command, worktree, status, workspace_id, permission, board_id, account_id)| {
-                        let account_label = account_id
-                            .as_ref()
-                            .and_then(|a| acct_labels.get(a).cloned());
-                        let ob = state
-                            .repo_root
-                            .join(".canvas")
-                            .join("transcripts")
-                            .join(format!("{id}.bin"))
-                            .metadata()
-                            .map(|m| m.len())
-                            .unwrap_or(0);
-                        // Replay the diff state too: a fresh client shouldn't
-                        // show a dirty worktree as clean until the diff
-                        // ticker next decides something changed.
-                        let wt = state
-                            .agents
-                            .worktree(&id)
-                            .or_else(|| {
+                    .map(
+                        |(
+                            id,
+                            name,
+                            command,
+                            worktree,
+                            status,
+                            workspace_id,
+                            permission,
+                            board_id,
+                            account_id,
+                        )| {
+                            let account_label = account_id
+                                .as_ref()
+                                .and_then(|a| acct_labels.get(a).cloned());
+                            let ob = state
+                                .repo_root
+                                .join(".canvas")
+                                .join("transcripts")
+                                .join(format!("{id}.bin"))
+                                .metadata()
+                                .map(|m| m.len())
+                                .unwrap_or(0);
+                            // Replay the diff state too: a fresh client shouldn't
+                            // show a dirty worktree as clean until the diff
+                            // ticker next decides something changed.
+                            let wt = state.agents.worktree(&id).or_else(|| {
                                 state
                                     .store
                                     .agent_worktree_abs(&id, &state.repo_root)
                                     .ok()
                                     .flatten()
                             });
-                        let (files, paths, branch) = wt
-                            .map(|w| {
-                                let paths = dirty_files(&w);
-                                (paths.len() as u32, paths, worktree_branch(&w))
-                            })
-                            .unwrap_or_default();
-                        protocol::SnapshotAgent {
-                            status: live.get(&id).copied().unwrap_or(status.as_str()).to_string(),
-                            agent_id: id,
-                            name,
-                            command,
-                            worktree,
-                            permission,
-                            workspace_id,
-                            board_id,
-                            account_label,
-                            output_bytes: ob,
-                            files,
-                            paths,
-                            branch,
-                        }
-                    })
+                            let (files, paths, branch) = wt
+                                .map(|w| {
+                                    let paths = dirty_files(&w);
+                                    (paths.len() as u32, paths, worktree_branch(&w))
+                                })
+                                .unwrap_or_default();
+                            protocol::SnapshotAgent {
+                                status: live
+                                    .get(&id)
+                                    .copied()
+                                    .unwrap_or(status.as_str())
+                                    .to_string(),
+                                agent_id: id,
+                                name,
+                                command,
+                                worktree,
+                                permission,
+                                workspace_id,
+                                board_id,
+                                account_label,
+                                output_bytes: ob,
+                                files,
+                                paths,
+                                branch,
+                            }
+                        },
+                    )
                     .collect()
             },
             workspaces: state
@@ -993,11 +1124,11 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .map(|(workspace_id, name, repo, board_id)| {
                     let agent_chain = state.store.workspace_chain(&workspace_id).ok().flatten();
                     protocol::SnapshotWorkspace {
-                    workspace_id,
-                    name,
-                    repo,
-                    board_id,
-                    agent_chain,
+                        workspace_id,
+                        name,
+                        repo,
+                        board_id,
+                        agent_chain,
                     }
                 })
                 .collect(),
@@ -1006,19 +1137,21 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .delegations_snapshot()
                 .unwrap_or_default()
                 .into_iter()
-                .map(|(edge_id, from, to, task, result, state, files, created_at, resolved_at)| {
-                    protocol::SnapshotDelegation {
-                        edge_id,
-                        from,
-                        to,
-                        task,
-                        result,
-                        files: files.unwrap_or(0) as u32,
-                        state,
-                        created_at,
-                        resolved_at,
-                    }
-                })
+                .map(
+                    |(edge_id, from, to, task, result, state, files, created_at, resolved_at)| {
+                        protocol::SnapshotDelegation {
+                            edge_id,
+                            from,
+                            to,
+                            task,
+                            result,
+                            files: files.unwrap_or(0) as u32,
+                            state,
+                            created_at,
+                            resolved_at,
+                        }
+                    },
+                )
                 .collect(),
             automations: state
                 .store
@@ -1042,30 +1175,35 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 .accounts_snapshot()
                 .unwrap_or_default()
                 .into_iter()
-                .map(|(account_id, cli, label, env)| protocol::SnapshotAccount { account_id, cli, label, env })
+                .map(|(account_id, cli, label, env)| protocol::SnapshotAccount {
+                    account_id,
+                    cli,
+                    label,
+                    env,
+                })
                 .collect(),
             notes: state
                 .store
                 .all_notes()
                 .unwrap_or_default()
                 .into_iter()
-                .map(|(note_id, board_id, col, text, pos, due)| protocol::SnapshotNote {
-                    note_id,
-                    board_id,
-                    col,
-                    text,
-                    pos,
-                    due,
-                })
+                .map(
+                    |(note_id, board_id, col, text, pos, due)| protocol::SnapshotNote {
+                        note_id,
+                        board_id,
+                        col,
+                        text,
+                        pos,
+                        due,
+                    },
+                )
                 .collect(),
             approvals: state
                 .pending_inputs
                 .lock()
                 .unwrap()
                 .iter()
-                .filter_map(|(id, bytes)| {
-                    sensitive_line(bytes).map(|line| (id.clone(), line))
-                })
+                .filter_map(|(id, bytes)| sensitive_line(bytes).map(|line| (id.clone(), line)))
                 .collect(),
         };
         if let Ok(text) = serde_json::to_string(&snapshot) {
@@ -1091,7 +1229,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
         loop {
             match rx.recv().await {
                 Ok(Event::Control(msg)) => {
-                    let Ok(text) = serde_json::to_string(&msg) else { continue };
+                    let Ok(text) = serde_json::to_string(&msg) else {
+                        continue;
+                    };
                     if out_tx.send(Message::Text(text.into())).await.is_err() {
                         break;
                     }
@@ -1147,11 +1287,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
     info!("websocket client disconnected");
 }
 
-fn handle_client_msg(
-    text: &str,
-    state: &Arc<AppState>,
-    send_control: &impl Fn(ServerMsg),
-) {
+fn handle_client_msg(text: &str, state: &Arc<AppState>, send_control: &impl Fn(ServerMsg)) {
     let msg: ClientMsg = match serde_json::from_str(text) {
         Ok(m) => m,
         Err(e) => {
@@ -1167,10 +1303,7 @@ fn handle_client_msg(
         ClientMsg::CreateBoard { name } => {
             let id = uuid_like();
             match state.store.board_created(&id, &name) {
-                Ok(()) => send_control(ServerMsg::BoardCreated {
-                    board_id: id,
-                    name,
-                }),
+                Ok(()) => send_control(ServerMsg::BoardCreated { board_id: id, name }),
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: None,
                     message: e.to_string(),
@@ -1199,7 +1332,10 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::SetPermission { agent_id, permission } => {
+        ClientMsg::SetPermission {
+            agent_id,
+            permission,
+        } => {
             let level = protocol::normalize_permission(Some(&permission));
             state.agents.set_permission(&agent_id, level);
             if let Err(e) = state.store.set_agent_permission(&agent_id, level) {
@@ -1219,25 +1355,25 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::DeleteBoard { board_id } => {
-            match state.store.board_deleted(&board_id) {
-                Ok(true) => send_control(ServerMsg::BoardDeleted { board_id }),
-                _ => send_control(ServerMsg::Error {
-                    agent_id: None,
-                    message: "board not empty or is main".to_string(),
-                }),
-            }
-        }
-        ClientMsg::DeleteDelegation { edge_id } => {
-            match state.store.delegation_delete(&edge_id) {
-                Ok(true) => send_control(ServerMsg::DelegationRemoved { edge_id }),
-                _ => send_control(ServerMsg::Error {
-                    agent_id: None,
-                    message: "no such delegation".to_string(),
-                }),
-            }
-        }
-        ClientMsg::CreateWorkspace { name, repo, board_id } => {
+        ClientMsg::DeleteBoard { board_id } => match state.store.board_deleted(&board_id) {
+            Ok(true) => send_control(ServerMsg::BoardDeleted { board_id }),
+            _ => send_control(ServerMsg::Error {
+                agent_id: None,
+                message: "board not empty or is main".to_string(),
+            }),
+        },
+        ClientMsg::DeleteDelegation { edge_id } => match state.store.delegation_delete(&edge_id) {
+            Ok(true) => send_control(ServerMsg::DelegationRemoved { edge_id }),
+            _ => send_control(ServerMsg::Error {
+                agent_id: None,
+                message: "no such delegation".to_string(),
+            }),
+        },
+        ClientMsg::CreateWorkspace {
+            name,
+            repo,
+            board_id,
+        } => {
             // Registering a workspace is an explicit operator gesture —
             // its repo joins the sandbox so the explorer and vault ops
             // can browse it.
@@ -1249,7 +1385,10 @@ fn handle_client_msg(
             // Path validated on spawn side; a workspace is just a named
             // container + its repo.
             let id = uuid::Uuid::new_v4().simple().to_string()[..12].to_string();
-            match state.store.workspace_created(&id, &name, &repo, board_id.as_deref()) {
+            match state
+                .store
+                .workspace_created(&id, &name, &repo, board_id.as_deref())
+            {
                 Ok(()) => send_control(ServerMsg::WorkspaceCreated {
                     workspace_id: id,
                     name,
@@ -1262,14 +1401,40 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::SetAgentChain { workspace_id, chain } => {
+        ClientMsg::SetAgentChain {
+            workspace_id,
+            chain,
+        } => {
             if let Err(e) = state.store.set_workspace_chain(&workspace_id, &chain) {
-                send_control(ServerMsg::Error { agent_id: None, message: e.to_string() });
+                send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                });
             }
         }
-        ClientMsg::SpawnAgent { name, command, cwd, workspace_id, permission, board_id, account_id, initial_input } => {
+        ClientMsg::SpawnAgent {
+            name,
+            command,
+            cwd,
+            workspace_id,
+            permission,
+            board_id,
+            account_id,
+            initial_input,
+        } => {
             let level = protocol::normalize_permission(permission.as_deref());
-            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, board_id.as_deref(), account_id.as_deref(), initial_input.as_deref(), None) {
+            match spawn_agent(
+                state,
+                &name,
+                &command,
+                &cwd,
+                workspace_id.as_deref(),
+                level,
+                board_id.as_deref(),
+                account_id.as_deref(),
+                initial_input.as_deref(),
+                None,
+            ) {
                 Ok((id, board)) => {
                     // Quick request: type the task into the fresh PTY once the
                     // CLI has had a moment to boot (CLIs redraw their TUI on
@@ -1290,8 +1455,20 @@ fn handle_client_msg(
                             }
                         });
                     }
-                    let wt = state.agents.worktree(&id).map(|p| p.to_string_lossy().to_string());
-                    send_control(ServerMsg::Spawned { agent_id: id, name, command, permission: level.to_string(), workspace_id, board_id: board, fallback_from: None, worktree: wt });
+                    let wt = state
+                        .agents
+                        .worktree(&id)
+                        .map(|p| p.to_string_lossy().to_string());
+                    send_control(ServerMsg::Spawned {
+                        agent_id: id,
+                        name,
+                        command,
+                        permission: level.to_string(),
+                        workspace_id,
+                        board_id: board,
+                        fallback_from: None,
+                        worktree: wt,
+                    });
                 }
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: None,
@@ -1299,7 +1476,18 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::Delegate { from, name, command, task, cwd, workspace_id, permission, account_id, board_id, initial_input } => {
+        ClientMsg::Delegate {
+            from,
+            name,
+            command,
+            task,
+            cwd,
+            workspace_id,
+            permission,
+            account_id,
+            board_id,
+            initial_input,
+        } => {
             // A delegation IS a spawn + a persisted edge. The edge returns
             // when the child's PTY prints `CANVAS_RESULT: <summary>`.
             let parent_level = state.store.agent_permission(&from).ok().flatten();
@@ -1308,13 +1496,28 @@ fn handle_client_msg(
             // The child lands on the requested board, else its parent's
             // (orchestrator nodes aren't agents — they carry theirs over).
             let parent_board = board_id.or(state.store.agent_board(&from).ok().flatten());
-            match spawn_agent(state, &name, &command, &cwd, workspace_id.as_deref(), level, parent_board.as_deref(), account_id.as_deref(), initial_input.as_deref(), None) {
+            match spawn_agent(
+                state,
+                &name,
+                &command,
+                &cwd,
+                workspace_id.as_deref(),
+                level,
+                parent_board.as_deref(),
+                account_id.as_deref(),
+                initial_input.as_deref(),
+                None,
+            ) {
                 Ok((id, board)) => {
                     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
                     if let Err(e) = state.store.delegation_created(&edge_id, &from, &id, &task) {
                         warn!(error = %e, "failed to persist delegation");
                     }
-                    state.pending_results.lock().unwrap().insert(id.clone(), edge_id.clone());
+                    state
+                        .pending_results
+                        .lock()
+                        .unwrap()
+                        .insert(id.clone(), edge_id.clone());
                     if let Some(text) = initial_input {
                         let agents = state.agents.clone();
                         let target = id.clone();
@@ -1331,7 +1534,10 @@ fn handle_client_msg(
                             }
                         });
                     }
-                    let wt = state.agents.worktree(&id).map(|p| p.to_string_lossy().to_string());
+                    let wt = state
+                        .agents
+                        .worktree(&id)
+                        .map(|p| p.to_string_lossy().to_string());
                     send_control(ServerMsg::Spawned {
                         agent_id: id.clone(),
                         name,
@@ -1395,7 +1601,11 @@ fn handle_client_msg(
                 message: "input denied by operator".to_string(),
             });
         }
-        ClientMsg::PtyResize { agent_id, cols, rows } => {
+        ClientMsg::PtyResize {
+            agent_id,
+            cols,
+            rows,
+        } => {
             if let Err(e) = state.agents.resize(&agent_id, cols, rows) {
                 send_control(ServerMsg::Error {
                     agent_id: Some(agent_id),
@@ -1460,17 +1670,29 @@ fn handle_client_msg(
             if let Err(e) = std::fs::create_dir_all(state.repo_root.join(&dir)) {
                 warn!(error = %e, "failed to create account dir");
             }
-            match state.store.account_created(&account_id, &cli, &label, &dir, env.as_deref()) {
-                Ok(()) => send_control(ServerMsg::AccountCreated { account_id, cli, label, env }),
-                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
+            match state
+                .store
+                .account_created(&account_id, &cli, &label, &dir, env.as_deref())
+            {
+                Ok(()) => send_control(ServerMsg::AccountCreated {
+                    account_id,
+                    cli,
+                    label,
+                    env,
+                }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
             }
         }
-        ClientMsg::DeleteAccount { account_id } => {
-            match state.store.account_deleted(&account_id) {
-                Ok(()) => send_control(ServerMsg::AccountDeleted { account_id }),
-                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
-            }
-        }
+        ClientMsg::DeleteAccount { account_id } => match state.store.account_deleted(&account_id) {
+            Ok(()) => send_control(ServerMsg::AccountDeleted { account_id }),
+            Err(e) => send_control(ServerMsg::Error {
+                agent_id: None,
+                message: e.to_string(),
+            }),
+        },
         ClientMsg::CreateAutomation {
             name,
             prompt,
@@ -1613,15 +1835,13 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::DeleteLoop { loop_id } => {
-            match state.store.loop_deleted(&loop_id) {
-                Ok(()) => send_control(ServerMsg::LoopDeleted { loop_id }),
-                Err(e) => send_control(ServerMsg::Error {
-                    agent_id: None,
-                    message: e.to_string(),
-                }),
-            }
-        }
+        ClientMsg::DeleteLoop { loop_id } => match state.store.loop_deleted(&loop_id) {
+            Ok(()) => send_control(ServerMsg::LoopDeleted { loop_id }),
+            Err(e) => send_control(ServerMsg::Error {
+                agent_id: None,
+                message: e.to_string(),
+            }),
+        },
         ClientMsg::SetLoopEnabled { loop_id, enabled } => {
             match state.store.loop_set_enabled(&loop_id, enabled) {
                 Ok(()) => {
@@ -1670,18 +1890,38 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::NoteUpsert { note_id, board_id, col, text, pos, due } => {
+        ClientMsg::NoteUpsert {
+            note_id,
+            board_id,
+            col,
+            text,
+            pos,
+            due,
+        } => {
             let id = note_id.unwrap_or_else(|| format!("note-{}", uuid_like()));
             let board = board_id.unwrap_or_else(|| "main".to_string());
             let p = match pos {
                 Some(p) => p,
                 None => state.store.note_next_pos(&board, &col).unwrap_or(0),
             };
-            match state.store.note_upsert(&id, &board, &col, &text, p, due.as_deref()) {
+            match state
+                .store
+                .note_upsert(&id, &board, &col, &text, p, due.as_deref())
+            {
                 Ok(()) => send_control(ServerMsg::NoteUpserted {
-                    note: protocol::SnapshotNote { note_id: id, board_id: board, col, text, pos: p, due },
+                    note: protocol::SnapshotNote {
+                        note_id: id,
+                        board_id: board,
+                        col,
+                        text,
+                        pos: p,
+                        due,
+                    },
                 }),
-                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
             }
         }
         ClientMsg::VaultList { dir } => {
@@ -1699,7 +1939,10 @@ fn handle_client_msg(
                     entries.truncate(2000);
                     send_control(ServerMsg::VaultListing { dir, entries });
                 }
-                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e,
+                }),
             }
         }
         ClientMsg::VaultDelete { dir, path } => {
@@ -1712,8 +1955,14 @@ fn handle_client_msg(
                     let trash = root.join(".trash");
                     // A `.trash` symlink would move notes outside the
                     // vault — refuse the delete rather than follow it.
-                    if std::fs::symlink_metadata(&trash).map(|m| m.file_type().is_symlink()).unwrap_or(false) {
-                        send_control(ServerMsg::Error { agent_id: None, message: "vault delete refused: .trash is a symlink".into() });
+                    if std::fs::symlink_metadata(&trash)
+                        .map(|m| m.file_type().is_symlink())
+                        .unwrap_or(false)
+                    {
+                        send_control(ServerMsg::Error {
+                            agent_id: None,
+                            message: "vault delete refused: .trash is a symlink".into(),
+                        });
                         return;
                     }
                     let base = file.file_name().unwrap_or_default();
@@ -1726,44 +1975,66 @@ fn handle_client_msg(
                         let stem = file.file_stem().unwrap_or_default().to_string_lossy();
                         dest = trash.join(format!("{stem}.{stamp}.md"));
                     }
-                    match std::fs::create_dir_all(&trash).and_then(|_| std::fs::rename(&file, &dest)) {
+                    match std::fs::create_dir_all(&trash)
+                        .and_then(|_| std::fs::rename(&file, &dest))
+                    {
                         Ok(()) => {
                             let mut entries = vault_list_entries(&root);
                             entries.truncate(2000);
                             send_control(ServerMsg::VaultListing { dir, entries });
                         }
-                        Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault delete failed: {e}") }),
+                        Err(e) => send_control(ServerMsg::Error {
+                            agent_id: None,
+                            message: format!("vault delete failed: {e}"),
+                        }),
                     }
                 }
-                (Err(e), _) => send_control(ServerMsg::Error { agent_id: None, message: e }),
-                (Ok(_), Err(e)) => send_control(ServerMsg::Error { agent_id: None, message: e }),
-                _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault delete refused: {path}") }),
+                (Err(e), _) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e,
+                }),
+                (Ok(_), Err(e)) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e,
+                }),
+                _ => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: format!("vault delete refused: {path}"),
+                }),
             }
         }
         ClientMsg::VaultGraph { dir } => {
             let root = match vault_sandbox_dir(state, &dir) {
                 Ok(r) => r,
                 Err(e) => {
-                    send_control(ServerMsg::Error { agent_id: None, message: e });
+                    send_control(ServerMsg::Error {
+                        agent_id: None,
+                        message: e,
+                    });
                     return;
                 }
             };
             let nodes = vault_list_entries(&root);
             let resolve = |name: &str| -> Option<String> {
                 let n = name.trim();
-                nodes.iter().find(|e| {
-                    e.as_str() == n
-                        || **e == format!("{n}.md")
-                        || e.ends_with(&format!("/{n}.md"))
-                        || e.trim_end_matches(".md") == n
-                }).cloned()
+                nodes
+                    .iter()
+                    .find(|e| {
+                        e.as_str() == n
+                            || **e == format!("{n}.md")
+                            || e.ends_with(&format!("/{n}.md"))
+                            || e.trim_end_matches(".md") == n
+                    })
+                    .cloned()
             };
             let mut edges: Vec<(String, String)> = Vec::new();
             for e in &nodes {
                 if let Ok(text) = std::fs::read_to_string(root.join(e)) {
                     for name in vault_links(&text) {
                         if let Some(t) = resolve(&name) {
-                            if t != *e { edges.push((e.clone(), t)); }
+                            if t != *e {
+                                edges.push((e.clone(), t));
+                            }
                         }
                     }
                 }
@@ -1772,122 +2043,203 @@ fn handle_client_msg(
             edges.dedup();
             send_control(ServerMsg::VaultGraph { dir, nodes, edges });
         }
-        ClientMsg::VaultRename { dir, path, new_path } => {
+        ClientMsg::VaultRename {
+            dir,
+            path,
+            new_path,
+        } => {
             let from = vault_sandbox_resolve(state, &dir, &path);
             let to = vault_sandbox_resolve(state, &dir, &new_path);
             match (from, to) {
-                (Ok(from), Ok(to)) if path.ends_with(".md") && new_path.ends_with(".md") && from.is_file() => {
+                (Ok(from), Ok(to))
+                    if path.ends_with(".md") && new_path.ends_with(".md") && from.is_file() =>
+                {
                     // Never clobber: the resolved destination is canonical,
                     // so renaming onto an in-vault symlink would overwrite
                     // the LINKED file's contents, not the link.
                     if to.exists() {
-                        send_control(ServerMsg::Error { agent_id: None, message: format!("vault rename refused: {new_path} already exists") });
+                        send_control(ServerMsg::Error {
+                            agent_id: None,
+                            message: format!("vault rename refused: {new_path} already exists"),
+                        });
                         return;
                     }
                     let result = (|| {
-                        if let Some(parent) = to.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+                        if let Some(parent) = to.parent() {
+                            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                        }
                         std::fs::rename(&from, &to).map_err(|e| e.to_string())?;
                         std::fs::read_to_string(&to).map_err(|e| e.to_string())
                     })();
                     match result {
                         Ok(text) => {
-                            send_control(ServerMsg::VaultFile { path: new_path, text });
+                            send_control(ServerMsg::VaultFile {
+                                path: new_path,
+                                text,
+                            });
                             if let Ok(root) = vault_sandbox_dir(state, &dir) {
                                 let mut entries = vault_list_entries(&root);
                                 entries.truncate(2000);
                                 send_control(ServerMsg::VaultListing { dir, entries });
                             }
                         }
-                        Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault rename failed: {e}") }),
+                        Err(e) => send_control(ServerMsg::Error {
+                            agent_id: None,
+                            message: format!("vault rename failed: {e}"),
+                        }),
                     }
                 }
-                (Err(e), _) | (_, Err(e)) => send_control(ServerMsg::Error { agent_id: None, message: e }),
-                _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault rename refused: {path}") }),
+                (Err(e), _) | (_, Err(e)) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e,
+                }),
+                _ => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: format!("vault rename refused: {path}"),
+                }),
             }
         }
-        ClientMsg::RepoTree { dir } => {
-            match vault_sandbox_dir(state, &dir) {
-                Ok(root) => {
-                    let mut entries = repo_tree_entries(&root);
-                    entries.truncate(4000);
-                    send_control(ServerMsg::RepoListing { dir, entries });
-                }
-                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e }),
+        ClientMsg::RepoTree { dir } => match vault_sandbox_dir(state, &dir) {
+            Ok(root) => {
+                let mut entries = repo_tree_entries(&root);
+                entries.truncate(4000);
+                send_control(ServerMsg::RepoListing { dir, entries });
             }
-        }
+            Err(e) => send_control(ServerMsg::Error {
+                agent_id: None,
+                message: e,
+            }),
+        },
         ClientMsg::RepoRead { dir, path } => {
             match vault_sandbox_resolve(state, &dir, &path) {
                 Ok(file) if file.is_file() => {
                     // 256 KiB cap — the viewer is for code, not binaries
                     // or minified bundles. Size-check BEFORE reading: an
                     // oversized file must never enter daemon memory.
-                    let too_big = std::fs::metadata(&file).map(|md| md.len() > 256 * 1024).unwrap_or(false);
+                    let too_big = std::fs::metadata(&file)
+                        .map(|md| md.len() > 256 * 1024)
+                        .unwrap_or(false);
                     if too_big {
-                        send_control(ServerMsg::Error { agent_id: None, message: format!("file too large to view (256 KiB cap): {path}") });
+                        send_control(ServerMsg::Error {
+                            agent_id: None,
+                            message: format!("file too large to view (256 KiB cap): {path}"),
+                        });
                         return;
                     }
                     // A NUL in the first chunk means binary: refuse.
                     match std::fs::read(&file) {
                         Ok(bytes) => {
                             if bytes.len() > 256 * 1024 {
-                                send_control(ServerMsg::Error { agent_id: None, message: format!("file too large to view ({} KiB cap): {path}", 256) });
+                                send_control(ServerMsg::Error {
+                                    agent_id: None,
+                                    message: format!(
+                                        "file too large to view ({} KiB cap): {path}",
+                                        256
+                                    ),
+                                });
                             } else if bytes[..bytes.len().min(8192)].contains(&0) {
-                                send_control(ServerMsg::Error { agent_id: None, message: format!("binary file — not viewable: {path}") });
+                                send_control(ServerMsg::Error {
+                                    agent_id: None,
+                                    message: format!("binary file — not viewable: {path}"),
+                                });
                             } else {
                                 match String::from_utf8(bytes) {
-                                    Ok(text) => send_control(ServerMsg::RepoFile { dir, path, text }),
-                                    Err(_) => send_control(ServerMsg::Error { agent_id: None, message: format!("file is not UTF-8 text: {path}") }),
+                                    Ok(text) => {
+                                        send_control(ServerMsg::RepoFile { dir, path, text })
+                                    }
+                                    Err(_) => send_control(ServerMsg::Error {
+                                        agent_id: None,
+                                        message: format!("file is not UTF-8 text: {path}"),
+                                    }),
                                 }
                             }
                         }
-                        _ => send_control(ServerMsg::Error { agent_id: None, message: format!("read failed: {path}") }),
+                        _ => send_control(ServerMsg::Error {
+                            agent_id: None,
+                            message: format!("read failed: {path}"),
+                        }),
                     }
                 }
-                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e }),
-                _ => send_control(ServerMsg::Error { agent_id: None, message: format!("read failed: {path}") }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e,
+                }),
+                _ => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: format!("read failed: {path}"),
+                }),
             }
         }
-        ClientMsg::RepoWrite { dir, path, text, base_text } => {
+        ClientMsg::RepoWrite {
+            dir,
+            path,
+            text,
+            base_text,
+        } => {
             let result = (|| -> Result<(), String> {
                 if text.len() > 256 * 1024 || text.as_bytes().contains(&0) {
                     return Err("file exceeds the 256 KiB text editor limit".into());
                 }
                 let repo_dir = registered_repo_dir(&state.repo_root, &state.store, &dir)?;
                 let file = vault_sandbox_resolve(state, &repo_dir.to_string_lossy(), &path)?;
-                if !file.is_file() { return Err(format!("write refused: file does not exist: {path}")); }
-                let current = std::fs::read_to_string(&file).map_err(|_| format!("file is not UTF-8 text: {path}"))?;
-                if current != base_text { return Err(format!("file changed on disk; reload before saving: {path}")); }
+                if !file.is_file() {
+                    return Err(format!("write refused: file does not exist: {path}"));
+                }
+                let current = std::fs::read_to_string(&file)
+                    .map_err(|_| format!("file is not UTF-8 text: {path}"))?;
+                if current != base_text {
+                    return Err(format!(
+                        "file changed on disk; reload before saving: {path}"
+                    ));
+                }
                 atomic_replace_repo_file(&file, &text)
             })();
             match result {
                 Ok(()) => send_control(ServerMsg::RepoFile { dir, path, text }),
-                Err(message) => send_control(ServerMsg::Error { agent_id: None, message }),
+                Err(message) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message,
+                }),
             }
         }
-        ClientMsg::VaultRead { dir, path } => {
-            match vault_sandbox_resolve(state, &dir, &path) {
-                Ok(file) if path.ends_with(".md") && file.is_file() => {
-                    match std::fs::read_to_string(&file) {
-                        Ok(text) => send_control(ServerMsg::VaultFile { path, text }),
-                        _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault read failed: {path}") }),
-                    }
+        ClientMsg::VaultRead { dir, path } => match vault_sandbox_resolve(state, &dir, &path) {
+            Ok(file) if path.ends_with(".md") && file.is_file() => {
+                match std::fs::read_to_string(&file) {
+                    Ok(text) => send_control(ServerMsg::VaultFile { path, text }),
+                    _ => send_control(ServerMsg::Error {
+                        agent_id: None,
+                        message: format!("vault read failed: {path}"),
+                    }),
                 }
-                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e }),
-                _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault read failed: {path}") }),
             }
-        }
-        ClientMsg::VaultPeek { dir, path } => {
-            match vault_sandbox_resolve(state, &dir, &path) {
-                Ok(file) if path.ends_with(".md") && file.is_file() => {
-                    match std::fs::read_to_string(&file) {
-                        Ok(text) => send_control(ServerMsg::VaultPeeked { path, text }),
-                        _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault peek failed: {path}") }),
-                    }
+            Err(e) => send_control(ServerMsg::Error {
+                agent_id: None,
+                message: e,
+            }),
+            _ => send_control(ServerMsg::Error {
+                agent_id: None,
+                message: format!("vault read failed: {path}"),
+            }),
+        },
+        ClientMsg::VaultPeek { dir, path } => match vault_sandbox_resolve(state, &dir, &path) {
+            Ok(file) if path.ends_with(".md") && file.is_file() => {
+                match std::fs::read_to_string(&file) {
+                    Ok(text) => send_control(ServerMsg::VaultPeeked { path, text }),
+                    _ => send_control(ServerMsg::Error {
+                        agent_id: None,
+                        message: format!("vault peek failed: {path}"),
+                    }),
                 }
-                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e }),
-                _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault peek failed: {path}") }),
             }
-        }
+            Err(e) => send_control(ServerMsg::Error {
+                agent_id: None,
+                message: e,
+            }),
+            _ => send_control(ServerMsg::Error {
+                agent_id: None,
+                message: format!("vault peek failed: {path}"),
+            }),
+        },
         ClientMsg::VaultAsset { dir, path } => {
             let file = vault_sandbox_resolve(state, &dir, &path);
             let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
@@ -1901,63 +2253,106 @@ fn handle_client_msg(
                 _ => "",
             };
             match file {
-                Ok(file) if !mime.is_empty() && file.is_file() => {
-                    match std::fs::read(&file) {
-                        Ok(bytes) if bytes.len() <= 8 * 1024 * 1024 => {
-                            let data = base64::engine::general_purpose::STANDARD.encode(bytes);
-                            send_control(ServerMsg::VaultAssetData { path, mime: mime.to_string(), data });
-                        }
-                        _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault asset failed: {path}") }),
+                Ok(file) if !mime.is_empty() && file.is_file() => match std::fs::read(&file) {
+                    Ok(bytes) if bytes.len() <= 8 * 1024 * 1024 => {
+                        let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+                        send_control(ServerMsg::VaultAssetData {
+                            path,
+                            mime: mime.to_string(),
+                            data,
+                        });
                     }
-                }
-                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e }),
-                _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault asset failed: {path}") }),
+                    _ => send_control(ServerMsg::Error {
+                        agent_id: None,
+                        message: format!("vault asset failed: {path}"),
+                    }),
+                },
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e,
+                }),
+                _ => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: format!("vault asset failed: {path}"),
+                }),
             }
         }
         ClientMsg::VaultAppend { dir, path, text } => {
             let file = vault_sandbox_resolve(state, &dir, &path);
             if !path.ends_with(".md") {
-                send_control(ServerMsg::Error { agent_id: None, message: format!("vault append refused: {path}") });
+                send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: format!("vault append refused: {path}"),
+                });
             } else if let Err(e) = file {
-                send_control(ServerMsg::Error { agent_id: None, message: e });
+                send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e,
+                });
             } else {
                 let file = file.unwrap();
                 let result = (|| {
-                    if let Some(parent) = file.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+                    if let Some(parent) = file.parent() {
+                        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                    }
                     use std::io::Write;
-                    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&file).map_err(|e| e.to_string())?;
+                    let mut f = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&file)
+                        .map_err(|e| e.to_string())?;
                     writeln!(f, "{text}").map_err(|e| e.to_string())?;
                     std::fs::read_to_string(&file).map_err(|e| e.to_string())
                 })();
                 match result {
                     Ok(text) => send_control(ServerMsg::VaultFile { path, text }),
-                    Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault append failed: {e}") }),
+                    Err(e) => send_control(ServerMsg::Error {
+                        agent_id: None,
+                        message: format!("vault append failed: {e}"),
+                    }),
                 }
             }
         }
         ClientMsg::VaultWrite { dir, path, text } => {
             let file = vault_sandbox_resolve(state, &dir, &path);
             if !path.ends_with(".md") {
-                send_control(ServerMsg::Error { agent_id: None, message: format!("vault write refused: {path}") });
+                send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: format!("vault write refused: {path}"),
+                });
             } else if let Err(e) = file {
-                send_control(ServerMsg::Error { agent_id: None, message: e });
+                send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e,
+                });
             } else {
                 let file = file.unwrap();
                 let result = (|| {
-                    if let Some(parent) = file.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+                    if let Some(parent) = file.parent() {
+                        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                    }
                     std::fs::write(&file, &text).map_err(|e| e.to_string())
                 })();
                 match result {
                     Ok(()) => send_control(ServerMsg::VaultFile { path, text }),
-                    Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault write failed: {e}") }),
+                    Err(e) => send_control(ServerMsg::Error {
+                        agent_id: None,
+                        message: format!("vault write failed: {e}"),
+                    }),
                 }
             }
         }
         ClientMsg::VaultWriteAsset { dir, path, data } => {
             if dir.is_empty() {
-                send_control(ServerMsg::Error { agent_id: None, message: "vault write-asset refused: no vault dir".to_string() });
+                send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: "vault write-asset refused: no vault dir".to_string(),
+                });
             } else if path.is_empty() || path.ends_with('/') {
-                send_control(ServerMsg::Error { agent_id: None, message: format!("vault write-asset refused: {path}") });
+                send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: format!("vault write-asset refused: {path}"),
+                });
             } else {
                 // Assets obey the exact same sandbox as every other vault
                 // operation: the destination is resolved through the canonical,
@@ -1968,15 +2363,24 @@ fn handle_client_msg(
                 let file = vault_sandbox_resolve(state, &dir, &path);
                 let root = vault_sandbox_dir(state, &dir);
                 match (file, root) {
-                    (Err(e), _) => send_control(ServerMsg::Error { agent_id: None, message: e }),
-                    (_, Err(e)) => send_control(ServerMsg::Error { agent_id: None, message: e }),
+                    (Err(e), _) => send_control(ServerMsg::Error {
+                        agent_id: None,
+                        message: e,
+                    }),
+                    (_, Err(e)) => send_control(ServerMsg::Error {
+                        agent_id: None,
+                        message: e,
+                    }),
                     (Ok(file), Ok(root)) if file == root => {
                         // Unlike markdown writes, assets have no extension gate.
                         // `.` (or a link back to the vault root) resolves to the
                         // root directory itself; treating that as a file would make
                         // the dedupe parent the vault's PARENT and invent names like
                         // `vault-2` outside the sandbox.
-                        send_control(ServerMsg::Error { agent_id: None, message: format!("vault write-asset refused: {path}") });
+                        send_control(ServerMsg::Error {
+                            agent_id: None,
+                            message: format!("vault write-asset refused: {path}"),
+                        });
                     }
                     (Ok(file), Ok(root)) => {
                         match base64::engine::general_purpose::STANDARD.decode(&data) {
@@ -1990,35 +2394,63 @@ fn handle_client_msg(
                                     // concurrent drops can't race a check-then-write
                                     // into an overwrite, and a dangling symlink fails
                                     // EEXIST instead of being written through.
-                                    if let Some(parent) = file.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
-                                    let stem = file.file_stem().unwrap_or_default().to_string_lossy().to_string();
-                                    let ext = file.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
-                                    let parent = file.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+                                    if let Some(parent) = file.parent() {
+                                        std::fs::create_dir_all(parent)
+                                            .map_err(|e| e.to_string())?;
+                                    }
+                                    let stem = file
+                                        .file_stem()
+                                        .unwrap_or_default()
+                                        .to_string_lossy()
+                                        .to_string();
+                                    let ext = file
+                                        .extension()
+                                        .map(|e| format!(".{}", e.to_string_lossy()))
+                                        .unwrap_or_default();
+                                    let parent =
+                                        file.parent().map(|p| p.to_path_buf()).unwrap_or_default();
                                     let mut wrote = false;
                                     for cand in std::iter::once(file.clone()).chain(
-                                        (2..100).map(|i| parent.join(format!("{stem}-{i}{ext}")))
+                                        (2..100).map(|i| parent.join(format!("{stem}-{i}{ext}"))),
                                     ) {
-                                        match std::fs::OpenOptions::new().write(true).create_new(true).open(&cand) {
+                                        match std::fs::OpenOptions::new()
+                                            .write(true)
+                                            .create_new(true)
+                                            .open(&cand)
+                                        {
                                             Ok(f) => {
                                                 // Reserve the name atomically, write the
                                                 // bytes to a sibling tmp file, then rename
                                                 // over the reservation — a failed write
                                                 // never leaves a truncated final file.
                                                 drop(f);
-                                                let tmp = cand.parent().unwrap_or(&root).join(format!(
-                                                    ".{}.tmp-{}",
-                                                    cand.file_name().unwrap_or_default().to_string_lossy(),
-                                                    std::process::id(),
-                                                ));
+                                                let tmp =
+                                                    cand.parent().unwrap_or(&root).join(format!(
+                                                        ".{}.tmp-{}",
+                                                        cand.file_name()
+                                                            .unwrap_or_default()
+                                                            .to_string_lossy(),
+                                                        std::process::id(),
+                                                    ));
                                                 // create_new on the tmp too — a vault file that
                                                 // happens to share the tmp name must never be
                                                 // truncated; cleanup only removes files we made.
-                                                let outcome = match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
+                                                let outcome = match std::fs::OpenOptions::new()
+                                                    .write(true)
+                                                    .create_new(true)
+                                                    .open(&tmp)
+                                                {
                                                     Ok(mut f) => {
-                                                        let r = std::io::Write::write_all(&mut f, &bytes);
+                                                        let r = std::io::Write::write_all(
+                                                            &mut f, &bytes,
+                                                        );
                                                         drop(f);
-                                                        r.and_then(|()| std::fs::rename(&tmp, &cand))
-                                                            .inspect_err(|_| { let _ = std::fs::remove_file(&tmp); })
+                                                        r.and_then(|()| {
+                                                            std::fs::rename(&tmp, &cand)
+                                                        })
+                                                        .inspect_err(|_| {
+                                                            let _ = std::fs::remove_file(&tmp);
+                                                        })
                                                     }
                                                     Err(e) => Err(e), // preexisting tmp — never touch it
                                                 };
@@ -2029,11 +2461,18 @@ fn handle_client_msg(
                                                 wrote = true;
                                                 break;
                                             }
-                                            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                                            Err(e)
+                                                if e.kind()
+                                                    == std::io::ErrorKind::AlreadyExists =>
+                                            {
+                                                continue
+                                            }
                                             Err(e) => return Err(e.to_string()),
                                         }
                                     }
-                                    if !wrote { return Err(format!("no free name for {path}")); }
+                                    if !wrote {
+                                        return Err(format!("no free name for {path}"));
+                                    }
                                     Ok(())
                                 })();
                                 match result {
@@ -2042,10 +2481,16 @@ fn handle_client_msg(
                                         entries.truncate(2000);
                                         send_control(ServerMsg::VaultListing { dir, entries });
                                     }
-                                    Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault write-asset failed: {e}") }),
+                                    Err(e) => send_control(ServerMsg::Error {
+                                        agent_id: None,
+                                        message: format!("vault write-asset failed: {e}"),
+                                    }),
                                 }
                             }
-                            _ => send_control(ServerMsg::Error { agent_id: None, message: format!("vault write-asset refused: {path}") }),
+                            _ => send_control(ServerMsg::Error {
+                                agent_id: None,
+                                message: format!("vault write-asset refused: {path}"),
+                            }),
                         }
                     }
                 }
@@ -2055,7 +2500,10 @@ fn handle_client_msg(
             let root = match vault_sandbox_dir(state, &dir) {
                 Ok(r) => r,
                 Err(e) => {
-                    send_control(ServerMsg::Error { agent_id: None, message: e });
+                    send_control(ServerMsg::Error {
+                        agent_id: None,
+                        message: e,
+                    });
                     return;
                 }
             };
@@ -2076,7 +2524,10 @@ fn handle_client_msg(
                             let p = e.path();
                             let name = e.file_name().to_string_lossy().to_string();
                             if name.starts_with('.')
-                                || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build")
+                                || matches!(
+                                    name.as_str(),
+                                    "node_modules" | "target" | "dist" | "build"
+                                )
                             {
                                 continue;
                             }
@@ -2117,11 +2568,16 @@ fn handle_client_msg(
             send_control(ServerMsg::VaultHits { dir, query, hits });
         }
         ClientMsg::VaultDiscover => {
-            send_control(ServerMsg::VaultDiscovered { vaults: canvasd::vault::discover() });
+            send_control(ServerMsg::VaultDiscovered {
+                vaults: canvasd::vault::discover(),
+            });
         }
         ClientMsg::VaultRegister { dir } => match canvasd::vault::register(&dir) {
             Ok(vaults) => send_control(ServerMsg::VaultDiscovered { vaults }),
-            Err(e) => send_control(ServerMsg::Error { agent_id: None, message: format!("vault register failed: {e}") }),
+            Err(e) => send_control(ServerMsg::Error {
+                agent_id: None,
+                message: format!("vault register failed: {e}"),
+            }),
         },
         ClientMsg::GitPush { agent_id } => {
             // Resolve under the agent's own workspace repo — an agent in an
@@ -2154,9 +2610,15 @@ fn handle_client_msg(
                         }),
                         Ok(o) => send_control(ServerMsg::Error {
                             agent_id: Some(agent_id),
-                            message: format!("git push: {}", String::from_utf8_lossy(&o.stderr).trim()),
+                            message: format!(
+                                "git push: {}",
+                                String::from_utf8_lossy(&o.stderr).trim()
+                            ),
                         }),
-                        Err(e) => send_control(ServerMsg::Error { agent_id: Some(agent_id), message: e.to_string() }),
+                        Err(e) => send_control(ServerMsg::Error {
+                            agent_id: Some(agent_id),
+                            message: e.to_string(),
+                        }),
                     }
                 }
                 None => send_control(ServerMsg::Error {
@@ -2165,36 +2627,69 @@ fn handle_client_msg(
                 }),
             }
         }
-        ClientMsg::ArtifactCreate { board_id, agent_id, kind, title, path, text } => {
+        ClientMsg::ArtifactCreate {
+            board_id,
+            agent_id,
+            kind,
+            title,
+            path,
+            text,
+        } => {
             let id = format!("art-{}", uuid_like());
             let board = board_id
-                .or_else(|| agent_id.as_deref().and_then(|a| state.store.agent_board(a).ok().flatten()))
+                .or_else(|| {
+                    agent_id
+                        .as_deref()
+                        .and_then(|a| state.store.agent_board(a).ok().flatten())
+                })
                 .unwrap_or_else(|| "main".to_string());
             let agent_name = agent_id
                 .as_deref()
                 .and_then(|a| state.store.agent_name(a).ok().flatten());
-            match state.store.artifact_created(&id, &board, agent_id.as_deref(), &kind, &title, path.as_deref(), text.as_deref()) {
+            match state.store.artifact_created(
+                &id,
+                &board,
+                agent_id.as_deref(),
+                &kind,
+                &title,
+                path.as_deref(),
+                text.as_deref(),
+            ) {
                 Ok(()) => send_control(ServerMsg::ArtifactCreated {
                     artifact: protocol::SnapshotArtifact {
-                        artifact_id: id, board_id: board, agent_id, agent_name, kind, title, path, text,
+                        artifact_id: id,
+                        board_id: board,
+                        agent_id,
+                        agent_name,
+                        kind,
+                        title,
+                        path,
+                        text,
                         created_at: String::new(),
                     },
                 }),
-                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
             }
         }
         ClientMsg::ArtifactDelete { artifact_id } => {
             match state.store.artifact_deleted(&artifact_id) {
                 Ok(()) => send_control(ServerMsg::ArtifactDeleted { artifact_id }),
-                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
             }
         }
-        ClientMsg::NoteDelete { note_id } => {
-            match state.store.note_deleted(&note_id) {
-                Ok(()) => send_control(ServerMsg::NoteDeleted { note_id }),
-                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
-            }
-        }
+        ClientMsg::NoteDelete { note_id } => match state.store.note_deleted(&note_id) {
+            Ok(()) => send_control(ServerMsg::NoteDeleted { note_id }),
+            Err(e) => send_control(ServerMsg::Error {
+                agent_id: None,
+                message: e.to_string(),
+            }),
+        },
         ClientMsg::Digest => {
             let rows = state.store.agents_snapshot().unwrap_or_default();
             let mut md = String::from("# Session digest\n\n");
@@ -2223,80 +2718,121 @@ fn handle_client_msg(
         }
         ClientMsg::StudioDoc { board_id } => {
             let board = board_id.unwrap_or_else(|| "main".to_string());
-            let mut md = String::from("# Studio — repo dossier
+            let mut md = String::from(
+                "# Studio — repo dossier
 
-");
+",
+            );
             // Repo structure (depth 2, skipping dependency dirs).
             let repo = &state.repo_root;
-            md.push_str(&format!("## Tree — {}
+            md.push_str(&format!(
+                "## Tree — {}
 
 ```
-", repo.display()));
+",
+                repo.display()
+            ));
             fn walk(d: &std::path::Path, depth: usize, prefix: &str, out: &mut String) {
-                if depth > 2 { return; }
-                let mut entries: Vec<_> = std::fs::read_dir(d).map(|rd| rd.flatten().collect()).unwrap_or_default();
+                if depth > 2 {
+                    return;
+                }
+                let mut entries: Vec<_> = std::fs::read_dir(d)
+                    .map(|rd| rd.flatten().collect())
+                    .unwrap_or_default();
                 entries.sort_by_key(|e| e.file_name());
                 for e in entries {
                     let name = e.file_name().to_string_lossy().to_string();
-                    if name.starts_with('.') || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build") {
+                    if name.starts_with('.')
+                        || matches!(name.as_str(), "node_modules" | "target" | "dist" | "build")
+                    {
                         continue;
                     }
-                    out.push_str(&format!("{prefix}{name}{}
-", if e.path().is_dir() { "/" } else { "" }));
+                    out.push_str(&format!(
+                        "{prefix}{name}{}
+",
+                        if e.path().is_dir() { "/" } else { "" }
+                    ));
                     if e.path().is_dir() {
                         walk(&e.path(), depth + 1, &format!("{prefix}  "), out);
                     }
                 }
             }
             walk(repo, 0, "", &mut md);
-            md.push_str("```
+            md.push_str(
+                "```
 
-");
+",
+            );
             // README first section.
             if let Ok(readme) = std::fs::read_to_string(repo.join("README.md")) {
-                let head: String = readme.lines().take(40).collect::<Vec<_>>().join("
-");
-                md.push_str(&format!("## README (head)
+                let head: String = readme.lines().take(40).collect::<Vec<_>>().join(
+                    "
+",
+                );
+                md.push_str(&format!(
+                    "## README (head)
 
 {head}
 
-"));
+"
+                ));
             }
             // Agents on this board.
             let agents = state.store.agents_snapshot().unwrap_or_default();
-            md.push_str("## Agents
+            md.push_str(
+                "## Agents
 
-");
-            for (_id, name, command, _wt, status, _ws, _perm, bd, acct) in &agents {
-                if bd.as_deref().unwrap_or("main") != board { continue; }
-                md.push_str(&format!("- **{name}** (`{command}`) — {status}{}
 ",
-                    acct.as_ref().map(|l| format!(" · @{l}")).unwrap_or_default()));
+            );
+            for (_id, name, command, _wt, status, _ws, _perm, bd, acct) in &agents {
+                if bd.as_deref().unwrap_or("main") != board {
+                    continue;
+                }
+                md.push_str(&format!(
+                    "- **{name}** (`{command}`) — {status}{}
+",
+                    acct.as_ref()
+                        .map(|l| format!(" · @{l}"))
+                        .unwrap_or_default()
+                ));
             }
             // Notes + artifacts index.
             let notes = state.store.all_notes().unwrap_or_default();
             let board_notes: Vec<_> = notes.iter().filter(|n| n.1 == board).collect();
             if !board_notes.is_empty() {
-                md.push_str("
+                md.push_str(
+                    "
 ## Notes
 
-");
+",
+                );
                 for (_id, _b, col, text, _pos, due) in &board_notes {
-                    md.push_str(&format!("- [{col}] {text}{}
-", due.as_ref().map(|d| format!(" (due {d})")).unwrap_or_default()));
+                    md.push_str(&format!(
+                        "- [{col}] {text}{}
+",
+                        due.as_ref()
+                            .map(|d| format!(" (due {d})"))
+                            .unwrap_or_default()
+                    ));
                 }
             }
             let arts = state.store.artifacts_snapshot().unwrap_or_default();
             if !arts.is_empty() {
-                md.push_str("
+                md.push_str(
+                    "
 ## Artifacts
 
-");
-                for (id, bd, agent, kind, title, _p, _t, at) in &arts {
-                    if bd != &board { continue; }
-                    md.push_str(&format!("- `{kind}` **{title}** — {} ({at}, `{id}`)
 ",
-                        agent.as_deref().unwrap_or("-")));
+                );
+                for (id, bd, agent, kind, title, _p, _t, at) in &arts {
+                    if bd != &board {
+                        continue;
+                    }
+                    md.push_str(&format!(
+                        "- `{kind}` **{title}** — {} ({at}, `{id}`)
+",
+                        agent.as_deref().unwrap_or("-")
+                    ));
                 }
             }
             send_control(ServerMsg::StudioDocMd { text: md });
@@ -2313,7 +2849,10 @@ fn handle_client_msg(
             }
             match std::fs::write(&path, &text) {
                 Ok(()) => send_control(ServerMsg::Memory { node_id, text }),
-                Err(e) => send_control(ServerMsg::Error { agent_id: None, message: e.to_string() }),
+                Err(e) => send_control(ServerMsg::Error {
+                    agent_id: None,
+                    message: e.to_string(),
+                }),
             }
         }
         ClientMsg::DeleteWorkspace { workspace_id } => {
@@ -2333,16 +2872,13 @@ fn handle_client_msg(
             // Live agents come from the manager; exited agents fall back
             // to their persisted worktree path so a done node's diff is
             // still readable.
-            let wt = state
-                .agents
-                .worktree(&agent_id)
-                .or_else(|| {
-                    state
-                        .store
-                        .agent_worktree_abs(&agent_id, &state.repo_root)
-                        .ok()
-                        .flatten()
-                });
+            let wt = state.agents.worktree(&agent_id).or_else(|| {
+                state
+                    .store
+                    .agent_worktree_abs(&agent_id, &state.repo_root)
+                    .ok()
+                    .flatten()
+            });
             match wt {
                 Some(wt) => send_control(ServerMsg::DiffDetail {
                     agent_id,
@@ -2359,7 +2895,19 @@ fn handle_client_msg(
 
 /// DB row → wire shape for the automations snapshot.
 fn automation_to_snapshot(
-    (id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at, interval_secs, next_run_at): store::AutomationRow,
+    (
+        id,
+        name,
+        prompt,
+        command,
+        workspace_id,
+        permission,
+        idle_secs,
+        on_approval,
+        last_run_at,
+        interval_secs,
+        next_run_at,
+    ): store::AutomationRow,
 ) -> protocol::SnapshotAutomation {
     protocol::SnapshotAutomation {
         id,
@@ -2379,7 +2927,17 @@ fn automation_to_snapshot(
 /// Shared by the manual RunAutomation arm and the schedule ticker:
 /// spawn the automation's agent, mark its guardrails, stamp the run.
 fn loop_to_snapshot(
-    (loop_id, board_id, target, instruction, trigger, interval_secs, pattern, enabled, last_fired_at): store::LoopRow,
+    (
+        loop_id,
+        board_id,
+        target,
+        instruction,
+        trigger,
+        interval_secs,
+        pattern,
+        enabled,
+        last_fired_at,
+    ): store::LoopRow,
 ) -> protocol::SnapshotLoop {
     protocol::SnapshotLoop {
         loop_id,
@@ -2408,7 +2966,10 @@ fn loop_targets(state: &Arc<AppState>, board_id: &str, target: &str) -> Vec<Stri
             .map(|a| a.0)
             .collect()
     } else {
-        live.contains(target).then(|| target.to_string()).into_iter().collect()
+        live.contains(target)
+            .then(|| target.to_string())
+            .into_iter()
+            .collect()
     }
 }
 
@@ -2427,15 +2988,40 @@ fn fire_loop(state: &Arc<AppState>, row: &store::LoopRow) {
 }
 
 fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
-    let (automation_id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, _, _, _) =
-        row;
-    match spawn_agent(state, &name, &command, ".", workspace_id.as_deref(), &permission, None, None, Some(&prompt), None) {
+    let (
+        automation_id,
+        name,
+        prompt,
+        command,
+        workspace_id,
+        permission,
+        idle_secs,
+        on_approval,
+        _,
+        _,
+        _,
+    ) = row;
+    match spawn_agent(
+        state,
+        &name,
+        &command,
+        ".",
+        workspace_id.as_deref(),
+        &permission,
+        None,
+        None,
+        Some(&prompt),
+        None,
+    ) {
         Ok((agent_id, run_board)) => {
             state
                 .agents
                 .set_automation(&agent_id, idle_secs.max(0) as u64, on_approval == "deny");
             let _ = state.store.automation_ran(&automation_id);
-            let wt = state.agents.worktree(&agent_id).map(|p| p.to_string_lossy().to_string());
+            let wt = state
+                .agents
+                .worktree(&agent_id)
+                .map(|p| p.to_string_lossy().to_string());
             let _ = state.events.send(Event::Control(ServerMsg::Spawned {
                 agent_id: agent_id.clone(),
                 name,
@@ -2493,7 +3079,10 @@ fn token_eq(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+    a.bytes()
+        .zip(b.bytes())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
 }
 
 fn generate_token() -> String {
@@ -2506,7 +3095,6 @@ fn generate_token() -> String {
 fn uuid_like() -> String {
     uuid::Uuid::new_v4().simple().to_string()[..12].to_string()
 }
-
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -2547,7 +3135,13 @@ async fn main() -> Result<()> {
     // The repo's origin remote as an https URL — git@/ssh/… normalized,
     // trailing ".git" stripped. One shot at startup; remotes rarely move.
     let repo_url = std::process::Command::new("git")
-        .args(["-C", &repo_root.to_string_lossy(), "remote", "get-url", "origin"])
+        .args([
+            "-C",
+            &repo_root.to_string_lossy(),
+            "remote",
+            "get-url",
+            "origin",
+        ])
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -2557,7 +3151,9 @@ async fn main() -> Result<()> {
             // Remotes may be proxies embedding the real host in the path
             // (e.g. git-manager.devin.ai/proxy/github.com/o/r) — prefer the
             // innermost github.com/… segment when one is present.
-            let inner = u.rfind("github.com/").map(|i| format!("https://{}", &u[i..]));
+            let inner = u
+                .rfind("github.com/")
+                .map(|i| format!("https://{}", &u[i..]));
             let u = inner.unwrap_or_else(|| {
                 u.replace("git@github.com:", "https://github.com/")
                     .replace("ssh://git@", "https://")
@@ -2567,30 +3163,36 @@ async fn main() -> Result<()> {
     let agents = Arc::new(AgentManager::new());
     agents.set_transcript_dir(repo_root.join(".canvas").join("transcripts"));
     let mut allowed_roots: Vec<PathBuf> = {
-            // The board repo is always inside the sandbox; extra roots
-            // (external vaults like ~/vault-demo) opt in one per line in
-            // `.canvas/allowed-roots` — Deska's allowedRoots model.
-            let mut roots: Vec<PathBuf> = Vec::new();
-            if let Ok(c) = std::fs::canonicalize(&repo_root) { roots.push(c); }
-            // Lives in the USER's config dir, not the checkout — a cloned
-            // repo must never be able to grant itself access to the
-            // operator's disk (repo authors control `.canvas/`).
-            let list = allowed_roots_list_path(&repo_root);
-            if let Ok(text) = std::fs::read_to_string(&list) {
-                for line in text.lines() {
-                    let line = line.trim();
-                    if line.is_empty() || line.starts_with('#') { continue; }
-                    // `~/` lines expand against the operator's home —
-                    // portably (the file is operator-written, so tilde
-                    // paths are expected input). Non-tilde lines pass
-                    // through unchanged.
-                    let expanded = canvasd::paths::expand_tilde(line);
-                    if let Ok(c) = std::fs::canonicalize(&expanded) {
-                        if !roots.contains(&c) { roots.push(c); }
+        // The board repo is always inside the sandbox; extra roots
+        // (external vaults like ~/vault-demo) opt in one per line in
+        // `.canvas/allowed-roots` — Deska's allowedRoots model.
+        let mut roots: Vec<PathBuf> = Vec::new();
+        if let Ok(c) = std::fs::canonicalize(&repo_root) {
+            roots.push(c);
+        }
+        // Lives in the USER's config dir, not the checkout — a cloned
+        // repo must never be able to grant itself access to the
+        // operator's disk (repo authors control `.canvas/`).
+        let list = allowed_roots_list_path(&repo_root);
+        if let Ok(text) = std::fs::read_to_string(&list) {
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                // `~/` lines expand against the operator's home —
+                // portably (the file is operator-written, so tilde
+                // paths are expected input). Non-tilde lines pass
+                // through unchanged.
+                let expanded = canvasd::paths::expand_tilde(line);
+                if let Ok(c) = std::fs::canonicalize(&expanded) {
+                    if !roots.contains(&c) {
+                        roots.push(c);
                     }
                 }
             }
-            roots
+        }
+        roots
     };
 
     // Workspaces registered before the auto-whitelist upgrade never got
@@ -2615,7 +3217,9 @@ async fn main() -> Result<()> {
         repo_root,
         repo_url,
         pending_results: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
-        pending_fallbacks: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+        pending_fallbacks: std::sync::Arc::new(std::sync::Mutex::new(
+            std::collections::HashMap::new(),
+        )),
         pending_inputs: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         shares: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         allowed_roots: std::sync::Arc::new(std::sync::Mutex::new(allowed_roots)),
@@ -2732,10 +3336,8 @@ async fn main() -> Result<()> {
                     if let Some(line) = line {
                         if last_line.get(&id) != Some(&line) {
                             last_line.insert(id.clone(), line.clone());
-                            let _ = ev.send(Event::Control(ServerMsg::Activity {
-                                agent_id: id,
-                                line,
-                            }));
+                            let _ =
+                                ev.send(Event::Control(ServerMsg::Activity { agent_id: id, line }));
                         }
                     }
                 }
@@ -2803,8 +3405,12 @@ async fn main() -> Result<()> {
                         Ok(rows) => {
                             for row in &rows {
                                 if row.4.as_str() == "match" {
-                                    let Some(pat) = row.6.as_deref() else { continue };
-                                    if pat.is_empty() { continue; }
+                                    let Some(pat) = row.6.as_deref() else {
+                                        continue;
+                                    };
+                                    if pat.is_empty() {
+                                        continue;
+                                    }
                                     for id in loop_targets(&sched_state, &row.1, &row.2) {
                                         let key = format!("{}:{}", row.0, id);
                                         let hit = sched_state
@@ -2832,14 +3438,14 @@ async fn main() -> Result<()> {
                         // "keep them moving" autopilot.
                         if prev == Some("working") && status == "idle" {
                             if let Ok(rows) = store.loops_enabled() {
-                                for row in rows.iter().filter(|r| {
-                                    r.4 == "idle" && (r.2 == id || r.2 == "*")
-                                }) {
+                                for row in rows
+                                    .iter()
+                                    .filter(|r| r.4 == "idle" && (r.2 == id || r.2 == "*"))
+                                {
                                     // A board-wide loop only fires for
                                     // agents that live on its board.
                                     if row.2 == "*"
-                                        && !loop_targets(&sched_state, &row.1, "*")
-                                            .contains(&id)
+                                        && !loop_targets(&sched_state, &row.1, "*").contains(&id)
                                     {
                                         continue;
                                     }
@@ -2879,14 +3485,16 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-
 #[cfg(test)]
 mod fallback_tests {
     use super::*;
 
     #[test]
     fn substitute_cli_keeps_arguments() {
-        assert_eq!(substitute_cli("claude --model opus", "codex"), "codex --model opus");
+        assert_eq!(
+            substitute_cli("claude --model opus", "codex"),
+            "codex --model opus"
+        );
         assert_eq!(substitute_cli("claude", "gemini"), "gemini");
     }
 
@@ -2899,7 +3507,11 @@ mod fallback_tests {
     #[test]
     fn chain_leads_with_requested_cli_without_duplicates() {
         let cli = "codex";
-        let configured = vec!["claude".to_string(), "codex".to_string(), "gemini".to_string()];
+        let configured = vec![
+            "claude".to_string(),
+            "codex".to_string(),
+            "gemini".to_string(),
+        ];
         let mut chain: Vec<String> = vec![cli.to_string()];
         for c in configured {
             if c != cli && !chain.contains(&c) {
@@ -2983,7 +3595,10 @@ mod wire_path_tests {
         let entries = vault_list_entries(&root);
         assert!(entries.contains(&"top.md".to_string()), "{entries:?}");
         assert!(entries.contains(&"sub/mid.md".to_string()), "{entries:?}");
-        assert!(entries.contains(&"sub/deep/note.md".to_string()), "{entries:?}");
+        assert!(
+            entries.contains(&"sub/deep/note.md".to_string()),
+            "{entries:?}"
+        );
         assert!(
             entries.iter().all(|e| !e.contains('\\')),
             "a backslash must never reach the wire: {entries:?}"
@@ -2995,7 +3610,10 @@ mod wire_path_tests {
     fn repo_tree_entries_follow_the_same_wire_contract() {
         let root = temp_vault("repo");
         let entries = repo_tree_entries(&root);
-        assert!(entries.contains(&"sub/deep/note.md".to_string()), "{entries:?}");
+        assert!(
+            entries.contains(&"sub/deep/note.md".to_string()),
+            "{entries:?}"
+        );
         assert!(
             entries.iter().all(|e| !e.contains('\\')),
             "a backslash must never reach the wire: {entries:?}"
@@ -3030,7 +3648,9 @@ mod vault_write_asset_sandbox_tests {
             pending_fallbacks: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             pending_inputs: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             shares: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
-            allowed_roots: Arc::new(std::sync::Mutex::new(vec![std::fs::canonicalize(repo).unwrap()])),
+            allowed_roots: Arc::new(std::sync::Mutex::new(vec![
+                std::fs::canonicalize(repo).unwrap()
+            ])),
         })
     }
 
@@ -3089,7 +3709,9 @@ mod vault_write_asset_sandbox_tests {
             "expected an access-denied error containing {needle:?}; got {messages:?}"
         );
         assert!(
-            !messages.iter().any(|m| matches!(m, ServerMsg::VaultListing { .. })),
+            !messages
+                .iter()
+                .any(|m| matches!(m, ServerMsg::VaultListing { .. })),
             "a refused write must not emit a successful vault listing: {messages:?}"
         );
     }
@@ -3112,7 +3734,10 @@ mod vault_write_asset_sandbox_tests {
         let absolute = target.to_string_lossy().to_string();
         let messages = write_asset(&f.state, &f.vault, &absolute);
         assert_access_denied(&messages, "absolute paths are not allowed");
-        assert!(!target.exists(), "an absolute target outside the vault must not be written");
+        assert!(
+            !target.exists(),
+            "an absolute target outside the vault must not be written"
+        );
     }
 
     #[test]
@@ -3161,7 +3786,10 @@ mod vault_write_asset_sandbox_tests {
             // creation. That does not weaken coverage where symlinks exist;
             // it only keeps the portable test suite runnable in restricted CI.
             assert!(
-                matches!(e.kind(), std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::Unsupported),
+                matches!(
+                    e.kind(),
+                    std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::Unsupported
+                ),
                 "test symlink setup failed unexpectedly: {e}"
             );
             eprintln!("skipping symlink assertion: {e}");
@@ -3209,15 +3837,29 @@ mod vault_write_asset_sandbox_tests {
         let f = fixture(true);
         let messages = write_asset(&f.state, &f.vault, "attachments/pic.png");
         assert!(
-            messages.iter().any(|m| matches!(m, ServerMsg::VaultListing { .. })),
+            messages
+                .iter()
+                .any(|m| matches!(m, ServerMsg::VaultListing { .. })),
             "a valid write should emit the refreshed vault listing: {messages:?}"
         );
-        assert!(error_messages(&messages).is_empty(), "valid write errored: {messages:?}");
-        assert_eq!(std::fs::read(f.vault.join("attachments").join("pic.png")).unwrap(), b"png");
+        assert!(
+            error_messages(&messages).is_empty(),
+            "valid write errored: {messages:?}"
+        );
+        assert_eq!(
+            std::fs::read(f.vault.join("attachments").join("pic.png")).unwrap(),
+            b"png"
+        );
 
         let messages = write_asset(&f.state, &f.vault, "attachments/pic.png");
-        assert!(error_messages(&messages).is_empty(), "deduped write errored: {messages:?}");
-        assert_eq!(std::fs::read(f.vault.join("attachments").join("pic-2.png")).unwrap(), b"png");
+        assert!(
+            error_messages(&messages).is_empty(),
+            "deduped write errored: {messages:?}"
+        );
+        assert_eq!(
+            std::fs::read(f.vault.join("attachments").join("pic-2.png")).unwrap(),
+            b"png"
+        );
         assert_eq!(
             std::fs::read(f.vault.join("attachments").join("pic.png")).unwrap(),
             b"png",

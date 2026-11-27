@@ -18,12 +18,21 @@ fn obsidian_config_candidates() -> Vec<PathBuf> {
     if let Some(h) = crate::paths::home_dir() {
         // macOS — chained joins rather than a "/"-laden literal: separator
         // characters belong to the platform path parser, not to our strings.
-        out.push(h.join("Library").join("Application Support").join("obsidian").join("obsidian.json"));
+        out.push(
+            h.join("Library")
+                .join("Application Support")
+                .join("obsidian")
+                .join("obsidian.json"),
+        );
         // Linux
         out.push(h.join(".config").join("obsidian").join("obsidian.json"));
     }
     if let Ok(appdata) = std::env::var("APPDATA") {
-        out.push(PathBuf::from(appdata).join("obsidian").join("obsidian.json")); // Windows
+        out.push(
+            PathBuf::from(appdata)
+                .join("obsidian")
+                .join("obsidian.json"),
+        ); // Windows
     }
     if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
         out.push(PathBuf::from(xdg).join("obsidian").join("obsidian.json"));
@@ -115,9 +124,7 @@ pub fn register(dir: &str) -> Result<Vec<VaultLocation>, String> {
     let cfg = obsidian_config_candidates()
         .into_iter()
         .find(|p| p.is_file())
-        .or_else(|| {
-            dirs::config_dir().map(|c| c.join("obsidian").join("obsidian.json"))
-        })
+        .or_else(|| dirs::config_dir().map(|c| c.join("obsidian").join("obsidian.json")))
         .ok_or_else(|| "cannot locate obsidian.json (no user config directory)".to_string())?;
 
     let mut json = std::fs::read_to_string(&cfg)
@@ -142,12 +149,18 @@ pub fn register(dir: &str) -> Result<Vec<VaultLocation>, String> {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
-        vaults.insert(id, serde_json::json!({ "path": path, "ts": ts, "open": false }));
+        vaults.insert(
+            id,
+            serde_json::json!({ "path": path, "ts": ts, "open": false }),
+        );
         if let Some(parent) = cfg.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        std::fs::write(&cfg, serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
+        std::fs::write(
+            &cfg,
+            serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
     }
     Ok(discover())
 }

@@ -40,23 +40,44 @@ pub enum ClientMsg {
     },
     /// Create a named board — a separate canvas with its own agents,
     /// workspaces and edges (Deska "Spaces").
-    CreateBoard { name: String },
+    CreateBoard {
+        name: String,
+    },
     /// Move an agent or workspace node to another board.
-    MoveToBoard { node_id: String, board_id: String },
+    MoveToBoard {
+        node_id: String,
+        board_id: String,
+    },
     /// Rename an agent or workspace node.
-    RenameNode { node_id: String, name: String },
+    RenameNode {
+        node_id: String,
+        name: String,
+    },
     /// Set the ordered CLI fallback chain for a workspace. Spawned agents
     /// whose CLI dies at launch retry with the next entry automatically.
-    SetAgentChain { workspace_id: String, chain: Vec<String> },
+    SetAgentChain {
+        workspace_id: String,
+        chain: Vec<String>,
+    },
     /// Change a live agent's permission level ("always allow" bumps
     /// supervised → auto so future commands stop asking).
-    SetPermission { agent_id: String, permission: String },
+    SetPermission {
+        agent_id: String,
+        permission: String,
+    },
     /// Rename a board.
-    RenameBoard { board_id: String, name: String },
+    RenameBoard {
+        board_id: String,
+        name: String,
+    },
     /// Delete a board — refused while it still holds nodes.
-    DeleteBoard { board_id: String },
+    DeleteBoard {
+        board_id: String,
+    },
     /// Remove a delegation record (and its edge) from the board.
-    DeleteDelegation { edge_id: String },
+    DeleteDelegation {
+        edge_id: String,
+    },
     /// Create or update a kanban note: no id = create (pos auto),
     /// id = move/edit (col/text/pos replace).
     NoteUpsert {
@@ -69,52 +90,103 @@ pub enum ClientMsg {
         due: Option<String>,
     },
     /// Delete a kanban note.
-    NoteDelete { note_id: String },
+    NoteDelete {
+        note_id: String,
+    },
     /// List markdown files under a vault directory (Obsidian-style vault).
-    VaultList { dir: String },
+    VaultList {
+        dir: String,
+    },
     /// List the file tree of a repository/root directory — all file types,
     /// for the repo explorer panel. Same sandbox rules as the vault.
-    RepoTree { dir: String },
+    RepoTree {
+        dir: String,
+    },
     /// Read a text file for the repo viewer — capped, binary rejected.
-    RepoRead { dir: String, path: String },
+    RepoRead {
+        dir: String,
+        path: String,
+    },
     /// Save edits to an existing text file under a registered repository.
     /// The base text is checked to avoid overwriting external changes.
-    RepoWrite { dir: String, path: String, text: String, base_text: String },
+    RepoWrite {
+        dir: String,
+        path: String,
+        text: String,
+        base_text: String,
+    },
     /// Read one file from the vault.
-    VaultRead { dir: String, path: String },
+    VaultRead {
+        dir: String,
+        path: String,
+    },
     /// Read one file without making it "the open note" — powers `![[embeds]]`.
-    VaultPeek { dir: String, path: String },
+    VaultPeek {
+        dir: String,
+        path: String,
+    },
     /// Read a binary vault asset (image) as base64 — powers `![[image.png]]`.
     /// Allowed extensions only (png/jpg/jpeg/gif/webp/svg/ico), root-scoped.
-    VaultAsset { dir: String, path: String },
+    VaultAsset {
+        dir: String,
+        path: String,
+    },
     /// Append markdown text to a vault file — Dex's "leave it in Obsidian"
     /// path. Creates the file (and parent dirs) when missing; the path is
     /// constrained to the vault root and must end in .md.
-    VaultAppend { dir: String, path: String, text: String },
+    VaultAppend {
+        dir: String,
+        path: String,
+        text: String,
+    },
     /// Overwrite a vault file with the given text — editing notes inside
     /// the app. Same constraints as vault_append (root-scoped, .md only,
     /// creates parent dirs).
-    VaultWrite { dir: String, path: String, text: String },
+    VaultWrite {
+        dir: String,
+        path: String,
+        text: String,
+    },
     /// Write a binary file into the vault (base64 body) — OS drag & drop
     /// of attachments (images, pdfs, anything). Root-scoped, no `..`,
     /// 8 MiB decoded cap, name deduped with `-N` on collision.
-    VaultWriteAsset { dir: String, path: String, data: String },
+    VaultWriteAsset {
+        dir: String,
+        path: String,
+        data: String,
+    },
     /// Delete a markdown file from the vault (root-scoped, .md only).
-    VaultDelete { dir: String, path: String },
+    VaultDelete {
+        dir: String,
+        path: String,
+    },
     /// Rename/move a markdown file inside the vault (root-scoped, .md only).
-    VaultRename { dir: String, path: String, new_path: String },
+    VaultRename {
+        dir: String,
+        path: String,
+        new_path: String,
+    },
     /// Build the whole-vault link graph (all notes + resolved links).
-    VaultGraph { dir: String },
+    VaultGraph {
+        dir: String,
+    },
     /// Full-text search across the vault's markdown files.
-    VaultSearch { dir: String, query: String },
+    VaultSearch {
+        dir: String,
+        query: String,
+    },
     /// Discover Obsidian vaults registered on this machine — the native
     /// integration surface is obsidian.json plus `.obsidian/` folders.
     VaultDiscover,
     /// Register a directory as an Obsidian vault (creates `.obsidian/` and
     /// adds it to obsidian.json) so it opens from the real Obsidian app too.
-    VaultRegister { dir: String },
+    VaultRegister {
+        dir: String,
+    },
     /// Push an agent's worktree branch to origin (its committed work).
-    GitPush { agent_id: String },
+    GitPush {
+        agent_id: String,
+    },
     /// Register an artifact (an agent's deliverable — a report, plan,
     /// exported file). Agents emit these via canvasctl.
     ArtifactCreate {
@@ -126,20 +198,31 @@ pub enum ClientMsg {
         text: Option<String>,
     },
     /// Remove an artifact.
-    ArtifactDelete { artifact_id: String },
+    ArtifactDelete {
+        artifact_id: String,
+    },
     /// A digest of every agent: status, files touched, transcript tail.
     Digest,
     /// Build a "studio" document: repo materialized as a markdown dossier
     /// (tree + README + agents + notes + artifacts) — repo→material.
-    StudioDoc { board_id: Option<String> },
+    StudioDoc {
+        board_id: Option<String>,
+    },
     /// Read a node's memory file — "main" is the board repo's memory,
     /// a workspace id reads that workspace's repo memory.
-    MemoryRead { node_id: String },
+    MemoryRead {
+        node_id: String,
+    },
     /// Overwrite a node's memory file.
-    MemoryWrite { node_id: String, text: String },
+    MemoryWrite {
+        node_id: String,
+        text: String,
+    },
     /// Delete a workspace — refused while it holds live agents; dead
     /// agents are detached and stay on the canvas.
-    DeleteWorkspace { workspace_id: String },
+    DeleteWorkspace {
+        workspace_id: String,
+    },
     PtyInput {
         agent_id: String,
         /// Base64-encoded bytes to write to the PTY.
@@ -161,9 +244,13 @@ pub enum ClientMsg {
     },
     /// Supervised-input gate: writes the stashed payload the operator just
     /// approved (the daemon holds one pending input per agent).
-    ApproveInput { agent_id: String },
+    ApproveInput {
+        agent_id: String,
+    },
     /// Drops the stashed payload — the agent never receives it.
-    DenyInput { agent_id: String },
+    DenyInput {
+        agent_id: String,
+    },
     /// Persist a node's canvas position (drag end).
     MoveNode {
         agent_id: String,
@@ -194,9 +281,15 @@ pub enum ClientMsg {
     /// The account gets its own config dir under .canvas/accounts/; `env`
     /// optionally overrides which env var points at it (for CLIs without
     /// a built-in config-dir key).
-    CreateAccount { cli: String, label: String, env: Option<String> },
+    CreateAccount {
+        cli: String,
+        label: String,
+        env: Option<String>,
+    },
     /// Remove a named account — agents that used it fall back to default.
-    DeleteAccount { account_id: String },
+    DeleteAccount {
+        account_id: String,
+    },
     /// Define an automation: a saved task that runs an agent with a prompt
     /// and guardrails (idle hang limit + approval policy).
     CreateAutomation {
@@ -213,8 +306,12 @@ pub enum ClientMsg {
         interval_secs: Option<u64>,
     },
     /// Run a saved automation once: spawns its agent and injects the prompt.
-    RunAutomation { automation_id: String },
-    DeleteAutomation { automation_id: String },
+    RunAutomation {
+        automation_id: String,
+    },
+    DeleteAutomation {
+        automation_id: String,
+    },
     /// Define a loop: a saved instruction the daemon re-sends to a live
     /// console on a trigger — 'interval' (every interval_secs), 'idle'
     /// (when the agent finishes/goes idle) or 'match' (when the PTY tail
@@ -227,21 +324,36 @@ pub enum ClientMsg {
         interval_secs: Option<u64>,
         pattern: Option<String>,
     },
-    DeleteLoop { loop_id: String },
-    SetLoopEnabled { loop_id: String, enabled: bool },
+    DeleteLoop {
+        loop_id: String,
+    },
+    SetLoopEnabled {
+        loop_id: String,
+        enabled: bool,
+    },
     /// Fire a loop's instruction immediately, regardless of its schedule.
-    RunLoop { loop_id: String },
+    RunLoop {
+        loop_id: String,
+    },
     /// Pause/resume every live agent on a board — Symvibe's "pause all".
     /// Unix uses SIGSTOP/SIGCONT so output buffers in the kernel; Windows v1
     /// has no suspension primitive and reports zero signalled agents.
-    PauseAll { board_id: Option<String> },
-    ResumeAll { board_id: Option<String> },
+    PauseAll {
+        board_id: Option<String>,
+    },
+    ResumeAll {
+        board_id: Option<String>,
+    },
     /// Stream an agent's saved transcript back as PtyOutput frames — for
     /// reading dead agents' terminals after they exited or after a
     /// daemon restart.
-    Transcript { agent_id: String },
+    Transcript {
+        agent_id: String,
+    },
     /// Full unified diff of the agent's uncommitted worktree changes.
-    DiffDetail { agent_id: String },
+    DiffDetail {
+        agent_id: String,
+    },
 }
 
 /// Deska-style permission ladder, most → least restrictive. The level
@@ -298,45 +410,109 @@ pub enum ServerMsg {
         #[serde(default)]
         worktree: Option<String>,
     },
-    Status { agent_id: String, status: AgentStatus },
+    Status {
+        agent_id: String,
+        status: AgentStatus,
+    },
     /// Live one-line activity preview — the agent's latest non-empty PTY
     /// line, ANSI-stripped. Deska's "background work" summaries: the node
     /// shows what the agent is doing without opening the terminal.
-    Activity { agent_id: String, line: String },
+    Activity {
+        agent_id: String,
+        line: String,
+    },
     /// Files with uncommitted changes in the agent's worktree — the
     /// node's diff badge; what the delegation actually produced.
-    Diff { agent_id: String, files: u32, paths: Vec<String>, branch: String },
+    Diff {
+        agent_id: String,
+        files: u32,
+        paths: Vec<String>,
+        branch: String,
+    },
     /// A supervised agent's PTY input matched a destructive pattern and
     /// is held until ApproveInput/DenyInput.
-    NeedsApproval { agent_id: String, line: String },
+    NeedsApproval {
+        agent_id: String,
+        line: String,
+    },
     /// An automation guardrail fired: the agent hung past its idle limit
     /// or hit a gated command its policy denied.
-    NeedsAttention { agent_id: String, reason: String },
-    AutomationSaved { automation: SnapshotAutomation },
-    AutomationDeleted { automation_id: String },
-    Error { agent_id: Option<String>, message: String },
-    Delegation { edge_id: String, from: String, to: String, task: String },
-    Result { edge_id: String, summary: String, files: u32 },
+    NeedsAttention {
+        agent_id: String,
+        reason: String,
+    },
+    AutomationSaved {
+        automation: SnapshotAutomation,
+    },
+    AutomationDeleted {
+        automation_id: String,
+    },
+    Error {
+        agent_id: Option<String>,
+        message: String,
+    },
+    Delegation {
+        edge_id: String,
+        from: String,
+        to: String,
+        task: String,
+    },
+    Result {
+        edge_id: String,
+        summary: String,
+        files: u32,
+    },
     /// A delegated child exited without ever printing a result —
     /// the ticket is done but empty-handed.
-    DelegationFailed { edge_id: String },
-    WorkspaceCreated { workspace_id: String, name: String, repo: String, board_id: Option<String> },
-    BoardCreated { board_id: String, name: String },
+    DelegationFailed {
+        edge_id: String,
+    },
+    WorkspaceCreated {
+        workspace_id: String,
+        name: String,
+        repo: String,
+        board_id: Option<String>,
+    },
+    BoardCreated {
+        board_id: String,
+        name: String,
+    },
     /// A node (agent or workspace) changed boards.
-    BoardMoved { node_id: String, board_id: String },
+    BoardMoved {
+        node_id: String,
+        board_id: String,
+    },
     /// A node was renamed.
-    NodeRenamed { node_id: String, name: String },
-    PermissionChanged { agent_id: String, permission: String },
+    NodeRenamed {
+        node_id: String,
+        name: String,
+    },
+    PermissionChanged {
+        agent_id: String,
+        permission: String,
+    },
     /// A board was renamed.
-    BoardRenamed { board_id: String, name: String },
+    BoardRenamed {
+        board_id: String,
+        name: String,
+    },
     /// A board was deleted (only emitted for empty boards).
-    BoardDeleted { board_id: String },
+    BoardDeleted {
+        board_id: String,
+    },
     /// A delegation record was removed; clients drop the edge.
-    DelegationRemoved { edge_id: String },
+    DelegationRemoved {
+        edge_id: String,
+    },
     /// A workspace was deleted; agents keep existing detached from it.
-    WorkspaceDeleted { workspace_id: String },
+    WorkspaceDeleted {
+        workspace_id: String,
+    },
     /// Unified diff text for one agent's worktree (DiffDetail answer).
-    DiffDetail { agent_id: String, diff: String },
+    DiffDetail {
+        agent_id: String,
+        diff: String,
+    },
     /// Board state replay sent once when a client connects: every agent the
     /// board knows (live and dead) plus saved node positions.
     Snapshot {
@@ -365,54 +541,113 @@ pub enum ServerMsg {
         cli_identities: std::collections::HashMap<String, CliIdentity>,
     },
     /// A named account was registered.
-    AccountCreated { account_id: String, cli: String, label: String, env: Option<String> },
+    AccountCreated {
+        account_id: String,
+        cli: String,
+        label: String,
+        env: Option<String>,
+    },
     /// A named account was removed.
-    AccountDeleted { account_id: String },
+    AccountDeleted {
+        account_id: String,
+    },
     /// Memory file contents (MemoryRead answer).
-    Memory { node_id: String, text: String },
+    Memory {
+        node_id: String,
+        text: String,
+    },
     /// Session digest markdown (Digest answer).
-    SessionDigest { text: String },
+    SessionDigest {
+        text: String,
+    },
     /// Studio document markdown (StudioDoc answer).
-    StudioDocMd { text: String },
+    StudioDocMd {
+        text: String,
+    },
     /// A kanban note was created or edited.
-    NoteUpserted { note: SnapshotNote },
+    NoteUpserted {
+        note: SnapshotNote,
+    },
     /// A kanban note was removed.
-    NoteDeleted { note_id: String },
+    NoteDeleted {
+        note_id: String,
+    },
     /// An artifact was registered.
-    ArtifactCreated { artifact: SnapshotArtifact },
+    ArtifactCreated {
+        artifact: SnapshotArtifact,
+    },
     /// git push finished for an agent's worktree.
-    GitPushed { agent_id: String, output: String },
+    GitPushed {
+        agent_id: String,
+        output: String,
+    },
     /// Vault file listing (VaultList answer): "sub/path.md" entries.
     /// Vault/repo-relative paths are always forward-slash joined on the
     /// wire (Obsidian convention) regardless of the daemon's platform —
     /// the client splits and matches on `/`, so a Windows daemon must
     /// never leak `\` separators here.
-    VaultListing { dir: String, entries: Vec<String> },
+    VaultListing {
+        dir: String,
+        entries: Vec<String>,
+    },
     /// Repo explorer: flat file tree of a root. Same forward-slash wire
     /// contract as VaultListing.
-    RepoListing { dir: String, entries: Vec<String> },
+    RepoListing {
+        dir: String,
+        entries: Vec<String>,
+    },
     /// Repo viewer: file contents (utf-8 text, size-capped).
-    RepoFile { dir: String, path: String, text: String },
+    RepoFile {
+        dir: String,
+        path: String,
+        text: String,
+    },
     /// Vault file contents (VaultRead answer).
-    VaultFile { path: String, text: String },
+    VaultFile {
+        path: String,
+        text: String,
+    },
     /// Vault file contents for an embed (VaultPeek answer) — cached client-side,
     /// never replaces the open note.
-    VaultPeeked { path: String, text: String },
+    VaultPeeked {
+        path: String,
+        text: String,
+    },
     /// Binary vault asset (VaultAsset answer): base64 body + mime.
-    VaultAssetData { path: String, mime: String, data: String },
+    VaultAssetData {
+        path: String,
+        mime: String,
+        data: String,
+    },
     /// Vault search hits (VaultSearch answer).
-    VaultHits { dir: String, query: String, hits: Vec<VaultHit> },
+    VaultHits {
+        dir: String,
+        query: String,
+        hits: Vec<VaultHit>,
+    },
     /// Whole-vault link graph (VaultGraph answer): every note plus every
     /// resolved [[link]] or (x.md) edge between them.
-    VaultGraph { dir: String, nodes: Vec<String>, edges: Vec<(String, String)> },
+    VaultGraph {
+        dir: String,
+        nodes: Vec<String>,
+        edges: Vec<(String, String)>,
+    },
     /// Obsidian vaults discovered on this machine (VaultDiscover answer).
-    VaultDiscovered { vaults: Vec<VaultLocation> },
+    VaultDiscovered {
+        vaults: Vec<VaultLocation>,
+    },
     /// An artifact was removed.
-    ArtifactDeleted { artifact_id: String },
+    ArtifactDeleted {
+        artifact_id: String,
+    },
     /// A loop was created.
-    LoopSaved { l: SnapshotLoop },
+    LoopSaved {
+        l: SnapshotLoop,
+    },
     /// A loop was removed.
-    LoopDeleted { loop_id: String },
+    LoopDeleted {
+        loop_id: String,
+    },
 }
 
 /// One Obsidian vault known on this machine.
