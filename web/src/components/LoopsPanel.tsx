@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { panelRoot } from "./panelChrome";
+import { EmptyState } from "./EmptyState";
 import { useBoard } from "../store/board";
 
 const input: React.CSSProperties = {
@@ -113,11 +114,23 @@ export function LoopsPanel() {
       <div style={{ flex: 1, overflowY: "auto" }}>
         {!creating && (
           <>
-            <div style={{ padding: "6px 12px 2px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", lineHeight: 1.5 }}>
-              A loop sends one instruction to your consoles — on a timer, when an
-              agent goes idle, or the moment its output prints something you care
-              about. Board: <b style={{ color: "var(--cv-ink)" }}>{boards[activeBoard] ?? activeBoard}</b>.
-            </div>
+            {list.length === 0 ? (
+              <EmptyState
+                compact
+                icon="loops"
+                title="No loops on this board"
+                hint="timer · idle · output match"
+              >
+                A loop re-sends one instruction to your consoles — on a timer, when an
+                agent goes idle, or the moment its output prints something you care about.
+              </EmptyState>
+            ) : (
+              <div style={{ padding: "6px 12px 2px", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", lineHeight: 1.5 }}>
+                A loop sends one instruction to your consoles — on a timer, when an
+                agent goes idle, or the moment its output prints something you care
+                about. Board: <b style={{ color: "var(--cv-ink)" }}>{boards[activeBoard] ?? activeBoard}</b>.
+              </div>
+            )}
             <div style={label}>Start from a template</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, padding: "4px 12px 8px" }}>
               {TEMPLATES.map((t) => (
@@ -184,11 +197,6 @@ export function LoopsPanel() {
             >
               start loop
             </button>
-          </div>
-        )}
-        {list.length === 0 && !creating && (
-          <div style={{ padding: "14px 12px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-faint)" }}>
-            No loops on this board yet.
           </div>
         )}
         {list.length > 0 && <div style={label}>Running on this board</div>}

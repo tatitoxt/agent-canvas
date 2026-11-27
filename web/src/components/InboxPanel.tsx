@@ -1,5 +1,6 @@
 import { useBoard } from "../store/board";
 import { panelRoot } from "./panelChrome";
+import { EmptyState } from "./EmptyState";
 
 const rowStyle: React.CSSProperties = {
   display: "flex",
@@ -56,11 +57,15 @@ export function InboxPanel({ onOpenAgent }: { onOpenAgent: (id: string) => void 
       data-panel="inbox"
       style={{ ...panelRoot, padding: "12px 8px" }}
     >
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      <div style={{ flex: 1, overflowY: "auto", display: empty ? "flex" : undefined, flexDirection: empty ? "column" : undefined }}>
         {empty && (
-          <div style={{ padding: "18px 12px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)" }}>
-            Nothing needs you — agents are running or done.
-          </div>
+          <EmptyState
+            icon="inbox"
+            title="Nothing needs you"
+            hint="waiting · blocked · approvals · returns"
+          >
+            Agents report here when they pause for input, hit a gated command, or return a delegation.
+          </EmptyState>
         )}
         {alerts.length > 0 && (
           <>

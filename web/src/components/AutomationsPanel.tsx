@@ -8,6 +8,7 @@ const PRESETS = [
 ];
 
 import { panelRoot } from "./panelChrome";
+import { EmptyState } from "./EmptyState";
 import { useBoard, PERMISSION_LEVELS, type Guardrails } from "../store/board";
 
 const input: React.CSSProperties = {
@@ -218,24 +219,35 @@ export function AutomationsPanel() {
           </div>
         )}
         {list.length === 0 && !creating && (
-          <div style={{ padding: "14px 12px", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)" }}>
-            <div style={{ marginBottom: 8 }}>Nothing saved yet — start from an example:</div>
-            {PRESETS.map((p) => (
-              <button
-                key={p.name}
-                className="cv-mini-btn"
-                style={{ display: "block", width: "100%", textAlign: "left", margin: "0 0 6px", padding: "7px 10px", fontSize: "var(--cv-text-xs)", cursor: "pointer", color: "var(--cv-ink)" }}
-                onClick={() => {
-                  setName(p.name);
-                  setPrompt(p.prompt);
-                  setEveryMins(String(p.mins));
-                  setCreating(true);
-                }}
-              >
-                {p.name}
-                <span style={{ display: "block", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", marginTop: 2 }}>{p.prompt.slice(0, 64)}…</span>
-              </button>
-            ))}
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+            <EmptyState
+              compact
+              icon="automations"
+              title="No automations yet"
+              hint="guardrails apply to every run"
+              actions={[{ label: "+ new automation", accent: true, title: "write a saved prompt from scratch", onClick: () => setCreating(true) }]}
+            >
+              A saved prompt that runs an agent on a schedule — or on demand — with its own guardrails.
+            </EmptyState>
+            <div style={{ padding: "0 12px 14px" }}>
+              <div className="cv-section-label" style={{ paddingBottom: 6 }}>or start from an example</div>
+              {PRESETS.map((p) => (
+                <button
+                  key={p.name}
+                  className="cv-mini-btn"
+                  style={{ display: "block", width: "100%", textAlign: "left", margin: "0 0 6px", padding: "7px 10px", fontSize: "var(--cv-text-xs)", cursor: "pointer", color: "var(--cv-ink)" }}
+                  onClick={() => {
+                    setName(p.name);
+                    setPrompt(p.prompt);
+                    setEveryMins(String(p.mins));
+                    setCreating(true);
+                  }}
+                >
+                  {p.name}
+                  <span style={{ display: "block", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)", marginTop: 2 }}>{p.prompt.slice(0, 64)}…</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {list.length > 0 && <div className="cv-section-label" style={label}>Saved</div>}

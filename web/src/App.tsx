@@ -24,6 +24,7 @@ import { DelegationEdge } from "./board/edges";
 import { initialEdges, initialNodes } from "./board/mockData";
 import { NavRail, RightRail, BottomDock } from "./components/NavRail";
 import { Icon } from "./components/icons";
+import { CanvasEmptyState } from "./components/CanvasEmptyState";
 import { SpawnBar } from "./components/SpawnBar";
 import { PanelNode } from "./board/PanelNode";
 import { PANEL_DEFS } from "./components/panelRegistry";
@@ -685,6 +686,12 @@ function Board() {
       ? [...initialNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs]
       : [...wsNodes, ...shapeNs, ...mdNs, ...webNs, ...live, ...orchNs, ...panelNs, ...termNs];
   }, [agents, positions, connected, workspaces, workspaceSizes, approvals, attention, activeBoard, webNodes, webNodeSizes, orchestrators, liveEdges, shapes, mdNodes, mdNodeSizes, panelNodes, termNodes, cardZ, agentSizes, gatherMotion]);
+
+  // First-run canvas: connected to the daemon and not a single card on this
+  // board — no agents, workspaces, panels, notes or shapes. Offline/demo never
+  // qualifies (the mock board fills it), and a transient disconnect keeps
+  // whatever the board already had.
+  const boardEmpty = connected === true && baseNodes.length === 0;
 
   // Controlled React Flow needs change application for selection and drag to
   // stick. rfNodes is the rendered array: baseNodes is re-derived from the
@@ -1383,6 +1390,7 @@ function Board() {
           </ViewportPortal>
         )}
       </ReactFlow>
+      {boardEmpty && !chromeHidden && <CanvasEmptyState />}
       {connected === false && null}
       {digestOpen && <Overlay><DigestPanel /></Overlay>}
       {studioOpen && <Overlay><StudioPanel /></Overlay>}

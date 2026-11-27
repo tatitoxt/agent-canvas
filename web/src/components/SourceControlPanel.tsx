@@ -1,5 +1,6 @@
 import { useBoard } from "../store/board";
 import { panelRoot } from "./panelChrome";
+import { EmptyState } from "./EmptyState";
 import { usePanelActions } from "./panelCtx";
 
 const groupLabel: React.CSSProperties = {
@@ -79,10 +80,9 @@ export function SourceControlPanel() {
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "0 4px" }}>
         {trees.length === 0 && (
-          <div style={{ ...groupLabel, padding: "14px 12px", letterSpacing: "0.01em" }}>
-            No agent worktrees yet — spawn an agent in a workspace and its
-            branch shows up here.
-          </div>
+          <EmptyState compact icon="worktrees" title="No worktrees in flight">
+            Spawn an agent in a workspace and its branch shows up here — dirty files, push and all.
+          </EmptyState>
         )}
         {trees.map((a) => (
           <div key={a.id}>
