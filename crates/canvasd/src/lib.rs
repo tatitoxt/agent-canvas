@@ -3,6 +3,7 @@
 //! (native commands/events).
 
 pub mod agent;
+pub mod chain;
 pub mod detect;
 pub mod paths;
 pub mod protocol;

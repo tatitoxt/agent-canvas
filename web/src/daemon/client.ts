@@ -176,11 +176,11 @@ export class CanvasClient {
 
   constructor(token: string, handlers: Handlers) {
     this.handlers = handlers;
-    // Served by canvasd itself (LAN/phone) → ws on the same host; on the
-    // vite dev port the daemon is the default localhost one.
+    // Served by canvasd itself (LAN/phone) → ws on the same host. In vite
+    // dev the server proxies /ws to the daemon, so the same host works
+    // there too; ?daemon=host:port overrides for remote/custom setups.
     const daemon =
-      new URLSearchParams(location.search).get("daemon") ??
-      (location.port === "5174" ? "127.0.0.1:4242" : location.host);
+      new URLSearchParams(location.search).get("daemon") ?? location.host;
     this.ws = new WebSocket(`ws://${daemon}/ws?token=${token}`);
     this.ws.binaryType = "arraybuffer";
     this.ws.onmessage = (ev) => {

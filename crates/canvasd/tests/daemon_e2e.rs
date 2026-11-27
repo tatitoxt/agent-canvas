@@ -629,3 +629,128 @@ async fn automation_guardrails_fire() {
         "idle agent must raise a hang alert"
     );
 }
+
+/// Chain fallback end-to-end: a workspace chain of fake CLIs where `claude`
+/// dies at launch and `codex` idles. The daemon must announce the original
+/// spawn, then a replacement spawned as the next chain entry with
+/// `fallback_from` marking the substitution — the same events the Tauri
+/// shell now emits through its mirrored watcher.
+#[cfg(unix)]
+#[tokio::test]
+async fn chain_fallback_respawns_dead_cli_as_next_chain_entry() {
+    let d = Daemon::start();
+    // Fake CLIs must win resolution inside the PTY's login shell:
+    // ~/.bash_profile runs after /etc/profile, so this prepend survives
+    // path_helper-style PATH reordering. `claude` dies instantly; `codex`
+    // idles long enough to observe the replacement (and is killed after).
+    let fakebin = d.home.join("fakebin");
+    std::fs::create_dir_all(&fakebin).unwrap();
+    for (name, body) in [
+        ("claude", "#!/bin/sh\nexit 1\n"),
+        ("codex", "#!/bin/sh\nexec sleep 30\n"),
+    ] {
+        let path = fakebin.join(name);
+        std::fs::write(&path, body).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    std::fs::write(
+        d.home.join(".bash_profile"),
+        format!("export PATH=\"{}:$PATH\"\n", fakebin.display()),
+    )
+    .unwrap();
+
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .expect("ws connect");
+    let snap = next_ctrl(&mut ws, Duration::from_secs(5)).await.unwrap();
+    assert_eq!(snap["type"], "snapshot");
+
+    ws.send(Message::Text(
+        json!({"cmd":"create_workspace","name":"chain-ws","repo":d.repo.to_str().unwrap()})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(3), |m| {
+        m["type"] == "workspace_created"
+    })
+    .await;
+    let ws_id = seen
+        .iter()
+        .find(|m| m["type"] == "workspace_created")
+        .unwrap()["workspace_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // The configured chain drives the fallback order — no reliance on what
+    // the host machine happens to have installed.
+    ws.send(Message::Text(
+        json!({"cmd":"set_agent_chain","workspace_id":ws_id,"chain":["claude","codex"]})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
+
+    ws.send(Message::Text(
+        json!({
+            "cmd": "spawn_agent", "name": "chain-agent", "command": "claude",
+            "cwd": ".", "workspace_id": ws_id, "permission": "auto"
+        })
+        .to_string()
+        .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |m| m["type"] == "spawned").await;
+    let first = seen.iter().find(|m| m["type"] == "spawned").unwrap();
+    assert_eq!(first["command"].as_str().unwrap_or(""), "claude");
+    assert!(first["fallback_from"].is_null());
+
+    // The fake claude exits instantly — within seconds the daemon must
+    // announce the replacement: same workspace, codex command, the dead
+    // CLI marked as the fallback origin.
+    let seen = collect_until(&mut ws, Duration::from_secs(10), |m| {
+        m["type"] == "spawned" && m["fallback_from"].as_str() == Some("claude")
+    })
+    .await;
+    let replacement = seen
+        .iter()
+        .find(|m| m["type"] == "spawned" && m["fallback_from"].as_str() == Some("claude"))
+        .unwrap_or_else(|| panic!("no fallback replacement announced; saw {seen:?}"));
+    assert_eq!(replacement["command"].as_str().unwrap_or(""), "codex");
+    assert_eq!(
+        replacement["workspace_id"].as_str().unwrap_or(""),
+        ws_id.as_str()
+    );
+    let replacement_id = replacement["agent_id"].as_str().unwrap().to_string();
+
+    // The replacement is a live agent: killing it is operator intent and
+    // must not respawn further down the chain.
+    ws.send(Message::Text(
+        json!({"cmd":"confirm_destructive","agent_id":replacement_id,"action":"kill"})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(6), |m| {
+        m["type"] == "status" && m["agent_id"] == replacement_id && m["status"] == "exited"
+    })
+    .await;
+    assert!(
+        seen.iter()
+            .any(|m| m["type"] == "status" && m["status"] == "exited"),
+        "replacement must die on confirmed kill"
+    );
+    // No third spawn may appear: the chain ends at codex, and a deliberate
+    // kill disarms the fallback either way.
+    let seen = collect_until(&mut ws, Duration::from_secs(3), |m| m["type"] == "spawned").await;
+    assert!(
+        !seen.iter().any(|m| m["type"] == "spawned"),
+        "a deliberate kill must not fall back; saw {seen:?}"
+    );
+}

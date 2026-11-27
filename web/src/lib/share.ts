@@ -1,9 +1,10 @@
 import { buildPdf, mdToLines } from "./pdf";
 
-/** daemond REST base: same origin when canvasd serves the web build
- * (LAN/phone), localhost daemon on the vite dev port. */
+/** daemon REST base: same origin — canvasd serves the web build itself
+ * (LAN/phone) and vite dev proxies /api, so the origin always reaches the
+ * daemon when one backs this page. */
 export function daemonBase(): string {
-  return location.port === "5174" ? "http://127.0.0.1:4242" : location.origin;
+  return location.origin;
 }
 
 const DAEMON = daemonBase();

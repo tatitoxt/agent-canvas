@@ -12,6 +12,7 @@ use canvasd::agent::{
     canvas_result_line, dirty_diff, dirty_file_count, dirty_files, sensitive_line, worktree_branch,
     AgentManager,
 };
+use canvasd::chain::{chain_for_spawn, command_cli, substitute_cli, KNOWN_CLIS};
 use canvasd::protocol::{
     AgentStatus, ServerMsg, SnapshotAgent, SnapshotAutomation, SnapshotDelegation,
 };
@@ -27,12 +28,37 @@ struct CanvasState {
     agents: Arc<AgentManager>,
     store: Arc<Store>,
     repo_root: PathBuf,
-    pending_results: Mutex<HashMap<String, String>>, // agent_id → edge_id
-    pending_inputs: Mutex<HashMap<String, Vec<u8>>>, // agent_id → held PTY input
+    // Arc'd like the daemon's: exit-watcher and input-injection tasks
+    // outlive the spawning call, so they clone these instead of borrowing
+    // the managed state.
+    pending_results: Arc<Mutex<HashMap<String, String>>>, // agent_id → edge_id
+    pending_inputs: Arc<Mutex<HashMap<String, Vec<u8>>>>, // agent_id → held PTY input
+    /// agent_id → chain-retry state: a fresh PTY dying within seconds
+    /// respawns as the next fallback CLI instead of dying silently.
+    pending_fallbacks: Arc<Mutex<HashMap<String, FallbackState>>>,
     /// Canonicalized roots vault file operations may touch — the board repo
     /// plus user-granted vault/workspace roots. Mutex because mounting a
     /// vault from the UI appends at runtime.
     allowed_roots: Arc<Mutex<Vec<PathBuf>>>,
+}
+
+/// Per-spawn retry state: when a fresh PTY dies within seconds, the next
+/// chain candidate gets a chance with the same parameters. Mirrors
+/// canvasd's FallbackState so the desktop shell falls back identically.
+struct FallbackState {
+    spawned_at: std::time::Instant,
+    name: String,
+    command: String,
+    cwd: String,
+    workspace_id: Option<String>,
+    permission: String,
+    board_id: Option<String>,
+    account_id: Option<String>,
+    /// CLIs not yet tried, in order.
+    remaining: Vec<String>,
+    /// Task text queued for the original PTY — re-injected into the
+    /// replacement so a fallback never silently drops the user's task.
+    initial_input: Option<String>,
 }
 
 fn emit_control(app: &AppHandle, msg: &ServerMsg) {
@@ -68,6 +94,54 @@ fn memory_path(state: &CanvasState, node_id: &str) -> PathBuf {
     repo.join(".canvas").join("memory.md")
 }
 
+/// Write PTY input honoring the supervised-input gate: `supervised`
+/// agents hold destructive-looking input until the operator approves.
+/// Mirrors canvasd's gated_write — chain-fallback re-injection goes
+/// through here so a replacement keeps the original's approval gate.
+/// Returns true when the payload was written (or held) without error.
+fn gated_write(app: &AppHandle, state: &CanvasState, agent_id: &str, bytes: &[u8]) -> bool {
+    let supervised = state
+        .agents
+        .permission(agent_id)
+        .map(|p| p == "supervised")
+        .unwrap_or(false);
+    if supervised {
+        if let Some(line) = sensitive_line(bytes) {
+            // Automation guardrail: a run whose approval policy is "deny"
+            // never waits on a human — the input is dropped and reported.
+            if state
+                .agents
+                .automation(agent_id)
+                .map(|m| m.deny_approvals)
+                .unwrap_or(false)
+            {
+                emit_control(
+                    app,
+                    &ServerMsg::NeedsAttention {
+                        agent_id: agent_id.to_string(),
+                        reason: format!("automation policy denied: {line}"),
+                    },
+                );
+                return true;
+            }
+            state
+                .pending_inputs
+                .lock()
+                .unwrap()
+                .insert(agent_id.to_string(), bytes.to_vec());
+            emit_control(
+                app,
+                &ServerMsg::NeedsApproval {
+                    agent_id: agent_id.to_string(),
+                    line,
+                },
+            );
+            return true;
+        }
+    }
+    state.agents.write(agent_id, bytes).is_ok()
+}
+
 /// Spawn a PTY agent wired to emit events + persist. Shared by spawn_agent
 /// and delegate.
 #[allow(clippy::too_many_arguments)]
@@ -81,6 +155,8 @@ fn spawn_wired(
     permission: &str,
     board_id: Option<&str>,
     account_id: Option<&str>,
+    initial_input: Option<&str>,
+    chain_override: Option<Vec<String>>,
 ) -> Result<(String, Option<String>), String> {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<(String, Vec<u8>)>();
     let (exit_tx, mut exit_rx) = mpsc::unbounded_channel::<String>();
@@ -97,49 +173,151 @@ fn spawn_wired(
     let agents2 = state.agents.clone();
     let repo2 = state.repo_root.clone();
     let ws2 = workspace_id.map(|w| w.to_string());
+    let fallbacks2 = state.pending_fallbacks.clone();
+    let results2 = state.pending_results.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(id) = exit_rx.recv().await {
-            let _ = store2.agent_status(&id, "exited");
-            // Close delegation tickets waiting on this agent: last-chance
-            // CANVAS_RESULT scan, else fail so the board isn't stuck in flight.
-            let edges: Vec<String> = store2
-                .unresolved_delegations()
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|(_, to)| to == &id)
-                .map(|(e, _)| e)
-                .collect();
-            if !edges.is_empty() {
-                let summary = agents2
-                    .scrollback(&id)
-                    .map(|b| String::from_utf8_lossy(&b).to_string())
-                    .and_then(|t| canvas_result_line(&t))
-                    .map(|s| s.trim().to_string());
-                let repo = ws2
-                    .as_deref()
-                    .and_then(|w| store2.workspace_repo(w).ok().flatten())
-                    .map(PathBuf::from)
-                    .unwrap_or_else(|| repo2.clone());
-                let files = store2
-                    .agent_worktree_abs(&id, &repo)
-                    .ok()
-                    .flatten()
-                    .map(|w| dirty_file_count(&w))
-                    .unwrap_or(0);
-                for edge_id in edges {
-                    if let Some(summary) = summary.clone() {
-                        let _ = store2.delegation_resolved(&edge_id, &summary, files);
+            // Chain fallback: a PTY dying within seconds of launch never
+            // gave the operator a working agent — retry the next CLI with
+            // the same parameters and announce the replacement. Mirrors
+            // canvasd's exit watcher so desktop and daemon behave alike.
+            let fb = fallbacks2.lock().unwrap().remove(&id);
+            let mut fell_back = false;
+            if let Some(fb) = fb {
+                if fb.spawned_at.elapsed() < std::time::Duration::from_secs(5)
+                    && !fb.remaining.is_empty()
+                {
+                    let next = fb.remaining[0].clone();
+                    let cmd = substitute_cli(&fb.command, &next);
+                    let respawned = {
+                        let st = app2.state::<CanvasState>();
+                        spawn_wired(
+                            &app2,
+                            st.inner(),
+                            &fb.name,
+                            &cmd,
+                            &fb.cwd,
+                            fb.workspace_id.as_deref(),
+                            &fb.permission,
+                            fb.board_id.as_deref(),
+                            fb.account_id.as_deref(),
+                            fb.initial_input.as_deref(),
+                            // The replacement's chain is what remained — never
+                            // recomputed, so a fully-dead chain ends instead of
+                            // looping through the same failing CLIs forever.
+                            Some(fb.remaining.clone()),
+                        )
+                    };
+                    if let Ok((new_id, new_board)) = respawned {
+                        fell_back = true;
+                        // Re-inject the queued task into the replacement —
+                        // gated, so a supervised automation keeps its
+                        // approval gate on the fallback too.
+                        if let Some(text) = fb.initial_input.clone() {
+                            let app3 = app2.clone();
+                            let target = new_id.clone();
+                            tauri::async_runtime::spawn(async move {
+                                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                                let mut data = text.into_bytes();
+                                data.push(b'\r');
+                                let st = app3.state::<CanvasState>();
+                                gated_write(&app3, st.inner(), &target, &data);
+                            });
+                        }
+                        // A delegation awaiting this child's result moves to
+                        // the replacement — otherwise the original exit marks
+                        // the ticket failed and the parent's result is lost.
+                        let edge = results2.lock().unwrap().remove(&id);
+                        if let Some(edge) = edge {
+                            // The replacement may have exited in the microseconds
+                            // since spawn — its exit runs on a different watcher,
+                            // so a ticket keyed to it would strand in flight.
+                            // Already dead: fail the ticket now instead.
+                            let replacement_live = agents2
+                                .statuses()
+                                .iter()
+                                .any(|(aid, st)| aid == &new_id && *st != "exited");
+                            if replacement_live {
+                                results2.lock().unwrap().insert(new_id.clone(), edge);
+                            } else {
+                                let _ = store2.delegation_failed(&edge, 0);
+                                emit_control(&app2, &ServerMsg::DelegationFailed { edge_id: edge });
+                            }
+                        }
+                        let wt = agents2
+                            .worktree(&new_id)
+                            .map(|p| p.to_string_lossy().to_string());
                         emit_control(
                             &app2,
-                            &ServerMsg::Result {
-                                edge_id,
-                                summary,
-                                files,
+                            &ServerMsg::Spawned {
+                                agent_id: new_id,
+                                name: fb.name.clone(),
+                                command: cmd.clone(),
+                                permission: fb.permission.clone(),
+                                workspace_id: fb.workspace_id.clone(),
+                                board_id: new_board.or(fb.board_id.clone()),
+                                fallback_from: Some(command_cli(&fb.command).to_string()),
+                                worktree: wt,
                             },
                         );
-                    } else {
-                        let _ = store2.delegation_failed(&edge_id, files);
-                        emit_control(&app2, &ServerMsg::DelegationFailed { edge_id });
+                    }
+                }
+            }
+            let _ = store2.agent_status(&id, "exited");
+            // Close delegation tickets waiting on this agent: last-chance
+            // CANVAS_RESULT scan, else fail so the board isn't stuck in
+            // flight. Skipped when the agent fell back — its ticket moved
+            // to the replacement and belongs to the replacement's exit.
+            if !fell_back {
+                // The in-memory ticket map is the primary key (a fallback
+                // replacement inherits the ticket under its own id, while
+                // the store row keeps the original's); the store scan
+                // sweeps tickets the map no longer holds — e.g. one
+                // removed by a kill confirmation before the PTY died.
+                let mut edges: Vec<String> =
+                    results2.lock().unwrap().remove(&id).into_iter().collect();
+                for (edge_id, _) in store2
+                    .unresolved_delegations()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|(_, to)| to == &id)
+                {
+                    if !edges.contains(&edge_id) {
+                        edges.push(edge_id);
+                    }
+                }
+                if !edges.is_empty() {
+                    let summary = agents2
+                        .scrollback(&id)
+                        .map(|b| String::from_utf8_lossy(&b).to_string())
+                        .and_then(|t| canvas_result_line(&t))
+                        .map(|s| s.trim().to_string());
+                    let repo = ws2
+                        .as_deref()
+                        .and_then(|w| store2.workspace_repo(w).ok().flatten())
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|| repo2.clone());
+                    let files = store2
+                        .agent_worktree_abs(&id, &repo)
+                        .ok()
+                        .flatten()
+                        .map(|w| dirty_file_count(&w))
+                        .unwrap_or(0);
+                    for edge_id in edges {
+                        if let Some(summary) = summary.clone() {
+                            let _ = store2.delegation_resolved(&edge_id, &summary, files);
+                            emit_control(
+                                &app2,
+                                &ServerMsg::Result {
+                                    edge_id,
+                                    summary,
+                                    files,
+                                },
+                            );
+                        } else {
+                            let _ = store2.delegation_failed(&edge_id, files);
+                            emit_control(&app2, &ServerMsg::DelegationFailed { edge_id });
+                        }
                     }
                 }
             }
@@ -183,12 +361,55 @@ fn spawn_wired(
         "CANVAS_MEMORY".to_string(),
         mem_path.to_string_lossy().to_string(),
     ));
-    let id = state
-        .agents
-        .spawn(
-            name, command, cwd, &repo_root, permission, out_tx, exit_tx, &pty_env,
-        )
-        .map_err(|e| e.to_string())?;
+    // Fallback chain: sync spawn failures (missing binary, bad exec) retry
+    // with the next CLI; early PTY deaths retry from the exit watcher.
+    let configured = workspace_id.and_then(|w| state.store.workspace_chain(w).ok().flatten());
+    let chain = chain_override.unwrap_or_else(|| chain_for_spawn(configured, command_cli(command)));
+    let mut remaining: Vec<String> = chain.iter().skip(1).cloned().collect();
+    let mut cmd_attempt = command.to_string();
+    let id = loop {
+        match state.agents.spawn(
+            name,
+            &cmd_attempt,
+            cwd,
+            &repo_root,
+            permission,
+            out_tx.clone(),
+            exit_tx.clone(),
+            &pty_env,
+        ) {
+            Ok(id) => break id,
+            Err(e) => {
+                if let Some(next) = remaining.first().cloned() {
+                    warn!(error = %e, cli = %command_cli(&cmd_attempt), fallback = %next, "spawn failed — trying fallback CLI");
+                    cmd_attempt = substitute_cli(&cmd_attempt, &next);
+                    remaining.remove(0);
+                    continue;
+                }
+                return Err(e.to_string());
+            }
+        }
+    };
+    if !remaining.is_empty() {
+        state.pending_fallbacks.lock().unwrap().insert(
+            id.clone(),
+            FallbackState {
+                spawned_at: std::time::Instant::now(),
+                name: name.to_string(),
+                command: cmd_attempt.clone(),
+                cwd: cwd.to_string(),
+                workspace_id: workspace_id.map(str::to_string),
+                permission: permission.to_string(),
+                board_id: board_id.map(str::to_string),
+                account_id: account_id.map(str::to_string),
+                remaining,
+                initial_input: initial_input.map(str::to_string),
+            },
+        );
+    }
+    // The persisted command is the one that actually launched, which may
+    // be a fallback substitute of the requested one.
+    let command = cmd_attempt.as_str();
     // Board: explicit, else the workspace's board, else 'main'.
     let board = board_id
         .map(|b| b.to_string())
@@ -233,17 +454,25 @@ fn spawn_agent(
         level,
         board_id.as_deref(),
         account_id.as_deref(),
+        initial_input.as_deref(),
+        None,
     )?;
     if let Some(text) = initial_input {
         // Quick request: type the task once the CLI has booted.
         let app2 = app.clone();
         let target = id.clone();
+        let pf = state.pending_fallbacks.clone();
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             let mut data = text.into_bytes();
             data.push(b'\r');
             let st = app2.state::<CanvasState>();
             let _ = st.agents.write(&target, &data);
+            // Delivered to the original — a later fallback must not run
+            // the task a second time.
+            if let Some(fb) = pf.lock().unwrap().get_mut(&target) {
+                fb.initial_input = None;
+            }
         });
     }
     let wt = app
@@ -2244,6 +2473,23 @@ fn create_workspace(
     Ok(id)
 }
 
+/// Set the ordered CLI fallback chain for a workspace — spawned agents
+/// whose CLI dies at launch retry with the next entry automatically.
+/// Empty means "back to auto" (the machine's auto-detected chain). The
+/// board store updates optimistically, so — like the daemon's handler —
+/// a success emits nothing; the next snapshot carries the chain either way.
+#[tauri::command]
+fn set_agent_chain(
+    state: State<'_, CanvasState>,
+    workspace_id: String,
+    chain: Vec<String>,
+) -> Result<(), String> {
+    state
+        .store
+        .set_workspace_chain(&workspace_id, &chain)
+        .map_err(|e| e.to_string())
+}
+
 fn uuid_v4ish() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let nanos = SystemTime::now()
@@ -2286,6 +2532,8 @@ fn delegate(
         level,
         parent_board.as_deref(),
         account_id.as_deref(),
+        initial_input.as_deref(),
+        None,
     )?;
     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
     let _ = state.store.delegation_created(&edge_id, &from, &id, &task);
@@ -2298,12 +2546,18 @@ fn delegate(
         // Type the brief once the CLI has booted (same delay as spawn_agent).
         let app2 = app.clone();
         let target = id.clone();
+        let pf = state.pending_fallbacks.clone();
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             let mut data = text.into_bytes();
             data.push(b'\r');
             let st = app2.state::<CanvasState>();
             let _ = st.agents.write(&target, &data);
+            // Delivered to the original — a later fallback must not run
+            // the brief a second time.
+            if let Some(fb) = pf.lock().unwrap().get_mut(&target) {
+                fb.initial_input = None;
+            }
         });
     }
     let wt = app
@@ -2634,6 +2888,10 @@ fn run_automation_row(
         &permission,
         None,
         None,
+        // The prompt rides the fallback state: a chain fallback before
+        // injection re-runs the automation on the replacement CLI.
+        Some(&prompt),
+        None,
     )?;
     state
         .agents
@@ -2659,6 +2917,7 @@ fn run_automation_row(
     // Inject the saved prompt — the kernel PTY buffer holds it until the
     // CLI reads stdin, gated like operator input.
     let bytes = format!("{prompt}\n");
+    let mut write_prompt = true;
     if state
         .agents
         .permission(&id)
@@ -2666,6 +2925,7 @@ fn run_automation_row(
         .unwrap_or(false)
     {
         if let Some(line) = sensitive_line(bytes.as_bytes()) {
+            write_prompt = false;
             if !state
                 .agents
                 .automation(&id)
@@ -2676,7 +2936,7 @@ fn run_automation_row(
                     .pending_inputs
                     .lock()
                     .unwrap()
-                    .insert(id.clone(), bytes.into_bytes());
+                    .insert(id.clone(), bytes.clone().into_bytes());
                 emit_control(
                     app,
                     &ServerMsg::NeedsApproval {
@@ -2684,22 +2944,30 @@ fn run_automation_row(
                         line,
                     },
                 );
-                return Ok(id);
+            } else {
+                emit_control(
+                    app,
+                    &ServerMsg::NeedsAttention {
+                        agent_id: id.clone(),
+                        reason: format!("automation policy denied: {line}"),
+                    },
+                );
             }
-            emit_control(
-                app,
-                &ServerMsg::NeedsAttention {
-                    agent_id: id.clone(),
-                    reason: format!("automation policy denied: {line}"),
-                },
-            );
-            return Ok(id);
         }
     }
-    state
-        .agents
-        .write(&id, bytes.as_bytes())
-        .map_err(|e| e.to_string())?;
+    let mut write_result = Ok(());
+    if write_prompt {
+        write_result = state
+            .agents
+            .write(&id, bytes.as_bytes())
+            .map_err(|e| e.to_string());
+    }
+    // Delivered to the original (written, held or dropped by policy) — a
+    // later chain fallback must not run the automation a second time.
+    if let Some(fb) = state.pending_fallbacks.lock().unwrap().get_mut(&id) {
+        fb.initial_input = None;
+    }
+    write_result?;
     Ok(id)
 }
 
@@ -2828,6 +3096,8 @@ fn confirm_destructive(
     match action.as_str() {
         "kill" => {
             state.agents.kill(&agent_id).map_err(|e| e.to_string())?;
+            // A deliberate kill is operator intent — never retry the chain.
+            state.pending_fallbacks.lock().unwrap().remove(&agent_id);
             let _ = state.store.agent_status(&agent_id, "exited");
             state.pending_results.lock().unwrap().remove(&agent_id);
             emit_control(
@@ -2840,7 +3110,11 @@ fn confirm_destructive(
             Ok(())
         }
         "forget" => {
-            let _ = state.agents.kill(&agent_id); // no-op if already gone
+            // no-op if the agent is already gone
+            let _ = state.agents.kill(&agent_id);
+            // Forget is operator intent too — a live agent cleared within
+            // seconds of launch must not respawn as a fallback.
+            state.pending_fallbacks.lock().unwrap().remove(&agent_id);
             state
                 .store
                 .remove_agent(&agent_id)
@@ -3119,9 +3393,7 @@ fn snapshot(app: AppHandle, state: State<'_, CanvasState>) -> Result<serde_json:
         "workspaces": workspaces,
         "layout": layout,
         "repo_url": repo_url,
-        "cli_identities": canvasd::detect::detect_cli_identities(&[
-            "claude", "codex", "gemini", "aider", "goose", "amp", "opencode", "cursor-agent",
-        ]),
+        "cli_identities": canvasd::detect::detect_cli_identities(KNOWN_CLIS),
         "artifacts": artifacts,
         "notes": state
             .store
@@ -3367,8 +3639,9 @@ fn main() {
                 agents: Arc::new(agents),
                 store,
                 repo_root,
-                pending_results: Mutex::new(HashMap::new()),
-                pending_inputs: Mutex::new(HashMap::new()),
+                pending_results: Arc::new(Mutex::new(HashMap::new())),
+                pending_inputs: Arc::new(Mutex::new(HashMap::new())),
+                pending_fallbacks: Arc::new(Mutex::new(HashMap::new())),
                 allowed_roots: Arc::new(Mutex::new(allowed_roots)),
             });
 
@@ -3377,6 +3650,7 @@ fn main() {
             tauri::async_runtime::spawn(async move {
                 let mut last: HashMap<String, &'static str> = HashMap::new();
                 let mut last_diff: HashMap<String, (Vec<String>, String)> = HashMap::new();
+                let mut last_line: HashMap<String, String> = HashMap::new();
                 // Edge detection for 'match' loops — fire once per
                 // appearance of the pattern, not every tick.
                 let mut match_seen: HashMap<String, bool> = HashMap::new();
@@ -3423,6 +3697,21 @@ fn main() {
                                 files,
                             },
                         );
+                    }
+
+                    // Activity pass: broadcast the agent's latest PTY line
+                    // when it changed — the node card previews live output.
+                    for id in state.agents.ids() {
+                        let line = state
+                            .agents
+                            .tail_text(&id)
+                            .and_then(|t| canvasd::agent::last_visible_line(&t));
+                        if let Some(line) = line {
+                            if last_line.get(&id) != Some(&line) {
+                                last_line.insert(id.clone(), line.clone());
+                                emit_control(&handle, &ServerMsg::Activity { agent_id: id, line });
+                            }
+                        }
                     }
 
                     // Diff pass (every 3rd tick): files changed per worktree.
@@ -3613,6 +3902,7 @@ fn main() {
             open_obsidian,
             default_vault_dir,
             create_workspace,
+            set_agent_chain,
             move_to_board,
             delegate,
             pty_input,

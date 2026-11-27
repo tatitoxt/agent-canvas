@@ -169,3 +169,23 @@ fn delegation_lifecycle() {
     assert!(store.delegation_delete("d1").unwrap());
     assert!(store.delegations_snapshot().unwrap().is_empty());
 }
+
+#[test]
+fn workspace_chain_roundtrip() {
+    let dir = temp_repo("chain");
+    let store = Store::open(&dir).unwrap();
+    store
+        .workspace_created("w1", "ws", "/tmp/repo", None)
+        .unwrap();
+    // Unset chain reads as None — callers then use the auto-detected chain.
+    assert_eq!(store.workspace_chain("w1").unwrap(), None);
+
+    let chain = vec!["claude".to_string(), "codex".to_string()];
+    store.set_workspace_chain("w1", &chain).unwrap();
+    assert_eq!(store.workspace_chain("w1").unwrap(), Some(chain));
+
+    // The editor's reset state is an empty array, and it roundtrips as
+    // empty — chain_for_spawn treats it as "back to auto", not "no fallback".
+    store.set_workspace_chain("w1", &[]).unwrap();
+    assert_eq!(store.workspace_chain("w1").unwrap(), Some(vec![]));
+}

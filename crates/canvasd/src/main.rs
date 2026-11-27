@@ -19,6 +19,7 @@ use canvasd::agent::{
     canvas_result_line, dirty_diff, dirty_file_count, dirty_files, last_visible_line,
     sensitive_line, worktree_branch, AgentManager,
 };
+use canvasd::chain::{command_cli, substitute_cli, KNOWN_CLIS};
 use canvasd::protocol;
 use canvasd::store;
 use protocol::{decode_pty_frame, encode_pty_frame, AgentStatus, ClientMsg, ServerMsg};
@@ -623,75 +624,13 @@ fn vault_links(text: &str) -> Vec<String> {
     out
 }
 
-/// Spawn a PTY agent wired to the event bus + store. Used by both
-/// CLIs the daemon knows how to fall back between, in preference order.
-const KNOWN_CLIS: &[&str] = &[
-    "claude",
-    "codex",
-    "gemini",
-    "aider",
-    "goose",
-    "amp",
-    "opencode",
-    "cursor-agent",
-];
-
-/// First token of a spawn command — the CLI being launched.
-fn command_cli(command: &str) -> &str {
-    command.split_whitespace().next().unwrap_or("")
-}
-
-/// Swap the leading CLI token of a command, keeping every argument.
-fn substitute_cli(command: &str, cli: &str) -> String {
-    let rest = command
-        .trim_start_matches(command_cli(command))
-        .trim_start();
-    if rest.is_empty() {
-        cli.to_string()
-    } else {
-        format!("{cli} {rest}")
-    }
-}
-
-/// Global default chain: known CLIs actually installed, in preference order.
-/// The PATH scan itself is portable (platform separators + Windows
-/// PATHEXT) and lives in the library so the logic is unit-testable.
-fn detected_chain() -> Vec<String> {
-    KNOWN_CLIS
-        .iter()
-        .filter(|c| canvasd::paths::binary_on_path(c))
-        .map(|c| c.to_string())
-        .collect()
-}
-
 /// Fallback chain for a spawn: the workspace's configured chain when it has
-/// one, else the daemon-wide auto-detected one. The CLI being spawned leads
-/// the chain even when the configuration omits it.
+/// one, else the daemon-wide auto-detected one. The CLI itself leads the
+/// chain even when the configuration omits it — the resolution logic lives
+/// in `canvasd::chain` so the Tauri shell falls back identically.
 fn chain_for(state: &Arc<AppState>, workspace_id: Option<&str>, cli: &str) -> Vec<String> {
-    if !KNOWN_CLIS.contains(&cli) {
-        // Not an agent CLI (bash, sh, editors…) — nothing to fall back to.
-        return if cli.is_empty() {
-            Vec::new()
-        } else {
-            vec![cli.to_string()]
-        };
-    }
-    let configured = workspace_id
-        .and_then(|w| state.store.workspace_chain(w).ok().flatten())
-        // An empty saved chain means "back to auto", not "no fallback" —
-        // the chain editor uses empty as its reset state.
-        .filter(|c| !c.is_empty())
-        .unwrap_or_else(detected_chain);
-    let mut chain: Vec<String> = Vec::new();
-    if !cli.is_empty() {
-        chain.push(cli.to_string());
-    }
-    for c in configured {
-        if c != cli && !chain.contains(&c) {
-            chain.push(c);
-        }
-    }
-    chain
+    let configured = workspace_id.and_then(|w| state.store.workspace_chain(w).ok().flatten());
+    canvasd::chain::chain_for_spawn(configured, cli)
 }
 
 /// Per-spawn retry state: when a fresh PTY dies within seconds, the next
@@ -1634,7 +1573,11 @@ fn handle_client_msg(text: &str, state: &Arc<AppState>, send_control: &impl Fn(S
                 "forget" => {
                     // Remove an (exited) agent from the db so the next
                     // snapshot stops resurrecting it — "clear done".
-                    let _ = state.agents.kill(&agent_id); // no-op if already gone
+                    // no-op if the agent is already gone
+                    let _ = state.agents.kill(&agent_id);
+                    // Forget is operator intent too — a live agent cleared
+                    // within seconds of launch must not respawn as a fallback.
+                    state.pending_fallbacks.lock().unwrap().remove(&agent_id);
                     match state.store.remove_agent(&agent_id) {
                         Ok(()) => send_control(ServerMsg::Status {
                             agent_id,
@@ -3239,8 +3182,9 @@ async fn main() -> Result<()> {
         .route("/ws", get(ws_handler))
         .route("/share/{id}", get(share_get))
         .nest("/api", api)
-        // The Vite dev origin (:5174) calls the daemon cross-origin —
-        // outermost layer so CORS answers preflights before auth runs.
+        // Permissive so any local dev origin (vite, preview builds, LAN
+        // hostnames) can call the daemon cross-origin — outermost layer so
+        // CORS answers preflights before auth runs.
         .layer(tower_http::cors::CorsLayer::permissive());
     // One binary serves UI+ws: CANVASD_WEB_DIR points at a built `web/dist`
     // so a phone on the LAN just opens http://<host>:<port>/?token=….
@@ -3483,43 +3427,6 @@ async fn main() -> Result<()> {
 
     axum::serve(listener, app).await?;
     Ok(())
-}
-
-#[cfg(test)]
-mod fallback_tests {
-    use super::*;
-
-    #[test]
-    fn substitute_cli_keeps_arguments() {
-        assert_eq!(
-            substitute_cli("claude --model opus", "codex"),
-            "codex --model opus"
-        );
-        assert_eq!(substitute_cli("claude", "gemini"), "gemini");
-    }
-
-    #[test]
-    fn command_cli_reads_first_token() {
-        assert_eq!(command_cli("codex -a x"), "codex");
-        assert_eq!(command_cli(""), "");
-    }
-
-    #[test]
-    fn chain_leads_with_requested_cli_without_duplicates() {
-        let cli = "codex";
-        let configured = vec![
-            "claude".to_string(),
-            "codex".to_string(),
-            "gemini".to_string(),
-        ];
-        let mut chain: Vec<String> = vec![cli.to_string()];
-        for c in configured {
-            if c != cli && !chain.contains(&c) {
-                chain.push(c);
-            }
-        }
-        assert_eq!(chain, vec!["codex", "claude", "gemini"]);
-    }
 }
 
 #[cfg(test)]
