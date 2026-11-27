@@ -144,18 +144,22 @@ impl Agent {
             .as_raw_fd()
             .map(|fd| unsafe { libc::tcgetpgrp(fd) })
             .filter(|p| *p > 0);
-        if let Some(pgid) = fg_pgid {
-            // Negative pid targets the whole process group (killpg).
-            if unsafe { libc::kill(-pgid, sig) } == 0 {
+        // Stop/continue the shell BEFORE the foreground job: a running shell
+        // can notice its child stopping and tcsetpgrp-reclaim the terminal,
+        // after which tcgetpgrp no longer names the job's group and resume
+        // would signal the wrong group. A stopped shell cannot reclaim, and
+        // the fg pgid is read once up-front so the target stays correct.
+        if let Some(pid) = shell_pid {
+            // When the shell IS the foreground group this is a harmless
+            // duplicate of the killpg below.
+            let shell_in_fg = fg_pgid.map(|p| p as u32) == Some(pid);
+            if !shell_in_fg && unsafe { libc::kill(pid as i32, sig) } == 0 {
                 signalled = true;
             }
         }
-        if let Some(pid) = shell_pid {
-            // When a foreground job runs, the shell waits in its own group;
-            // freeze it too so input processing stops with the job. When the
-            // shell IS the foreground group this is a harmless duplicate.
-            let shell_in_fg = fg_pgid.map(|p| p as u32) == Some(pid);
-            if !shell_in_fg && unsafe { libc::kill(pid as i32, sig) } == 0 {
+        if let Some(pgid) = fg_pgid {
+            // Negative pid targets the whole process group (killpg).
+            if unsafe { libc::kill(-pgid, sig) } == 0 {
                 signalled = true;
             }
         }
