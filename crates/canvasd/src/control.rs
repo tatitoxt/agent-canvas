@@ -951,12 +951,19 @@ fn handle_client_msg(text: &str, state: &ControlSocketState, identity: &ControlI
             agent_id,
             permission,
         } => {
-            let id = agent_id.clone();
-            report(
-                orchestrator,
-                set_permission(orchestrator, agent_id, permission),
-                Some(id),
-            )
+            if matches!(identity, ControlIdentity::Agent(_)) {
+                // Permission is the caller's security ceiling; letting an
+                // agent raise it would make spawn/delegation clamping useless.
+                orchestrator
+                    .emit_error(Some(agent_id), "set_permission requires operator identity");
+            } else {
+                let id = agent_id.clone();
+                report(
+                    orchestrator,
+                    set_permission(orchestrator, agent_id, permission),
+                    Some(id),
+                )
+            }
         }
         ClientMsg::SetAgentChain {
             workspace_id,

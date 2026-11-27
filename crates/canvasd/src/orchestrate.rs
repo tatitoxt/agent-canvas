@@ -596,7 +596,10 @@ impl Orchestrator {
                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                 let mut data = text.into_bytes();
                 data.push(b'\r');
-                let _ = delayed.agents.write(&target, &data);
+                // Initial prompts use the same supervised destructive-input
+                // gate as typed input; a held prompt can then only be released
+                // by the native UI.
+                let _ = delayed.gated_write(&target, &data);
             }));
         }
         // Normal spawns register nothing beyond what spawn already did —
@@ -622,9 +625,14 @@ impl Orchestrator {
     /// Delegation: spawn a child and persist its result edge. The child must
     /// never climb above its parent's permission level.
     pub fn delegate(&self, params: DelegateParams) -> Result<String, String> {
-        let parent_level = self.store.agent_permission(&params.from).ok().flatten();
+        let parent_level = self
+            .store
+            .agent_permission(&params.from)
+            .ok()
+            .flatten()
+            .ok_or_else(|| format!("unknown delegation parent: {}", params.from))?;
         let requested = protocol::normalize_permission(params.permission.as_deref());
-        let level = protocol::clamp_to_parent(requested, parent_level.as_deref());
+        let level = protocol::clamp_to_parent(requested, Some(&parent_level));
         // The child lands on the requested board, else its parent's
         // (orchestrator nodes aren't agents — they carry theirs over).
         let parent_board = params.board_id.clone().or(self
@@ -663,7 +671,10 @@ impl Orchestrator {
                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                 let mut data = text.into_bytes();
                 data.push(b'\r');
-                let _ = delayed.agents.write(&target, &data);
+                // Delegated briefs are usually agent-authored. They must pass
+                // the same supervised destructive-input gate as typed input;
+                // a held brief can then only be released by the native UI.
+                let _ = delayed.gated_write(&target, &data);
             }));
         }
         let wt = self
