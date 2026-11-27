@@ -2,6 +2,7 @@ import { memo } from "react";
 import { NodeResizer, useReactFlow, type NodeProps } from "@xyflow/react";
 import { useBoard } from "../store/board";
 import { Icon } from "../components/icons";
+import { CardChrome, CardChromeButton } from "../components/CardChrome";
 import { PANEL_DEFS } from "../components/panelRegistry";
 
 /** A tool panel living on the canvas — Deska "Add to board": the live
@@ -78,96 +79,39 @@ export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
         )}
         <span style={{ fontSize: "var(--cv-text-sm)", fontWeight: 600, color: "var(--cv-text-main)" }}>{def.title}</span>
         <span style={{ flex: 1 }} />
-        <span
-          className="cv-card-chrome"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-        <button
-          className="nodrag"
-          title={n.collapsed ? "Expand" : "Collapse"}
-          aria-label={n.collapsed ? "Expand panel" : "Minimize panel"}
-          onPointerDown={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); useBoard.getState().collapsePanelNode(id); }}
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 6,
-            border: "none",
-            background: "transparent",
-            color: "var(--cv-text-main)",
-            fontSize: "var(--cv-text-xs)",
-            cursor: "pointer",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          <Icon name={n.collapsed ? "ph-max" : "ph-min"} size={12} />
-        </button>
-        <button
-          className="nodrag"
-          title={n.maximized ? "Restore size" : "Maximize — fill the view"}
-          aria-label={n.maximized ? "Restore panel size" : "Maximize panel"}
-          onPointerDown={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (n.maximized) {
-              useBoard.getState().maximizePanelNode(id);
-            } else {
-              // y=64 keeps the title bar below the top chrome — otherwise
-              // the restore button lands under the topbar and can't be clicked.
-              const tl = rf.screenToFlowPosition({ x: 12, y: 64 });
-              const br = rf.screenToFlowPosition({ x: window.innerWidth - 12, y: window.innerHeight - 12 });
-              useBoard.getState().maximizePanelNode(id, { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y });
-            }
-          }}
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 6,
-            border: "none",
-            background: "transparent",
-            color: "var(--cv-text-main)",
-            fontSize: "var(--cv-text-xxs)",
-            cursor: "pointer",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          <Icon name={n.maximized ? "ph-restore" : "ph-max"} size={12} />
-        </button>
-        <button
-          className="nodrag cv-card-close"
-          title="Close panel"
-          aria-label="Close panel"
-          onPointerDown={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            useBoard.getState().closePanelNode(id);
-            useBoard.getState().requestNav("canvas");
-          }}
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 6,
-            border: "none",
-            background: "transparent",
-            color: "var(--cv-text-main)",
-            fontSize: "var(--cv-text-sm)",
-            cursor: "pointer",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          <Icon name="ph-x" size={13} />
-        </button>
-        </span>
+        <CardChrome>
+          <CardChromeButton
+            icon={n.collapsed ? "expand" : "collapse"}
+            title={n.collapsed ? "Expand" : "Collapse"}
+            ariaLabel={n.collapsed ? "Expand panel" : "Minimize panel"}
+            onClick={() => useBoard.getState().collapsePanelNode(id)}
+          />
+          <CardChromeButton
+            icon={n.maximized ? "restore" : "maximize"}
+            title={n.maximized ? "Restore size" : "Maximize — fill the view"}
+            ariaLabel={n.maximized ? "Restore panel size" : "Maximize panel"}
+            onClick={() => {
+              if (n.maximized) {
+                useBoard.getState().maximizePanelNode(id);
+              } else {
+                // y=64 keeps the title bar below the top chrome — otherwise
+                // the restore button lands under the topbar and can't be clicked.
+                const tl = rf.screenToFlowPosition({ x: 12, y: 64 });
+                const br = rf.screenToFlowPosition({ x: window.innerWidth - 12, y: window.innerHeight - 12 });
+                useBoard.getState().maximizePanelNode(id, { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y });
+              }
+            }}
+          />
+          <CardChromeButton
+            icon="close"
+            title="Close panel"
+            ariaLabel="Close panel"
+            onClick={() => {
+              useBoard.getState().closePanelNode(id);
+              useBoard.getState().requestNav("canvas");
+            }}
+          />
+        </CardChrome>
       </div>
       {!n.collapsed && (
         <div className="nodrag nowheel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>

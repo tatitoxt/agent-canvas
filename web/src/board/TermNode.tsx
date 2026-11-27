@@ -4,7 +4,7 @@ import { useBoard } from "../store/board";
 import { LazyTermHost as TermHost } from "../components/LazyTermHost";
 import { PanelActionsCtx } from "../components/panelCtx";
 import { CliMark } from "../components/CliMark";
-import { Icon } from "../components/icons";
+import { CardChrome, CardChromeButton } from "../components/CardChrome";
 import { STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "./nodes";
 import type { AgentStatus } from "./types";
 
@@ -136,135 +136,62 @@ export const TermNode = memo(function TermNode({ id, selected, width }: NodeProp
           {!tightHeader && meta.label}
         </span>
         <span style={{ flex: 1 }} />
-        <span className="cv-card-chrome" style={{ display: "inline-flex", alignItems: "center", gap: tightHeader ? 4 : 6 }}>
-        {!tightHeader && (
-        <button
-          className="nodrag"
-          title="Files — open this agent's worktree in the repo explorer"
-          onClick={() => {
-            const st = useBoard.getState();
-            const a = st.agents[agentId];
-            const wsRepo = a?.workspace_id ? st.workspaces[a.workspace_id]?.repo : undefined;
-            st.openExplorer(a?.worktree ?? wsRepo);
-          }}
-          style={{
-            border: "none",
-            background: "transparent",
-            cursor: "pointer",
-            color: "var(--cv-ink-dim)",
-            fontSize: "var(--cv-text-xxs)",
-            padding: "0 2px",
-          }}
-        >
-          ⌸
-        </button>
-        )}
-        {!tightHeader && (
-        <button
-          className="nodrag"
-          title="Copy transcript to clipboard"
-          onClick={() => {
-            const buf = useBoard.getState().ptyBuffer(agentId);
-            if (!buf) { useBoard.getState().notify("nothing to copy yet"); return; }
-            const text = new TextDecoder().decode(buf).replace(ANSI, "");
-            void navigator.clipboard?.writeText(text).catch(() => {});
-            useBoard.getState().notify("transcript copied");
-          }}
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 6,
-            border: "none",
-            background: "transparent",
-            color: "var(--cv-ink-faint)",
-            fontSize: "var(--cv-text-xs)",
-            cursor: "pointer",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          ⧉
-        </button>
-        )}
-        <button
-          className="nodrag"
-          title={n.maximized ? "Restore terminal card size" : "Maximize terminal card"}
-          aria-label={n.maximized ? "Restore terminal card size" : "Maximize terminal card"}
-          onPointerDown={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (n.maximized) {
-              useBoard.getState().maximizeTermNode(id);
-            } else {
-              const tl = rf.screenToFlowPosition({ x: 12, y: 64 });
-              const br = rf.screenToFlowPosition({ x: window.innerWidth - 12, y: window.innerHeight - 12 });
-              useBoard.getState().maximizeTermNode(id, { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y });
-            }
-          }}
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 6,
-            border: "none",
-            background: "transparent",
-            color: "var(--cv-ink-faint)",
-            cursor: "pointer",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          <Icon name={n.maximized ? "ph-restore" : "ph-max"} size={12} />
-        </button>
-        <button
-          className="nodrag"
-          title={n.collapsed ? "Expand" : "Collapse"}
-          aria-label={n.collapsed ? "Expand terminal card" : "Minimize terminal card"}
-          onPointerDown={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); useBoard.getState().collapseTermNode(id); }}
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 6,
-            border: "none",
-            background: "transparent",
-            color: "var(--cv-ink-faint)",
-            fontSize: "var(--cv-text-xs)",
-            cursor: "pointer",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          {n.collapsed ? "▸" : "−"}
-        </button>
-        <button
-          className="nodrag cv-card-close"
-          title="Put back — card closes, terminal returns to the drawer"
-          aria-label="Put terminal back in drawer"
-          onPointerDown={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            useBoard.getState().closeTermNode(id);
-            actions?.openTerm?.({ id: agentId, name: agent?.name ?? "terminal" });
-          }}
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 6,
-            border: "none",
-            background: "transparent",
-            color: "var(--cv-ink-faint)",
-            fontSize: "var(--cv-text-sm)",
-            cursor: "pointer",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          ×
-        </button>
-        </span>
+        <CardChrome>
+          {!tightHeader && (
+            <CardChromeButton
+              icon="files"
+              title="Files — open this agent's worktree in the repo explorer"
+              onClick={() => {
+                const st = useBoard.getState();
+                const a = st.agents[agentId];
+                const wsRepo = a?.workspace_id ? st.workspaces[a.workspace_id]?.repo : undefined;
+                st.openExplorer(a?.worktree ?? wsRepo);
+              }}
+            />
+          )}
+          {!tightHeader && (
+            <CardChromeButton
+              icon="copy"
+              title="Copy transcript to clipboard"
+              onClick={() => {
+                const buf = useBoard.getState().ptyBuffer(agentId);
+                if (!buf) { useBoard.getState().notify("nothing to copy yet"); return; }
+                const text = new TextDecoder().decode(buf).replace(ANSI, "");
+                void navigator.clipboard?.writeText(text).catch(() => {});
+                useBoard.getState().notify("transcript copied");
+              }}
+            />
+          )}
+          <CardChromeButton
+            icon={n.collapsed ? "expand" : "collapse"}
+            title={n.collapsed ? "Expand" : "Collapse"}
+            ariaLabel={n.collapsed ? "Expand terminal card" : "Minimize terminal card"}
+            onClick={() => useBoard.getState().collapseTermNode(id)}
+          />
+          <CardChromeButton
+            icon={n.maximized ? "restore" : "maximize"}
+            title={n.maximized ? "Restore terminal card size" : "Maximize terminal card"}
+            ariaLabel={n.maximized ? "Restore terminal card size" : "Maximize terminal card"}
+            onClick={() => {
+              if (n.maximized) {
+                useBoard.getState().maximizeTermNode(id);
+              } else {
+                const tl = rf.screenToFlowPosition({ x: 12, y: 64 });
+                const br = rf.screenToFlowPosition({ x: window.innerWidth - 12, y: window.innerHeight - 12 });
+                useBoard.getState().maximizeTermNode(id, { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y });
+              }
+            }}
+          />
+          <CardChromeButton
+            icon="close"
+            title="Put back — card closes, terminal returns to the drawer"
+            ariaLabel="Put terminal back in drawer"
+            onClick={() => {
+              useBoard.getState().closeTermNode(id);
+              actions?.openTerm?.({ id: agentId, name: agent?.name ?? "terminal" });
+            }}
+          />
+        </CardChrome>
       </div>
       {!n.collapsed && (
         <div className="nodrag nowheel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>

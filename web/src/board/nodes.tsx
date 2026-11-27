@@ -1,6 +1,7 @@
 import { Handle, Position, NodeResizer, useReactFlow, type NodeProps, type Node } from "@xyflow/react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { CliMark } from "../components/CliMark";
+import { CardChrome, CardChromeButton } from "../components/CardChrome";
 import { Icon } from "../components/icons";
 import { useBoard } from "../store/board";
 import { useNearViewport } from "../lib/nearViewport";
@@ -427,51 +428,23 @@ export const AgentNode = memo(function AgentNode({ id, data, selected, width }: 
             {!tightHeader && <span style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{meta.label}</span>}
           </span>
         </div>
-        <span
-          className="nodrag card-chrome"
-          style={{ display: "inline-flex", alignItems: "center", gap: tightHeader ? 6 : 7, flex: "none", color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-xs)" }}
-        >
-          <button
-            type="button"
-            className="nodrag"
+        <CardChrome style={{ flex: "none" }}>
+          <CardChromeButton
+            icon="terminal"
             title="Open terminal"
-            style={{ cursor: "pointer", lineHeight: 1, display: "inline-flex", border: "none", padding: 0, background: "transparent" }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                launchTerminal();
-              }
-            }}
-            onClick={(e) => { e.stopPropagation(); launchTerminal(); }}
-          >
-            <Icon name="terminal" size={12} />
-          </button>
-          <button
-            type="button"
-            className="nodrag"
+            onClick={launchTerminal}
+          />
+          <CardChromeButton
+            icon="collapse"
             title="collapse"
-            style={{ cursor: "pointer", lineHeight: 1, border: "none", padding: 0, background: "transparent" }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }}
-          >
-            <Icon name="ph-min" size={12} />
-          </button>
-          <button
-            type="button"
-            className="nodrag"
+            onClick={() => setCollapsed((c) => !c)}
+          />
+          <CardChromeButton
+            icon="close"
             title="kill"
-            data-danger="true"
-            style={{ cursor: "pointer", lineHeight: 1, fontSize: "var(--cv-text-xs)", border: "none", padding: 0, background: "transparent" }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); if (data.id) useBoard.getState().kill(data.id); }}
-          >
-            <Icon name="ph-x" size={12} />
-          </button>
-        </span>
+            onClick={() => { if (data.id) useBoard.getState().kill(data.id); }}
+          />
+        </CardChrome>
       </div>
       {/* Full-width section separator — Deska splits header from body
           edge to edge, not inside the padding. */}
@@ -1217,42 +1190,22 @@ export function WebNode({
           flexShrink: 0,
         }}
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5fd9c4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-          <circle cx="12" cy="12" r="10" />
-          <path d="M2 12h20" />
-          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-        </svg>
+        <Icon name="web" size={13} color="#5fd9c4" />
         <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--cv-text-main)" }}>
           {data.url}
         </span>
-        <span
-          className="cv-card-chrome"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          <button
-            onClick={(e) => { e.stopPropagation(); window.open(data.url, "_blank"); }}
-            style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", padding: 3, borderRadius: 6, display: "flex" }}
+        <CardChrome>
+          <CardChromeButton
+            icon="open"
             title="open in browser"
-          >
-            <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor">
-              <path d="M216,48V96a8,8,0,0,1-16,0V67.31l-50.34,50.35a8,8,0,0,1-11.32-11.32L188.69,56H160a8,8,0,0,1,0-16h48A8,8,0,0,1,216,48ZM106.34,138.34,56,188.69V160a8,8,0,0,0-16,0v48a8,8,0,0,0,8,8H96a8,8,0,0,0,0-16H67.31l50.35-50.34a8,8,0,0,0-11.32-11.32Z" />
-            </svg>
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); webNodeRemove(id); }}
-            className="cv-card-close"
-            style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", padding: 3, borderRadius: 6, display: "flex" }}
+            onClick={() => window.open(data.url, "_blank")}
+          />
+          <CardChromeButton
+            icon="close"
             title="close"
-          >
-            <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor">
-              <path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z" />
-            </svg>
-          </button>
-        </span>
+            onClick={() => webNodeRemove(id)}
+          />
+        </CardChrome>
       </div>
       <iframe
         src={data.url}
