@@ -390,6 +390,21 @@ test("terminal drawer resizes and keeps its PTY interactive", async ({ page }) =
   const grip = await handle.boundingBox();
   expect(before).not.toBeNull();
   expect(grip).not.toBeNull();
+  const terminal = page.locator(".xterm").first();
+  await terminal.click();
+  const rows = page.locator(".terminal-drawer .xterm-rows");
+  const readPtySize = async (marker: string) => {
+    await page.keyboard.type(`printf '${marker} '; stty size`);
+    await page.keyboard.press("Enter");
+    await expect(rows).toContainText(marker, { timeout: 8_000 });
+    await expect.poll(async () => rows.innerText()).toMatch(new RegExp(`${marker}\\s+\\d+\\s+\\d+`));
+    const text = await rows.innerText();
+    const match = text.match(new RegExp(`${marker}\\s+(\\d+)\\s+(\\d+)`));
+    expect(match, `expected ${marker} followed by PTY rows and columns in: ${text}`).not.toBeNull();
+    return { rows: Number(match![1]), cols: Number(match![2]) };
+  };
+  const sizeBefore = await readPtySize("PTY_SIZE_BEFORE");
+
   await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
   await page.mouse.down();
   await page.mouse.move(grip!.x + grip!.width / 2 + 90, grip!.y + grip!.height / 2 + 60);
@@ -397,11 +412,13 @@ test("terminal drawer resizes and keeps its PTY interactive", async ({ page }) =
   await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBeGreaterThan(before!.width + 50);
   await expect.poll(async () => (await panel.boundingBox())?.height ?? 0).toBeGreaterThan(before!.height + 30);
 
-  const terminal = page.locator(".xterm").first();
   await terminal.click();
   await page.keyboard.type("printf 'resized-terminal-e2e-ok\\n'");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".xterm-rows")).toContainText("resized-terminal-e2e-ok", { timeout: 8_000 });
+  await expect(rows).toContainText("resized-terminal-e2e-ok", { timeout: 8_000 });
+  const sizeAfter = await readPtySize("PTY_SIZE_AFTER");
+  expect(sizeAfter.rows).toBeGreaterThan(sizeBefore.rows);
+  expect(sizeAfter.cols).toBeGreaterThan(sizeBefore.cols);
 });
 
 test("reconnecting rebuilds a live terminal from scrollback without duplicate history", async ({ page }) => {
