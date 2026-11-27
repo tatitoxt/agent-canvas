@@ -434,3 +434,57 @@ test("reconnecting rebuilds a live terminal from scrollback without duplicate hi
   await expect(page.locator("[data-testid='daemon-status']")).toHaveAttribute("aria-label", "Canvas daemon connected", { timeout: 12_000 });
   await expect.poll(markerCount).toBe(beforeReconnect);
 });
+
+test("PTY resize made while disconnected is replayed after reconnect", async ({ page }) => {
+  await page.addInitScript(() => {
+    const NativeWebSocket = window.WebSocket;
+    const sockets: WebSocket[] = [];
+    Object.defineProperty(window, "__canvasSockets", { value: sockets });
+    window.WebSocket = new Proxy(NativeWebSocket, {
+      construct(target, args) {
+        const socket = Reflect.construct(target, args) as WebSocket;
+        sockets.push(socket);
+        return socket;
+      },
+    });
+  });
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const terminal = page.locator(".terminal-drawer .xterm").first();
+  const rows = page.locator(".terminal-drawer .xterm-rows");
+  const runSizeProbe = async (label: string) => {
+    await terminal.click();
+    await page.keyboard.type(`printf '${label}:'; stty size`);
+    await page.keyboard.press("Enter");
+    await expect(rows).toContainText(`${label}:`, { timeout: 8_000 });
+    const text = await rows.innerText();
+    const match = text.match(new RegExp(`${label}:(\\d+)\\s+(\\d+)`));
+    if (!match) throw new Error(`Could not read PTY size from terminal output: ${text}`);
+    return { rows: Number(match[1]), cols: Number(match[2]) };
+  };
+
+  const before = await runSizeProbe("before-size");
+  await page.evaluate(() => (window as any).__canvasSockets[0].close());
+  await page.waitForFunction(() => (window as any).__canvasSockets[0].readyState === WebSocket.CLOSED, { timeout: 5_000 });
+  await page.waitForTimeout(100);
+
+  const handle = page.getByTestId("terminal-resize-handle");
+  const panel = handle.locator("xpath=..");
+  const beforeBox = await panel.boundingBox();
+  const grip = await handle.boundingBox();
+  expect(beforeBox).not.toBeNull();
+  expect(grip).not.toBeNull();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + grip!.width / 2 + 180, grip!.y + grip!.height / 2 + 100, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBeGreaterThan(beforeBox!.width + 100);
+  await expect.poll(async () => (await panel.boundingBox())?.height ?? 0).toBeGreaterThan(beforeBox!.height + 50);
+
+  await page.waitForFunction(() => (window as any).__canvasSockets.length >= 2, { timeout: 12_000 });
+  await expect(page.locator("[data-testid='daemon-status']")).toHaveAttribute("aria-label", "Canvas daemon connected", { timeout: 12_000 });
+  const after = await runSizeProbe("after-size");
+  expect(after.cols, "reconnected PTY should adopt the wider terminal").toBeGreaterThan(before.cols);
+  expect(after.rows, "reconnected PTY should adopt the taller terminal").toBeGreaterThan(before.rows);
+});

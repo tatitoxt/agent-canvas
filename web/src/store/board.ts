@@ -1491,8 +1491,20 @@ export const useBoard = create<BoardState>((set, get) => ({
     };
     // Inside Tauri there is no socket and no token — the app itself is the peer.
     client = isTauri() ? new TauriCanvasClient(handlers) : new CanvasClient(t, handlers);
-    void client.whenOpen().then(() => {
+    const openingClient = client;
+    void openingClient.whenOpen().then(() => {
+      if (client !== openingClient) return;
       set({ connected: true });
+      // PTY size is a client-side desired value. Resize gestures can happen
+      // while the transport is down, when CanvasClient silently drops sends;
+      // replay the latest dimensions after every connection opens so shells
+      // and TUIs do not keep stale rows/columns after reconnect.
+      const state = get();
+      for (const [agentId, size] of Object.entries(state.ptySize)) {
+        if (state.agents[agentId]?.status !== "exited") {
+          openingClient.resize(agentId, size.cols, size.rows);
+        }
+      }
       // Re-mount the saved vault after (re)connect — a vaultList() sent
       // before the socket opens would be silently dropped.
       const dir = get().vaultDir || (() => {
