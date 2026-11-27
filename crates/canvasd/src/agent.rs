@@ -24,19 +24,22 @@ pub type AgentId = String;
 const MAX_PENDING_PTY_BYTES: usize = 1024 * 1024;
 
 fn reserve_writer_bytes(pending: &AtomicUsize, len: usize) -> Result<()> {
-    pending
-        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
-            current
-                .checked_add(len)
-                .filter(|next| *next <= MAX_PENDING_PTY_BYTES)
-        })
-        .map(|_| ())
-        .map_err(|_| {
-            anyhow::anyhow!(
+    let mut current = pending.load(Ordering::Acquire);
+    loop {
+        let Some(next) = current
+            .checked_add(len)
+            .filter(|next| *next <= MAX_PENDING_PTY_BYTES)
+        else {
+            anyhow::bail!(
                 "pty input queue is full ({} KiB limit); wait for the terminal to catch up",
                 MAX_PENDING_PTY_BYTES / 1024
-            )
-        })
+            );
+        };
+        match pending.compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire) {
+            Ok(_) => return Ok(()),
+            Err(actual) => current = actual,
+        }
+    }
 }
 
 struct PendingPtyWrite {
