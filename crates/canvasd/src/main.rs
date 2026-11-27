@@ -1666,22 +1666,6 @@ fn handle_client_msg(text: &str, state: &Arc<AppState>, send_control: &impl Fn(S
                 }),
             }
         }
-        ClientMsg::PauseAll { board_id } => {
-            let board = board_id.unwrap_or_else(|| "main".to_string());
-            let n = state.agents.suspend_many(&loop_targets(state, &board, "*"));
-            send_control(ServerMsg::Error {
-                agent_id: None,
-                message: format!("paused {n} agents"),
-            });
-        }
-        ClientMsg::ResumeAll { board_id } => {
-            let board = board_id.unwrap_or_else(|| "main".to_string());
-            let n = state.agents.resume_many(&loop_targets(state, &board, "*"));
-            send_control(ServerMsg::Error {
-                agent_id: None,
-                message: format!("resumed {n} agents"),
-            });
-        }
         ClientMsg::Transcript { agent_id } => {
             // Dead agents keep no live PTY — replay their on-disk
             // transcript through the normal output channel.
@@ -1694,6 +1678,20 @@ fn handle_client_msg(text: &str, state: &Arc<AppState>, send_control: &impl Fn(S
                     message: "no transcript for agent".into(),
                 }),
             }
+        }
+        ClientMsg::PauseAll { board_id } => {
+            let board = board_id.unwrap_or_else(|| "main".to_string());
+            let n = state.agents.suspend_many(&loop_targets(state, &board, "*"));
+            send_control(ServerMsg::Notice {
+                message: format!("paused {n} agents"),
+            });
+        }
+        ClientMsg::ResumeAll { board_id } => {
+            let board = board_id.unwrap_or_else(|| "main".to_string());
+            let n = state.agents.resume_many(&loop_targets(state, &board, "*"));
+            send_control(ServerMsg::Notice {
+                message: format!("resumed {n} agents"),
+            });
         }
         ClientMsg::NoteUpsert {
             note_id,
