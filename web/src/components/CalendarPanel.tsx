@@ -104,7 +104,7 @@ export function CalendarPanel() {
                 border: "none",
                 cursor: "pointer",
                 fontSize: "var(--cv-text-xxs)",
-                color: isToday ? "#fff" : "var(--cv-ink)",
+                color: isToday ? "var(--cv-accent-ink)" : "var(--cv-ink)",
                 background: isToday ? "var(--cv-accent)" : "transparent",
               }}
             >
@@ -119,7 +119,7 @@ export function CalendarPanel() {
                     height: 4,
                     marginLeft: -2,
                     borderRadius: "50%",
-                    background: isToday ? "#fff" : "var(--cv-accent)",
+                    background: isToday ? "var(--cv-accent-ink)" : "var(--cv-accent)",
                   }}
                 />
               )}

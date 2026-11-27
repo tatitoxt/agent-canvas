@@ -77,7 +77,7 @@ export function SearchPanel({
           style={{
             background: "transparent",
             border: "none",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            borderBottom: "1px solid var(--cv-hairline)",
             padding: "13px 16px",
             fontSize: "var(--cv-text-md)",
             color: "var(--cv-ink)",

@@ -12,8 +12,8 @@ import { useBoard, PERMISSION_LEVELS, type Guardrails } from "../store/board";
 
 const input: React.CSSProperties = {
   width: "100%",
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: "var(--cv-ink-fill-control)",
+  border: "1px solid var(--cv-hairline)",
   borderRadius: 8,
   padding: "6px 10px",
   fontSize: "var(--cv-text-xs)",
@@ -40,8 +40,8 @@ const GUARDRAIL_ROWS: Array<{ key: keyof Guardrails; label: string; options: Arr
 ];
 
 const select: React.CSSProperties = {
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: "var(--cv-ink-fill-control)",
+  border: "1px solid var(--cv-hairline)",
   borderRadius: 7,
   padding: "3px 6px",
   fontSize: "var(--cv-text-xxs)",
@@ -141,7 +141,7 @@ export function AutomationsPanel() {
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
         {guardOpen && (
-          <div style={{ padding: "2px 12px 10px", borderBottom: "1px solid rgba(255,255,255,0.07)", marginBottom: 6 }}>
+          <div style={{ padding: "2px 12px 10px", borderBottom: "1px solid var(--cv-hairline)", marginBottom: 6 }}>
             <div className="cv-section-label" style={{ paddingBottom: 6 }}>
               Guardrails — applies unless a run overrides
             </div>

@@ -64,7 +64,7 @@ const PERMISSION_LABEL: Record<string, string> = {
 };
 
 export function cliMeta(cli: string) {
-  return CLI_META[cli.toLowerCase()] ?? { mark: "▢", label: cli, color: "#eef1f5" };
+  return CLI_META[cli.toLowerCase()] ?? { mark: "▢", label: cli, color: "var(--cv-ink)" };
 }
 
 const ANSI_RE = /\u001b\[[0-9;?><=!$]*[a-zA-Z@]|\u001b\][^\u0007]*(?:\u0007|\u001b\\)|\u001b[()][0-9A-B]|\u001b[=>#]?[0-9]*.?/g;
@@ -121,7 +121,7 @@ function MiniTerm({ agentId, active }: { agentId: string; active: boolean }) {
         fontFamily: "var(--cv-font-mono)",
         fontSize: "var(--cv-text-xxs)",
         lineHeight: 1.65,
-        color: "rgba(244,242,238,0.85)",
+        color: "var(--cv-text-main)",
         overflow: "hidden",
         whiteSpace: "pre",
         textOverflow: "clip",
@@ -1046,7 +1046,7 @@ function ChainEditor({ workspaceId }: { workspaceId: string }) {
               onDragStart={(e) => e.dataTransfer.setData("text/plain", String(i))}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => { e.preventDefault(); move(Number(e.dataTransfer.getData("text/plain")), i); }}
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 4px", cursor: "grab", borderRadius: 6, background: "rgba(255,255,255,0.03)", marginBottom: 3 }}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 4px", cursor: "grab", borderRadius: 6, background: "var(--cv-ink-fill-subtle)", marginBottom: 3 }}
             >
               <span style={{ color: "var(--cv-ink-faint)" }}>⋮⋮</span>
               <CliMark cli={cli} color="#9a968e" size={12} />

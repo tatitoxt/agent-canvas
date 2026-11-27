@@ -142,7 +142,7 @@ function mdInline(text: string, onLink?: (name: string) => void, onTag?: (tag: s
       );
     } else {
       out.push(
-        <code key={k++} style={{ background: "rgba(255,255,255,0.07)", borderRadius: 4, padding: "0 4px", fontSize: "0.92em", fontFamily: "var(--cv-font-mono)" }}>
+        <code key={k++} style={{ background: "var(--cv-ink-fill-active)", borderRadius: 4, padding: "0 4px", fontSize: "0.92em", fontFamily: "var(--cv-font-mono)" }}>
           {t.slice(1, -1)}
         </code>,
       );
@@ -268,8 +268,8 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
         key="fm"
         style={{
           margin: "4px 0 12px", maxWidth: 640, borderRadius: 8,
-          border: "1px solid rgba(255,255,255,0.08)",
-          background: "rgba(255,255,255,0.02)", overflow: "hidden",
+          border: "1px solid var(--cv-hairline)",
+          background: "var(--cv-ink-fill-subtle)", overflow: "hidden",
         }}
       >
         {props.map(([k, v], i) => (
@@ -277,7 +277,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
             key={i}
             style={{
               display: "flex", gap: 10, padding: "4px 12px", fontSize: "var(--cv-text-xxs)",
-              borderBottom: i === props.length - 1 ? "none" : "1px solid rgba(255,255,255,0.05)",
+              borderBottom: i === props.length - 1 ? "none" : "1px solid var(--cv-hairline)",
             }}
           >
             <span style={{ minWidth: 90, color: "var(--cv-ink-faint)", fontWeight: 600 }}>{k}</span>
@@ -294,7 +294,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
     if (/^\s*```/.test(l)) {
       if (inCode) {
         els.push(
-          <pre key={i} style={{ margin: "8px 0", padding: "10px 12px", borderRadius: 8, background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.06)", fontSize: "var(--cv-text-xxs)", fontFamily: "var(--cv-font-mono)", lineHeight: 1.5, overflowX: "auto", color: "var(--cv-ink-dim)" }}>
+          <pre key={i} style={{ margin: "8px 0", padding: "10px 12px", borderRadius: 8, background: "var(--cv-code-bg)", border: "1px solid var(--cv-hairline)", fontSize: "var(--cv-text-xxs)", fontFamily: "var(--cv-font-mono)", lineHeight: 1.5, overflowX: "auto", color: "var(--cv-ink-dim)" }}>
             {codeBuf.join("\n")}
           </pre>,
         );
@@ -397,7 +397,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
               fontSize: "var(--cv-text-xs)",
               width: "100%",
               maxWidth: 640,
-              border: "1px solid rgba(255,255,255,0.09)",
+              border: "1px solid var(--cv-hairline-strong)",
               borderRadius: 8,
               overflow: "hidden",
             }}
@@ -407,7 +407,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
                 {head.map((c, j) => (
                   <th
                     key={j}
-                    style={{ padding: cell, textAlign: "left", color: "var(--cv-accent)", borderBottom: "1px solid rgba(255,255,255,0.14)", fontWeight: 700, whiteSpace: "nowrap" }}
+                    style={{ padding: cell, textAlign: "left", color: "var(--cv-accent)", borderBottom: "1px solid var(--cv-hairline-strong)", fontWeight: 700, whiteSpace: "nowrap" }}
                   >
                     {mdInline(c, onLink, onTag, fns, fnScope, entries, onOpenExternal)}
                   </th>
@@ -416,9 +416,9 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
             </thead>
             <tbody>
               {body.map((r, j) => (
-                <tr key={j} style={{ background: j % 2 ? "rgba(255,255,255,0.02)" : "transparent" }}>
+                <tr key={j} style={{ background: j % 2 ? "var(--cv-ink-fill-subtle)" : "transparent" }}>
                   {r.map((c, k) => (
-                    <td key={k} style={{ padding: cell, borderBottom: "1px solid rgba(255,255,255,0.06)", color: "var(--cv-ink)" }}>
+                    <td key={k} style={{ padding: cell, borderBottom: "1px solid var(--cv-hairline)", color: "var(--cv-ink)" }}>
                       {mdInline(c, onLink, onTag, fns, fnScope, entries, onOpenExternal)}
                     </td>
                   ))}
@@ -478,7 +478,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
       continue;
     }
     if (/^\s*(-{3,}|\*{3,})\s*$/.test(l)) {
-      els.push(<hr key={i} style={{ border: "none", borderTop: "1px solid rgba(255,255,255,0.1)", margin: "14px 0" }} />);
+      els.push(<hr key={i} style={{ border: "none", borderTop: "1px solid var(--cv-hairline-strong)", margin: "14px 0" }} />);
       continue;
     }
     if (l.trim() === "") { els.push(<div key={i} style={{ height: 7 }} />); continue; }
@@ -486,7 +486,7 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
   }
   if (fns.size) {
     els.push(
-      <div key="fns" style={{ margin: "18px 0 4px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 8 }}>
+      <div key="fns" style={{ margin: "18px 0 4px", borderTop: "1px solid var(--cv-hairline-strong)", paddingTop: 8 }}>
         {[...fnDefs.entries()].map(([id, def]) => (
           <div key={id} id={`${fnScope}vfn-def-${id}`} style={{ margin: "4px 0", fontSize: "var(--cv-text-xs)", color: "var(--cv-ink-dim)", display: "flex", gap: 7 }}>
             {fnReferenced.has(id) ? (
@@ -573,7 +573,7 @@ function NoteEmbed({ name, section, lookup, fetchPath, onLink, onTag, assetSrc, 
             src={src}
             alt={hit.path}
             title={hit.path}
-            style={{ maxWidth: "100%", maxHeight: 420, borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", display: "block" }}
+            style={{ maxWidth: "100%", maxHeight: 420, borderRadius: 8, border: "1px solid var(--cv-hairline)", display: "block" }}
           />
         )}
       </div>
@@ -585,7 +585,7 @@ function NoteEmbed({ name, section, lookup, fetchPath, onLink, onTag, assetSrc, 
         margin: "10px 0", maxWidth: 640, borderRadius: 8,
         border: "1px solid color-mix(in srgb, var(--cv-accent) 32%, transparent)",
         borderLeft: "3px solid var(--cv-accent)",
-        background: "rgba(255,255,255,0.025)", padding: "8px 12px 10px",
+        background: "var(--cv-ink-fill-subtle)", padding: "8px 12px 10px",
       }}
     >
       <button

@@ -4,8 +4,8 @@ import { useBoard } from "../store/board";
 
 const input: React.CSSProperties = {
   width: "100%",
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: "var(--cv-ink-fill-control)",
+  border: "1px solid var(--cv-hairline)",
   borderRadius: 8,
   padding: "6px 10px",
   fontSize: "var(--cv-text-xs)",
