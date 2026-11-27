@@ -265,7 +265,7 @@ export function CommandPalette({
           style={{
             background: "transparent",
             border: "none",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            borderBottom: "1px solid var(--cv-hairline)",
             padding: "13px 16px",
             fontSize: "var(--cv-text-md)",
             color: "var(--cv-ink)",
@@ -290,7 +290,7 @@ export function CommandPalette({
                 alignItems: "center",
                 width: "100%",
                 textAlign: "left",
-                background: i === selClamped ? "rgba(255,255,255,0.07)" : "transparent",
+                background: i === selClamped ? "var(--cv-ink-fill-active)" : "transparent",
                 border: "none",
                 borderRadius: 8,
                 padding: "8px 12px",
@@ -316,7 +316,7 @@ export function CommandPalette({
         </div>
         <div
           style={{
-            borderTop: "1px solid rgba(255,255,255,0.06)",
+            borderTop: "1px solid var(--cv-hairline)",
             padding: "6px 14px",
             fontSize: "var(--cv-text-xxs)",
             color: "var(--cv-ink-faint)",

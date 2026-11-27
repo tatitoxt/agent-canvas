@@ -1139,7 +1139,7 @@ export function VaultPanel() {
                   }
                 }}
                 onBlur={() => setRenaming(false)}
-                style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 500, color: "var(--cv-ink)", background: "rgba(255,255,255,.06)", border: "1px solid rgba(212,169,106,.4)", borderRadius: 5, padding: "1px 6px", outline: "none", minWidth: 140 }}
+                style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 500, color: "var(--cv-ink)", background: "var(--cv-ink-fill-active)", border: "1px solid color-mix(in srgb, var(--cv-accent) 40%, transparent)", borderRadius: 5, padding: "1px 6px", outline: "none", minWidth: 140 }}
               />
             ) : (
               <span

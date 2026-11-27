@@ -26,6 +26,14 @@
   --cv-text-main: color-mix(in srgb, var(--cv-ink) 90%, transparent);
   --cv-text-hint: var(--cv-ink-faint);
 
+  /* Transparent ink fills — unlike the opaque surface ramp below, these are
+     overlays for rows, inputs, inline code and embedded content. They follow
+     the theme ink in both directions: light ink on dark themes, dark ink on
+     paper, instead of freezing a white alpha intended only for obsidian. */
+  --cv-ink-fill-subtle: color-mix(in srgb, var(--cv-ink) 2%, transparent);
+  --cv-ink-fill-control: color-mix(in srgb, var(--cv-ink) 4%, transparent);
+  --cv-ink-fill-active: color-mix(in srgb, var(--cv-ink) 7%, transparent);
+
   /* Deska surface model — foreground percentages mixed onto background.
      Cards use the nearly-opaque panel shell; floating clusters/popovers use
      progressively lighter glass. */
@@ -40,6 +48,9 @@
   --cv-glass-hi: var(--cv-surface-2);
   --cv-hairline: color-mix(in srgb, var(--cv-ink) 6%, transparent);
   --cv-hairline-strong: color-mix(in srgb, var(--cv-ink) 11%, transparent);
+  --cv-edge: color-mix(in srgb, var(--cv-ink) 38%, transparent);
+  --cv-edge-active: color-mix(in srgb, var(--cv-ink) 40%, transparent);
+  --cv-code-bg: rgba(0, 0, 0, 0.35);
   --cv-glass-edge: var(--cv-hairline);
   --cv-glass-shine: color-mix(in srgb, var(--cv-ink) 6%, transparent);
 
@@ -359,7 +370,7 @@ body,
 
 /* edges — quiet hairlines, not glowing wires */
 .react-flow__edge-path {
-  stroke: rgba(255, 255, 255, 0.38);
+  stroke: var(--cv-edge);
   stroke-width: 1.25;
 }
 /* Deska marquee — dashed accent selection rectangle with a light fill. */
@@ -370,7 +381,7 @@ body,
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: rgba(255, 255, 255, 0.4);
+  stroke: var(--cv-edge-active);
 }
 /* Selected cards get Deska's active accent ring — works for single clicks and the
  * ghost multi-select alike (React Flow adds .selected to every picked node). */
@@ -602,6 +613,7 @@ button.cv-card-close:hover,
   --cv-control-divider: rgba(35, 33, 29, 0.09);
   --cv-minimap-mask: rgba(63, 47, 25, 0.12);
   --cv-minimap-node-stroke: rgba(35, 33, 29, 0.22);
+  --cv-code-bg: color-mix(in srgb, var(--cv-ink) 5%, transparent);
   --cv-minimap-node-term: #d97706;
   --cv-minimap-node-agent: #16804f;
   --cv-minimap-node-panel: #6f5bd7;

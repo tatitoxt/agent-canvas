@@ -95,7 +95,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
         <div
           style={{
             padding: "10px 14px 8px",
-            borderBottom: "1px solid rgba(255,255,255,0.07)",
+            borderBottom: "1px solid var(--cv-hairline)",
             fontSize: "var(--cv-text-sm)",
             fontWeight: 700,
             color: "var(--cv-ink)",
