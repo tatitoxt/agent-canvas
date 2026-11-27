@@ -6,6 +6,10 @@ const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-s
 
 test("Add Explorer to canvas mounts a live repository file browser", async ({ page }) => {
   const { port, token, vault, repo } = stack();
+  // The scratch repo is shared for the whole suite run and this test edits its
+  // files on purpose; reset them so a retry never inherits a poisoned tree.
+  writeFileSync(resolve(repo, "README.md"), "# e2e scratch repo\n");
+  writeFileSync(resolve(repo, "OTHER.md"), "# another file with different contents\n");
   await page.addInitScript((v) => localStorage.setItem("cv-vault-dir", v), vault);
   await page.goto(`http://127.0.0.1:${port}/?token=${token}`);
   await expect(page.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
