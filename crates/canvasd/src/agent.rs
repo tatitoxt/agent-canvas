@@ -566,6 +566,14 @@ impl AgentManager {
         self.automation_meta.lock().unwrap().get(id).copied()
     }
 
+    /// Drop automation guardrails for an agent that exited on its own.
+    /// A dead agent is never "hung" — without this its metadata keeps
+    /// aging in the hang ticker and fires a spurious idle alert. On a
+    /// chain fallback the guardrails already ride the replacement.
+    pub fn clear_automation(&self, id: &str) {
+        self.automation_meta.lock().unwrap().remove(id);
+    }
+
     /// Hang detection for the ticker: seconds since the agent's last PTY
     /// output — `None` for unknown agents.
     pub fn silent_for(&self, id: &str) -> Option<u64> {
