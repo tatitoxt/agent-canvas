@@ -5,6 +5,7 @@ import { CardChrome, CardChromeButton } from "../components/CardChrome";
 import { Icon } from "../components/icons";
 import { useBoard } from "../store/board";
 import { useNearViewport } from "../lib/nearViewport";
+import { countRender } from "../lib/renderProbe";
 import { screenLines } from "./ptyScreen";
 import type {
   AgentNodeData,
@@ -85,6 +86,7 @@ export function announcedModel(buf?: Uint8Array): string | undefined {
 }
 
 function MiniTerm({ agentId, active }: { agentId: string; active: boolean }) {
+  countRender("MiniTerm", agentId);
   // While the card is outside the viewport halo, do not even subscribe to the
   // rolling PTY object: store flushes would otherwise re-render every offscreen
   // card a few times per second. The headless screen keeps its stream cursor,
@@ -200,11 +202,15 @@ function AgentTaskLine({ agentId, status, staticTask }: { agentId?: string; stat
   );
 }
 
-export const AgentNode = memo(function AgentNode({ id, data, selected, width }: NodeProps<Node<AgentNodeData>>) {
+export const AgentNode = memo(function AgentNode({ id, data, selected, width, height }: NodeProps<Node<AgentNodeData>>) {
+  countRender("AgentNode", id);
   const meta = cliMeta(data.cli);
   const { ref: cardRef, near: nearViewport } = useNearViewport<HTMLDivElement>();
   const summaries = useBoard((s) => s.panelSummaries);
   const customSize = useBoard((s) => s.agentSizes[data.id ?? id]);
+  // True only for the card being resized right now (scoped selector — other
+  // cards never re-render when one starts or ends a resize).
+  const resizing = useBoard((s) => Boolean(s.resizingAgents[id]));
   const [collapsed, setCollapsed] = useState(false);
   const [steeringText, setSteeringText] = useState("");
   const [steeringState, setSteeringState] = useState<"idle" | "sent">("idle");
@@ -244,8 +250,19 @@ export const AgentNode = memo(function AgentNode({ id, data, selected, width }: 
   // React Flow reports width=0 before the first measurement, and the
   // collapsed pill measures well below the card minimum. Both are sentinel
   // cases, not real card widths; valid expanded cards are >= minWidth 320.
+  // Live geometry belongs to React Flow: while a resize gesture is in
+  // flight (and at every rest state after it) the measured width IS the
+  // card width — the persisted store size only matters before the first
+  // measurement lands. Mid-resize store writes used to feed this layout;
+  // they cascade-rendered the whole canvas per mousemove for no visual
+  // benefit, since RF already reports live dimensions here.
   const nodeWidth = typeof width === "number" && width >= 300 ? width : undefined;
-  const cardWidth = customSize?.w ?? nodeWidth ?? 460;
+  const nodeHeight = typeof height === "number" && height >= 100 ? height : undefined;
+  const cardWidth = nodeWidth ?? customSize?.w ?? 460;
+  // Height stays natural (content-driven) until the user resizes the card;
+  // mid-gesture the live measurement is the only correct height — the store
+  // still holds the pre-resize value or nothing at all on the first resize.
+  const explicitH = resizing ? (nodeHeight ?? customSize?.h) : customSize?.h;
   const compactHeader = cardWidth < 410;
   const tightHeader = cardWidth < 350;
   if (collapsed) {
@@ -302,8 +319,8 @@ export const AgentNode = memo(function AgentNode({ id, data, selected, width }: 
       style={{
         position: "relative",
         width: cardWidth,
-        height: customSize?.h,
-        overflow: customSize?.h ? "hidden" : undefined,
+        height: explicitH,
+        overflow: explicitH ? "hidden" : undefined,
         display: "flex",
         flexDirection: "column",
         minHeight: 0,
@@ -330,9 +347,6 @@ export const AgentNode = memo(function AgentNode({ id, data, selected, width }: 
         minHeight={120}
         handleClassName="cv-node-resize-handle"
         lineClassName="cv-node-resize-line"
-        onResize={(_, p) => {
-          useBoard.getState().resizeAgentCard(data.id ?? id, Math.round(p.width), Math.round(p.height), false, { x: p.x, y: p.y });
-        }}
         onResizeEnd={(_, p) => {
           useBoard.getState().resizeAgentCard(data.id ?? id, Math.round(p.width), Math.round(p.height), true, { x: p.x, y: p.y });
           useBoard.getState().markAgentResizing(id, false);
@@ -455,9 +469,9 @@ export const AgentNode = memo(function AgentNode({ id, data, selected, width }: 
         data-testid="agent-card-body"
         style={{
           padding: "10px 13px 11px",
-          flex: customSize?.h ? "1 1 auto" : undefined,
+          flex: explicitH ? "1 1 auto" : undefined,
           minHeight: 0,
-          overflowY: customSize?.h ? "auto" : undefined,
+          overflowY: explicitH ? "auto" : undefined,
           overflowX: "hidden",
           scrollbarWidth: "thin",
           scrollbarColor: "var(--cv-glass-edge) transparent",
@@ -775,10 +789,11 @@ function FooterModel({ agentId }: { agentId?: string }) {
  */
 const EMPTY_WIRED: string[] = [];
 
-export function OrchestratorNode({
+export const OrchestratorNode = memo(function OrchestratorNode({
   data,
   id,
 }: NodeProps<Node<OrchestratorNodeData>>) {
+  countRender("OrchestratorNode", id);
   const orchId = data.id ?? id;
   const agents = useBoard((s) => s.agents);
   const edges = useBoard((s) => s.edges);
@@ -1001,7 +1016,7 @@ export function OrchestratorNode({
       <Handle type="source" position={Position.Right} />
     </div>
   );
-}
+});
 
 /**
  * A workspace: a container agents live inside. Several coexist on one
@@ -1083,11 +1098,12 @@ function ChainEditor({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-export function WorkspaceNode({
+export const WorkspaceNode = memo(function WorkspaceNode({
   id,
   data,
   selected,
 }: NodeProps<Node<WorkspaceNodeData>>) {
+  countRender("WorkspaceNode", id);
   const rf = useReactFlow();
   const { fitView } = rf;
   return (
@@ -1143,15 +1159,16 @@ export function WorkspaceNode({
       </div>
     </div>
   );
-}
+});
 
 /** A live web page embedded in the canvas — e.g. a localhost dev server
  * preview that sits next to the agent building it. */
-export function WebNode({
+export const WebNode = memo(function WebNode({
   id,
   data,
   selected,
 }: NodeProps<Node<WebNodeData>>) {
+  countRender("WebNode", id);
   const webNodeRemove = useBoard((s) => s.webNodeRemove);
   const resizeWebNode = useBoard((s) => s.resizeWebNode);
   return (
@@ -1173,7 +1190,6 @@ export function WebNode({
         minHeight={220}
         handleClassName="cv-node-resize-handle"
         lineClassName="cv-node-resize-line"
-        onResize={(_, p) => resizeWebNode(id, Math.round(p.width), Math.round(p.height), false, undefined, { x: p.x, y: p.y })}
         onResizeEnd={(_, p) => resizeWebNode(id, Math.round(p.width), Math.round(p.height), true, undefined, { x: p.x, y: p.y })}
       />
       <div
@@ -1215,4 +1231,4 @@ export function WebNode({
       />
     </div>
   );
-}
+});
