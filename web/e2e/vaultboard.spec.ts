@@ -40,8 +40,14 @@ test("Add to Board: popover closes, live note window appears, survives reload", 
   await expect(noteWindow.locator("strong", { hasText: "persistent bold" })).toBeVisible();
   await expect(noteWindow.locator('a[title="Missing target (not created yet)"]')).toBeVisible();
 
-  // Where did it land? Record the card's position to compare after reload.
-  const before = await noteWindow.boundingBox();
+  // Where did it land? Canvas coords (react-flow transform) — screen coords
+  // shift with viewport reframing after reload, flow positions don't.
+  const readPos = () => page.evaluate(() => {
+    const el = document.querySelector(".react-flow__node-md") as HTMLElement;
+    const m = el?.style.transform.match(/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/);
+    return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
+  });
+  const before = await readPos();
   expect(before).not.toBeNull();
 
   // 3. Reload — the live window must persist (board membership, position,
@@ -51,10 +57,10 @@ test("Add to Board: popover closes, live note window appears, survives reload", 
   const restored = page.locator(".react-flow__node-md").filter({ hasText: name });
   await expect(restored, "md note window must survive a reload").toBeVisible({ timeout: 10_000 });
   await expect(restored.locator("strong", { hasText: "persistent bold" }), "live content must re-hydrate after reload").toBeVisible({ timeout: 10_000 });
-  const after = await restored.boundingBox();
+  const after = await readPos();
   expect(after).not.toBeNull();
-  // Same neighborhood — the daemon restores exact positions; allow small
-  // slack for fitView framing differences but never a teleport across the canvas.
-  expect(Math.abs(after!.x - before!.x), `x drifted ${before!.x} → ${after!.x}`).toBeLessThan(200);
-  expect(Math.abs(after!.y - before!.y), `y drifted ${before!.y} → ${after!.y}`).toBeLessThan(200);
+  // Same canvas position — the daemon restores exact positions; tiny slack
+  // for float round-trips, never a teleport across the board.
+  expect(Math.abs(after!.x - before!.x), `x drifted ${before!.x} → ${after!.x}`).toBeLessThan(30);
+  expect(Math.abs(after!.y - before!.y), `y drifted ${before!.y} → ${after!.y}`).toBeLessThan(30);
 });
