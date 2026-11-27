@@ -26,7 +26,12 @@ pub struct Agent {
     pub worktree: PathBuf,
     /// Permission ladder level — gates PTY input the operator must approve.
     pub permission: String,
-    writer: Mutex<Box<dyn Write + Send>>,
+    /// Input queue to the per-agent writer thread. Writes never block the
+    /// caller: the dedicated OS thread is the only thing that can stall on
+    /// PTY capacity (e.g. a SIGSTOPped child with a full kernel buffer),
+    /// so neither the agents-map lock nor a tokio worker is ever held
+    /// across a blocking write.
+    writer_tx: std::sync::mpsc::Sender<Vec<u8>>,
     master: Mutex<Box<dyn portable_pty::MasterPty + Send>>,
     child: Mutex<Box<dyn Child + Send + Sync>>,
     /// Last PTY activity + rolling tail for status derivation. Shared with
@@ -101,7 +106,9 @@ fn looks_like_waiting_prompt(tail: &str) -> bool {
 
 impl Agent {
     pub fn write(&self, data: &[u8]) -> Result<()> {
-        self.writer.lock().unwrap().write_all(data)?;
+        self.writer_tx
+            .send(data.to_vec())
+            .map_err(|_| anyhow::anyhow!("pty writer thread gone"))?;
         Ok(())
     }
 
@@ -451,6 +458,21 @@ impl AgentManager {
         let mut reader = pair.master.try_clone_reader()?;
         let writer = pair.master.take_writer()?;
 
+        // Dedicated writer thread: the ONLY place a write_all to the PTY
+        // master can block. FIFO order is preserved by the single consumer;
+        // when the child is killed the write errors out and the thread
+        // exits, which makes every future send fail fast.
+        let (writer_tx, writer_rx) = std::sync::mpsc::channel::<Vec<u8>>();
+        std::thread::spawn(move || {
+            let mut writer = writer;
+            while let Ok(data) = writer_rx.recv() {
+                if writer.write_all(&data).is_err() {
+                    break;
+                }
+                let _ = writer.flush();
+            }
+        });
+
         let agent_id = id.clone();
         let last_output_at = Arc::new(Mutex::new(std::time::Instant::now()));
         let tail = Arc::new(Mutex::new(Vec::new()));
@@ -498,7 +520,7 @@ impl AgentManager {
             command: command.to_string(),
             worktree,
             permission: permission.to_string(),
-            writer: Mutex::new(writer),
+            writer_tx,
             master: Mutex::new(pair.master),
             child: Mutex::new(child),
             last_output_at,
@@ -1046,6 +1068,123 @@ mod tests {
         ensure_initial_commit(&repo);
         let log = git(&["log", "--oneline"], &repo);
         assert_eq!(String::from_utf8_lossy(&log.stdout).lines().count(), 1);
+        std::fs::remove_dir_all(&repo).unwrap();
+    }
+
+    /// Spawn a throwaway `cat` agent against a temp git repo. The receivers
+    /// are returned and must outlive the test: dropping them kills the
+    /// reader thread (its send fails), the kernel output buffer fills and
+    /// the child stalls mid-echo — exactly what production avoids by holding
+    /// them in the daemon event loop.
+    #[cfg(unix)]
+    #[allow(clippy::type_complexity)]
+    fn spawn_cat(
+        mgr: &AgentManager,
+        repo: &Path,
+    ) -> (
+        AgentId,
+        mpsc::UnboundedReceiver<(AgentId, Vec<u8>)>,
+        mpsc::UnboundedReceiver<AgentId>,
+    ) {
+        let (out_tx, out_rx) = mpsc::unbounded_channel();
+        let (exit_tx, exit_rx) = mpsc::unbounded_channel();
+        let id = mgr
+            .spawn("Terminal", "cat", ".", repo, "full", out_tx, exit_tx, &[])
+            .unwrap();
+        (id, out_rx, exit_rx)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn large_write_never_blocks_resume() {
+        use std::time::{Duration, Instant};
+
+        let repo = git_temp_root();
+        assert!(git(&["init"], &repo).status.success());
+        let mgr = AgentManager::new();
+        // Receivers stay alive for the whole test (unbounded sends never
+        // need polling) — dropping them would kill the reader thread.
+        let (id, out_rx, exit_rx) = spawn_cat(&mgr, &repo);
+        // Let `cat` exec and block on stdin before we freeze it.
+        std::thread::sleep(Duration::from_millis(500));
+        assert_eq!(mgr.suspend_many(&[id.clone()]), 1);
+
+        // 256 KiB is far beyond the kernel PTY input buffer (~4-64 KiB), so
+        // a direct write_all would stall until the child drains — and the
+        // child is SIGSTOPped. Run the write on a side thread so a blocking
+        // implementation is observed as "not finished", not a hung test.
+        // Canonical-mode PTYs cap a single input line at 4096 bytes, so the
+        // payload is line-shaped (as any real paste is): 100-byte lines.
+        let marker = b"EOMARKER-canvas-82";
+        let mut payload = Vec::new();
+        while payload.len() < 256 * 1024 {
+            payload.extend_from_slice(&[b'x'; 99]);
+            payload.push(b'\n');
+        }
+        payload.extend_from_slice(marker);
+        payload.push(b'\n');
+
+        let mgr_addr = &mgr as *const AgentManager as usize;
+        let id2 = id.clone();
+        let payload2 = payload.clone();
+        let write_done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let write_done2 = write_done.clone();
+        let handle = std::thread::spawn(move || {
+            let mgr = unsafe { &*(mgr_addr as *const AgentManager) };
+            mgr.write(&id2, &payload2).unwrap();
+            write_done2.store(true, std::sync::atomic::Ordering::SeqCst);
+        });
+
+        std::thread::sleep(Duration::from_secs(2));
+        assert!(
+            write_done.load(std::sync::atomic::Ordering::SeqCst),
+            "write() must return immediately even with a stopped child — \
+             before the fix it blocked inside write_all holding the map lock"
+        );
+
+        // The exact deadlock from the issue: the writer thread is now parked
+        // on PTY capacity while the child is stopped. Resume All MUST still
+        // return — before the fix it waited on the same agents-map lock.
+        let t = Instant::now();
+        let n = mgr.resume_many(&[id.clone()]);
+        assert_eq!(n, 1);
+        assert!(
+            t.elapsed() < Duration::from_secs(2),
+            "resume_many wedged behind the in-flight write — the deadlock"
+        );
+        handle.join().unwrap();
+
+        // Payload integrity: once the child drains, cat echoes everything and
+        // the end marker lands in the rolling tail.
+        let tail_arc = {
+            let agents = mgr.agents.lock().unwrap();
+            agents.get(&id).unwrap().tail.clone()
+        };
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut arrived = false;
+        while Instant::now() < deadline {
+            {
+                let tail = tail_arc.lock().unwrap();
+                if tail.windows(marker.len()).any(|w| w == marker) {
+                    arrived = true;
+                    break;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(150));
+        }
+        if !arrived {
+            let tail = tail_arc.lock().unwrap();
+            eprintln!(
+                "DEBUG tail len={} head={:?} end={:?}",
+                tail.len(),
+                String::from_utf8_lossy(&tail[..tail.len().min(120)]),
+                String::from_utf8_lossy(&tail[tail.len().saturating_sub(120)..])
+            );
+        }
+        assert!(arrived, "full payload must echo after resume");
+
+        mgr.kill(&id).ok();
+        drop((out_rx, exit_rx));
         std::fs::remove_dir_all(&repo).unwrap();
     }
 
