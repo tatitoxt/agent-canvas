@@ -238,6 +238,72 @@ test("split right shows two live xterm panes in the drawer", async ({ page }) =>
   await expect(page.locator(".terminal-drawer .xterm")).toHaveCount(2, { timeout: 6_000 });
 });
 
+test("split down stacks a second live pane below the first", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const splitBtn = page.locator("button[title*='split down']").first();
+  await expect(splitBtn).toBeVisible({ timeout: 5_000 });
+  await splitBtn.click();
+  const panes = page.locator(".terminal-drawer .xterm");
+  await expect(panes).toHaveCount(2, { timeout: 6_000 });
+  // down = vertical arrangement: the second pane sits BELOW the first,
+  // not beside it — that's what distinguishes it from split right.
+  const b0 = await panes.nth(0).boundingBox();
+  const b1 = await panes.nth(1).boundingBox();
+  expect(b0).not.toBeNull();
+  expect(b1).not.toBeNull();
+  expect(b1!.y).toBeGreaterThan(b0!.y + b0!.height - 40);
+  // PTY-level: typing into the second pane produces output in ITS rows,
+  // and the first pane stays clean — the panes are independent sessions.
+  await panes.nth(1).click();
+  await page.keyboard.type("printf 'split-down-pane-two\n'");
+  await page.keyboard.press("Enter");
+  await expect(panes.nth(1).locator(".xterm-rows")).toContainText("split-down-pane-two", { timeout: 8_000 });
+  await expect(panes.nth(0).locator(".xterm-rows")).not.toContainText("split-down-pane-two");
+});
+
+test("split with a NEW terminal spawns an independent shell in the pane", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const agentsBefore = await page.locator(".react-flow__node-agent").count();
+  await page.locator("button[title*='split right']").first().click();
+  // With a single agent on the board the pane has no mirror — the NEW
+  // button is the way to fill it.
+  await expect(page.locator(".terminal-drawer")).toContainText("no second agent", { timeout: 5_000 });
+  await page.locator("button[title*='split with a NEW independent terminal']").click();
+  // A fresh bash agent is spawned (and lands on the canvas), then the
+  // pane auto-assigns it once the daemon reports it.
+  await expect.poll(async () => page.locator(".react-flow__node-agent").count(), { timeout: 8_000 }).toBe(agentsBefore + 1);
+  const panes = page.locator(".terminal-drawer .xterm");
+  await expect(panes).toHaveCount(2, { timeout: 8_000 });
+  // PTY-level: the new pane is a live independent shell.
+  await panes.nth(1).click();
+  await page.keyboard.type("printf 'split-new-shell-alive\n'");
+  await page.keyboard.press("Enter");
+  await expect(panes.nth(1).locator(".xterm-rows")).toContainText("split-new-shell-alive", { timeout: 8_000 });
+  await expect(panes.nth(0).locator(".xterm-rows")).not.toContainText("split-new-shell-alive");
+});
+
+test("close split returns the drawer to a single pane", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  await page.locator("button[title*='split right']").first().click();
+  const panes = page.locator(".terminal-drawer .xterm");
+  await expect(panes).toHaveCount(2, { timeout: 6_000 });
+  await page.locator("button[title='close split']").click();
+  await expect(panes).toHaveCount(1, { timeout: 5_000 });
+  // The surviving pane is the original terminal and still takes input.
+  await panes.first().click();
+  await page.keyboard.type("printf 'after-close-split\n'");
+  await page.keyboard.press("Enter");
+  await expect(panes.first().locator(".xterm-rows")).toContainText("after-close-split", { timeout: 8_000 });
+});
+
 test("terminal accepts shell input and renders PTY output", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
