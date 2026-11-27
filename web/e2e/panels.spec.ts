@@ -671,15 +671,81 @@ test("panel card drags to a new position", async ({ page }) => {
   expect(Math.abs(after!.x - before!.x)).toBeGreaterThan(40);
 });
 
-test("alignment snap preference toggles and survives reload", async ({ page }) => {
+test("alignment snap aligns card edges only when enabled and survives reload", async ({ page }) => {
   await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Inbox to canvas" }).click();
+  await expect(dock).toBeHidden();
+  const inbox = page.locator('.react-flow__node[data-id="panel-inbox"]');
+  await expect(inbox).toBeVisible();
+  const inboxStart = await inbox.boundingBox();
+  expect(inboxStart).not.toBeNull();
+  // Place the target where its title bar does not overlap Obsidian's.
+  await page.mouse.move(inboxStart!.x + inboxStart!.width / 2, inboxStart!.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(inboxStart!.x + inboxStart!.width / 2 + 420, inboxStart!.y + 52, { steps: 12 });
+  await page.mouse.up();
+  await expect.poll(async () => (await inbox.boundingBox())!.x).toBeGreaterThan(inboxStart!.x + 350);
+  await page.locator("button[title='Files — open your Obsidian vault']").click();
+  const vault = page.locator('.react-flow__node[data-id="panel-vault"]');
+  await expect(vault).toBeVisible();
+
   await page.locator("button[title='Settings']").click();
   const settings = page.locator(".react-flow__node-panel [data-panel='settings']").first();
   const snap = settings.getByRole("button", { name: "Alignment snap off" });
   await expect(snap).toBeVisible();
-  await snap.click();
-  await expect(settings.getByRole("button", { name: "Alignment snap on", pressed: true })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("cv-snap-align"))).not.toBe("true");
+  const settingsNode = page.locator('.react-flow__node[data-id="panel-settings"]');
+  const dismissSettings = async () => {
+    await settingsNode.click({ position: { x: 90, y: 18 } });
+    await expect(settingsNode).toHaveClass(/selected/);
+    await settingsNode.locator("button[title='Close panel']").click();
+    await expect(settingsNode).toHaveCount(0);
+  };
+  const dropVaultNearTop = async (gap: number) => {
+    const source = await vault.boundingBox();
+    const target = await inbox.boundingBox();
+    expect(source).not.toBeNull();
+    expect(target).not.toBeNull();
+    const start = { x: source!.x + source!.width / 2, y: source!.y + 12 };
+    const end = { x: start.x, y: start.y + target!.y - source!.y - gap };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    // Cross the drag threshold, then return to the same x so short alignment
+    // corrections remain a real pointer drag.
+    await page.mouse.move(start.x + 18, start.y, { steps: 3 });
+    await page.mouse.move(start.x, start.y, { steps: 3 });
+    await page.mouse.move(end.x, end.y, { steps: 8 });
+    await page.mouse.up();
+  };
+
+  await dismissSettings();
+  await dropVaultNearTop(2);
+  await expect.poll(async () => {
+    const a = await inbox.boundingBox();
+    const b = await vault.boundingBox();
+    return Math.abs(a!.y - b!.y);
+  }).toBeGreaterThan(1);
+  await expect.poll(async () => {
+    const a = await inbox.boundingBox();
+    const b = await vault.boundingBox();
+    return Math.abs(a!.y - b!.y);
+  }).toBeLessThan(5);
+
+  await page.locator("button[title='Settings']").click();
+  const enabledSettings = page.locator(".react-flow__node-panel [data-panel='settings']").first();
+  await enabledSettings.getByRole("button", { name: "Alignment snap off" }).click();
+  await expect(enabledSettings.getByRole("button", { name: "Alignment snap on", pressed: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem("cv-snap-align"))).toBe("true");
+  await dismissSettings();
+
+  await dropVaultNearTop(2);
+  await expect.poll(async () => {
+    const a = await inbox.boundingBox();
+    const b = await vault.boundingBox();
+    return Math.abs(a!.y - b!.y);
+  }).toBeLessThan(3);
 
   await page.reload();
   await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
