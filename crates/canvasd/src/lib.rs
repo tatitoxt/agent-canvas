@@ -4,8 +4,11 @@
 
 pub mod agent;
 pub mod chain;
+pub mod control;
+pub mod ctl;
 pub mod detect;
 pub mod export;
+pub mod orchestrate;
 pub mod paths;
 pub mod protocol;
 pub mod share;

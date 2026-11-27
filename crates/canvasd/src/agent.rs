@@ -179,11 +179,15 @@ pub struct AutoMeta {
     pub hang_notified: bool,
 }
 
+type AgentEnvHook = Arc<dyn Fn(&str) -> Vec<(String, String)> + Send + Sync>;
+
 pub struct AgentManager {
     agents: Mutex<HashMap<AgentId, Agent>>,
     automation_meta: Mutex<HashMap<AgentId, AutoMeta>>,
     transcript_dir: Mutex<PathBuf>,
     extra_env: Mutex<HashMap<String, String>>,
+    path_entries: Mutex<Vec<PathBuf>>,
+    agent_env_hook: Mutex<Option<AgentEnvHook>>,
 }
 
 /// Cap transcripts at ~1MB; when exceeded keep the newest 512KB.
@@ -313,10 +317,21 @@ fn ensure_worktree(repo_root: &Path, agent_id: &str, branch: &str) -> Result<Pat
 /// shim disables both, then `exec`s the requested command so the shell does
 /// not remain as an extra process.
 #[cfg(unix)]
+fn unix_shell_script(command: &str) -> String {
+    // bash -l sources login profiles before this script. Those profiles are
+    // allowed to customize PATH, but they must not hide the control helper:
+    // re-apply the exe/shim prefix after login startup and before exec.
+    format!(
+        "stty -echo -icanon 2>/dev/null; if [ -n \"$CANVAS_PATH_PREPEND\" ]; then export PATH=\"$CANVAS_PATH_PREPEND:$PATH\"; fi; exec {}",
+        command
+    )
+}
+
+#[cfg(unix)]
 fn shell_command(command: &str) -> CommandBuilder {
     let mut cmd = CommandBuilder::new("/bin/bash");
     cmd.arg("-lc");
-    cmd.arg(format!("stty -echo -icanon 2>/dev/null; exec {}", command));
+    cmd.arg(unix_shell_script(command));
     cmd
 }
 
@@ -333,14 +348,34 @@ fn shell_command(command: &str) -> CommandBuilder {
     cmd
 }
 
-/// Prepend the directory holding this binary to PATH so `canvasctl` is
-/// reachable inside every PTY, using the host platform's PATH separator.
-fn path_with_exe_dir() -> Option<std::ffi::OsString> {
+/// The control-helper directories every PTY should prefer, in order: this
+/// executable's directory first (canvasd and canvasctl build side by side),
+/// then host-registered helpers such as the native shell's generated shim.
+fn control_path_entries(extra_entries: &[PathBuf]) -> Option<Vec<PathBuf>> {
     let exe_dir = std::env::current_exe()
         .ok()?
         .parent()
         .map(|dir| dir.to_path_buf())?;
     let mut entries = vec![exe_dir];
+    for dir in extra_entries {
+        if !entries.contains(dir) {
+            entries.push(dir.clone());
+        }
+    }
+    Some(entries)
+}
+
+/// Join just the control-helper prefix. Unix login shells may replace PATH
+/// from their profiles, so the PTY also carries this prefix separately and
+/// re-applies it after profile startup (see shell_command).
+fn control_path_prefix(extra_entries: &[PathBuf]) -> Option<std::ffi::OsString> {
+    std::env::join_paths(control_path_entries(extra_entries)?).ok()
+}
+
+/// Prepend the control-helper directories to the ambient PATH using the host
+/// platform's separator.
+fn path_with_exe_dir(extra_entries: &[PathBuf]) -> Option<std::ffi::OsString> {
+    let mut entries = control_path_entries(extra_entries)?;
     if let Some(path) = std::env::var_os("PATH") {
         entries.extend(std::env::split_paths(&path));
     }
@@ -365,6 +400,8 @@ impl AgentManager {
                     .join("transcripts"),
             ),
             extra_env: Mutex::new(HashMap::new()),
+            path_entries: Mutex::new(Vec::new()),
+            agent_env_hook: Mutex::new(None),
         }
     }
 
@@ -375,6 +412,28 @@ impl AgentManager {
             .lock()
             .unwrap()
             .insert(key.to_string(), value.to_string());
+    }
+
+    /// Prepend an extra directory when constructing each PTY's PATH. The
+    /// native shell uses this for its generated canvasctl shim; the daemon
+    /// needs no entry because canvasctl already sits beside canvasd.
+    pub fn prepend_path_entry(&self, dir: impl Into<PathBuf>) {
+        let dir = dir.into();
+        let mut entries = self.path_entries.lock().unwrap();
+        if !entries.contains(&dir) {
+            entries.push(dir);
+        }
+    }
+
+    /// Register a hook that contributes identity-scoped environment to every
+    /// PTY after its agent id is known. The native shell uses this for the
+    /// per-agent control token; the daemon leaves it unset and keeps its
+    /// historical shared-token injection through set_env.
+    pub fn set_agent_env_hook(
+        &self,
+        hook: impl Fn(&str) -> Vec<(String, String)> + Send + Sync + 'static,
+    ) {
+        *self.agent_env_hook.lock().unwrap() = Some(Arc::new(hook));
     }
 
     /// Where per-agent transcript files live (`<dir>/<agent_id>.bin`).
@@ -442,15 +501,34 @@ impl AgentManager {
         for (k, v) in self.extra_env.lock().unwrap().iter() {
             cmd.env(k, v);
         }
+        // Identity-scoped values come after process-wide extra_env so a
+        // per-agent credential can override a host default for this PTY.
+        let env_hook = self.agent_env_hook.lock().unwrap().clone();
+        if let Some(hook) = env_hook {
+            for (k, v) in hook(&id) {
+                cmd.env(k, v);
+            }
+        }
         for (k, v) in pty_env {
             cmd.env(k, v);
         }
         // Put the directory holding this binary (canvasd / the app) first
         // on PATH so `canvasctl` is reachable inside every PTY. If the exe
         // path is unavailable, CommandBuilder still inherits the ambient PATH.
-        if let Some(path) = path_with_exe_dir() {
+        let extra_path_entries = self.path_entries.lock().unwrap().clone();
+        if let Some(prefix) = control_path_prefix(&extra_path_entries) {
+            // Read by unix_shell_script after login profiles have run.
+            cmd.env("CANVAS_PATH_PREPEND", prefix);
+        }
+        if let Some(path) = path_with_exe_dir(&extra_path_entries) {
             cmd.env("PATH", path);
         }
+        #[cfg(windows)]
+        // cmd.exe otherwise searches the worktree itself before PATH for a
+        // bare command, letting checkout content impersonate canvasctl and
+        // steal the control token. Defining this variable (any value) makes
+        // NeedCurrentDirectoryForExePath omit the current directory.
+        cmd.env("NoDefaultCurrentDirectoryInExePath", "1");
 
         let child = pair.slave.spawn_command(cmd)?;
         drop(pair.slave);
@@ -616,6 +694,17 @@ impl AgentManager {
     /// back to the on-disk transcript for agents that already exited (or
     /// lived under a previous daemon run).
     pub fn scrollback(&self, id: &str) -> Option<Vec<u8>> {
+        // IDs are generated hex, but this method is also reachable with wire
+        // input. Never let separators or dot components become a transcript
+        // path — otherwise ../../… can read unrelated *.bin files.
+        if id.is_empty()
+            || id.len() > 128
+            || !id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+        {
+            return None;
+        }
         if let Some(a) = self.agents.lock().unwrap().get(id) {
             return Some(a.tail.lock().unwrap().clone());
         }
@@ -930,6 +1019,38 @@ pub fn account_env_key(cli: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn registered_path_entry_is_prepended_after_the_exe_dir() {
+        let extra = PathBuf::from("/tmp/canvas-test-shim-dir");
+        let path = path_with_exe_dir(std::slice::from_ref(&extra)).unwrap();
+        let entries: Vec<PathBuf> = std::env::split_paths(&path).collect();
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        assert_eq!(entries[0], exe_dir);
+        assert_eq!(entries[1], extra);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_shell_script_reapplies_control_path_after_login_profiles() {
+        let script = unix_shell_script("claude --help");
+        let export = "export PATH=\"$CANVAS_PATH_PREPEND:$PATH\"";
+        assert!(script.contains(export), "{script}");
+        assert!(script.find(export).unwrap() < script.find("exec claude").unwrap());
+    }
+
+    #[test]
+    fn scrollback_rejects_path_like_agent_ids() {
+        let manager = AgentManager::new();
+        assert!(manager.scrollback("../../outside").is_none());
+        assert!(manager.scrollback("..").is_none());
+        assert!(manager.scrollback("a/b").is_none());
+        assert!(manager.scrollback("").is_none());
+    }
 
     #[test]
     fn canvas_result_survives_pty_escapes() {

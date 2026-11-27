@@ -19,7 +19,8 @@ use canvasd::agent::{
     canvas_result_line, dirty_diff, dirty_file_count, dirty_files, last_visible_line,
     sensitive_line, worktree_branch, AgentManager,
 };
-use canvasd::chain::{command_cli, substitute_cli, KNOWN_CLIS};
+use canvasd::chain::{command_cli, substitute_cli};
+use canvasd::control::{generate_token, loop_to_snapshot, token_eq, uuid_like};
 use canvasd::protocol;
 use canvasd::store;
 use protocol::{decode_pty_frame, encode_pty_frame, AgentStatus, ClientMsg, ServerMsg};
@@ -977,219 +978,32 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
     let mut rx = state.events.subscribe();
     info!("websocket client connected");
 
-    // Replay board state: every agent this board knows (live status for the
-    // ones still running) plus saved node positions.
-    if let Ok(agents) = state.store.agents_snapshot() {
-        let live: std::collections::HashMap<String, &str> =
-            state.agents.statuses().into_iter().collect();
-        let snapshot = ServerMsg::Snapshot {
-            boards: state
-                .store
-                .boards_snapshot()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(board_id, name)| protocol::SnapshotBoard { board_id, name })
-                .collect(),
-            artifacts: {
-                let names: std::collections::HashMap<String, String> =
-                    agents.iter().map(|a| (a.0.clone(), a.1.clone())).collect();
-                state
-                    .store
-                    .artifacts_snapshot()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(
-                        |(artifact_id, board_id, agent_id, kind, title, path, text, created_at)| {
-                            let agent_name = agent_id.as_ref().and_then(|a| names.get(a).cloned());
-                            protocol::SnapshotArtifact {
-                                artifact_id,
-                                board_id,
-                                agent_id,
-                                agent_name,
-                                kind,
-                                title,
-                                path,
-                                text,
-                                created_at,
-                            }
-                        },
-                    )
-                    .collect()
-            },
-            agents: {
-                let acct_labels: std::collections::HashMap<String, String> = state
-                    .store
-                    .accounts_snapshot()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|(id, _cli, label, _env)| (id, label))
-                    .collect();
-                agents
-                    .into_iter()
-                    .map(
-                        |(
-                            id,
-                            name,
-                            command,
-                            worktree,
-                            status,
-                            workspace_id,
-                            permission,
-                            board_id,
-                            account_id,
-                        )| {
-                            let account_label = account_id
-                                .as_ref()
-                                .and_then(|a| acct_labels.get(a).cloned());
-                            let ob = state
-                                .repo_root
-                                .join(".canvas")
-                                .join("transcripts")
-                                .join(format!("{id}.bin"))
-                                .metadata()
-                                .map(|m| m.len())
-                                .unwrap_or(0);
-                            // Replay the diff state too: a fresh client shouldn't
-                            // show a dirty worktree as clean until the diff
-                            // ticker next decides something changed.
-                            let wt = state.agents.worktree(&id).or_else(|| {
-                                state
-                                    .store
-                                    .agent_worktree_abs(&id, &state.repo_root)
-                                    .ok()
-                                    .flatten()
-                            });
-                            let (files, paths, branch) = wt
-                                .map(|w| {
-                                    let paths = dirty_files(&w);
-                                    (paths.len() as u32, paths, worktree_branch(&w))
-                                })
-                                .unwrap_or_default();
-                            protocol::SnapshotAgent {
-                                status: live
-                                    .get(&id)
-                                    .copied()
-                                    .unwrap_or(status.as_str())
-                                    .to_string(),
-                                agent_id: id,
-                                name,
-                                command,
-                                worktree,
-                                permission,
-                                workspace_id,
-                                board_id,
-                                account_label,
-                                output_bytes: ob,
-                                files,
-                                paths,
-                                branch,
-                            }
-                        },
-                    )
-                    .collect()
-            },
-            workspaces: state
-                .store
-                .workspaces_snapshot()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(workspace_id, name, repo, board_id)| {
-                    let agent_chain = state.store.workspace_chain(&workspace_id).ok().flatten();
-                    protocol::SnapshotWorkspace {
-                        workspace_id,
-                        name,
-                        repo,
-                        board_id,
-                        agent_chain,
-                    }
-                })
-                .collect(),
-            delegations: state
-                .store
-                .delegations_snapshot()
-                .unwrap_or_default()
-                .into_iter()
-                .map(
-                    |(edge_id, from, to, task, result, state, files, created_at, resolved_at)| {
-                        protocol::SnapshotDelegation {
-                            edge_id,
-                            from,
-                            to,
-                            task,
-                            result,
-                            files: files.unwrap_or(0) as u32,
-                            state,
-                            created_at,
-                            resolved_at,
-                        }
-                    },
-                )
-                .collect(),
-            automations: state
-                .store
-                .automations_snapshot()
-                .unwrap_or_default()
-                .into_iter()
-                .map(automation_to_snapshot)
-                .collect(),
-            loops: state
-                .store
-                .loops_snapshot()
-                .unwrap_or_default()
-                .into_iter()
-                .map(loop_to_snapshot)
-                .collect(),
-            layout: state.store.layout_map().unwrap_or_default(),
-            repo_url: state.repo_url.clone(),
-            cli_identities: canvasd::detect::detect_cli_identities(KNOWN_CLIS),
-            accounts: state
-                .store
-                .accounts_snapshot()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(account_id, cli, label, env)| protocol::SnapshotAccount {
-                    account_id,
-                    cli,
-                    label,
-                    env,
-                })
-                .collect(),
-            notes: state
-                .store
-                .all_notes()
-                .unwrap_or_default()
-                .into_iter()
-                .map(
-                    |(note_id, board_id, col, text, pos, due)| protocol::SnapshotNote {
-                        note_id,
-                        board_id,
-                        col,
-                        text,
-                        pos,
-                        due,
-                    },
-                )
-                .collect(),
-            approvals: state
-                .pending_inputs
-                .lock()
-                .unwrap()
-                .iter()
-                .filter_map(|(id, bytes)| sensitive_line(bytes).map(|line| (id.clone(), line)))
-                .collect(),
-        };
-        if let Ok(text) = serde_json::to_string(&snapshot) {
-            let _ = socket.send(Message::Text(text.into())).await;
+    // Replay board state first: one shared snapshot builder serves canvasd,
+    // the native shell, and the native control socket without wire drift.
+    match canvasd::control::snapshot_message(
+        &state.store,
+        &state.agents,
+        &state.repo_root,
+        state.repo_url.clone(),
+        canvasd::control::approval_lines(&state.pending_inputs),
+    ) {
+        Ok(snapshot) => {
+            if let Ok(text) = serde_json::to_string(&snapshot) {
+                let _ = socket.send(Message::Text(text.into())).await;
+            }
         }
-        // Transcript replay: buffered PTY scrollback so a reconnected
-        // terminal shows its history instead of a blank screen.
-        for id in state.agents.list() {
-            if let Some(buf) = state.agents.scrollback(&id) {
-                if !buf.is_empty() {
-                    let _ = socket
-                        .send(Message::Binary(encode_pty_frame(&id, &buf).into()))
-                        .await;
-                }
+        Err(e) => {
+            warn!(error = %e, "failed to build board snapshot");
+        }
+    }
+    // Transcript replay: buffered PTY scrollback so a reconnected
+    // terminal shows its history instead of a blank screen.
+    for id in state.agents.list() {
+        if let Some(buf) = state.agents.scrollback(&id) {
+            if !buf.is_empty() {
+                let _ = socket
+                    .send(Message::Binary(encode_pty_frame(&id, &buf).into()))
+                    .await;
             }
         }
     }
@@ -2884,65 +2698,6 @@ fn handle_client_msg(text: &str, state: &Arc<AppState>, send_control: &impl Fn(S
     }
 }
 
-/// DB row → wire shape for the automations snapshot.
-fn automation_to_snapshot(
-    (
-        id,
-        name,
-        prompt,
-        command,
-        workspace_id,
-        permission,
-        idle_secs,
-        on_approval,
-        last_run_at,
-        interval_secs,
-        next_run_at,
-    ): store::AutomationRow,
-) -> protocol::SnapshotAutomation {
-    protocol::SnapshotAutomation {
-        id,
-        name,
-        prompt,
-        command,
-        workspace_id,
-        permission,
-        idle_secs: idle_secs.max(0) as u64,
-        on_approval,
-        last_run_at,
-        interval_secs: interval_secs.map(|v| v.max(0) as u64),
-        next_run_at,
-    }
-}
-
-/// Shared by the manual RunAutomation arm and the schedule ticker:
-/// spawn the automation's agent, mark its guardrails, stamp the run.
-fn loop_to_snapshot(
-    (
-        loop_id,
-        board_id,
-        target,
-        instruction,
-        trigger,
-        interval_secs,
-        pattern,
-        enabled,
-        last_fired_at,
-    ): store::LoopRow,
-) -> protocol::SnapshotLoop {
-    protocol::SnapshotLoop {
-        loop_id,
-        board_id,
-        target,
-        instruction,
-        trigger,
-        interval_secs: interval_secs.map(|v| v.max(0) as u64),
-        pattern,
-        enabled,
-        last_fired_at,
-    }
-}
-
 /// Resolve a loop's target to live agent ids: "*" means every live agent
 /// on the loop's board; otherwise the single id if it is still running.
 fn loop_targets(state: &Arc<AppState>, board_id: &str, target: &str) -> Vec<String> {
@@ -2978,6 +2733,8 @@ fn fire_loop(state: &Arc<AppState>, row: &store::LoopRow) {
     }
 }
 
+/// Shared by the manual RunAutomation arm and the schedule ticker:
+/// spawn the automation's agent, mark its guardrails, stamp the run.
 fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
     let (
         automation_id,
@@ -3129,28 +2886,6 @@ async fn auth_middleware(
     } else {
         (StatusCode::UNAUTHORIZED, "invalid session token").into_response()
     }
-}
-
-/// Constant-time token compare — avoids early-exit leaks on the auth path.
-fn token_eq(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    a.bytes()
-        .zip(b.bytes())
-        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
-        == 0
-}
-
-fn generate_token() -> String {
-    use rand::RngCore;
-    let mut buf = [0u8; 32];
-    rand::rng().fill_bytes(&mut buf);
-    buf.iter().map(|b| format!("{b:02x}")).collect()
-}
-
-fn uuid_like() -> String {
-    uuid::Uuid::new_v4().simple().to_string()[..12].to_string()
 }
 
 #[tokio::main]
