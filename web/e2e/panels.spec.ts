@@ -289,6 +289,36 @@ test("Tools Add shape opens its choices and creates a canvas shape", async ({ pa
   await expect(page.locator(".react-flow__node-shape")).toBeVisible();
 });
 
+test("Pencil and Region shot modes have working visible and Escape exits", async ({ page }) => {
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
+
+  const openTools = async () => {
+    await page.locator("button[title^='Tools —']").click();
+    return page.getByRole("dialog", { name: "Tools panel" });
+  };
+
+  const tools = await openTools();
+  await tools.getByRole("button", { name: "Pencil markups" }).click();
+  await expect(page.getByTestId("pencil-overlay")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Turn off pencil/ })).toBeVisible();
+  await page.getByRole("button", { name: /Turn off pencil/ }).click();
+  await expect(page.getByTestId("pencil-overlay")).toHaveCount(0);
+
+  const toolsAgain = await openTools();
+  await toolsAgain.getByRole("button", { name: "Pencil markups" }).click();
+  await expect(page.getByTestId("pencil-overlay")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("pencil-overlay")).toHaveCount(0);
+
+  const toolsForRegion = await openTools();
+  await toolsForRegion.getByRole("button", { name: "Region shot" }).click();
+  await expect(page.getByTestId("region-shot-overlay")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("region-shot-overlay")).toHaveCount(0);
+});
+
 test("Add to canvas closes Tools and mounts a live Inbox panel", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();
