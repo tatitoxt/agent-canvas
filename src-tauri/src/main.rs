@@ -2439,14 +2439,30 @@ fn delete_automation(
 }
 
 #[tauri::command]
-fn pty_input(state: State<'_, CanvasState>, agent_id: String, data: String) -> Result<(), String> {
+fn pty_input(
+    app: AppHandle,
+    state: State<'_, CanvasState>,
+    agent_id: String,
+    data: String,
+) -> Result<(), String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&data)
         .map_err(|e| e.to_string())?;
-    if gated_write(&state, &agent_id, &bytes) {
-        Ok(())
-    } else {
-        Err("pty write failed".to_string())
+    match state
+        .orchestrator
+        .gated_write_disposition(&agent_id, &bytes)
+    {
+        Ok(_) => Ok(()),
+        Err(message) => {
+            emit_control(
+                &app,
+                &ServerMsg::Error {
+                    agent_id: Some(agent_id),
+                    message: message.clone(),
+                },
+            );
+            Err(message)
+        }
     }
 }
 

@@ -84,9 +84,17 @@ export class TauriCanvasClient {
   }
 
   ptyInput(agentId: string, bytes: Uint8Array) {
-    void invoke("pty_input", { agentId, data: b64encode(bytes) }).catch(
-      console.error,
+    void invoke("pty_input", { agentId, data: b64encode(bytes) }).catch((e) =>
+      this.reportAgentFailure(agentId, e),
     );
+  }
+
+  private reportAgentFailure(agentId: string, error: unknown) {
+    console.error("[tauri] pty_input failed:", error);
+    const message = typeof error === "string"
+      ? error
+      : error instanceof Error ? error.message : String(error);
+    this.handlers.onControl({ type: "error", agent_id: agentId, message });
   }
 
   resize(agentId: string, cols: number, rows: number) {

@@ -304,7 +304,16 @@ fn gated_write(state: &Arc<AppState>, agent_id: &str, bytes: &[u8]) -> bool {
             return true;
         }
     }
-    state.agents.write(agent_id, bytes).is_ok()
+    match state.agents.write(agent_id, bytes) {
+        Ok(()) => true,
+        Err(error) => {
+            let _ = state.events.send(Event::Control(ServerMsg::Error {
+                agent_id: Some(agent_id.to_string()),
+                message: error.to_string(),
+            }));
+            false
+        }
+    }
 }
 
 /// Wire event: control (JSON) or raw PTY output (binary).
@@ -1358,12 +1367,7 @@ fn handle_client_msg(text: &str, state: &Arc<AppState>, send_control: &impl Fn(S
         ClientMsg::PtyInput { agent_id, data } => {
             match base64::engine::general_purpose::STANDARD.decode(&data) {
                 Ok(bytes) => {
-                    if !gated_write(state, &agent_id, &bytes) {
-                        send_control(ServerMsg::Error {
-                            agent_id: Some(agent_id),
-                            message: "pty write failed".to_string(),
-                        });
-                    }
+                    gated_write(state, &agent_id, &bytes);
                 }
                 Err(e) => send_control(ServerMsg::Error {
                     agent_id: Some(agent_id),

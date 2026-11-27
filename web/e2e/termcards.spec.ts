@@ -40,6 +40,48 @@ test("agent card terminal control is keyboard-operable", async ({ page }) => {
   await expect(page.locator(".terminal-drawer .xterm").first()).toBeVisible({ timeout: 5_000 });
 });
 
+test("PTY queue-limit errors are shown in the terminal that caused them", async ({ page }) => {
+  const { port, token } = await boot(page);
+  await spawnTerm(page);
+  const card = page.locator(".agent-card").first();
+  await card.locator("[data-testid='agent-card-header']").click();
+  await card.locator("[title='Open terminal']").click();
+  const drawer = page.locator(".terminal-drawer").first();
+  await expect(drawer.locator(".xterm")).toBeVisible({ timeout: 5_000 });
+  const agentId = await card.locator("[data-testid='agent-card-header']").evaluate((el) =>
+    el.closest(".react-flow__node")?.getAttribute("data-id")?.replace(/^agent-/, ""),
+  );
+  expect(agentId).toBeTruthy();
+
+  await page.evaluate(({ port, token, agentId }) => new Promise<void>((resolve, reject) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?token=${token}`);
+    const timeout = window.setTimeout(() => reject(new Error("canvasd did not report the PTY queue limit")), 10_000);
+    ws.onmessage = (event) => {
+      if (typeof event.data !== "string") return;
+      const message = JSON.parse(event.data);
+      if (message.type === "error" && message.agent_id === agentId && /queue/i.test(message.message)) {
+        window.clearTimeout(timeout);
+        ws.close();
+        resolve();
+      }
+    };
+    ws.onerror = () => reject(new Error("test websocket failed"));
+    ws.onopen = () => {
+      const id = new TextEncoder().encode(agentId!);
+      const frame = new Uint8Array(1 + id.length + 1024 * 1024 + 1);
+      frame[0] = id.length;
+      frame.set(id, 1);
+      frame.fill(120, 1 + id.length);
+      ws.send(frame);
+    };
+  }), { port, token, agentId });
+
+  const error = drawer.getByTestId("terminal-error");
+  await expect(error).toContainText(/queue/i);
+  await error.getByRole("button", { name: "Dismiss terminal error" }).click();
+  await expect(error).toHaveCount(0);
+});
+
 test("agent cards resize from their canvas handles", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
