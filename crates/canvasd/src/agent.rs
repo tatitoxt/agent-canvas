@@ -126,16 +126,44 @@ impl Agent {
         let _ = self.child.lock().unwrap().kill();
     }
 
-    /// SIGSTOP/SIGCONT the PTY child — Symvibe's "pause all": output
-    /// queues in the kernel PTY buffer and the process resumes mid-line.
+    /// SIGSTOP/SIGCONT the PTY foreground work — Symvibe's "pause all".
+    /// Interactive shells use job control: the foreground pipeline runs in
+    /// its OWN process group, so signaling only the shell PID leaves loops
+    /// and TUIs running. The honest target is the terminal's foreground
+    /// process group (tcgetpgrp on the master fd), plus the shell itself
+    /// when it sits in a different group. Returns false when nothing could
+    /// be signalled — pause-all must never pretend a freeze happened.
     #[cfg(unix)]
     fn signal(&self, sig: i32) -> bool {
-        self.child
+        let shell_pid = self.child.lock().unwrap().process_id();
+        let mut signalled = false;
+        let fg_pgid = self
+            .master
             .lock()
             .unwrap()
-            .process_id()
-            .map(|pid| unsafe { libc::kill(pid as i32, sig) == 0 })
-            .unwrap_or(false)
+            .as_raw_fd()
+            .map(|fd| unsafe { libc::tcgetpgrp(fd) })
+            .filter(|p| *p > 0);
+        // Stop/continue the shell BEFORE the foreground job: a running shell
+        // can notice its child stopping and tcsetpgrp-reclaim the terminal,
+        // after which tcgetpgrp no longer names the job's group and resume
+        // would signal the wrong group. A stopped shell cannot reclaim, and
+        // the fg pgid is read once up-front so the target stays correct.
+        if let Some(pid) = shell_pid {
+            // When the shell IS the foreground group this is a harmless
+            // duplicate of the killpg below.
+            let shell_in_fg = fg_pgid.map(|p| p as u32) == Some(pid);
+            if !shell_in_fg && unsafe { libc::kill(pid as i32, sig) } == 0 {
+                signalled = true;
+            }
+        }
+        if let Some(pgid) = fg_pgid {
+            // Negative pid targets the whole process group (killpg).
+            if unsafe { libc::kill(-pgid, sig) } == 0 {
+                signalled = true;
+            }
+        }
+        signalled
     }
 
     #[cfg(unix)]
