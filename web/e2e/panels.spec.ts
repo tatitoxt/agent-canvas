@@ -1,5 +1,6 @@
 import { test, expect } from "./fixtures.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
+import WebSocket from "ws";
 import { resolve } from "node:path";
 
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
@@ -287,6 +288,109 @@ test("Tools Add shape opens its choices and creates a canvas shape", async ({ pa
   await rect.click();
   await expect(dock).toBeHidden();
   await expect(page.locator(".react-flow__node-shape")).toBeVisible();
+});
+
+test("Tools creates every supported shape", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  for (const kind of ["ellipse", "diamond", "sticky"] as const) {
+    await dock.getByRole("button", { name: "Add shape" }).click();
+    await dock.locator(`button[title='${kind}']`).click();
+    await expect.poll(() => page.evaluate((expected) => {
+      const all = JSON.parse(localStorage.getItem("cv-shapes") ?? "{}");
+      return Object.values(all.main ?? {}).filter((shape: any) => shape.kind === expected).length;
+    }, kind)).toBe(1);
+    await page.locator("button[title^='Tools —']").click();
+  }
+});
+
+test("Team Builder has named controls and spawns the selected role", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Team builder" }).click();
+
+  const team = page.locator(".glass-panel").filter({ hasText: "Team builder" }).last();
+  await expect(team).toBeVisible();
+  await expect(team.getByRole("button", { name: "Close Team builder" })).toBeVisible();
+  await expect(team.getByRole("button", { name: "Decrease General count" })).toBeVisible();
+  const spawn = team.getByRole("button", { name: "Spawn", exact: true });
+  await expect(spawn).toBeDisabled();
+  await team.getByRole("button", { name: "Increase General count" }).click();
+  const spawnOne = team.getByRole("button", { name: "Spawn 1", exact: true });
+  await expect(spawnOne).toBeEnabled();
+  await spawnOne.click();
+
+  await expect(team).toHaveCount(0);
+  const card = page.locator(".agent-card").filter({ hasText: "general-1" }).first();
+  await expect(card).toBeVisible({ timeout: 12_000 });
+});
+
+test("Pause all and Resume all return process outcomes without error notices", async ({ page }) => {
+  const { port, token } = await boot(page);
+  await page.locator("button[title='Terminal — spawn a plain shell']").first().click();
+  await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 8_000 });
+  const agentId = await page.locator(".agent-card").first().evaluate((el) =>
+    el.closest(".react-flow__node")?.getAttribute("data-id"),
+  );
+  expect(agentId).toBeTruthy();
+
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?token=${token}`);
+  const frames: any[] = [];
+  ws.addEventListener("message", (event) => {
+    if (typeof event.data === "string") {
+      try { frames.push(JSON.parse(event.data)); } catch { /* binary or partial */ }
+    }
+  });
+  await new Promise<void>((resolve) => ws.addEventListener("open", () => resolve(), { once: true }));
+  await new Promise<void>((resolve) => {
+    const onMessage = (event: MessageEvent) => {
+      if (typeof event.data !== "string") return;
+      const msg = JSON.parse(event.data);
+      if (msg.type === "snapshot") { ws.removeEventListener("message", onMessage); resolve(); }
+    };
+    ws.addEventListener("message", onMessage);
+  });
+  ws.send(JSON.stringify({ cmd: "pause_all", board_id: "main" }));
+  await expect.poll(() => frames.find((m) => m.type === "agent_processes_paused")?.count).toBeGreaterThan(0);
+  expect(frames.some((m) => m.type === "error" && /paused/.test(m.message))).toBe(false);
+  ws.send(JSON.stringify({ cmd: "resume_all", board_id: "main" }));
+  await expect.poll(() => frames.find((m) => m.type === "agent_processes_resumed")?.count).toBeGreaterThan(0);
+  expect(frames.some((m) => m.type === "error" && /paused|resumed/.test(m.message))).toBe(false);
+  ws.close();
+});
+
+test("Canvas shot exports a PNG download", async ({ page }) => {
+  await boot(page);
+  await page.evaluate(() => localStorage.setItem("cv-panelnodes", JSON.stringify({ main: { "panel-inbox": { panel: "inbox", x: 120, y: 160, w: 460, h: 320 } } })));
+  await page.reload();
+  await expect(page.locator(".react-flow__node-panel [data-panel='inbox']")).toBeVisible();
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  const download = page.waitForEvent("download");
+  await dock.getByRole("button", { name: "Canvas shot" }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^canvas-.*\.png$/);
+});
+
+test("Session digest and Studio doc render real daemon content", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title='Terminal — spawn a plain shell']").first().click();
+  await expect(page.locator(".agent-card").first()).toBeVisible({ timeout: 8_000 });
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Session digest" }).click();
+  const digest = page.getByText("Session digest", { exact: true }).last();
+  await expect(digest).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator("pre").filter({ hasText: /Terminal.*—/ }).last()).toBeVisible();
+  await page.getByRole("button", { name: "×" }).click();
+  await page.locator("button[title^='Tools —']").click();
+  const studioReady = page.waitForResponse((response) => response.ok()).catch(() => null);
+  await dock.getByRole("button", { name: "Studio doc" }).click();
+  await studioReady;
+  await expect(page.getByText("studio doc", { exact: true })).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator("pre").filter({ hasText: "README.md" })).toBeVisible();
 });
 
 test("Add to canvas closes Tools and mounts a live Inbox panel", async ({ page }) => {

@@ -502,6 +502,8 @@ type BoardState = {
   ptyBuffers: Record<string, Uint8Array>;
   /** Last known PTY size per agent (daemon default 80×24). */
   ptySize: Record<string, { cols: number; rows: number }>;
+  /** Latest resize not accepted by the transport yet; only these are replayed after reconnect. */
+  pendingPtyResize: Record<string, { cols: number; rows: number; requestId: string }>;
   connect: (token: string) => void;
   setActiveBoard: (boardId: string) => void;
   createBoard: (name: string) => void;
@@ -895,6 +897,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   ptyListeners: {},
   ptyBuffers: {},
   ptySize: {},
+  pendingPtyResize: {},
   sessionUse: {},
   acctLedger: loadLedger(),
 
@@ -1089,6 +1092,11 @@ export const useBoard = create<BoardState>((set, get) => ({
           }
           case "status":
             if (agents[msg.agent_id]) {
+              if (msg.status === "exited") {
+                const pendingPtyResize = { ...get().pendingPtyResize };
+                delete pendingPtyResize[msg.agent_id];
+                set({ pendingPtyResize });
+              }
               set({
                 agents: {
                   ...agents,
@@ -1275,6 +1283,9 @@ export const useBoard = create<BoardState>((set, get) => ({
                 },
               ]),
             );
+            const pendingPtyResize = Object.fromEntries(
+              Object.entries(get().pendingPtyResize).filter(([agentId]) => agents[agentId]),
+            );
             const accounts = Object.fromEntries(
               (msg.accounts ?? []).map((a) => [a.account_id, a]),
             );
@@ -1350,6 +1361,7 @@ export const useBoard = create<BoardState>((set, get) => ({
             }
             set({
               agents,
+              pendingPtyResize,
               ptyBuffers,
               positions,
               edges,
@@ -1443,6 +1455,12 @@ export const useBoard = create<BoardState>((set, get) => ({
           case "session_digest":
             set({ digest: msg.text });
             break;
+          case "agent_processes_paused":
+            get().notify(`paused ${msg.count} agents`);
+            break;
+          case "agent_processes_resumed":
+            get().notify(`resumed ${msg.count} agents`);
+            break;
           case "memory": {
             set((st) => ({ memories: { ...st.memories, [msg.node_id]: msg.text } }));
             break;
@@ -1465,6 +1483,15 @@ export const useBoard = create<BoardState>((set, get) => ({
             get().notify(`error — ${msg.message}`);
             console.error("[canvasd]", msg.message);
             break;
+          case "pty_resized": {
+            const pending = get().pendingPtyResize[msg.agent_id];
+            if (pending?.requestId === msg.request_id) {
+              const pendingPtyResize = { ...get().pendingPtyResize };
+              delete pendingPtyResize[msg.agent_id];
+              set({ pendingPtyResize });
+            }
+            break;
+          }
           default:
             break;
         }
@@ -1491,8 +1518,46 @@ export const useBoard = create<BoardState>((set, get) => ({
     };
     // Inside Tauri there is no socket and no token — the app itself is the peer.
     client = isTauri() ? new TauriCanvasClient(handlers) : new CanvasClient(t, handlers);
-    void client.whenOpen().then(() => {
+    const openingClient = client;
+    void openingClient.whenOpen().then(() => {
+      if (client !== openingClient) return;
       set({ connected: true });
+      // Only replay a resize that the transport rejected while offline. A
+      // resize accepted on this socket is already authoritative at the
+      // daemon; replaying this tab's old geometry could overwrite a newer
+      // resize from another tab sharing the same PTY.
+      const state = get();
+      const pending = state.pendingPtyResize;
+      for (const [agentId, size] of Object.entries(pending)) {
+        const requestId = crypto.randomUUID();
+        if (!state.agents[agentId] || state.agents[agentId].status === "exited") {
+          const rest = { ...get().pendingPtyResize };
+          delete rest[agentId];
+          set({ pendingPtyResize: rest });
+          continue;
+        }
+        const accepted = openingClient.resize(agentId, size.cols, size.rows, requestId);
+        if (accepted instanceof Promise) {
+          void accepted.then((ok) => {
+            const latest = get().pendingPtyResize[agentId];
+            if (ok && latest?.requestId === requestId) {
+              const rest = { ...get().pendingPtyResize };
+              delete rest[agentId];
+              set({ pendingPtyResize: rest });
+            }
+          });
+        } else if (accepted && isTauri()) {
+          // The native invoke resolves only after Rust applied the resize.
+          // WebSocket `send()` only queues bytes locally; keep that request
+          // pending until the daemon's matching `pty_resized` control frame.
+          const latest = get().pendingPtyResize[agentId];
+          if (latest?.requestId === requestId) {
+            const rest = { ...get().pendingPtyResize };
+            delete rest[agentId];
+            set({ pendingPtyResize: rest });
+          }
+        }
+      }
       // Re-mount the saved vault after (re)connect — a vaultList() sent
       // before the socket opens would be silently dropped.
       const dir = get().vaultDir || (() => {
@@ -3385,8 +3450,33 @@ export const useBoard = create<BoardState>((set, get) => ({
 
   sendInput: (agentId, bytes) => client?.ptyInput(agentId, bytes),
   resizePty: (agentId, cols, rows) => {
-    set({ ptySize: { ...get().ptySize, [agentId]: { cols, rows } } });
-    client?.resize(agentId, cols, rows);
+    const size = { cols, rows };
+    const current = client;
+    set({ ptySize: { ...get().ptySize, [agentId]: size } });
+    const requestId = crypto.randomUUID();
+    set({ pendingPtyResize: { ...get().pendingPtyResize, [agentId]: { ...size, requestId } } });
+    if (!current) {
+      return;
+    }
+    const accepted = current.resize(agentId, cols, rows, requestId);
+    if (accepted instanceof Promise) {
+      void accepted.then((ok) => {
+        const latest = get().pendingPtyResize[agentId];
+        if (ok && latest?.requestId === requestId) {
+          const pendingPtyResize = { ...get().pendingPtyResize };
+          delete pendingPtyResize[agentId];
+          set({ pendingPtyResize });
+        }
+      });
+    } else if (!accepted) {
+      return;
+    } else if (isTauri()) {
+      // In Tauri the successful command response confirms Rust applied it.
+      // The WebSocket path must wait for the server's request-id ACK.
+      const pendingPtyResize = { ...get().pendingPtyResize };
+      delete pendingPtyResize[agentId];
+      set({ pendingPtyResize });
+    }
   },
 
   requestTranscript: (agentId) => client?.transcript(agentId),

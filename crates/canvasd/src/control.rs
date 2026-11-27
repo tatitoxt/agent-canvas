@@ -994,16 +994,20 @@ fn handle_client_msg(text: &str, state: &ControlSocketState, identity: &ControlI
             agent_id,
             cols,
             rows,
+            request_id,
         } => {
             let id = agent_id.clone();
-            report(
-                orchestrator,
-                orchestrator
-                    .agents
-                    .resize(&agent_id, cols, rows)
-                    .map_err(|e| e.to_string()),
-                Some(id),
-            )
+            match orchestrator.agents.resize(&agent_id, cols, rows) {
+                Ok(()) => {
+                    if let Some(request_id) = request_id {
+                        orchestrator.emit_control(ServerMsg::PtyResized {
+                            agent_id: id,
+                            request_id,
+                        });
+                    }
+                }
+                Err(error) => orchestrator.emit_error(Some(id), error.to_string()),
+            }
         }
         ClientMsg::KillAgent { agent_id } => {
             orchestrator.emit_error(Some(agent_id), "kill requires confirm_destructive")
@@ -1043,14 +1047,14 @@ fn handle_client_msg(text: &str, state: &ControlSocketState, identity: &ControlI
             let n = orchestrator
                 .agents
                 .suspend_many(&live_targets(orchestrator, &board));
-            orchestrator.emit_error(None, format!("paused {n} agents"));
+            orchestrator.emit_control(ServerMsg::AgentProcessesPaused { count: n });
         }
         ClientMsg::ResumeAll { board_id } => {
             let board = board_id.unwrap_or_else(|| "main".to_string());
             let n = orchestrator
                 .agents
                 .resume_many(&live_targets(orchestrator, &board));
-            orchestrator.emit_error(None, format!("resumed {n} agents"));
+            orchestrator.emit_control(ServerMsg::AgentProcessesResumed { count: n });
         }
 
         // Deliberately out of the native control-socket v1 scope. These are

@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 
 import { LazyTermHost as TermHost } from "./LazyTermHost";
+import { markPtyResizeIntent } from "./ptyResize";
 import { useBoard } from "../store/board";
 import { CliMark } from "./CliMark";
 import { announcedModel, STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "../board/nodes";
@@ -155,6 +156,7 @@ export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index 
     if (maxed) return;
     e.preventDefault();
     e.stopPropagation();
+    markPtyResizeIntent(agentId);
     resizeRef.current = { x: e.clientX, y: e.clientY, width: size.width, height: size.height };
     let nextSize = { width: size.width, height: size.height };
     const move = (ev: PointerEvent) => {

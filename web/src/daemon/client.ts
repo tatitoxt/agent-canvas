@@ -65,6 +65,8 @@ export type ServerMsg =
   | { type: "activity"; agent_id: string; line: string }
   | { type: "diff"; agent_id: string; files: number; paths?: string[]; branch?: string }
   | { type: "error"; agent_id: string | null; message: string }
+  | { type: "agent_processes_paused" | "agent_processes_resumed"; count: number }
+  | { type: "pty_resized"; agent_id: string; request_id: string }
   | { type: "needs_approval"; agent_id: string; line: string }
   | { type: "needs_attention"; agent_id: string; reason: string }
   | { type: "automation_saved"; automation: AutomationDef }
@@ -382,8 +384,10 @@ export class CanvasClient {
     this.sendBinary(agentId, bytes);
   }
 
-  resize(agentId: string, cols: number, rows: number) {
-    this.send({ cmd: "pty_resize", agent_id: agentId, cols, rows });
+  resize(agentId: string, cols: number, rows: number, requestId?: string): boolean {
+    if (this.ws.readyState !== WebSocket.OPEN) return false;
+    this.ws.send(JSON.stringify({ cmd: "pty_resize", agent_id: agentId, cols, rows, request_id: requestId }));
+    return true;
   }
 
   /** The only way to kill: explicit destructive confirmation. */

@@ -74,7 +74,7 @@ export function TeamBuilder({ onClose }: { onClose: () => void }) {
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 700, color: "var(--cv-ink)" }}>◨ Team builder</span>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", display: "flex", padding: 2 }}><Icon name="ph-x" size={12} /></button>
+        <button aria-label="Close Team builder" title="Close Team builder" onClick={onClose} style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", display: "flex", padding: 2 }}><Icon name="ph-x" size={12} /></button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
         {ROLES.map((r) => {
@@ -94,9 +94,9 @@ export function TeamBuilder({ onClose }: { onClose: () => void }) {
             >
               <span style={{ color: "var(--cv-accent)", fontSize: "var(--cv-text-xs)" }}>{r.glyph}</span>
               <span style={{ flex: 1, fontSize: "var(--cv-text-xs)", color: "var(--cv-ink)" }}>{r.label}</span>
-              <button onClick={() => bump(r.key, -1)} style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xs)" }}>−</button>
+              <button aria-label={`Decrease ${r.label} count`} title={`Decrease ${r.label} count`} onClick={() => bump(r.key, -1)} style={{ background: "none", border: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-xs)" }}>−</button>
               <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink)", minWidth: 10, textAlign: "center" }}>{n}</span>
-              <button onClick={() => bump(r.key, 1)} style={{ background: "none", border: "none", color: "var(--cv-ink)", cursor: "pointer", fontSize: "var(--cv-text-xs)" }}>+</button>
+              <button aria-label={`Increase ${r.label} count`} title={`Increase ${r.label} count`} onClick={() => bump(r.key, 1)} style={{ background: "none", border: "none", color: "var(--cv-ink)", cursor: "pointer", fontSize: "var(--cv-text-xs)" }}>+</button>
             </div>
           );
         })}

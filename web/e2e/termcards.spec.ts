@@ -429,8 +429,274 @@ test("reconnecting rebuilds a live terminal from scrollback without duplicate hi
   await expect.poll(markerCount).toBeGreaterThan(0);
   const beforeReconnect = await markerCount();
 
-  await page.evaluate(() => (window as any).__canvasSockets[0].close());
+  await page.evaluate(() => {
+    const socket = (window as any).__canvasSockets[0] as WebSocket;
+    socket.close();
+  });
   await page.waitForFunction(() => (window as any).__canvasSockets.length >= 2, { timeout: 12_000 });
   await expect(page.locator("[data-testid='daemon-status']")).toHaveAttribute("aria-label", "Canvas daemon connected", { timeout: 12_000 });
   await expect.poll(markerCount).toBe(beforeReconnect);
+});
+
+test("PTY resize made while disconnected is replayed after reconnect", async ({ page }) => {
+  await page.addInitScript(() => {
+    const NativeWebSocket = window.WebSocket;
+    const sockets: WebSocket[] = [];
+    Object.defineProperty(window, "__canvasSockets", { value: sockets });
+    window.WebSocket = new Proxy(NativeWebSocket, {
+      construct(target, args) {
+        const socket = Reflect.construct(target, args) as WebSocket;
+        sockets.push(socket);
+        return socket;
+      },
+    });
+  });
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const terminal = page.locator(".terminal-drawer .xterm").first();
+  const rows = page.locator(".terminal-drawer .xterm-rows");
+  const runSizeProbe = async (label: string) => {
+    await terminal.click();
+    await page.keyboard.type(`printf '${label}:'; stty size`);
+    await page.keyboard.press("Enter");
+    await expect(rows).toContainText(`${label}:`, { timeout: 8_000 });
+    const text = await rows.innerText();
+    const match = text.match(new RegExp(`${label}:(\\d+)\\s+(\\d+)`));
+    if (!match) throw new Error(`Could not read PTY size from terminal output: ${text}`);
+    return { rows: Number(match[1]), cols: Number(match[2]) };
+  };
+
+  const before = await runSizeProbe("before-size");
+  await page.evaluate(() => (window as any).__canvasSockets[0].close());
+  await page.waitForFunction(() => (window as any).__canvasSockets[0].readyState === WebSocket.CLOSED, { timeout: 5_000 });
+  await page.waitForTimeout(100);
+
+  const handle = page.getByTestId("terminal-resize-handle");
+  const panel = handle.locator("xpath=..");
+  const beforeBox = await panel.boundingBox();
+  const grip = await handle.boundingBox();
+  expect(beforeBox).not.toBeNull();
+  expect(grip).not.toBeNull();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + grip!.width / 2 + 180, grip!.y + grip!.height / 2 + 100, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBeGreaterThan(beforeBox!.width + 100);
+  await expect.poll(async () => (await panel.boundingBox())?.height ?? 0).toBeGreaterThan(beforeBox!.height + 50);
+
+  await page.waitForFunction(() => (window as any).__canvasSockets.length >= 2, { timeout: 12_000 });
+  await expect(page.locator("[data-testid='daemon-status']")).toHaveAttribute("aria-label", "Canvas daemon connected", { timeout: 12_000 });
+  const after = await runSizeProbe("after-size");
+  expect(after.cols, "reconnected PTY should adopt the wider terminal").toBeGreaterThan(before.cols);
+  expect(after.rows, "reconnected PTY should adopt the taller terminal").toBeGreaterThan(before.rows);
+});
+
+test("PTY resize stays pending until the daemon ACK arrives", async ({ page }) => {
+  await page.addInitScript(() => {
+    const NativeWebSocket = window.WebSocket;
+    const sockets: WebSocket[] = [];
+    Object.defineProperties(window, {
+      __canvasSockets: { value: sockets },
+      __resizeFrames: { value: [] },
+      __resizeAckDropped: { value: 0, writable: true },
+      __dropResizeAcks: { value: false, writable: true },
+    });
+    window.WebSocket = new Proxy(NativeWebSocket, {
+      construct(target, args) {
+        const socket = Reflect.construct(target, args) as WebSocket;
+        sockets.push(socket);
+        const send = socket.send.bind(socket);
+        socket.send = (data) => {
+          if (typeof data === "string") {
+            const message = JSON.parse(data);
+            if (message.cmd === "pty_resize") (window as any).__resizeFrames.push(message);
+          }
+          send(data);
+        };
+        const onmessage = Object.getOwnPropertyDescriptor(NativeWebSocket.prototype, "onmessage");
+        if (onmessage?.get && onmessage.set) {
+          Object.defineProperty(socket, "onmessage", {
+            configurable: true,
+            get() { return onmessage.get!.call(socket); },
+            set(value) {
+              if (typeof value === "function") {
+                onmessage.set!.call(socket, (event: MessageEvent) => {
+                if (typeof event.data === "string") {
+                  const message = JSON.parse(event.data);
+                  if (message.type === "pty_resized" && (window as any).__dropResizeAcks) {
+                    (window as any).__resizeAckDropped += 1;
+                    return;
+                  }
+                }
+                  value.call(socket, event);
+                });
+              } else {
+                onmessage.set!.call(socket, value);
+              }
+            },
+          });
+        }
+        return socket;
+      },
+    });
+  });
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+
+  await page.evaluate(() => { (window as any).__dropResizeAcks = true; });
+  const handle = page.getByTestId("terminal-resize-handle");
+  const panel = handle.locator("xpath=..");
+  const beforeBox = await panel.boundingBox();
+  const grip = await handle.boundingBox();
+  expect(beforeBox).not.toBeNull();
+  expect(grip).not.toBeNull();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + grip!.width / 2 + 160, grip!.y + grip!.height / 2 + 90, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBeGreaterThan(beforeBox!.width + 80);
+  await expect.poll(() => page.evaluate(() => (window as any).__resizeAckDropped)).toBeGreaterThan(0);
+
+  // The daemon already applied the first request, but the browser never saw
+  // its ACK. Reconnect must replay it instead of treating WebSocket.send as
+  // proof of application.
+  await page.evaluate(() => (window as any).__canvasSockets[0].close());
+  await page.waitForFunction(() => (window as any).__canvasSockets.length >= 2, { timeout: 12_000 });
+  await expect(page.locator("[data-testid='daemon-status']")).toHaveAttribute("aria-label", "Canvas daemon connected", { timeout: 12_000 });
+  await expect.poll(() => page.evaluate(() => (window as any).__resizeFrames.length)).toBeGreaterThan(1);
+  await page.evaluate(() => { (window as any).__dropResizeAcks = false; });
+});
+
+test("reconnecting a terminal tab without a pending resize does not overwrite another tab's PTY size", async ({ browser }) => {
+  const tabA = await browser.newPage();
+  const tabB = await browser.newPage();
+  for (const page of [tabA, tabB]) {
+    await page.addInitScript(() => {
+      const NativeWebSocket = window.WebSocket;
+      const sockets: WebSocket[] = [];
+      const resizeFrames: unknown[] = [];
+      Object.defineProperties(window, {
+        __canvasSockets: { value: sockets },
+        __ptyResizeFrames: { value: resizeFrames },
+      });
+      window.WebSocket = new Proxy(NativeWebSocket, {
+        construct(target, args) {
+          const socket = Reflect.construct(target, args) as WebSocket;
+          sockets.push(socket);
+          const send = socket.send.bind(socket);
+          socket.send = (data) => {
+            if (typeof data === "string") {
+              const message = JSON.parse(data);
+              if (message.cmd === "pty_resize") resizeFrames.push(message);
+            }
+            send(data);
+          };
+          return socket;
+        },
+      });
+    });
+  }
+  await boot(tabA);
+  await spawnTerm(tabA);
+  const node = tabA.locator(".react-flow__node-agent").first();
+  await expect(node).toBeVisible();
+  const agentId = await node.getAttribute("data-id");
+  expect(agentId).toBeTruthy();
+  const open = async (page: import("@playwright/test").Page) => {
+    const card = page.locator(`.react-flow__node[data-id="${agentId}"]`);
+    await expect(card).toBeVisible({ timeout: 8_000 });
+    const rect = await card.boundingBox();
+    expect(rect).not.toBeNull();
+    await page.mouse.click(rect!.x + 30, rect!.y + 30, { button: "right" });
+    await page.locator(".cv-menu").getByRole("button", { name: "open terminal" }).click();
+    const terminal = page.locator(".terminal-drawer .xterm").first();
+    await expect(terminal).toBeVisible({ timeout: 8_000 });
+    return terminal;
+  };
+  const termA = await open(tabA);
+  const stackInfo = stack();
+  await tabB.goto(`http://127.0.0.1:${stackInfo.port}/?token=${stackInfo.token}`);
+  await expect(tabB.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
+  const termB = await open(tabB);
+  const resizeTabB = tabB.getByTestId("terminal-resize-handle");
+  const initialPanelBox = await resizeTabB.locator("xpath=..").boundingBox();
+  const initialGrip = await resizeTabB.boundingBox();
+  expect(initialPanelBox).not.toBeNull();
+  expect(initialGrip).not.toBeNull();
+  await tabB.mouse.move(initialGrip!.x + initialGrip!.width / 2, initialGrip!.y + initialGrip!.height / 2);
+  await tabB.mouse.down();
+  await tabB.mouse.move(initialGrip!.x + initialGrip!.width / 2 + 140, initialGrip!.y + initialGrip!.height / 2 + 60, { steps: 6 });
+  await tabB.mouse.up();
+  await expect.poll(async () => (await resizeTabB.locator("xpath=..").boundingBox())?.width ?? 0).toBeGreaterThan(initialPanelBox!.width + 100);
+  await expect.poll(async () => (await resizeTabB.locator("xpath=..").boundingBox())?.height ?? 0).toBeGreaterThan(initialPanelBox!.height + 40);
+  const noPendingResize = (page: import("@playwright/test").Page) =>
+    page.evaluate((id) => !(window as any).useBoard?.getState().pendingPtyResize[id], agentId);
+  await expect.poll(() => noPendingResize(tabA)).toBe(true);
+  await expect.poll(() => noPendingResize(tabB)).toBe(true);
+  const sizeOn = async (page: import("@playwright/test").Page, terminal: import("@playwright/test").Locator, marker: string) => {
+    await terminal.click();
+    await page.keyboard.type(`printf '${marker}:'; stty size`);
+    await page.keyboard.press("Enter");
+    const rows = page.locator(".terminal-drawer .xterm-rows");
+    await expect(rows).toContainText(`${marker}:`, { timeout: 8_000 });
+    const text = await rows.innerText();
+    const match = text.match(new RegExp(`${marker}:(\\d+)\\s+(\\d+)`));
+    if (!match) throw new Error(`Could not read PTY dimensions: ${text}`);
+    return { rows: Number(match[1]), cols: Number(match[2]) };
+  };
+  const initial = await sizeOn(tabA, termA, "shared-before");
+  const disconnect = async (page: import("@playwright/test").Page) => {
+    await page.evaluate(() => (window as any).__canvasSockets[0].close());
+    await page.waitForFunction(() => (window as any).__canvasSockets[0].readyState === WebSocket.CLOSED, { timeout: 5_000 });
+  };
+  await disconnect(tabA);
+  const handle = resizeTabB;
+  const beforeBox = await handle.locator("xpath=..").boundingBox();
+  const grip = await handle.boundingBox();
+  expect(beforeBox).not.toBeNull();
+  expect(grip).not.toBeNull();
+  await tabB.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await tabB.mouse.down();
+  await tabB.mouse.move(grip!.x + grip!.width / 2 + 180, grip!.y + grip!.height / 2 + 100, { steps: 8 });
+  await tabB.mouse.up();
+  await expect.poll(async () => (await handle.locator("xpath=..").boundingBox())?.width ?? 0).toBeGreaterThan(beforeBox!.width + 100);
+  await expect.poll(async () => (await handle.locator("xpath=..").boundingBox())?.height ?? 0).toBeGreaterThan(beforeBox!.height + 50);
+  const newSharedSize = await sizeOn(tabB, termB, "shared-after-tab-b-resize");
+  await expect.poll(() => noPendingResize(tabB)).toBe(true);
+  expect(newSharedSize.cols).toBeGreaterThan(initial.cols);
+  expect(newSharedSize.rows).toBeGreaterThan(initial.rows);
+  await disconnect(tabB);
+  const resizeFramesBeforeTabAReconnect = await tabA.evaluate(() => (window as any).__ptyResizeFrames.length);
+  await tabA.waitForFunction(() => (window as any).__canvasSockets.length >= 2, { timeout: 12_000 });
+  await expect(tabA.locator("[data-testid='daemon-status']")).toHaveAttribute("aria-label", "Canvas daemon connected", { timeout: 12_000 });
+
+  // Reconnect status chrome can briefly change the drawer's measured height.
+  // This is observer churn, not a user resize; it must not overwrite tab B's
+  // newer dimensions on the shared PTY.
+  await tabA.locator(".terminal-drawer").evaluate((drawer) => {
+    const previousHeight = (drawer as HTMLElement).style.height;
+    (drawer as HTMLElement).style.height = "240px";
+    window.setTimeout(() => { (drawer as HTMLElement).style.height = previousHeight; }, 160);
+  });
+  await tabA.waitForTimeout(750);
+  await expect.poll(() => tabA.evaluate(() => (window as any).__ptyResizeFrames.length)).toBe(resizeFramesBeforeTabAReconnect);
+  const afterTabAReconnect = await tabA.evaluate(async () => {
+    const terminal = document.querySelector(".terminal-drawer .xterm") as HTMLElement | null;
+    if (!terminal) throw new Error("terminal drawer missing after reconnect");
+    terminal.focus();
+    const textarea = terminal.querySelector("textarea.xterm-helper-textarea") as HTMLTextAreaElement | null;
+    if (!textarea) throw new Error("xterm input missing after reconnect");
+    textarea.value = "";
+    textarea.dispatchEvent(new InputEvent("input", { bubbles: true, data: "", inputType: "insertText" }));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const screen = terminal.querySelector(".xterm-screen") as HTMLElement | null;
+    return { width: screen?.clientWidth, height: screen?.clientHeight };
+  });
+  expect(afterTabAReconnect.width).toBeGreaterThan(0);
+  expect(afterTabAReconnect.height).toBeGreaterThan(0);
+  expect(await tabA.evaluate(() => (window as any).__ptyResizeFrames.length)).toBe(resizeFramesBeforeTabAReconnect);
+  await tabA.close();
+  await tabB.close();
 });
