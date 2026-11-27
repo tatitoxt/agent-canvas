@@ -97,6 +97,7 @@
   --cv-radius-sm: 4px;
   --cv-radius-md: 6px;
   --cv-radius-lg: 8px;
+  --cv-radius-chrome: 7px;
   --cv-radius: 12px;
   --cv-radius-panel: 12px;
   --cv-radius-region: 14px;
@@ -466,11 +467,15 @@ body,
   border-radius: 999px;
 }
 
-/* Panel chrome — Deska's 16px controls. They stay fully hidden until the
-   card is active/selected (Fausto's model), then fade in with Deska's fast
+/* Card chrome — Deska titlebar controls: uniform 24px hit areas, radius 7,
+   16px phosphor glyphs in foreground ink at 72%. They stay fully hidden until
+   the card is active/selected (Fausto's model), then fade in with Deska's fast
    120ms ease-out timing. Close is the only destructive red hover. */
 .agent-card .card-chrome,
 .cv-card-chrome {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--cv-motion-fast) var(--cv-ease-out);
@@ -484,16 +489,13 @@ body,
 .cv-card-chrome button,
 .cv-card-btn {
   box-sizing: border-box;
-  width: 16px !important;
-  height: 16px !important;
   padding: 0 !important;
   border: 0 !important;
-  border-radius: var(--cv-radius-sm) !important;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent !important;
-  color: var(--cv-ink-dim) !important;
+  color: color-mix(in srgb, var(--cv-ink) 72%, transparent) !important;
   cursor: pointer;
   flex: none;
   transition:
@@ -502,6 +504,19 @@ body,
     color var(--cv-motion-fast) var(--cv-ease-out),
     transform var(--cv-motion-fast) var(--cv-ease-out);
 }
+.agent-card .card-chrome button,
+.cv-card-chrome button {
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: var(--cv-radius-chrome) !important;
+}
+/* Legacy one-off close buttons on notes/shapes keep their smaller footprint;
+   canonical card chrome uses the 24px control above. */
+.cv-card-btn {
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: var(--cv-radius-sm) !important;
+}
 .agent-card .card-chrome button:hover,
 .cv-card-chrome button:hover,
 .cv-card-btn:hover {
@@ -509,6 +524,7 @@ body,
   color: var(--cv-text-main) !important;
 }
 .agent-card .card-chrome button[data-danger="true"]:hover,
+.cv-card-chrome button[data-danger="true"]:hover,
 .cv-card-chrome button.cv-card-close:hover,
 button.cv-card-close:hover,
 .cv-card-close:hover {
