@@ -305,6 +305,12 @@ export function ArtifactsPanel() {
                 aria-expanded={expanded === a.artifact_id}
                 title={a.text ? (expanded === a.artifact_id ? "close preview" : "read preview") : "no stored contents"}
                 style={{ flex: 1, minWidth: 0, cursor: a.text ? "pointer" : "default" }}
+                tabIndex={a.text ? 0 : -1}
+                onKeyDown={(e) => {
+                  if (!a.text || (e.key !== "Enter" && e.key !== " ")) return;
+                  e.preventDefault();
+                  setExpanded((cur) => (cur === a.artifact_id ? null : a.artifact_id));
+                }}
                 onClick={() => {
                   if (!a.text) return;
                   setExpanded((cur) => (cur === a.artifact_id ? null : a.artifact_id));
@@ -419,7 +425,15 @@ export function ArtifactsPanel() {
                   }}
                 >
                   <Suspense fallback={<div style={{ color: "var(--cv-ink-faint)", fontSize: "var(--cv-text-xxs)" }}>Loading preview…</div>}>
-                    <ReadingView text={a.text} />
+                    <ReadingView
+                      text={a.text}
+                      onLink={(name) => {
+                        const base = name.split("#")[0].trim();
+                        const st = useBoard.getState();
+                        const hit = st.vaultEntries.find((e) => e === `${base}.md` || e.endsWith(`/${base}.md`) || e.replace(/\.md$/, "") === base);
+                        if (hit) st.vaultRead(hit);
+                      }}
+                    />
                   </Suspense>
                 </div>
               )}
