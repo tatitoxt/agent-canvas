@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { panelRoot } from "./panelChrome";
+import { EmptyState } from "./EmptyState";
 import { useBoard } from "../store/board";
 
 const COLS = [
@@ -77,6 +78,15 @@ export function NotesPanel() {
           ))}
         </div>
       )}
+      {cards.length === 0 && earlier.length === 0 ? (
+        <EmptyState
+          icon="notes"
+          title="No cards on this board"
+          hint="todo → doing → done"
+        >
+          Type above to capture the first one — tasks and notes persist here across sessions.
+        </EmptyState>
+      ) : (
       <div style={{ flex: 1, display: "flex", gap: 6, minHeight: 0 }}>
         {COLS.map((col) => (
           <div key={col.key} style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
@@ -129,6 +139,7 @@ export function NotesPanel() {
           </div>
         ))}
       </div>
+      )}
       {earlier.length > 0 && (
         <div style={{ margin: "8px 4px 0", borderTop: "1px solid var(--cv-glass-edge)", paddingTop: 8, maxHeight: 110, overflowY: "auto" }}>
           <div style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 400, color: "var(--cv-ink-dim)", letterSpacing: "0.02em", padding: "0 6px 6px" }}>

@@ -250,6 +250,60 @@ body,
   cursor: default;
 }
 
+/* ---------- keyboard focus — one ring, in the system's accent, never the
+   browser default blue. The ring lives on :focus-visible only, so it appears
+   for keyboard navigation and stays out of the mouse's way.
+   The `!important` is deliberate and scoped: dozens of inputs and buttons
+   carry a legacy inline `outline: none` which would otherwise win the
+   cascade on exactly the elements keyboard users Tab into. An author
+   !important beats those inline styles only while the pseudo-class matches —
+   mouse interaction never triggers it. The accent token is theme-safe by
+   construction (paper shifts it to a darker amber that keeps contrast on
+   light ground). */
+:focus-visible {
+  outline: 2px solid var(--cv-accent) !important;
+  outline-offset: 2px;
+}
+/* …with two honest exceptions:
+   - xterm's hidden helper textarea is a focus proxy positioned at the
+     terminal cursor — a ring there floats meaninglessly over the output.
+     The terminal's own cursor already tells the truth about focus.
+   - the React Flow pane wrapper swallows focus for canvas keyboard shortcuts;
+     a ring around the entire viewport is noise, not information. The
+     individual cards stay focusable and keep their ring. */
+.xterm-helper-textarea:focus-visible,
+.react-flow:focus-visible {
+  outline: none !important;
+}
+/* Text inputs gain the ring on click too (they are keyboard-input elements,
+   so :focus-visible matches regardless of modality) — that is the intended
+   behavior: the ring reinforces where the caret actually is. */
+
+/* ---------- empty states — quiet entrances, no popping ---------- */
+@keyframes cv-empty-in-kf {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.cv-empty-state {
+  animation: cv-empty-in-kf var(--cv-motion-base) var(--cv-ease-out);
+}
+/* The first-run canvas message holds back for half a second: on connect the
+   daemon's snapshot lands within a beat, and a restored board should never
+   see the empty state flash in and out underneath it. */
+@keyframes cv-canvas-empty-in-kf {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.cv-canvas-empty {
+  animation: cv-canvas-empty-in-kf 420ms var(--cv-ease-out) 480ms backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cv-empty-state,
+  .cv-canvas-empty {
+    animation: none;
+  }
+}
+
 /* ---------- react flow base ---------- */
 
 .react-flow {

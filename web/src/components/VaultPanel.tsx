@@ -5,6 +5,7 @@ import { isTauri } from "../daemon/tauriClient";
 import { downloadPdf } from "../lib/pdf";
 import { buildDoc, buildAskDoc } from "../lib/boardDocs";
 import { Icon } from "./icons";
+import { EmptyState } from "./EmptyState";
 import { ReadingView, IMAGE_RE } from "./noteView";
 import { resolveNotePath } from "./notePath";
 import { GeneratePdfMenu } from "./GeneratePdfMenu";
@@ -1095,15 +1096,34 @@ export function VaultPanel() {
           armedDel={armedDel}
           bookmarks={bookmarks}
         />
-        {shown.length === 0 && vaultDir && (
-          <div style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", padding: "8px 12px" }}>
-            No notes match — try fewer letters.
-          </div>
+        {shown.length === 0 && vaultDir && vaultEntries.length === 0 && (
+          <EmptyState
+            compact
+            icon="notes"
+            title="This vault is empty"
+            actions={[{
+              label: "+ new note",
+              accent: true,
+              title: "create the first note in this vault",
+              onClick: () => { setNewNote(true); setGenOpen(false); setMoreOpen(false); },
+            }]}
+          >
+            Write the first note, or drop markdown files here — they land straight in the vault.
+          </EmptyState>
+        )}
+        {shown.length === 0 && vaultDir && vaultEntries.length > 0 && (
+          <EmptyState compact icon="search" title="No notes match">
+            Nothing in titles or contents — try fewer letters.
+          </EmptyState>
         )}
         {!vaultDir && (
-          <div style={{ padding: "18px 14px", fontSize: "var(--cv-text-xxs)", lineHeight: 1.6, color: "var(--cv-ink-faint)" }}>
-            Point the explorer at a folder of markdown notes — your vault mounts live: read, edit, link and pin notes without leaving the board.
-          </div>
+          <EmptyState
+            compact
+            icon="vault"
+            title="No vault open"
+          >
+            Point the explorer at a folder of markdown notes above — read, edit, link and pin them without leaving the board.
+          </EmptyState>
         )}
       </div>
       </div>
@@ -1342,8 +1362,10 @@ export function VaultPanel() {
           </div>
         </div>
       ) : (
-        <div style={{ flex: 1, display: "grid", placeItems: "center", color: "var(--cv-ink-faint)", fontSize: "var(--cv-text-xs)" }}>
-          pick a note — or today for your daily
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <EmptyState icon="ph-file" title="No note open">
+            Pick a note from the explorer — or open today's daily note.
+          </EmptyState>
         </div>
       )}
       {ctxMenu && (

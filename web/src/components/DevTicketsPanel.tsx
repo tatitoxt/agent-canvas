@@ -1,5 +1,6 @@
 import { useBoard } from "../store/board";
 import { panelRoot } from "./panelChrome";
+import { EmptyState } from "./EmptyState";
 
 const groupLabel: React.CSSProperties = {
   fontSize: "var(--cv-text-xxs)",
@@ -90,10 +91,9 @@ export function DevTicketsPanel() {
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "0 4px" }}>
         {all.length === 0 && (
-          <div style={{ ...groupLabel, padding: "14px 12px", letterSpacing: "0.01em" }}>
-            No tickets yet — drag a wire off an agent card to delegate a
-            task and it lands here.
-          </div>
+          <EmptyState compact icon="ticket" title="No tickets yet" hint="drag a wire off an agent card">
+            Delegate a task and it lands here — status, result and changed files.
+          </EmptyState>
         )}
         {groups.map(([label, list]) =>
           list.length === 0 ? null : (

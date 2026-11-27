@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 import { Icon } from "./icons";
+import { EmptyState } from "./EmptyState";
 
 const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
   new URLSearchParams(location.search).get("token") ??
@@ -133,7 +134,17 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
         {!slug && <Hint text="This canvas isn't bound to a GitHub repo." />}
         {err && <Hint text={err} />}
         {slug && !err && items === null && <Hint text="loading…" />}
-        {items?.length === 0 && <Hint text={kind === "prs" ? "No open pull requests." : "No open issues."} />}
+        {items?.length === 0 && (
+          <EmptyState
+            compact
+            icon={kind === "prs" ? "pr" : "issue"}
+            title={kind === "prs" ? "No open pull requests" : "No open issues"}
+          >
+            {kind === "prs"
+              ? "Nothing waiting on review — the repo is quiet."
+              : "The tracker is clear — nothing open right now."}
+          </EmptyState>
+        )}
         {items?.map((it) => (
           <button
             key={it.number}
