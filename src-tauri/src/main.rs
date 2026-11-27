@@ -54,12 +54,28 @@ struct FallbackState {
     permission: String,
     board_id: Option<String>,
     account_id: Option<String>,
+    /// Automation guardrails (idle alert secs, deny-approvals policy) —
+    /// re-applied to every replacement so a fallback keeps the original's
+    /// automation constraints.
+    automation: Option<(u64, bool)>,
     /// CLIs not yet tried, in order.
     remaining: Vec<String>,
     /// Task text queued for the original PTY — re-injected into the
     /// replacement so a fallback never silently drops the user's task.
+    /// Never cleared on a successful write: fallback only fires when the
+    /// original DIED within seconds of launch, so its copy of the task
+    /// never completed and re-running it is the correct retry semantics.
     initial_input: Option<String>,
 }
+
+/// Registration-completion gate handed back from [`spawn_wired`]. The
+/// agent's exit watcher waits on it before processing any exit, so a PTY
+/// dying during spawn can never outrun the registration of its fallback
+/// state, automation metadata, or delegation ticket. Callers fire it once
+/// their own post-spawn registration completes; dropping it (error paths)
+/// releases the watcher too — a permanently-blocked watcher would never
+/// mark the agent exited at all.
+type RegistrationGate = tokio::sync::oneshot::Sender<()>;
 
 fn emit_control(app: &AppHandle, msg: &ServerMsg) {
     if let Err(e) = app.emit("canvas://control", msg) {
@@ -157,9 +173,15 @@ fn spawn_wired(
     account_id: Option<&str>,
     initial_input: Option<&str>,
     chain_override: Option<Vec<String>>,
-) -> Result<(String, Option<String>), String> {
+    automation: Option<(u64, bool)>,
+) -> Result<(String, Option<String>, RegistrationGate), String> {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<(String, Vec<u8>)>();
     let (exit_tx, mut exit_rx) = mpsc::unbounded_channel::<String>();
+    // The exit watcher waits on this gate before processing any exit —
+    // the PTY reader can report a death before spawn even returns, and
+    // without the gate that exit would be handled with fallback state,
+    // automation metadata, or delegation tickets not yet registered.
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
 
     let app1 = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -175,7 +197,12 @@ fn spawn_wired(
     let ws2 = workspace_id.map(|w| w.to_string());
     let fallbacks2 = state.pending_fallbacks.clone();
     let results2 = state.pending_results.clone();
+    let inputs2 = state.pending_inputs.clone();
     tauri::async_runtime::spawn(async move {
+        // Hold exit processing until the spawning call signals that all
+        // registration for this agent is complete. Dropping the sender
+        // (spawn error paths) releases the watcher too.
+        let _ = ready_rx.await;
         while let Some(id) = exit_rx.recv().await {
             // Chain fallback: a PTY dying within seconds of launch never
             // gave the operator a working agent — retry the next CLI with
@@ -206,9 +233,14 @@ fn spawn_wired(
                             // recomputed, so a fully-dead chain ends instead of
                             // looping through the same failing CLIs forever.
                             Some(fb.remaining.clone()),
+                            // Automation guardrails ride the fallback state —
+                            // the replacement keeps the original's idle alert
+                            // and approval policy instead of losing them with
+                            // the dead agent's id.
+                            fb.automation,
                         )
                     };
-                    if let Ok((new_id, new_board)) = respawned {
+                    if let Ok((new_id, new_board, new_ready)) = respawned {
                         fell_back = true;
                         // Re-inject the queued task into the replacement —
                         // gated, so a supervised automation keeps its
@@ -244,6 +276,10 @@ fn spawn_wired(
                                 emit_control(&app2, &ServerMsg::DelegationFailed { edge_id: edge });
                             }
                         }
+                        // Registration for the replacement is complete
+                        // (fallback state inside spawn_wired, ticket transfer
+                        // above) — release its exit watcher.
+                        let _ = new_ready.send(());
                         let wt = agents2
                             .worktree(&new_id)
                             .map(|p| p.to_string_lossy().to_string());
@@ -264,6 +300,10 @@ fn spawn_wired(
                 }
             }
             let _ = store2.agent_status(&id, "exited");
+            // Held input keyed to a dead agent can never be approved —
+            // drop it. On fallback the re-injection re-holds against the
+            // replacement through the gate.
+            inputs2.lock().unwrap().remove(&id);
             // Close delegation tickets waiting on this agent: last-chance
             // CANVAS_RESULT scan, else fail so the board isn't stuck in
             // flight. Skipped when the agent fell back — its ticket moved
@@ -390,6 +430,13 @@ fn spawn_wired(
             }
         }
     };
+    // Automation guardrails attach here — inside the spawn, before the
+    // registration gate fires — so even a PTY dying in the meantime is
+    // handled with the policy in place, and the fallback state carries it
+    // to any replacement.
+    if let Some((idle_secs, deny)) = automation {
+        state.agents.set_automation(&id, idle_secs, deny);
+    }
     if !remaining.is_empty() {
         state.pending_fallbacks.lock().unwrap().insert(
             id.clone(),
@@ -402,6 +449,7 @@ fn spawn_wired(
                 permission: permission.to_string(),
                 board_id: board_id.map(str::to_string),
                 account_id: account_id.map(str::to_string),
+                automation,
                 remaining,
                 initial_input: initial_input.map(str::to_string),
             },
@@ -426,7 +474,7 @@ fn spawn_wired(
     ) {
         warn!(error = %e, "failed to persist agent");
     }
-    Ok((id, board))
+    Ok((id, board, ready_tx))
 }
 
 #[tauri::command]
@@ -444,7 +492,7 @@ fn spawn_agent(
     initial_input: Option<String>,
 ) -> Result<String, String> {
     let level = canvasd::protocol::normalize_permission(permission.as_deref());
-    let (id, board) = spawn_wired(
+    let (id, board, ready) = spawn_wired(
         &app,
         state.inner(),
         &name,
@@ -456,25 +504,27 @@ fn spawn_agent(
         account_id.as_deref(),
         initial_input.as_deref(),
         None,
+        None,
     )?;
     if let Some(text) = initial_input {
-        // Quick request: type the task once the CLI has booted.
+        // Quick request: type the task once the CLI has booted. The copy
+        // in the fallback state is NOT cleared on write — fallback only
+        // fires when the original died within seconds of launch, so its
+        // copy of the task never completed and re-running it on the
+        // replacement is the correct retry semantics.
         let app2 = app.clone();
         let target = id.clone();
-        let pf = state.pending_fallbacks.clone();
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             let mut data = text.into_bytes();
             data.push(b'\r');
             let st = app2.state::<CanvasState>();
             let _ = st.agents.write(&target, &data);
-            // Delivered to the original — a later fallback must not run
-            // the task a second time.
-            if let Some(fb) = pf.lock().unwrap().get_mut(&target) {
-                fb.initial_input = None;
-            }
         });
     }
+    // spawn_agent registers nothing beyond what spawn_wired already did —
+    // release the exit watcher.
+    let _ = ready.send(());
     let wt = app
         .state::<CanvasState>()
         .agents
@@ -2522,7 +2572,7 @@ fn delegate(
     // The child lands on the requested board, else its parent's
     // (orchestrator nodes aren't agents — they carry theirs over).
     let parent_board = board_id.or(state.store.agent_board(&from).ok().flatten());
-    let (id, board) = spawn_wired(
+    let (id, board, ready) = spawn_wired(
         &app,
         state.inner(),
         &name,
@@ -2534,6 +2584,7 @@ fn delegate(
         account_id.as_deref(),
         initial_input.as_deref(),
         None,
+        None,
     )?;
     let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
     let _ = state.store.delegation_created(&edge_id, &from, &id, &task);
@@ -2542,22 +2593,22 @@ fn delegate(
         .lock()
         .unwrap()
         .insert(id.clone(), edge_id.clone());
+    // The delegation ticket is the registration the exit watcher needs —
+    // release it only now that the ticket is in place.
+    let _ = ready.send(());
     if let Some(text) = initial_input {
         // Type the brief once the CLI has booted (same delay as spawn_agent).
+        // The fallback-state copy is NOT cleared on write — the original
+        // dying within seconds of launch means its copy of the brief never
+        // completed, so re-running it on the replacement is correct.
         let app2 = app.clone();
         let target = id.clone();
-        let pf = state.pending_fallbacks.clone();
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             let mut data = text.into_bytes();
             data.push(b'\r');
             let st = app2.state::<CanvasState>();
             let _ = st.agents.write(&target, &data);
-            // Delivered to the original — a later fallback must not run
-            // the brief a second time.
-            if let Some(fb) = pf.lock().unwrap().get_mut(&target) {
-                fb.initial_input = None;
-            }
         });
     }
     let wt = app
@@ -2878,7 +2929,7 @@ fn run_automation_row(
         _,
         _,
     ) = row;
-    let (id, run_board) = spawn_wired(
+    let (id, run_board, ready) = spawn_wired(
         app,
         state,
         &name,
@@ -2892,10 +2943,11 @@ fn run_automation_row(
         // injection re-runs the automation on the replacement CLI.
         Some(&prompt),
         None,
+        // Guardrails attach inside the spawn — before the registration
+        // gate fires — and ride the fallback state, so a replacement keeps
+        // the idle alert and approval policy of the original run.
+        Some((idle_secs.max(0) as u64, on_approval == "deny")),
     )?;
-    state
-        .agents
-        .set_automation(&id, idle_secs.max(0) as u64, on_approval == "deny");
     let _ = state.store.automation_ran(&automation_id);
     let wt = state
         .agents
@@ -2962,11 +3014,28 @@ fn run_automation_row(
             .write(&id, bytes.as_bytes())
             .map_err(|e| e.to_string());
     }
-    // Delivered to the original (written, held or dropped by policy) — a
-    // later chain fallback must not run the automation a second time.
-    if let Some(fb) = state.pending_fallbacks.lock().unwrap().get_mut(&id) {
-        fb.initial_input = None;
+    // Prompt disposition vs. fallback retry:
+    // - written or held: the fallback-state copy STAYS — fallback only
+    //   fires when the original died within seconds of launch, so its copy
+    //   of the prompt never completed (a write into the kernel PTY buffer
+    //   of a dying CLI delivers nothing); the replacement re-runs it.
+    // - dropped by deny-policy: a deliberate drop must NOT retry on the
+    //   replacement — clear the copy so fallback skips re-injection.
+    if !write_prompt {
+        let denied = state
+            .agents
+            .automation(&id)
+            .map(|m| m.deny_approvals)
+            .unwrap_or(false);
+        if denied {
+            if let Some(fb) = state.pending_fallbacks.lock().unwrap().get_mut(&id) {
+                fb.initial_input = None;
+            }
+        }
     }
+    // Registration for this run is complete (guardrails inside spawn_wired,
+    // prompt disposition above) — release the exit watcher.
+    let _ = ready.send(());
     write_result?;
     Ok(id)
 }
@@ -3095,9 +3164,12 @@ fn confirm_destructive(
 ) -> Result<(), String> {
     match action.as_str() {
         "kill" => {
-            state.agents.kill(&agent_id).map_err(|e| e.to_string())?;
             // A deliberate kill is operator intent — never retry the chain.
+            // Disarm BEFORE signaling the PTY: the exit watcher fires as soon
+            // as the process closes and would claim the retry while the kill
+            // was still returning.
             state.pending_fallbacks.lock().unwrap().remove(&agent_id);
+            state.agents.kill(&agent_id).map_err(|e| e.to_string())?;
             let _ = state.store.agent_status(&agent_id, "exited");
             state.pending_results.lock().unwrap().remove(&agent_id);
             emit_control(
@@ -3110,11 +3182,13 @@ fn confirm_destructive(
             Ok(())
         }
         "forget" => {
+            // Forget is operator intent too — a live agent cleared within
+            // seconds of launch must not respawn as a fallback. Disarm
+            // BEFORE the kill so the exit watcher can't claim the retry
+            // in between.
+            state.pending_fallbacks.lock().unwrap().remove(&agent_id);
             // no-op if the agent is already gone
             let _ = state.agents.kill(&agent_id);
-            // Forget is operator intent too — a live agent cleared within
-            // seconds of launch must not respawn as a fallback.
-            state.pending_fallbacks.lock().unwrap().remove(&agent_id);
             state
                 .store
                 .remove_agent(&agent_id)

@@ -1555,29 +1555,36 @@ fn handle_client_msg(text: &str, state: &Arc<AppState>, send_control: &impl Fn(S
         ClientMsg::ConfirmDestructive { agent_id, action } => {
             // The ONLY path to destructive actions — never prompt text.
             match action.as_str() {
-                "kill" => match state.agents.kill(&agent_id) {
-                    Ok(()) => {
-                        // A deliberate kill is operator intent — never retry.
-                        state.pending_fallbacks.lock().unwrap().remove(&agent_id);
-                        let _ = state.store.agent_status(&agent_id, "exited");
-                        send_control(ServerMsg::Status {
-                            agent_id,
-                            status: AgentStatus::Exited,
-                        });
+                "kill" => {
+                    // A deliberate kill is operator intent — never retry.
+                    // Disarm BEFORE signaling the PTY: the exit watcher fires
+                    // as soon as the process closes and would claim the retry
+                    // while the kill was still returning.
+                    state.pending_fallbacks.lock().unwrap().remove(&agent_id);
+                    match state.agents.kill(&agent_id) {
+                        Ok(()) => {
+                            let _ = state.store.agent_status(&agent_id, "exited");
+                            send_control(ServerMsg::Status {
+                                agent_id,
+                                status: AgentStatus::Exited,
+                            });
+                        }
+                        Err(e) => send_control(ServerMsg::Error {
+                            agent_id: Some(agent_id),
+                            message: e.to_string(),
+                        }),
                     }
-                    Err(e) => send_control(ServerMsg::Error {
-                        agent_id: Some(agent_id),
-                        message: e.to_string(),
-                    }),
-                },
+                }
                 "forget" => {
                     // Remove an (exited) agent from the db so the next
                     // snapshot stops resurrecting it — "clear done".
-                    // no-op if the agent is already gone
-                    let _ = state.agents.kill(&agent_id);
                     // Forget is operator intent too — a live agent cleared
                     // within seconds of launch must not respawn as a fallback.
+                    // Disarm BEFORE the kill so the exit watcher can't claim
+                    // the retry in between.
                     state.pending_fallbacks.lock().unwrap().remove(&agent_id);
+                    // no-op if the agent is already gone
+                    let _ = state.agents.kill(&agent_id);
                     match state.store.remove_agent(&agent_id) {
                         Ok(()) => send_control(ServerMsg::Status {
                             agent_id,
