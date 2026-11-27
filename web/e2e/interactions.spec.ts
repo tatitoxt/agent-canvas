@@ -19,10 +19,14 @@ async function spawnTerm(page: import("@playwright/test").Page) {
 test("click on an agent card selects it — no drawer duplicate appears", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
-  const node = page.locator(".react-flow__node-agent, .react-flow__node").first();
-  const b = await node.boundingBox();
-  if (!b) throw new Error("no node");
-  await page.mouse.click(b.x + 30, b.y + 30);
+  const node = page.locator(".react-flow__node-agent").first();
+  await expect(node).toBeVisible({ timeout: 8_000 });
+  // Never click at pre-measured coordinates: the viewport re-fits when
+  // the first node spawns (scale 1 → 1.1) and under suite load the box
+  // measured at a fixed timeout can predate that animation — the click
+  // lands on empty pane and nothing selects. locator.click re-measures
+  // at action time and waits for element stability.
+  await node.click({ position: { x: 30, y: 30 } });
   await page.waitForTimeout(700);
   await expect(page.locator(".react-flow__node.selected").first()).toBeVisible({ timeout: 4_000 });
   // the bottom-right drawer must NOT open on plain click
@@ -33,9 +37,8 @@ test("double-click pops the terminal out in-place as a canvas card", async ({ pa
   await boot(page);
   await spawnTerm(page);
   const node = page.locator(".react-flow__node-agent").first();
-  const b = await node.boundingBox();
-  if (!b) throw new Error("no agent node");
-  await page.mouse.dblclick(b.x + 30, b.y + 12);
+  await expect(node).toBeVisible({ timeout: 8_000 });
+  await node.dblclick({ position: { x: 30, y: 12 } });
   await page.waitForTimeout(1200);
   await expect(page.locator(".react-flow__node-term").first()).toBeVisible({ timeout: 5_000 });
 });
