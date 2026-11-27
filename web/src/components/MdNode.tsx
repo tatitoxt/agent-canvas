@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useRef, useState } from "react";
 import { NodeResizer, type NodeProps, type Node } from "@xyflow/react";
 import type { MdNodeData } from "../board/types";
 import { resolveNotePath } from "./notePath";
 import { useBoard } from "../store/board";
+import { countRender } from "../lib/renderProbe";
 import { Icon } from "./icons";
 
 /** The Obsidian-style reading view is the heavy half of the old VaultPanel —
@@ -21,7 +22,8 @@ const noteLoading = (
 const POLL_MS = 4000;
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|ico)$/i;
 
-export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
+export const MdNode = memo(function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
+  countRender("MdNode", id);
   const text = useBoard((s) => s.mdContents[data.path]);
   const entries = useBoard((s) => s.vaultEntries);
   const mdNodeRemove = useBoard((s) => s.mdNodeRemove);
@@ -62,7 +64,6 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
   return (
     <div className="glass-panel" style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 12, border: "1px solid var(--cv-glass-edge)" }}>
       <NodeResizer isVisible={selected} minWidth={260} minHeight={180} handleClassName="cv-node-resize-handle" lineClassName="cv-node-resize-line"
-        onResize={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), false, boardId, { x: p.x, y: p.y })}
         onResizeEnd={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), true, boardId, { x: p.x, y: p.y })} />
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--cv-glass-edge)", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
         <img src="/obsidian.svg" alt="" width={12} height={12} />
@@ -106,7 +107,7 @@ export function MdNode({ id, data, selected }: NodeProps<Node<MdNodeData>>) {
       )}
     </div>
   );
-}
+});
 
 const toolButton: React.CSSProperties = {
   border: "1px solid var(--cv-glass-edge)", borderRadius: 6, padding: "3px 7px",

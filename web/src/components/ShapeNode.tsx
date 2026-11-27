@@ -1,13 +1,15 @@
+import { memo } from "react";
 import { NodeResizer, type NodeProps, type Node } from "@xyflow/react";
 import type { ShapeNodeData, ShapeDef } from "../board/types";
 import { useBoard } from "../store/board";
+import { countRender } from "../lib/renderProbe";
 
 const PALETTE = [
   "#e8e6e3", "#e05d5d", "#e0954a", "#e0c04a",
   "#5db96f", "#4a9fe0", "#7a6fe0", "#c95db9",
 ];
 
-function ShapeSvg({ s }: { s: ShapeDef }) {
+function ShapeSvg({ s, w, h }: { s: ShapeDef; w: number; h: number }) {
   const isGroup = s.kind === "rect" && s.group;
   // Gather regions are structural chrome, not whiteboard doodles: crisp
   // geometry, a quiet 8% tint and a 1.25px hairline. Freehand shapes keep
@@ -21,30 +23,37 @@ function ShapeSvg({ s }: { s: ShapeDef }) {
   };
   if (s.kind === "ellipse") {
     return (
-      <svg width={s.w} height={s.h}>
-        <ellipse cx={s.w / 2} cy={s.h / 2} rx={s.w / 2 - 2} ry={s.h / 2 - 2} {...common} />
+      <svg width={w} height={h}>
+        <ellipse cx={w / 2} cy={h / 2} rx={w / 2 - 2} ry={h / 2 - 2} {...common} />
       </svg>
     );
   }
   if (s.kind === "diamond") {
     return (
-      <svg width={s.w} height={s.h}>
+      <svg width={w} height={h}>
         <polygon
-          points={`${s.w / 2},2 ${s.w - 2},${s.h / 2} ${s.w / 2},${s.h - 2} 2,${s.h / 2}`}
+          points={`${w / 2},2 ${w - 2},${h / 2} ${w / 2},${h - 2} 2,${h / 2}`}
           {...common}
         />
       </svg>
     );
   }
   return (
-    <svg width={s.w} height={s.h}>
-      <rect x={1} y={1} width={s.w - 2} height={s.h - 2} rx={s.kind === "rect" ? (s.group ? 14 : 10) : 0} {...common} />
+    <svg width={w} height={h}>
+      <rect x={1} y={1} width={w - 2} height={h - 2} rx={s.kind === "rect" ? (s.group ? 14 : 10) : 0} {...common} />
     </svg>
   );
 }
 
-export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>) {
+export const ShapeNode = memo(function ShapeNode({ id, data, selected, width, height }: NodeProps<Node<ShapeNodeData>>) {
+  countRender("ShapeNode", id);
   const s = data.shape;
+  // Live geometry comes from React Flow while a resize gesture is in
+  // flight; the store shape only catches up when the pointer is released.
+  // Shape nodes always carry explicit style dimensions, so the props are
+  // never circular — unlike natural-height agent cards.
+  const liveW = typeof width === "number" && width > 0 ? width : s.w;
+  const liveH = typeof height === "number" && height > 0 ? height : s.h;
   const updateShape = useBoard((st) => st.updateShape);
   const deleteShape = useBoard((st) => st.deleteShape);
   const vaultDir = useBoard((st) => st.vaultDir);
@@ -74,14 +83,13 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
           minHeight={140}
           handleClassName="cv-node-resize-handle"
           lineClassName="cv-node-resize-line"
-          onResize={(_, p) => updateShape(id, { x: p.x, y: p.y, w: Math.round(p.width), h: Math.round(p.height) }, false)}
           onResizeEnd={(_, p) => updateShape(id, { x: p.x, y: p.y, w: Math.round(p.width), h: Math.round(p.height) })}
         />
         <div
           style={{
             position: "relative",
-            width: s.w,
-            height: s.h,
+            width: liveW,
+            height: liveH,
             borderRadius: 12,
             background: "var(--cv-glass)",
             backdropFilter: "blur(var(--cv-blur-popover))",
@@ -161,9 +169,9 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
   return (
     <div
       className={`${isGroup ? "cv-group-frame" : ""}${leaving ? " cv-group-frame-out" : ""}`.trim() || undefined}
-      style={{ position: "relative", width: s.w, height: s.h }}
+      style={{ position: "relative", width: liveW, height: liveH }}
     >
-      <ShapeSvg s={s} />
+      <ShapeSvg s={s} w={liveW} h={liveH} />
       {s.kind === "rect" && s.text != null && (
         // Freehand region labels sit above the frame. Gather regions reserve
         // a real header band in the layout, so the label lives inside it and
@@ -177,7 +185,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
             position: "absolute",
             top: 11,
             left: 14,
-            width: Math.max(76, Math.min(220, s.w - 28, (s.text?.length ?? 0) * 7.4 + 30)),
+            width: Math.max(76, Math.min(220, liveW - 28, (s.text?.length ?? 0) * 7.4 + 30)),
             height: 28,
             padding: "0 10px",
             borderRadius: 8,
@@ -193,7 +201,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
             position: "absolute",
             top: -24,
             left: 2,
-            width: Math.min(220, s.w - 12),
+            width: Math.min(220, liveW - 12),
             background: "transparent",
             border: "none",
             outline: "none",
@@ -266,4 +274,4 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData>>
       )}
     </div>
   );
-}
+});

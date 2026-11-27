@@ -6,6 +6,7 @@ import { PanelActionsCtx } from "../components/panelCtx";
 import { CliMark } from "../components/CliMark";
 import { CardChrome, CardChromeButton } from "../components/CardChrome";
 import { STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "./nodes";
+import { countRender } from "../lib/renderProbe";
 import type { AgentStatus } from "./types";
 
 // CSI + OSC escape sequences — good enough to copy a readable transcript.
@@ -14,6 +15,7 @@ const ANSI = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[\[\]()#;?]*[0-9;]*[ -\/]*[@
 /** A live terminal popped out of the bottom drawer onto the canvas —
  * a real card: movable, resizable, collapsible, closable (Deska window). */
 export const TermNode = memo(function TermNode({ id, selected, width }: NodeProps) {
+  countRender("TermNode", id);
   const rf = useReactFlow();
   const n = useBoard((s) => s.termNodes[s.activeBoard]?.[id]);
   const agentId = id.slice(5); // term-<agentId>

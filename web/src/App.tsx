@@ -36,6 +36,7 @@ import { isTauri } from "./daemon/tauriClient";
 import { TermNode } from "./board/TermNode";
 import { getAgentSpawnPositions, useBoard } from "./store/board";
 import { minimapNodeColor } from "./board/minimap";
+import { countRender } from "./lib/renderProbe";
 import type { BoardNodeData } from "./board/types";
 
 /** On-demand overlays: each ships in its own chunk and loads the first time
@@ -161,6 +162,7 @@ function ViewportTracker() {
 }
 
 function Board() {
+  countRender("Board");
   const agents = useBoard((s) => s.agents);
   const liveEdges = useBoard((s) => s.edges);
   const workspaces = useBoard((s) => s.workspaces);
@@ -517,6 +519,7 @@ function Board() {
 
   const motionClassFor = (id: string) => gatherMotion?.ids.includes(id) ? " cv-gather-motion" : "";
   const baseNodes = useMemo<Node<BoardNodeData>[]>(() => {
+    countRender("baseNodesCompute");
     const fallbackWorkspaceAgents = Object.values(agents).filter((a) => (a.board_id ?? "main") === activeBoard && a.workspace_id && !positions[a.id]);
     const wsFallbackCount = new Map<string, number>();
     for (const a of fallbackWorkspaceAgents) wsFallbackCount.set(a.workspace_id!, (wsFallbackCount.get(a.workspace_id!) ?? 0) + 1);
@@ -739,7 +742,11 @@ function Board() {
         // store writes), with `p` still being the previous render's node.
         // Verify the previous node's own inputs too, otherwise class-only
         // updates (gather motion cleanup) can be swallowed indefinitely.
-        if (cached?.sig === sig && geometryMatches && nodeInputSig(p) === sig) return p;
+        if (cached?.sig === sig && geometryMatches && nodeInputSig(p) === sig) {
+          countRender("nodeSyncReused");
+          return p;
+        }
+        countRender("nodeSyncRebuilt");
         return { ...base, selected: p.selected, dragging: p.dragging };
       });
       const alive = new Set(baseNodes.map((n) => n.id));

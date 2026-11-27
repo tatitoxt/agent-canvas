@@ -4,11 +4,13 @@ import { useBoard } from "../store/board";
 import { Icon } from "../components/icons";
 import { CardChrome, CardChromeButton } from "../components/CardChrome";
 import { PANEL_DEFS } from "../components/panelRegistry";
+import { countRender } from "../lib/renderProbe";
 
 /** A tool panel living on the canvas — Deska "Add to board": the live
  * panel UI inside a real card (title bar, close X, resizable, movable
  * like any node). */
 export const PanelNode = memo(function PanelNode({ id, selected }: NodeProps) {
+  countRender("PanelNode", id);
   const rf = useReactFlow();
   const n = useBoard((s) => s.panelNodes[s.activeBoard]?.[id]);
   if (!n) return null;

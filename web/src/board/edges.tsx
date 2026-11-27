@@ -8,6 +8,7 @@ import {
 } from "@xyflow/react";
 import type { DelegationEdgeData } from "./types";
 import { useBoard } from "../store/board";
+import { countRender } from "../lib/renderProbe";
 
 /**
  * Edges are quiet hairlines with a small glass label — the record of a
@@ -182,6 +183,7 @@ export function DelegationEdge({
   data,
   markerEnd,
 }: EdgeProps<Edge<DelegationEdgeData>>) {
+  countRender("DelegationEdge");
   // Orthogonal routing with node avoidance from main, enhanced with the
   // recent detour router so paths can clear multiple intervening nodes.
   const { getNodes } = useReactFlow();

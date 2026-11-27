@@ -4,6 +4,7 @@ import { isTauri } from "../daemon/tauriClient";
 import { Icon } from "./icons";
 import { ToolsMenu, type ToolsMenuActions } from "./ToolsRail";
 import { PANEL_META } from "./panelMeta";
+import { countRender } from "../lib/renderProbe";
 
 const pill: React.CSSProperties = {
   padding: "6px 11px",
@@ -73,6 +74,7 @@ export const Topbar = memo(function Topbar({
   onNav: (key: string) => void;
   tools: ToolsMenuActions;
 }) {
+  countRender("Topbar");
   const lastGather = useBoard((s) => s.lastGather);
   const connected = useBoard((s) => s.connected);
   const workspaces = useBoard((s) => s.workspaces);
