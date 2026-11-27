@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures.mjs";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
@@ -351,7 +351,7 @@ test("pinned Obsidian note edits and saves back to the real vault", async ({ pag
 });
 
 test("Add Artifacts to canvas closes Tools and mounts the interactive artifact library", async ({ page }) => {
-  await boot(page);
+  const { vault } = await boot(page);
   await page.locator("button[title^='Tools —']").click();
   const dock = page.getByRole("dialog", { name: "Tools panel" });
   await expect(dock).toBeVisible();
@@ -376,6 +376,12 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await artifacts.getByPlaceholder("Search artifacts or ask Dex").fill(title);
   const addToBoard = artifacts.locator("button[title^='Add to Board']");
   await expect(addToBoard).toHaveCount(1);
+  const vaultFile = resolve(vault, "Canvas", "Artifacts", `${title}.md`);
+  await artifacts.locator("button[title^='save to your Obsidian vault']").click();
+  await expect.poll(() => {
+    try { return readFileSync(vaultFile, "utf8"); } catch { return ""; }
+  }).toBe(`## ${title}\n\n${body}\n`);
+  unlinkSync(vaultFile);
   await addToBoard.click();
 
   await expect(page.locator(".react-flow__node-panel [data-panel='artifacts']")).toHaveCount(0);
@@ -474,6 +480,12 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await expect(restoredCard).toBeVisible();
   await expect.poll(async () => restoredCard.evaluate((el) => Number.parseFloat(getComputedStyle(el).width))).toBe(savedShape.w);
   await expect.poll(async () => restoredCard.evaluate((el) => Number.parseFloat(getComputedStyle(el).height))).toBe(savedShape.h);
+  const pinnedNote = resolve(vault, "Canvas", `${title}.md`);
+  await restoredCard.locator("button[title^='append this note to your Obsidian vault']").click();
+  await expect.poll(() => {
+    try { return readFileSync(pinnedNote, "utf8"); } catch { return ""; }
+  }).toBe(`## ${title}\n\n${body}\n`);
+  unlinkSync(pinnedNote);
 });
 
 test("web preview windows resize and keep their dimensions after reload", async ({ page }) => {
