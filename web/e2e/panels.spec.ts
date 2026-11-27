@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures.mjs";
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
@@ -980,4 +980,38 @@ test("panel card resizing from the top-left keeps the resized origin instead of 
   expect(afterRect).not.toBeNull();
   expect(afterRect!.x).toBeLessThan(beforeRect!.x - 20);
   expect(afterRect!.y).toBeLessThan(beforeRect!.y - 12);
+});
+
+test("Tools Pause all freezes every board PTY and Resume all continues them", async ({ page }) => {
+  const { repo } = await boot(page);
+  const markers = [resolve(repo, "pause-all-one.log"), resolve(repo, "pause-all-two.log")];
+  markers.forEach((path) => writeFileSync(path, ""));
+
+  for (let i = 0; i < markers.length; i++) {
+    await page.locator("button[title='Terminal — spawn a plain shell']").first().click();
+    const card = page.locator(".agent-card").nth(i);
+    await expect(card).toBeVisible({ timeout: 8_000 });
+    const steering = card.getByTestId("agent-steering-input");
+    await steering.fill(`while true; do printf x >> '${markers[i]}'; sleep 0.05; done`);
+    await steering.press("Enter");
+    await expect.poll(() => statSync(markers[i]).size, { timeout: 8_000 }).toBeGreaterThan(0);
+  }
+
+  const openTools = async () => {
+    await page.locator("button[title^='Tools —']").click();
+    return page.getByRole("dialog", { name: "Tools panel" });
+  };
+  let tools = await openTools();
+  await tools.getByRole("button", { name: "Pause all" }).click();
+  // Allow any in-flight `sleep` child to return; then both shell-parent
+  // processes must remain stopped across a sustained observation window.
+  await page.waitForTimeout(500);
+  const pausedSizes = markers.map((path) => statSync(path).size);
+  await page.waitForTimeout(650);
+  expect(markers.map((path) => statSync(path).size)).toEqual(pausedSizes);
+
+  await tools.getByRole("button", { name: "Resume all" }).click();
+  for (let i = 0; i < markers.length; i++) {
+    await expect.poll(() => statSync(markers[i]).size, { timeout: 5_000 }).toBeGreaterThan(pausedSizes[i]);
+  }
 });
