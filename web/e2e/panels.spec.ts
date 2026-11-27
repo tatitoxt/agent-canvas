@@ -671,6 +671,23 @@ test("panel card drags to a new position", async ({ page }) => {
   expect(Math.abs(after!.x - before!.x)).toBeGreaterThan(40);
 });
 
+test("alignment snap preference toggles and survives reload", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title='Settings']").click();
+  const settings = page.locator(".react-flow__node-panel [data-panel='settings']").first();
+  const snap = settings.getByRole("button", { name: "Alignment snap off" });
+  await expect(snap).toBeVisible();
+  await snap.click();
+  await expect(settings.getByRole("button", { name: "Alignment snap on", pressed: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("cv-snap-align"))).toBe("true");
+
+  await page.reload();
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
+  await page.locator("button[title='Settings']").click();
+  const restored = page.locator(".react-flow__node-panel [data-panel='settings']").first();
+  await expect(restored.getByRole("button", { name: "Alignment snap on", pressed: true })).toBeVisible();
+});
+
 test("gather pulls loose cards into a group", async ({ page }) => {
   await boot(page);
   // spawn one terminal so there's at least one loose card
