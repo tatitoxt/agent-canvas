@@ -1,8 +1,33 @@
 import { test, expect } from "./fixtures.mjs";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import WebSocket from "ws";
 
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
+
+async function savedPosition(port: number, token: string, nodeId: string): Promise<[number, number]> {
+  return new Promise((resolvePosition, reject) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?token=${token}`);
+    const timeout = setTimeout(() => {
+      ws.close();
+      reject(new Error("daemon snapshot did not include the pinned note position"));
+    }, 5_000);
+    ws.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    ws.on("message", (raw) => {
+      let message: { type?: string; layout?: Record<string, [number, number]> };
+      try { message = JSON.parse(raw.toString()); } catch { return; }
+      if (message.type !== "snapshot") return;
+      clearTimeout(timeout);
+      ws.close();
+      const position = message.layout?.[nodeId];
+      if (!position) reject(new Error(`snapshot is missing node ${nodeId}`));
+      else resolvePosition(position);
+    });
+  });
+}
 
 async function boot(page: import("@playwright/test").Page) {
   const { port, token, vault, repo } = stack();
@@ -40,9 +65,12 @@ test("Add to Board: popover closes, live note window appears, survives reload", 
   await expect(noteWindow.locator("strong", { hasText: "persistent bold" })).toBeVisible();
   await expect(noteWindow.locator('a[title="Missing target (not created yet)"]')).toBeVisible();
 
-  // Where did it land? Record the card's position to compare after reload.
-  const before = await noteWindow.boundingBox();
-  expect(before).not.toBeNull();
+  // Record the persisted board coordinates (not screen pixels, which change
+  // when fitView chooses a different camera framing after reload).
+  const nodeId = await noteWindow.getAttribute("data-id");
+  expect(nodeId).toBeTruthy();
+  const { port, token } = stack();
+  const before = await savedPosition(port, token, nodeId!);
 
   // 3. Reload — the live window must persist (board membership, position,
   //    and re-hydrated live content from the vault).
@@ -51,10 +79,8 @@ test("Add to Board: popover closes, live note window appears, survives reload", 
   const restored = page.locator(".react-flow__node-md").filter({ hasText: name });
   await expect(restored, "md note window must survive a reload").toBeVisible({ timeout: 10_000 });
   await expect(restored.locator("strong", { hasText: "persistent bold" }), "live content must re-hydrate after reload").toBeVisible({ timeout: 10_000 });
-  const after = await restored.boundingBox();
-  expect(after).not.toBeNull();
-  // Same neighborhood — the daemon restores exact positions; allow small
-  // slack for fitView framing differences but never a teleport across the canvas.
-  expect(Math.abs(after!.x - before!.x), `x drifted ${before!.x} → ${after!.x}`).toBeLessThan(200);
-  expect(Math.abs(after!.y - before!.y), `y drifted ${before!.y} → ${after!.y}`).toBeLessThan(200);
+  await expect(restored).toHaveAttribute("data-id", nodeId!);
+  const after = await savedPosition(port, token, nodeId!);
+  expect(after[0], `board x changed ${before[0]} → ${after[0]}`).toBe(before[0]);
+  expect(after[1], `board y changed ${before[1]} → ${after[1]}`).toBe(before[1]);
 });
