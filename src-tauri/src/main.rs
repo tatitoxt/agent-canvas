@@ -24,6 +24,10 @@ struct CanvasState {
     repo_root: PathBuf,
     pending_results: Mutex<HashMap<String, String>>, // agent_id → edge_id
     pending_inputs: Mutex<HashMap<String, Vec<u8>>>, // agent_id → held PTY input
+    /// Canonicalized roots vault file operations may touch — the board repo
+    /// plus user-granted vault/workspace roots. Mutex because mounting a
+    /// vault from the UI appends at runtime.
+    allowed_roots: Arc<Mutex<Vec<PathBuf>>>,
 }
 
 fn emit_control(app: &AppHandle, msg: &ServerMsg) {
@@ -192,6 +196,7 @@ fn spawn_wired(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 fn spawn_agent(
     app: AppHandle,
     state: State<'_, CanvasState>,
@@ -472,7 +477,14 @@ fn repo_tree_entries(root: &PathBuf) -> Vec<String> {
 
 fn read_repo_file(root: &PathBuf, path: &str) -> Result<String, String> {
     let rel = std::path::Path::new(path);
-    if rel.is_absolute() || rel.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+    if rel.is_absolute()
+        || rel.components().any(|c| {
+            matches!(
+                c,
+                std::path::Component::Prefix(_) | std::path::Component::RootDir | std::path::Component::ParentDir
+            )
+        })
+    {
         return Err("access denied: path escapes the repository".into());
     }
     let canonical = std::fs::canonicalize(root.join(rel)).map_err(|_| format!("read failed: {path}"))?;
@@ -548,6 +560,207 @@ fn expand_home_path(path: &str) -> PathBuf {
         }
     }
     PathBuf::from(path)
+}
+
+#[cfg(not(windows))]
+const SANDBOX_HINT: &str = " — open the vault from the Vault panel to grant access, or add its path to ~/.config/canvas/allowed-roots (one per line)";
+#[cfg(windows)]
+const SANDBOX_HINT: &str = " — open the vault from the Vault panel to grant access, or add its path to %APPDATA%\\canvas\\allowed-roots (one per line)";
+
+/// Canonicalize a path that may not fully exist yet: canonicalize the
+/// deepest existing ancestor and re-append the missing tail. New vault
+/// folders inside an allowed root therefore initialize fine, while a
+/// missing ancestor outside every root still fails the caller's
+/// allowed-roots check.
+fn canon_through_missing(path: &Path) -> Option<PathBuf> {
+    let mut probe = path.to_path_buf();
+    let mut tail: Vec<std::ffi::OsString> = Vec::new();
+    loop {
+        if std::fs::symlink_metadata(&probe).is_ok() {
+            break;
+        }
+        match (probe.file_name(), probe.parent()) {
+            (Some(name), Some(parent)) => {
+                tail.push(name.to_os_string());
+                probe = parent.to_path_buf();
+            }
+            _ => return None,
+        }
+    }
+    let mut resolved = std::fs::canonicalize(&probe).ok()?;
+    for comp in tail.iter().rev() {
+        resolved.push(comp);
+    }
+    Some(resolved)
+}
+
+fn root_allowed(allowed_roots: &Mutex<Vec<PathBuf>>, canon_root: &Path) -> bool {
+    allowed_roots
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|root| canon_root.starts_with(root))
+}
+
+fn push_allowed_root(roots: &mut Vec<PathBuf>, canon_root: PathBuf) {
+    if !roots.iter().any(|root| canon_root.starts_with(root)) {
+        roots.push(canon_root);
+    }
+}
+
+/// Persist a newly mounted vault root in the same user-level grant file the
+/// daemon uses (`allowed-roots` under Canvas's config dir). The native app
+/// keeps its own in-memory copy — there is no live shared state with a
+/// running canvasd — but both processes converge on the same user grants.
+///
+/// Unlike the daemon's legacy fallback, this deliberately never reads or
+/// writes a repo-local grant file: a cloned repository must not be able to
+/// grant itself access to the operator's disk.
+fn persist_allowed_root(allowed_roots: &Mutex<Vec<PathBuf>>, canon_root: &Path) {
+    {
+        let mut roots = allowed_roots.lock().unwrap();
+        if roots.iter().any(|root| canon_root.starts_with(root)) {
+            return;
+        }
+        roots.push(canon_root.to_path_buf());
+    }
+
+    let Some(config) = canvasd::paths::canvas_config_dir() else {
+        return;
+    };
+    // A newline in the path would smuggle extra grant lines into the config
+    // on the next boot — pathological, but cheap to refuse.
+    let line = canon_root.to_string_lossy().to_string();
+    if line.contains('\n') || line.contains('\r') {
+        return;
+    }
+    let list = config.join("allowed-roots");
+    if let Some(parent) = list.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let prev = std::fs::read_to_string(&list).unwrap_or_default();
+    if prev.lines().any(|l| l.trim() == line) {
+        return;
+    }
+    // Append rather than rewrite the whole file: canvasd may be holding the
+    // same user-level grant list, and a read/modify/write race must not drop
+    // a grant the daemon just appended. Duplicate lines are harmless.
+    use std::io::Write;
+    let mut addition = String::new();
+    if !prev.is_empty() && !prev.ends_with('\n') {
+        addition.push('\n');
+    }
+    addition.push_str(&line);
+    addition.push('\n');
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&list) {
+        let _ = file.write_all(addition.as_bytes());
+    }
+}
+
+/// Initial sandbox roots: the board repo, operator-written lines in the
+/// user-level `allowed-roots` file, and repos already registered as
+/// workspaces (those were explicit operator gestures when created).
+fn initial_allowed_roots(repo_root: &Path, store: &Store) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Ok(canon) = std::fs::canonicalize(repo_root) {
+        push_allowed_root(&mut roots, canon);
+    }
+    if let Some(list) = canvasd::paths::canvas_config_dir().map(|dir| dir.join("allowed-roots")) {
+        if let Ok(text) = std::fs::read_to_string(&list) {
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                let expanded = canvasd::paths::expand_tilde(line);
+                if let Ok(canon) = std::fs::canonicalize(&expanded) {
+                    push_allowed_root(&mut roots, canon);
+                }
+            }
+        }
+    }
+    if let Ok(workspaces) = store.workspaces_snapshot() {
+        for (_, _, repo, _) in workspaces {
+            let expanded = canvasd::paths::expand_tilde(&repo);
+            if let Some(canon) = canon_through_missing(&expanded) {
+                push_allowed_root(&mut roots, canon);
+            }
+        }
+    }
+    roots
+}
+
+/// Deska-style sandbox: every vault path is validated in the native shell,
+/// never trusted from the renderer.
+///
+/// - `path` must be relative — an absolute path would make `root.join`
+///   REPLACE the root, escaping the vault entirely.
+/// - no `..`/root/prefix components — no traversal above the root.
+/// - the canonicalized vault root must sit inside an allowed root.
+/// - the target, canonicalized through its deepest existing ancestor,
+///   must stay inside the canonical root — kills symlink escapes, which
+///   the naive `!path.contains("..")` checks never saw.
+fn vault_sandbox_resolve(
+    allowed_roots: &Mutex<Vec<PathBuf>>,
+    dir: &str,
+    path: &str,
+) -> Result<PathBuf, String> {
+    let rel = Path::new(path);
+    if rel.is_absolute() {
+        return Err("access denied: absolute paths are not allowed".into());
+    }
+    // Reject roots/prefixes component-wise too, not just `..`: on Windows
+    // `\foo` carries a RootDir without being `is_absolute` (no drive
+    // prefix), and `C:` is a drive-relative Prefix — both would bend the
+    // probe away from the vault root before the final containment check
+    // caught them.
+    if rel.components().any(|c| {
+        matches!(
+            c,
+            std::path::Component::Prefix(_) | std::path::Component::RootDir | std::path::Component::ParentDir
+        )
+    }) {
+        return Err("access denied: path escapes the vault".into());
+    }
+    let canon_root = canon_through_missing(Path::new(dir))
+        .ok_or_else(|| format!("access denied: vault root not found: {dir}"))?;
+    if !root_allowed(allowed_roots, &canon_root) {
+        return Err(format!("access denied: path is outside allowed directories{SANDBOX_HINT}"));
+    }
+    // Walk the components that exist: any symlink in the chain must resolve
+    // inside the vault. `symlink_metadata` (lstat) sees dangling links that
+    // `exists()` misses — a dangling symlink is never a legitimate write
+    // target, because the write would follow it and create the file wherever
+    // it points.
+    let mut probe = canon_root.clone();
+    for comp in rel.components() {
+        probe.push(comp.as_os_str());
+        if let Ok(meta) = std::fs::symlink_metadata(&probe) {
+            if meta.file_type().is_symlink() {
+                match std::fs::canonicalize(&probe) {
+                    Ok(canon) if canon.starts_with(&canon_root) => {
+                        probe = canon;
+                    }
+                    // Dangling or escaping link — refuse outright.
+                    _ => return Err("access denied: path is outside allowed directories".into()),
+                }
+            }
+        }
+    }
+    if !probe.starts_with(&canon_root) {
+        return Err("access denied: path is outside allowed directories".into());
+    }
+    Ok(probe)
+}
+
+fn vault_sandbox_dir(allowed_roots: &Mutex<Vec<PathBuf>>, dir: &str) -> Result<PathBuf, String> {
+    let canon_root = canon_through_missing(Path::new(dir))
+        .ok_or_else(|| format!("access denied: vault root not found: {dir}"))?;
+    if root_allowed(allowed_roots, &canon_root) {
+        Ok(canon_root)
+    } else {
+        Err(format!("access denied: path is outside allowed directories{SANDBOX_HINT}"))
+    }
 }
 
 fn resolve_registered_repo_dir(dir: &str, roots: &[PathBuf]) -> Result<PathBuf, String> {
@@ -787,12 +1000,9 @@ fn vault_links(text: &str) -> Vec<String> {
 #[tauri::command]
 fn default_vault_dir() -> Option<String> {
     let home = std::env::var("HOME").ok()?;
-    for cand in [format!("{home}/Documents/Orkelya-Memory"), format!("{home}/Documents"), home] {
-        if PathBuf::from(&cand).is_dir() {
-            return Some(cand);
-        }
-    }
-    None
+    [format!("{home}/Documents/Orkelya-Memory"), format!("{home}/Documents"), home]
+        .into_iter()
+        .find(|cand| PathBuf::from(cand.as_str()).is_dir())
 }
 
 #[tauri::command]
@@ -802,8 +1012,14 @@ fn vault_discover(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn vault_register(app: AppHandle, dir: String) -> Result<(), String> {
-    let vaults = canvasd::vault::register(&dir)?;
+fn vault_register(app: AppHandle, state: State<'_, CanvasState>, dir: String) -> Result<(), String> {
+    // Registration creates `.obsidian` inside the target folder, so it is a
+    // filesystem write and must not become a way to write into an ungranted
+    // directory. The Vault panel mount gesture (`vault_list`) is what grants
+    // the root; this command only registers an already-mounted vault.
+    let root = vault_sandbox_dir(&state.allowed_roots, &dir)?;
+    let root = root.to_string_lossy().to_string();
+    let vaults = canvasd::vault::register(&root)?;
     emit_control(&app, &ServerMsg::VaultDiscovered { vaults });
     Ok(())
 }
@@ -821,16 +1037,15 @@ fn uri_component(value: &str) -> String {
 }
 
 #[tauri::command]
-fn open_obsidian(vault_dir: String, path: String) -> Result<(), String> {
-    let root = expand_home_path(&vault_dir);
-    let root = std::fs::canonicalize(&root).map_err(|_| "Obsidian vault folder is unavailable".to_string())?;
+fn open_obsidian(state: State<'_, CanvasState>, vault_dir: String, path: String) -> Result<(), String> {
+    let root = vault_sandbox_dir(&state.allowed_roots, &vault_dir)
+        .map_err(|_| "Obsidian vault folder is unavailable or not mounted".to_string())?;
+    if !root.is_dir() {
+        return Err("Obsidian vault folder is unavailable".into());
+    }
     if !path.trim().is_empty() {
-        let rel = std::path::Path::new(&path);
-        if rel.is_absolute() || rel.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
-            return Err("note path must stay inside the selected vault".into());
-        }
-        let target = std::fs::canonicalize(root.join(rel)).map_err(|_| format!("note not found in vault: {path}"))?;
-        if !target.starts_with(&root) || !target.is_file() {
+        let target = vault_sandbox_resolve(&state.allowed_roots, &vault_dir, &path)?;
+        if !target.is_file() {
             return Err("note path must stay inside the selected vault".into());
         }
     }
@@ -856,18 +1071,41 @@ fn open_obsidian(vault_dir: String, path: String) -> Result<(), String> {
     result.map(|_| ()).map_err(|e| format!("could not open Obsidian: {e}"))
 }
 
+/// Emit a vault listing after treating the list request as the Vault panel's
+/// mount gesture. This mirrors canvasd: opening a directory in the panel is
+/// what grants that canonical root to the sandbox and persists the grant in
+/// the user-level `allowed-roots` file.
+fn emit_vault_listing(app: &AppHandle, state: &CanvasState, dir: String) {
+    if let Some(canon) = canon_through_missing(Path::new(&dir)) {
+        if !root_allowed(&state.allowed_roots, &canon) {
+            persist_allowed_root(&state.allowed_roots, &canon);
+        }
+    }
+    match vault_sandbox_dir(&state.allowed_roots, &dir) {
+        Ok(root) => {
+            let mut entries = vault_list_entries(&root);
+            entries.truncate(2000);
+            emit_control(app, &ServerMsg::VaultListing { dir, entries });
+        }
+        Err(message) => emit_control(app, &ServerMsg::Error { agent_id: None, message }),
+    }
+}
+
 #[tauri::command]
-fn vault_list(app: AppHandle, dir: String) -> Result<(), String> {
-    let root = PathBuf::from(&dir);
-    let mut entries = vault_list_entries(&root);
-    entries.truncate(2000);
-    emit_control(&app, &ServerMsg::VaultListing { dir, entries });
+fn vault_list(app: AppHandle, state: State<'_, CanvasState>, dir: String) -> Result<(), String> {
+    emit_vault_listing(&app, state.inner(), dir);
     Ok(())
 }
 
 #[tauri::command]
-fn vault_graph(app: AppHandle, dir: String) -> Result<(), String> {
-    let root = PathBuf::from(&dir);
+fn vault_graph(app: AppHandle, state: State<'_, CanvasState>, dir: String) -> Result<(), String> {
+    let root = match vault_sandbox_dir(&state.allowed_roots, &dir) {
+        Ok(root) => root,
+        Err(message) => {
+            emit_control(&app, &ServerMsg::Error { agent_id: None, message });
+            return Ok(());
+        }
+    };
     let nodes = vault_list_entries(&root);
     let resolve = |name: &str| -> Option<String> {
         let n = name.trim();
@@ -895,8 +1133,14 @@ fn vault_graph(app: AppHandle, dir: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn vault_search(app: AppHandle, dir: String, query: String) -> Result<(), String> {
-    let root = PathBuf::from(&dir);
+fn vault_search(app: AppHandle, state: State<'_, CanvasState>, dir: String, query: String) -> Result<(), String> {
+    let root = match vault_sandbox_dir(&state.allowed_roots, &dir) {
+        Ok(root) => root,
+        Err(message) => {
+            emit_control(&app, &ServerMsg::Error { agent_id: None, message });
+            return Ok(());
+        }
+    };
     let needle = query.to_lowercase();
     let mut hits = Vec::new();
     let mut scanned = 0usize;
@@ -957,9 +1201,12 @@ fn vault_search(app: AppHandle, dir: String, query: String) -> Result<(), String
 }
 
 #[tauri::command]
-fn vault_read(app: AppHandle, dir: String, path: String) -> Result<(), String> {
-    let file = PathBuf::from(&dir).join(&path);
-    if path.contains("..") || !path.ends_with(".md") || !file.is_file() {
+fn vault_read(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String) -> Result<(), String> {
+    if !path.ends_with(".md") {
+        return Err("not a markdown file in the vault".into());
+    }
+    let file = vault_sandbox_resolve(&state.allowed_roots, &dir, &path)?;
+    if !file.is_file() {
         return Err("not a markdown file in the vault".into());
     }
     let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
@@ -969,9 +1216,12 @@ fn vault_read(app: AppHandle, dir: String, path: String) -> Result<(), String> {
 
 /// Read a vault file without making it the open note — powers `![[embeds]]`.
 #[tauri::command]
-fn vault_peek(app: AppHandle, dir: String, path: String) -> Result<(), String> {
-    let file = PathBuf::from(&dir).join(&path);
-    if path.contains("..") || !path.ends_with(".md") || !file.is_file() {
+fn vault_peek(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String) -> Result<(), String> {
+    if !path.ends_with(".md") {
+        return Err("not a markdown file in the vault".into());
+    }
+    let file = vault_sandbox_resolve(&state.allowed_roots, &dir, &path)?;
+    if !file.is_file() {
         return Err("not a markdown file in the vault".into());
     }
     let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
@@ -981,8 +1231,7 @@ fn vault_peek(app: AppHandle, dir: String, path: String) -> Result<(), String> {
 
 /// Read a binary vault asset (image) as base64 — powers `![[image.png]]`.
 #[tauri::command]
-fn vault_asset(app: AppHandle, dir: String, path: String) -> Result<(), String> {
-    let file = PathBuf::from(&dir).join(&path);
+fn vault_asset(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String) -> Result<(), String> {
     let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
     let mime = match ext.as_str() {
         "png" => "image/png",
@@ -993,8 +1242,12 @@ fn vault_asset(app: AppHandle, dir: String, path: String) -> Result<(), String> 
         "ico" => "image/x-icon",
         _ => return Err("not an image asset".into()),
     };
-    if path.contains("..") || !file.is_file() {
+    let file = vault_sandbox_resolve(&state.allowed_roots, &dir, &path)?;
+    if !file.is_file() {
         return Err("not a file in the vault".into());
+    }
+    if std::fs::metadata(&file).map(|m| m.len() > 8 * 1024 * 1024).unwrap_or(false) {
+        return Err("asset too large".into());
     }
     let bytes = std::fs::read(&file).map_err(|e| e.to_string())?;
     if bytes.len() > 8 * 1024 * 1024 {
@@ -1006,11 +1259,11 @@ fn vault_asset(app: AppHandle, dir: String, path: String) -> Result<(), String> 
 }
 
 #[tauri::command]
-fn vault_append(app: AppHandle, dir: String, path: String, text: String) -> Result<(), String> {
-    let file = PathBuf::from(&dir).join(&path);
-    if path.contains("..") || !path.ends_with(".md") {
+fn vault_append(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String, text: String) -> Result<(), String> {
+    if !path.ends_with(".md") {
         return Err("vault append refused".into());
     }
+    let file = vault_sandbox_resolve(&state.allowed_roots, &dir, &path)?;
     if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -1023,13 +1276,22 @@ fn vault_append(app: AppHandle, dir: String, path: String, text: String) -> Resu
 }
 
 #[tauri::command]
-fn vault_delete(app: AppHandle, dir: String, path: String) -> Result<(), String> {
-    let file = PathBuf::from(&dir).join(&path);
-    if path.contains("..") || !path.ends_with(".md") || !file.is_file() {
+fn vault_delete(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String) -> Result<(), String> {
+    if !path.ends_with(".md") {
+        return Err("vault delete refused".into());
+    }
+    let file = vault_sandbox_resolve(&state.allowed_roots, &dir, &path)?;
+    let root = vault_sandbox_dir(&state.allowed_roots, &dir)?;
+    if !file.is_file() {
         return Err("vault delete refused".into());
     }
     // Obsidian-style trash: move to <vault>/.trash/, recoverable always.
-    let trash = PathBuf::from(&dir).join(".trash");
+    // A `.trash` symlink would move notes outside the vault — refuse the
+    // delete rather than follow it.
+    let trash = root.join(".trash");
+    if std::fs::symlink_metadata(&trash).map(|m| m.file_type().is_symlink()).unwrap_or(false) {
+        return Err("vault delete refused: .trash is a symlink".into());
+    }
     let base = file.file_name().ok_or("bad name")?;
     let mut dest = trash.join(base);
     if dest.exists() {
@@ -1042,16 +1304,25 @@ fn vault_delete(app: AppHandle, dir: String, path: String) -> Result<(), String>
     }
     std::fs::create_dir_all(&trash).map_err(|e| e.to_string())?;
     std::fs::rename(&file, &dest).map_err(|e| e.to_string())?;
-    vault_list(app, dir)
+    emit_vault_listing(&app, state.inner(), dir);
+    Ok(())
 }
 
 #[tauri::command]
-fn vault_rename(app: AppHandle, dir: String, path: String, new_path: String) -> Result<(), String> {
-    let root = PathBuf::from(&dir);
-    let from = root.join(&path);
-    let to = root.join(&new_path);
-    if path.contains("..") || new_path.contains("..") || !path.ends_with(".md") || !new_path.ends_with(".md") || !from.is_file() {
+fn vault_rename(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String, new_path: String) -> Result<(), String> {
+    if !path.ends_with(".md") || !new_path.ends_with(".md") {
         return Err("vault rename refused".into());
+    }
+    let from = vault_sandbox_resolve(&state.allowed_roots, &dir, &path)?;
+    let to = vault_sandbox_resolve(&state.allowed_roots, &dir, &new_path)?;
+    if !from.is_file() {
+        return Err("vault rename refused".into());
+    }
+    // Never clobber: the resolved destination is canonical, so renaming onto
+    // an in-vault symlink would overwrite the LINKED file's contents, not the
+    // link.
+    if to.exists() {
+        return Err(format!("vault rename refused: {new_path} already exists"));
     }
     if let Some(parent) = to.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -1059,15 +1330,16 @@ fn vault_rename(app: AppHandle, dir: String, path: String, new_path: String) -> 
     std::fs::rename(&from, &to).map_err(|e| e.to_string())?;
     let text = std::fs::read_to_string(&to).map_err(|e| e.to_string())?;
     emit_control(&app, &ServerMsg::VaultFile { path: new_path, text });
-    vault_list(app, dir)
+    emit_vault_listing(&app, state.inner(), dir);
+    Ok(())
 }
 
 #[tauri::command]
-fn vault_write(app: AppHandle, dir: String, path: String, text: String) -> Result<(), String> {
-    let file = PathBuf::from(&dir).join(&path);
-    if path.contains("..") || !path.ends_with(".md") {
+fn vault_write(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String, text: String) -> Result<(), String> {
+    if !path.ends_with(".md") {
         return Err("vault write refused".into());
     }
+    let file = vault_sandbox_resolve(&state.allowed_roots, &dir, &path)?;
     if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -1076,66 +1348,283 @@ fn vault_write(app: AppHandle, dir: String, path: String, text: String) -> Resul
     Ok(())
 }
 
-#[tauri::command]
-fn vault_write_asset(app: AppHandle, dir: String, path: String, data: String) -> Result<(), String> {
-    if dir.is_empty() || path.contains("..") || path.is_empty() || path.ends_with('/') {
-        return Err("vault write-asset refused".into());
+/// Sandbox and write a base64-encoded vault asset. Split from the Tauri
+/// command so the traversal/symlink/dedupe behavior is directly unit-testable
+/// without constructing an AppHandle.
+fn write_vault_asset_sandboxed(
+    allowed_roots: &Mutex<Vec<PathBuf>>,
+    dir: &str,
+    path: &str,
+    data: &str,
+) -> Result<(), String> {
+    if dir.is_empty() {
+        return Err("vault write-asset refused: no vault dir".into());
     }
+    if path.is_empty() || path.ends_with('/') {
+        return Err(format!("vault write-asset refused: {path}"));
+    }
+    // Assets obey the exact same sandbox as every other vault operation: the
+    // destination is resolved through the canonical, allowed vault root before
+    // any directory is created or byte is written. In particular
+    // `root.join(path)` must never see the renderer-supplied path directly — an
+    // absolute path would replace the root, and an intermediate symlink could
+    // point outside it.
+    let file = vault_sandbox_resolve(allowed_roots, dir, path)?;
+    let root = vault_sandbox_dir(allowed_roots, dir)?;
+    if file == root {
+        // Unlike markdown writes, assets have no extension gate. `.` (or a
+        // link back to the vault root) resolves to the root directory itself;
+        // treating that as a file would make the dedupe parent the vault's
+        // PARENT and invent names like `vault-2` outside the sandbox.
+        return Err(format!("vault write-asset refused: {path}"));
+    }
+
     let bytes = base64::engine::general_purpose::STANDARD
-        .decode(&data)
+        .decode(data)
         .map_err(|e| e.to_string())?;
     if bytes.len() > 8 * 1024 * 1024 {
         return Err("vault asset too large".into());
     }
-    // create_new per candidate — atomic name reservation, and a dangling
-    // symlink counts as taken so it is never written through.
-    let root = PathBuf::from(&dir);
-    let target = root.join(&path);
-    if let Some(parent) = target.parent() {
+
+    // Never clobber: foo.png → foo-2.png. Open with create_new (O_EXCL) per
+    // candidate — atomic, so concurrent drops can't race a check-then-write
+    // into an overwrite, and a dangling symlink fails EEXIST instead of being
+    // written through.
+    if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let stem = target.file_stem().unwrap_or_default().to_string_lossy().to_string();
-    let ext = target
+    let stem = file.file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let ext = file
         .extension()
         .map(|e| format!(".{}", e.to_string_lossy()))
         .unwrap_or_default();
-    let parent = target.parent().map(|p| p.to_path_buf()).unwrap_or_default();
-    let mut file = None;
-    for cand in std::iter::once(target.clone()).chain((2..100).map(|i| parent.join(format!("{stem}-{i}{ext}")))) {
+    let parent = file.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    let mut wrote = false;
+    for cand in std::iter::once(file.clone()).chain((2..100).map(|i| parent.join(format!("{stem}-{i}{ext}")))) {
         match std::fs::OpenOptions::new().write(true).create_new(true).open(&cand) {
             Ok(f) => {
+                // Reserve the name atomically, write the bytes to a sibling tmp
+                // file, then rename over the reservation — a failed write never
+                // leaves a truncated final file.
                 drop(f);
-                file = Some(cand);
+                let tmp = cand.parent().unwrap_or(&root).join(format!(
+                    ".{}.tmp-{}",
+                    cand.file_name().unwrap_or_default().to_string_lossy(),
+                    std::process::id(),
+                ));
+                // create_new on the tmp too — a vault file that happens to
+                // share the tmp name must never be truncated; cleanup only
+                // removes files we made.
+                let outcome = match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
+                    Ok(mut f) => {
+                        let r = std::io::Write::write_all(&mut f, &bytes);
+                        drop(f);
+                        r.and_then(|()| std::fs::rename(&tmp, &cand))
+                            .inspect_err(|_| { let _ = std::fs::remove_file(&tmp); })
+                    }
+                    Err(e) => Err(e), // preexisting tmp — never touch it
+                };
+                if let Err(e) = outcome {
+                    let _ = std::fs::remove_file(&cand); // our empty reservation
+                    return Err(e.to_string());
+                }
+                wrote = true;
                 break;
             }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(e) => return Err(e.to_string()),
         }
     }
-    let file = file.ok_or_else(|| format!("no free name for {path}"))?;
-    // Write to a sibling tmp file then rename over the empty reservation — a
-    // failed write never leaves a truncated file at the final name.
-    let tmp = parent.join(format!(
-        ".{}.tmp-{}",
-        file.file_name().unwrap_or_default().to_string_lossy(),
-        std::process::id(),
-    ));
-    // create_new on the tmp too — a vault file that happens to share the
-    // tmp name must never be truncated, and cleanup only touches our own.
-    let outcome = match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
-        Ok(mut f) => {
-            let r = std::io::Write::write_all(&mut f, &bytes);
-            drop(f);
-            r.and_then(|()| std::fs::rename(&tmp, &file))
-                .inspect_err(|_| { let _ = std::fs::remove_file(&tmp); })
-        }
-        Err(e) => Err(e), // preexisting tmp — never touch it
-    };
-    if let Err(e) = outcome {
-        let _ = std::fs::remove_file(&file); // our empty reservation
-        return Err(e.to_string());
+    if !wrote {
+        return Err(format!("no free name for {path}"));
     }
-    vault_list(app, dir)
+    Ok(())
+}
+
+#[tauri::command]
+fn vault_write_asset(app: AppHandle, state: State<'_, CanvasState>, dir: String, path: String, data: String) -> Result<(), String> {
+    write_vault_asset_sandboxed(&state.allowed_roots, &dir, &path, &data)?;
+    emit_vault_listing(&app, state.inner(), dir);
+    Ok(())
+}
+
+#[cfg(test)]
+mod vault_write_asset_sandbox_tests {
+    use super::write_vault_asset_sandboxed;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+
+    struct Fixture {
+        allowed_roots: Mutex<Vec<PathBuf>>,
+        vault: PathBuf,
+        tmp: tempfile::TempDir,
+    }
+
+    /// A vault two levels below the temp root: `../../etc/passwd` from it
+    /// lands at `<tmp>/etc/passwd`, so a vulnerable write is observable
+    /// without ever touching the host's real `/etc`.
+    fn fixture(allow_vault: bool) -> Fixture {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        let vault = tmp.path().join("sandbox").join("vault");
+        std::fs::create_dir_all(&vault).unwrap();
+        let mut roots = vec![std::fs::canonicalize(repo).unwrap()];
+        if allow_vault {
+            roots.push(std::fs::canonicalize(&vault).unwrap());
+        }
+        Fixture {
+            allowed_roots: Mutex::new(roots),
+            vault,
+            tmp,
+        }
+    }
+
+    /// `cG5n` is the base64 for the bytes `png`; using one payload keeps the
+    /// filesystem assertions focused on path handling rather than encoding.
+    fn write_asset(fixture: &Fixture, path: &str) -> Result<(), String> {
+        let dir = fixture.vault.to_string_lossy().to_string();
+        write_vault_asset_sandboxed(&fixture.allowed_roots, &dir, path, "cG5n")
+    }
+
+    fn assert_access_denied(result: Result<(), String>, needle: &str) {
+        let error = result.expect_err("the sandboxed write should have been refused");
+        assert!(
+            error.contains(needle),
+            "expected an access-denied error containing {needle:?}; got {error:?}"
+        );
+    }
+
+    #[test]
+    fn rejects_parent_traversal_before_creating_anything() {
+        let fixture = fixture(true);
+        let result = write_asset(&fixture, "../../etc/passwd");
+        assert_access_denied(result, "path escapes the vault");
+        assert!(
+            !fixture.tmp.path().join("etc").join("passwd").exists(),
+            "parent traversal must not create a file outside the vault"
+        );
+    }
+
+    #[test]
+    fn rejects_absolute_paths_even_inside_the_scratch_area() {
+        let fixture = fixture(true);
+        let target = fixture.tmp.path().join("outside").join("absolute.png");
+        let absolute = target.to_string_lossy().to_string();
+        let result = write_asset(&fixture, &absolute);
+        assert_access_denied(result, "absolute paths are not allowed");
+        assert!(
+            !target.exists(),
+            "an absolute target outside the vault must not be written"
+        );
+    }
+
+    #[test]
+    fn rejects_the_vault_root_itself_as_a_file_target() {
+        let fixture = fixture(true);
+        let sibling_escape = fixture.vault.parent().unwrap().join("vault-2");
+        let error = write_asset(&fixture, ".").expect_err("the vault root is not a file target");
+        assert!(
+            error.contains("vault write-asset refused"),
+            "expected the root target to be refused; got {error:?}"
+        );
+        assert!(
+            !sibling_escape.exists(),
+            "dedupe must never invent a sibling outside the vault root"
+        );
+    }
+
+    #[cfg(unix)]
+    fn symlink_dir(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_dir(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_dir(target, link)
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    fn symlink_dir(_target: &Path, _link: &Path) -> std::io::Result<()> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "directory symlinks are unsupported on this platform",
+        ))
+    }
+
+    #[test]
+    fn rejects_symlinked_directories_that_escape_the_vault() {
+        let fixture = fixture(true);
+        let outside = fixture.tmp.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let link = fixture.vault.join("linked");
+        if let Err(e) = symlink_dir(&outside, &link) {
+            // Windows may require Developer Mode or elevation for symlink
+            // creation. That does not weaken coverage where symlinks exist;
+            // it only keeps the portable test suite runnable in restricted CI.
+            assert!(
+                matches!(e.kind(), std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::Unsupported),
+                "test symlink setup failed unexpectedly: {e}"
+            );
+            eprintln!("skipping symlink assertion: {e}");
+            return;
+        }
+
+        let result = write_asset(&fixture, "linked/escape.png");
+        assert_access_denied(result, "outside allowed directories");
+        assert!(
+            !outside.join("escape.png").exists(),
+            "a symlinked directory must not carry the write outside the vault"
+        );
+
+        // A link back to the vault root is containment-valid as a path, but it
+        // is not a file target: without a root-target guard the dedupe step
+        // would look for `vault-2` beside the vault, outside the sandbox.
+        let root_link = fixture.vault.join("root-link");
+        symlink_dir(&fixture.vault, &root_link).unwrap();
+        let error = write_asset(&fixture, "root-link")
+            .expect_err("a symlink resolving to the vault root must be refused as a file target");
+        assert!(
+            error.contains("vault write-asset refused"),
+            "expected a root-resolving symlink to be refused; got {error:?}"
+        );
+        assert!(
+            !fixture.vault.parent().unwrap().join("vault-2").exists(),
+            "root-resolving symlink must not create a sibling outside the vault"
+        );
+    }
+
+    #[test]
+    fn rejects_a_vault_root_that_was_never_granted() {
+        let fixture = fixture(false);
+        let result = write_asset(&fixture, "pic.png");
+        assert_access_denied(result, "outside allowed directories");
+        assert!(
+            !fixture.vault.join("pic.png").exists(),
+            "an ungranted vault root must not become writable just because it exists"
+        );
+    }
+
+    #[test]
+    fn legitimate_nested_write_still_lands_in_the_vault_and_dedupes() {
+        let fixture = fixture(true);
+        write_asset(&fixture, "attachments/pic.png").unwrap();
+        assert_eq!(
+            std::fs::read(fixture.vault.join("attachments").join("pic.png")).unwrap(),
+            b"png"
+        );
+
+        write_asset(&fixture, "attachments/pic.png").unwrap();
+        assert_eq!(
+            std::fs::read(fixture.vault.join("attachments").join("pic-2.png")).unwrap(),
+            b"png"
+        );
+        assert_eq!(
+            std::fs::read(fixture.vault.join("attachments").join("pic.png")).unwrap(),
+            b"png",
+            "the original file must never be clobbered"
+        );
+    }
 }
 
 #[tauri::command]
@@ -1174,6 +1663,7 @@ fn git_push(app: AppHandle, state: State<'_, CanvasState>, agent_id: String) -> 
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 fn artifact_create(
     app: AppHandle,
     state: State<'_, CanvasState>,
@@ -1212,6 +1702,7 @@ fn artifact_delete(app: AppHandle, state: State<'_, CanvasState>, artifact_id: S
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 fn note_upsert(
     app: AppHandle,
     state: State<'_, CanvasState>,
@@ -1251,7 +1742,7 @@ fn session_digest(app: AppHandle, state: State<'_, CanvasState>) -> Result<(), S
         if let Some(l) = acct {
             md.push_str(&format!(" · @{l}"));
         }
-        md.push_str("\n");
+        md.push('\n');
         let tail = state
             .agents
             .scrollback(id)
@@ -1265,7 +1756,7 @@ fn session_digest(app: AppHandle, state: State<'_, CanvasState>) -> Result<(), S
         for l in lines.iter().rev().take(6).rev() {
             md.push_str(&format!("    {l}\n"));
         }
-        md.push_str("\n");
+        md.push('\n');
     }
     emit_control(&app, &ServerMsg::SessionDigest { text: md });
     Ok(())
@@ -1310,6 +1801,14 @@ fn create_workspace(
     repo: String,
     board_id: Option<String>,
 ) -> Result<String, String> {
+    // Registering a workspace is an explicit operator gesture — its repo joins
+    // the sandbox so the explorer and vault operations can browse it later.
+    let expanded_repo = canvasd::paths::expand_tilde(&repo);
+    if let Some(canon) = canon_through_missing(&expanded_repo) {
+        if !root_allowed(&state.allowed_roots, &canon) {
+            persist_allowed_root(&state.allowed_roots, &canon);
+        }
+    }
     let id = uuid_v4ish();
     state
         .store
@@ -1333,6 +1832,7 @@ fn uuid_v4ish() -> String {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 fn delegate(
     app: AppHandle,
     state: State<'_, CanvasState>,
@@ -2226,12 +2726,14 @@ fn main() {
             }
             let agents = AgentManager::new();
             agents.set_transcript_dir(repo_root.join(".canvas").join("transcripts"));
+            let allowed_roots = initial_allowed_roots(&repo_root, &store);
             app.manage(CanvasState {
                 agents: Arc::new(agents),
                 store,
                 repo_root,
                 pending_results: Mutex::new(HashMap::new()),
                 pending_inputs: Mutex::new(HashMap::new()),
+                allowed_roots: Arc::new(Mutex::new(allowed_roots)),
             });
 
             // 1s ticker: derived statuses + CANVAS_RESULT returns + diffs.
