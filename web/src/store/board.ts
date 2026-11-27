@@ -440,6 +440,9 @@ type BoardState = {
   /** Transient toast — latest info/error line shown bottom-right. */
   notice: string | null;
   notices: { id: number; text: string }[];
+  /** Latest PTY transport error per agent, so queue/input failures stay with the terminal that caused them. */
+  terminalErrors: Record<string, string>;
+  dismissTerminalError: (agentId: string) => void;
   /** Obsidian-style vault browser state. */
   vaultDir: string;
   vaultEntries: string[];
@@ -824,6 +827,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   digest: null,
   notice: null,
   notices: [],
+  terminalErrors: {},
   vaultDir: "",
   vaultEntries: [],
   repoEntries: [],
@@ -1461,10 +1465,15 @@ export const useBoard = create<BoardState>((set, get) => ({
             });
             break;
           }
-          case "error":
-            get().notify(`error — ${msg.message}`);
+          case "error": {
+            const agentName = msg.agent_id ? get().agents[msg.agent_id]?.name : undefined;
+            if (msg.agent_id) {
+              set((st) => ({ terminalErrors: { ...st.terminalErrors, [msg.agent_id!]: msg.message } }));
+            }
+            get().notify(`error${agentName ? ` — ${agentName}` : ""} — ${msg.message}`);
             console.error("[canvasd]", msg.message);
             break;
+          }
           default:
             break;
         }
@@ -1658,6 +1667,12 @@ export const useBoard = create<BoardState>((set, get) => ({
         : s.notices,
     })),
   dismissNotice: (id) => set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
+  dismissTerminalError: (agentId) => set((s) => {
+    if (!s.terminalErrors[agentId]) return s;
+    const terminalErrors = { ...s.terminalErrors };
+    delete terminalErrors[agentId];
+    return { terminalErrors };
+  }),
   vaultList: (dir) => {
     set({ vaultDir: dir });
     try { localStorage.setItem("cv-vault-dir", dir); } catch { /* noop */ }

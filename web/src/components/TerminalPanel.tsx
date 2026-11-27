@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 
 import { LazyTermHost as TermHost } from "./LazyTermHost";
+import { TerminalError } from "./TerminalError";
 import { useBoard } from "../store/board";
 import { CliMark } from "./CliMark";
 import { announcedModel, STATUS_COLOR, STATUS_LABEL, StatusBars, cliMeta } from "../board/nodes";
@@ -458,6 +459,7 @@ export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index 
           </button>
         </div>
       </div>
+      <TerminalError agentId={agentId} />
       <div
         className="min-h-0 flex-1"
         style={{ display: "flex", flexDirection: split === "down" ? "column" : "row" }}
