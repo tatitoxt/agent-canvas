@@ -198,11 +198,19 @@ function Board() {
   // Markup pencil — freehand strokes drawn over the canvas (screen coords),
   // baked into the PNG when a shot exports.
   const [pencil, setPencil] = useState(false);
+  const [pencilColor, setPencilColor] = useState("#e8b25a");
+  const pencilColors = [
+    { name: "Gold", value: "#e8b25a" },
+    { name: "Coral", value: "#ff7048" },
+    { name: "Mint", value: "#58d6bd" },
+    { name: "Blue", value: "#6ea8ff" },
+    { name: "White", value: "#f4f1eb" },
+  ];
   const [strokes, setStrokes] = useState<Array<Array<{ x: number; y: number }>>>([]);
   const [drawing, setDrawing] = useState<Array<{ x: number; y: number }> | null>(null);
 
   const composeShot = useCallback(
-    async (dataUrl: string, screenRect: { x1: number; y1: number; x2: number; y2: number }, name: string) => {
+    async (dataUrl: string, viewport: { x: number; y: number; zoom: number }, name: string) => {
       const img = new Image();
       img.src = dataUrl;
       await img.decode();
@@ -211,23 +219,25 @@ function Board() {
       const ctx = cv.getContext("2d");
       if (!ctx) return;
       ctx.drawImage(img, 0, 0);
-      const sx = img.width / (screenRect.x2 - screenRect.x1);
-      const sy = img.height / (screenRect.y2 - screenRect.y1);
-      ctx.strokeStyle = "#e8b25a";
+      ctx.strokeStyle = pencilColor;
       ctx.lineWidth = 3;
       ctx.lineJoin = ctx.lineCap = "round";
       for (const st of strokes) {
         if (st.length < 2) continue;
         ctx.beginPath();
-        ctx.moveTo((st[0].x - screenRect.x1) * sx, (st[0].y - screenRect.y1) * sy);
-        for (const p of st.slice(1)) ctx.lineTo((p.x - screenRect.x1) * sx, (p.y - screenRect.y1) * sy);
+        const first = screenToFlowPosition({ x: st[0].x, y: st[0].y });
+        ctx.moveTo(first.x * viewport.zoom + viewport.x, first.y * viewport.zoom + viewport.y);
+        for (const p of st.slice(1)) {
+          const flow = screenToFlowPosition({ x: p.x, y: p.y });
+          ctx.lineTo(flow.x * viewport.zoom + viewport.x, flow.y * viewport.zoom + viewport.y);
+        }
         ctx.stroke();
       }
       const a = document.createElement("a");
       a.download = name;
       a.href = cv.toDataURL("image/png");
       a.click();
-    }, [strokes]);
+    }, [strokes, pencilColor, screenToFlowPosition]);
   const shotCanvas = useCallback(async () => {
     const ns = getNodes();
     if (ns.length === 0) return;
@@ -248,10 +258,7 @@ function Board() {
         transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})`,
       },
     });
-    const a = document.createElement("a");
-    a.download = `canvas-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
-    a.href = dataUrl;
-    a.click();
+    void composeShot(dataUrl, vp, `canvas-${new Date().toISOString().replace(/[:.]/g, "-")}.png`);
   }, [getNodes, composeShot]);
   const viewCmdN = useBoard((s) => s.viewCmdN);
   useEffect(() => {
@@ -410,9 +417,9 @@ function Board() {
       height: h,
       style: { width: `${w}px`, height: `${h}px`, transform: `translate(${v.x}px, ${v.y}px) scale(${v.zoom})` },
     });
-    void composeShot(dataUrl, r, `canvas-region-${Date.now()}.png`);
+    void composeShot(dataUrl, v, `canvas-region-${Date.now()}.png`);
     useBoard.getState().notify(`region shot — ${picked.length} node(s)`);
-  }, [getNodes]);
+  }, [getNodes, composeShot]);
   // Connect on load when a token is present — no manual "connect" click.
   useEffect(() => {
     useBoard.getState().connect("");
@@ -1160,7 +1167,7 @@ function Board() {
                 key={i}
                 points={st.map((p) => `${p.x},${p.y}`).join(" ")}
                 fill="none"
-                stroke="#e8b25a"
+                stroke={pencilColor}
                 strokeWidth={3}
                 strokeLinejoin="round"
                 strokeLinecap="round"
@@ -1190,6 +1197,29 @@ function Board() {
             <Icon name="draw" size={13} color="var(--cv-accent)" />
             <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600, color: "var(--cv-ink)" }}>Pencil</span>
             <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", fontWeight: 500 }}>drag to mark up the canvas</span>
+            <span style={{ width: 1, height: 16, background: "var(--cv-glass-edge)" }} />
+            <div role="group" aria-label="Pencil color" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              {pencilColors.map((color) => (
+                <button
+                  key={color.value}
+                  type="button"
+                  aria-label={`${color.name} pencil color`}
+                  aria-pressed={pencilColor === color.value}
+                  title={`${color.name} pencil color`}
+                  onClick={(e) => { e.stopPropagation(); setPencilColor(color.value); }}
+                  style={{
+                    width: 17,
+                    height: 17,
+                    padding: 0,
+                    borderRadius: "50%",
+                    border: pencilColor === color.value ? "2px solid var(--cv-ink)" : "1px solid var(--cv-glass-edge)",
+                    background: color.value,
+                    boxShadow: pencilColor === color.value ? "0 0 0 2px var(--cv-accent)" : "none",
+                    cursor: "pointer",
+                  }}
+                />
+              ))}
+            </div>
             <span style={{ width: 1, height: 16, background: "var(--cv-glass-edge)" }} />
             <button
               title="Clear every stroke"
