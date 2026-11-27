@@ -176,6 +176,68 @@ async fn rejects_bad_token() {
 }
 
 #[tokio::test]
+async fn oversized_pty_input_reports_queue_limit_to_the_client() {
+    let d = Daemon::start();
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .expect("ws connect");
+    let _snapshot = next_ctrl(&mut ws, Duration::from_secs(5))
+        .await
+        .expect("initial snapshot");
+
+    ws.send(Message::Text(
+        json!({
+            "cmd": "spawn_agent",
+            "name": "queue-limit-e2e",
+            "command": "cat",
+            "cwd": ".",
+            "permission": "auto"
+        })
+        .to_string()
+        .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |message| {
+        message["type"] == "spawned"
+    })
+    .await;
+    let agent_id = seen
+        .iter()
+        .find(|message| message["type"] == "spawned")
+        .expect("agent spawned")["agent_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // The backend caps pending input at 1 MiB; this oversized paste is
+    // rejected before allocation into the writer queue and surfaced over the
+    // same binary-input path used by the live xterm.
+    let oversized = vec![b'x'; 1024 * 1024 + 1];
+    ws.send(Message::Binary(pty_frame(&agent_id, &oversized).into()))
+        .await
+        .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |message| {
+        message["type"] == "error"
+            && message["message"]
+                .as_str()
+                .unwrap_or("")
+                .contains("pty input queue is full")
+    })
+    .await;
+    assert!(
+        seen.iter().any(|message| {
+            message["type"] == "error"
+                && message["message"]
+                    .as_str()
+                    .unwrap_or("")
+                    .contains("pty input queue is full")
+        }),
+        "the client should see why PTY input was rejected; got {seen:?}"
+    );
+}
+
+#[tokio::test]
 async fn end_to_end_agent_lifecycle() {
     let d = Daemon::start();
     let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))

@@ -8,12 +8,48 @@ use std::{
     collections::HashMap,
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
 };
 use tokio::sync::mpsc;
 use tracing::info;
 
 pub type AgentId = String;
+
+/// Bound PTY input retained in the dedicated writer, including the write
+/// currently blocked on kernel PTY capacity. This keeps a paused or wedged
+/// child from turning repeated large pastes into unbounded memory growth.
+const MAX_PENDING_PTY_BYTES: usize = 1024 * 1024;
+
+fn reserve_writer_bytes(pending: &AtomicUsize, len: usize) -> Result<()> {
+    pending
+        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+            current
+                .checked_add(len)
+                .filter(|next| *next <= MAX_PENDING_PTY_BYTES)
+        })
+        .map(|_| ())
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "pty input queue is full ({} KiB limit); wait for the terminal to catch up",
+                MAX_PENDING_PTY_BYTES / 1024
+            )
+        })
+}
+
+struct PendingPtyWrite {
+    data: Vec<u8>,
+    pending_bytes: Arc<AtomicUsize>,
+}
+
+impl Drop for PendingPtyWrite {
+    fn drop(&mut self) {
+        self.pending_bytes
+            .fetch_sub(self.data.len(), Ordering::AcqRel);
+    }
+}
 
 pub struct Agent {
     #[allow(dead_code)]
@@ -31,7 +67,10 @@ pub struct Agent {
     /// PTY capacity (e.g. a SIGSTOPped child with a full kernel buffer),
     /// so neither the agents-map lock nor a tokio worker is ever held
     /// across a blocking write.
-    writer_tx: std::sync::mpsc::Sender<Vec<u8>>,
+    writer_tx: std::sync::mpsc::Sender<PendingPtyWrite>,
+    /// Bytes reserved by queued and in-flight writes. The writer releases the
+    /// reservation only after write_all completes or fails.
+    writer_pending_bytes: Arc<AtomicUsize>,
     master: Mutex<Box<dyn portable_pty::MasterPty + Send>>,
     child: Mutex<Box<dyn Child + Send + Sync>>,
     /// Last PTY activity + rolling tail for status derivation. Shared with
@@ -106,9 +145,20 @@ fn looks_like_waiting_prompt(tail: &str) -> bool {
 
 impl Agent {
     pub fn write(&self, data: &[u8]) -> Result<()> {
-        self.writer_tx
-            .send(data.to_vec())
-            .map_err(|_| anyhow::anyhow!("pty writer thread gone"))?;
+        if data.is_empty() {
+            return Ok(());
+        }
+
+        let len = data.len();
+        reserve_writer_bytes(&self.writer_pending_bytes, len)?;
+
+        let write = PendingPtyWrite {
+            data: data.to_vec(),
+            pending_bytes: Arc::clone(&self.writer_pending_bytes),
+        };
+        if self.writer_tx.send(write).is_err() {
+            anyhow::bail!("pty writer thread gone");
+        }
         Ok(())
     }
 
@@ -540,11 +590,12 @@ impl AgentManager {
         // master can block. FIFO order is preserved by the single consumer;
         // when the child is killed the write errors out and the thread
         // exits, which makes every future send fail fast.
-        let (writer_tx, writer_rx) = std::sync::mpsc::channel::<Vec<u8>>();
+        let (writer_tx, writer_rx) = std::sync::mpsc::channel::<PendingPtyWrite>();
+        let writer_pending_bytes = Arc::new(AtomicUsize::new(0));
         std::thread::spawn(move || {
             let mut writer = writer;
-            while let Ok(data) = writer_rx.recv() {
-                if writer.write_all(&data).is_err() {
+            while let Ok(pending) = writer_rx.recv() {
+                if writer.write_all(&pending.data).is_err() {
                     break;
                 }
                 let _ = writer.flush();
@@ -599,6 +650,7 @@ impl AgentManager {
             worktree,
             permission: permission.to_string(),
             writer_tx,
+            writer_pending_bytes,
             master: Mutex::new(pair.master),
             child: Mutex::new(child),
             last_output_at,
@@ -1311,6 +1363,46 @@ mod tests {
         mgr.kill(&id).ok();
         drop((out_rx, exit_rx));
         std::fs::remove_dir_all(&repo).unwrap();
+    }
+
+    #[test]
+    fn writer_queue_byte_budget_rejects_overflow_and_recovers() {
+        const CHUNK: usize = 128 * 1024;
+        let pending = Arc::new(AtomicUsize::new(0));
+        let accepted = Arc::new(AtomicUsize::new(0));
+        std::thread::scope(|scope| {
+            for _ in 0..16 {
+                let pending = Arc::clone(&pending);
+                let accepted = Arc::clone(&accepted);
+                scope.spawn(move || {
+                    if reserve_writer_bytes(&pending, CHUNK).is_ok() {
+                        accepted.fetch_add(1, Ordering::AcqRel);
+                    }
+                });
+            }
+        });
+
+        assert_eq!(accepted.load(Ordering::Acquire), 8);
+        assert_eq!(pending.load(Ordering::Acquire), MAX_PENDING_PTY_BYTES);
+        let error = reserve_writer_bytes(&pending, 1).unwrap_err();
+        assert!(error.to_string().contains("pty input queue is full"));
+
+        pending.fetch_sub(CHUNK, Ordering::AcqRel);
+        reserve_writer_bytes(&pending, CHUNK).unwrap();
+        assert_eq!(pending.load(Ordering::Acquire), MAX_PENDING_PTY_BYTES);
+    }
+
+    #[test]
+    fn pending_pty_write_releases_its_reservation_when_dropped() {
+        let pending_bytes = Arc::new(AtomicUsize::new(0));
+        reserve_writer_bytes(&pending_bytes, 32).unwrap();
+        let write = PendingPtyWrite {
+            data: vec![b'x'; 32],
+            pending_bytes: Arc::clone(&pending_bytes),
+        };
+        assert_eq!(pending_bytes.load(Ordering::Acquire), 32);
+        drop(write);
+        assert_eq!(pending_bytes.load(Ordering::Acquire), 0);
     }
 
     #[test]
