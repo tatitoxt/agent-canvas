@@ -33,12 +33,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
         working-directory: web
       - run: npm run typecheck
+        working-directory: web
+      # The vitest unit suite (85 tests) must gate the build: typecheck
+      # alone does not catch behavioral regressions in stores/parsers.
+      - run: npm test
         working-directory: web
       - run: npm run build
         working-directory: web
@@ -51,7 +55,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
@@ -84,7 +88,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
@@ -97,13 +101,20 @@ jobs:
 
   # Same check on Linux: the GTK/WebKitGTK system libs are the part that
   # actually varies, so install them exactly as the build guide says.
+  # This job also runs the src-tauri unit tests (repo explorer + vault
+  # write-asset sandbox): the shell is excluded from the cargo workspace,
+  # so `cargo test --workspace` never reaches it, and `cargo test` here
+  # subsumes the compile gate while exercising the security-critical path
+  # logic. Ubuntu over macOS because the suite is platform-independent
+  # filesystem logic (the unix-only symlink test included) and ubuntu
+  # minutes are the cheap ones.
   tauri-ubuntu:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
@@ -117,5 +128,7 @@ jobs:
         working-directory: web
       - run: npm run build
         working-directory: web
-      - run: cargo check
+      # cargo test compiles and links the whole crate — a superset of the
+      # old cargo check gate — then runs the unit suite.
+      - run: cargo test
         working-directory: src-tauri
