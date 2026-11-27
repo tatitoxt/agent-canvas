@@ -103,9 +103,25 @@ test("agent card sends inline steering to the live PTY and preserves Shift+Enter
 
   await input.fill("printf 'shift");
   await input.press("Shift+Enter");
+  // The deterministic client-side signal: Shift+Enter must NOT submit —
+  // the textarea keeps its content and gains a real newline. (In a
+  // cooked bash PTY the byte streams of submit-then-type and
+  // newline-then-type collapse to the same thing, so the output alone
+  // cannot tell them apart.)
+  await expect(input).toHaveValue("printf 'shift\n");
   await input.type("-newline-ok\\n'");
   await input.press("Enter");
-  await expect(card.getByTestId("agent-terminal-preview")).toContainText("shift-newline-ok", { timeout: 8_000 });
+  // The multiline message reaches bash as ONE command: the printf runs
+  // and its output shows in the preview. Asserting the flattened rows
+  // join into "shift-newline-ok" is wrong — the mini terminal is narrow,
+  // so readline redraws wrapped rows with cursor addressing and the
+  // screen model concatenates prompt fragments between the two output
+  // rows. The semantic signal instead: the output text is present AND
+  // bash never split the input into two commands (which would print
+  // "-newline-ok: command not found").
+  const preview = card.getByTestId("agent-terminal-preview");
+  await expect(preview).toContainText("-newline-ok", { timeout: 8_000 });
+  await expect(preview).not.toContainText("command not found");
 });
 
 test("inline steering does not submit while an IME candidate is composing", async ({ page }) => {
