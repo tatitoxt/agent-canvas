@@ -518,24 +518,42 @@ test("web preview windows resize and keep their dimensions after reload", async 
     return stableSamples;
   }, { intervals: [100, 100, 100, 100, 100, 100], timeout: 3_000 }).toBeGreaterThanOrEqual(4);
   const original = await web.boundingBox();
-  const handle = await grip.boundingBox();
   expect(original).not.toBeNull();
-  expect(handle).not.toBeNull();
-  const bottomIsHitTarget = await page.evaluate(({ x, y }) => {
-    const target = document.elementFromPoint(x, y);
-    return !!target?.closest(".react-flow__resize-control.line.bottom");
-  }, { x: handle!.x + handle!.width / 2, y: handle!.y + handle!.height / 2 });
-  expect(bottomIsHitTarget, "the invisible bottom-edge resize zone must receive the pointer").toBe(true);
-  await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2 + 60, { steps: 8 });
-  await page.mouse.up();
-  await expect.poll(async () => (await web.boundingBox())?.height ?? 0).toBeGreaterThan(original!.height + 30);
+  const originalSize = await web.evaluate((el) => ({
+    width: Number.parseFloat(getComputedStyle(el).width),
+    height: Number.parseFloat(getComputedStyle(el).height),
+  }));
+  const dragInvisibleEdge = async (edge: "top" | "right" | "bottom" | "left", dx: number, dy: number, dimension: "width" | "height") => {
+    const zone = web.locator(`.react-flow__resize-control.line.${edge}`);
+    const box = await zone.boundingBox();
+    expect(box, `${edge} resize zone should have geometry`).not.toBeNull();
+    const x = box!.x + box!.width / 2;
+    const y = box!.y + box!.height / 2;
+    const before = await web.boundingBox();
+    expect(before).not.toBeNull();
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(async () => (await web.boundingBox())?.[dimension] ?? 0).toBeGreaterThan(before![dimension] + 25);
+  };
+
+  // All four invisible edge hit areas must resize the live web node. Drag
+  // outward for top/left so xyflow grows from the opposite anchored edge.
+  await dragInvisibleEdge("bottom", 0, 60, "height");
+  await dragInvisibleEdge("top", 0, -45, "height");
+  await dragInvisibleEdge("right", 55, 0, "width");
+  await dragInvisibleEdge("left", -45, 0, "width");
   const savedHeight = await page.evaluate((id) => {
     const sizes = JSON.parse(localStorage.getItem("cv-webnodesizes") ?? "{}");
     return sizes[`main:${id}`]?.h ?? 0;
   }, webId);
-  expect(savedHeight).toBeGreaterThan(370);
+  const savedWidth = await page.evaluate((id) => {
+    const sizes = JSON.parse(localStorage.getItem("cv-webnodesizes") ?? "{}");
+    return sizes[`main:${id}`]?.w ?? 0;
+  }, webId);
+  expect(savedHeight).toBeGreaterThan(originalSize.height + 25);
+  expect(savedWidth).toBeGreaterThan(originalSize.width + 25);
   if (process.env.CANVAS_PREVIEW_PATH) {
     await page.screenshot({ path: process.env.CANVAS_PREVIEW_PATH, animations: "disabled" });
     const detail = await web.boundingBox();
@@ -558,6 +576,7 @@ test("web preview windows resize and keep their dimensions after reload", async 
   // fitView changes screen-space dimensions on reload, so compare the node's
   // own CSS size with the persisted flow-space size rather than its bbox.
   await expect.poll(async () => restored.evaluate((el) => Number.parseFloat(getComputedStyle(el).height))).toBe(savedHeight);
+  await expect.poll(async () => restored.evaluate((el) => Number.parseFloat(getComputedStyle(el).width))).toBe(savedWidth);
 });
 
 test("Add to canvas closes Tools even when the dock is pinned", async ({ page }) => {

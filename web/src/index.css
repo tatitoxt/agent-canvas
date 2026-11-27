@@ -392,9 +392,9 @@ body,
   width: 10px !important;
 }
 .react-flow__resize-control.line.cv-node-resize-line.bottom { transform: translate(0, -90%) !important; }
-.react-flow__resize-control.line.cv-node-resize-line.top { transform: translate(0, -10%) !important; }
+.react-flow__resize-control.line.cv-node-resize-line.top { transform: translate(0, 90%) !important; }
 .react-flow__resize-control.line.cv-node-resize-line.right { transform: translate(-90%, 0) !important; }
-.react-flow__resize-control.line.cv-node-resize-line.left { transform: translate(-10%, 0) !important; }
+.react-flow__resize-control.line.cv-node-resize-line.left { transform: translate(90%, 0) !important; }
 
 /* The invisible resize zones overlap the trailing header chrome by a few
    pixels by design: the top-right corner handle (18px square, biased
