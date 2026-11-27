@@ -431,7 +431,7 @@ export function ArtifactsPanel() {
                       onLink={(name) => {
                         const base = name.split("#")[0].trim();
                         const st = useBoard.getState();
-                        const hit = resolveNotePath(st.vaultEntries, base);
+                        const hit = resolveNotePath(st.vaultEntries.filter((e) => e.endsWith(".md")), base);
                         if (hit) st.vaultRead(hit);
                       }}
                     />
