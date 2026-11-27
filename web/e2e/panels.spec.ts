@@ -318,6 +318,64 @@ test("Tools Panel summaries toggle exposes state and persists after reload", asy
   await expect(summaries).toHaveAttribute("aria-pressed", "false");
 });
 
+test("Tools capture and documentation actions produce usable outputs", async ({ page }) => {
+  const { repo } = await boot(page);
+
+  // Canvas shot must export a real image rather than merely dismissing Tools.
+  await page.locator("button[title^='Tools —']").click();
+  let dock = page.getByRole("dialog", { name: "Tools panel" });
+  const shotDownload = page.waitForEvent("download");
+  await dock.getByRole("button", { name: "Canvas shot" }).click();
+  const shot = await shotDownload;
+  expect(shot.suggestedFilename()).toMatch(/^canvas-.*\.png$/);
+  await expect(dock).toBeHidden();
+
+  // Digest is backed by the live daemon and offers the documented copy,
+  // PDF/artifact, memory, and dismiss actions.
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Session digest" }).click();
+  const digest = page.getByText("Session digest", { exact: true }).last();
+  await expect(digest).toBeVisible({ timeout: 10_000 });
+  const digestDialog = page.locator(".glass").filter({ has: digest }).last();
+  await expect(digestDialog.locator("pre")).toContainText("# Session digest");
+  await expect(digestDialog.getByRole("button", { name: "copy" })).toBeVisible();
+  const pdfDownload = page.waitForEvent("download");
+  await digestDialog.getByRole("button", { name: "→ PDF" }).click();
+  expect((await pdfDownload).suggestedFilename()).toMatch(/\.pdf$/);
+  await digestDialog.getByRole("button", { name: "→ board memory" }).click();
+  await expect(page.getByText("Session digest", { exact: true })).toHaveCount(0);
+
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Memory to canvas" }).click();
+  const memory = page.locator(".react-flow__node-panel [data-panel='memory']").first();
+  await expect(memory.locator("textarea")).toContainText("# Session digest");
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  const artifacts = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
+  await expect(artifacts).toBeVisible();
+  await expect(artifacts.getByText("PDF — Session digest", { exact: true })).toBeVisible({ timeout: 10_000 });
+
+  // Studio doc is generated from the configured repository and downloads as
+  // Markdown, with the repo dossier's expected sections.
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Studio doc" }).click();
+  const studioTitle = page.getByText("studio doc", { exact: true });
+  await expect(studioTitle).toBeVisible({ timeout: 10_000 });
+  const studioDialog = page.locator(".glass").filter({ has: studioTitle }).last();
+  await expect(studioDialog.locator("pre")).toContainText("# Studio — repo dossier");
+  await expect(studioDialog.locator("pre")).toContainText("## Tree");
+  await expect(studioDialog.locator("pre")).toContainText(repo.split("/").at(-1)!);
+  const mdDownload = page.waitForEvent("download");
+  await studioDialog.getByRole("button", { name: "▤ .md" }).click();
+  expect((await mdDownload).suggestedFilename()).toMatch(/^studio-.*\.md$/);
+  await studioDialog.getByRole("button").last().click();
+  await expect(studioTitle).toHaveCount(0);
+});
+
 test("Tools creates an Orchestrator and Team builder spawns a configured shell member", async ({ page }) => {
   await boot(page);
 

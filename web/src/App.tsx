@@ -230,7 +230,6 @@ function Board() {
     }, [strokes]);
   const shotCanvas = useCallback(async () => {
     const ns = getNodes();
-    if (ns.length === 0) return;
     const bounds = getNodesBounds(ns);
     const w = Math.min(2400, Math.max(800, Math.ceil(bounds.width) + 240));
     const h = Math.min(2400, Math.max(600, Math.ceil(bounds.height) + 240));
