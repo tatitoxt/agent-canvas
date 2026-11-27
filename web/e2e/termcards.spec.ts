@@ -70,8 +70,16 @@ test("agent card terminal preview emphasizes the latest visible row", async ({ p
   await card.locator("[data-testid='agent-card-header']").click();
   await expect(card.locator("[title='Open terminal']")).toBeVisible();
   await card.locator("[title='Open terminal']").click();
+  // Staged assertions: the drawer opening is synchronous store state, but
+  // the xterm element hangs off two chained lazy chunks (TerminalPanel
+  // itself is React.lazy with a null fallback, then LazyTermHost inside
+  // it) — the only unbounded, load-sensitive part of the path. Asserting
+  // the drawer frame first keeps "drawer never opened" distinct from
+  // "xterm chunk slow under suite load", and the emulator gets a generous
+  // budget for the cold chunk fetch on a fresh page.
+  await expect(page.locator(".terminal-drawer").first()).toBeVisible({ timeout: 5_000 });
   const terminal = page.locator(".terminal-drawer .xterm").first();
-  await expect(terminal).toBeVisible({ timeout: 5_000 });
+  await expect(terminal).toBeVisible({ timeout: 15_000 });
   await terminal.click();
   await page.keyboard.type("printf '\\033[1;32mpreview-latest-row\\033[0m\\n'");
   await page.keyboard.press("Enter");
