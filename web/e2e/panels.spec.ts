@@ -625,6 +625,38 @@ test("automation creation survives reload and can be deleted", async ({ page }) 
   await expect(restoredPanel.getByText(automationName, { exact: true })).toHaveCount(0);
 });
 
+test("loop creation, pause, resume, persistence, and delete work from the canvas panel", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Loops to canvas" }).click();
+  await expect(dock).toBeHidden();
+
+  const panel = page.locator(".react-flow__node-panel [data-panel='loops']").first();
+  await expect(panel).toBeVisible();
+  await panel.getByRole("button", { name: "+ new", exact: true }).click();
+  const instruction = `E2E loop ${Date.now()}: record status only`;
+  await panel.getByPlaceholder("the instruction the agent receives").fill(instruction);
+  await panel.getByRole("combobox").nth(1).selectOption("match");
+  const pattern = `E2E_NEVER_MATCH_${Date.now()}`;
+  await panel.getByPlaceholder('text to watch for — e.g. "FAILED" or "DO YOU WANT"').fill(pattern);
+  await panel.getByRole("button", { name: "start loop" }).click();
+  await expect(panel.getByText(instruction, { exact: true })).toBeVisible();
+  await expect(panel).toContainText(`on "${pattern}"`);
+  await expect(panel.getByRole("button", { name: "pause" })).toBeVisible();
+
+  await panel.getByRole("button", { name: "pause" }).click();
+  await expect(panel.getByRole("button", { name: "resume" })).toBeVisible();
+  await panel.getByRole("button", { name: "resume" }).click();
+  await expect(panel.getByRole("button", { name: "pause" })).toBeVisible();
+
+  await page.reload();
+  const restoredPanel = page.locator(".react-flow__node-panel [data-panel='loops']").first();
+  await expect(restoredPanel.getByText(instruction, { exact: true })).toBeVisible();
+  await restoredPanel.getByRole("button", { name: "delete" }).click();
+  await expect(restoredPanel.getByText(instruction, { exact: true })).toHaveCount(0);
+});
+
 test("panel chrome minimizes, restores, and closes with accessible controls", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();
