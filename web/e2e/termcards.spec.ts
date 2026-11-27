@@ -288,6 +288,34 @@ test("terminal accepts shell input and renders PTY output", async ({ page }) => 
   await expect(page.locator(".xterm-rows")).toContainText("terminal-e2e-ok", { timeout: 8_000 });
 });
 
+test("terminal card reflects live running/waiting state and the model announced by its PTY", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+
+  const card = page.locator(".agent-card").first();
+  const status = card.getByTestId("agent-card-status");
+  const terminal = page.locator(".terminal-drawer .xterm").first();
+  const rows = page.locator(".terminal-drawer .xterm-rows");
+  await expect(terminal).toBeVisible();
+  await terminal.click();
+  await expect(status).toHaveText(/waiting/i, { timeout: 8_000 });
+
+  // A continuously emitting shell process exercises the real status path
+  // without invoking a provider CLI or consuming model usage.
+  await page.keyboard.type("while :; do printf 'status-running-pulse\\n'; sleep 0.25; done");
+  await page.keyboard.press("Enter");
+  await expect(rows).toContainText("status-running-pulse", { timeout: 5_000 });
+  await expect(status).toHaveText(/running/i, { timeout: 5_000 });
+
+  await page.keyboard.press("Control+c");
+  await expect(status).toHaveText(/waiting/i, { timeout: 8_000 });
+  await page.keyboard.type("printf 'GPT-6.2-e2e\\n'");
+  await page.keyboard.press("Enter");
+  await expect(rows).toContainText("GPT-6.2-e2e", { timeout: 8_000 });
+  await expect(card).toContainText("GPT-6.2-e2e", { timeout: 8_000 });
+});
+
 test("terminal search shortcut finds scrollback and Escape returns focus to the TUI", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
