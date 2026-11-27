@@ -230,7 +230,6 @@ function Board() {
     }, [strokes]);
   const shotCanvas = useCallback(async () => {
     const ns = getNodes();
-    if (ns.length === 0) return;
     const bounds = getNodesBounds(ns);
     const w = Math.min(2400, Math.max(800, Math.ceil(bounds.width) + 240));
     const h = Math.min(2400, Math.max(600, Math.ceil(bounds.height) + 240));
@@ -1134,6 +1133,7 @@ function Board() {
       )}
       {pencil && (
         <div
+          data-testid="pencil-overlay"
           /* The overlay must capture the pointer at all times — the old
              `drawing ? auto : none` trick made it impossible to ever START a
              stroke (mousedown always fell through to the canvas), so the mode
@@ -1202,6 +1202,7 @@ function Board() {
             </button>
             <button
               title="Turn off pencil — same as Esc or the Pencil item in Tools"
+              aria-label="Turn off pencil"
               style={{
                 border: "none",
                 background: "var(--cv-accent-dim)",
@@ -1225,6 +1226,7 @@ function Board() {
       )}
       {shotMode && (
         <div
+          data-testid="region-shot-overlay"
           style={{
             position: "absolute",
             inset: 0,

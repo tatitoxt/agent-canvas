@@ -998,7 +998,25 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
     }
     // Transcript replay: buffered PTY scrollback so a reconnected
     // terminal shows its history instead of a blank screen.
+    let mut replayed = std::collections::HashSet::new();
     for id in state.agents.list() {
+        replayed.insert(id.clone());
+        if let Some(buf) = state.agents.scrollback(&id) {
+            if !buf.is_empty() {
+                let _ = socket
+                    .send(Message::Binary(encode_pty_frame(&id, &buf).into()))
+                    .await;
+            }
+        }
+    }
+    // Agents from earlier daemon runs no longer exist in AgentManager,
+    // but their persisted transcript is still the terminal history the
+    // board snapshot advertises. Replay those buffers too so a restored
+    // terminal does not open as a blank pane after app restart.
+    for (id, ..) in state.store.agents_snapshot().unwrap_or_default() {
+        if replayed.contains(&id) {
+            continue;
+        }
         if let Some(buf) = state.agents.scrollback(&id) {
             if !buf.is_empty() {
                 let _ = socket

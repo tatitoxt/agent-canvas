@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures.mjs";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
@@ -277,16 +277,166 @@ test("topbar labels Panels and opens Mission Map from its live summary", async (
   await expect(page.locator("button[title='Automations']")).toHaveCSS("width", "34px");
 });
 
-test("Tools Add shape opens its choices and creates a canvas shape", async ({ page }) => {
+test("Tools can add each of the four canvas shape types", async ({ page }) => {
   await boot(page);
+  for (const kind of ["rect", "ellipse", "diamond", "sticky"]) {
+    await page.locator("button[title^='Tools —']").click();
+    const dock = page.getByRole("dialog", { name: "Tools panel" });
+    await dock.getByRole("button", { name: "Add shape" }).click();
+    await dock.locator(`button[title='${kind}']`).click();
+    await expect(dock).toBeHidden();
+  }
+  await expect(page.locator(".react-flow__node-shape")).toHaveCount(4);
+  const savedKinds = await page.evaluate(() => {
+    const all = JSON.parse(localStorage.getItem("cv-shapes") ?? "{}");
+    return Object.values(all.main ?? {}).map((shape: any) => shape.kind).sort();
+  });
+  expect(savedKinds).toEqual(["diamond", "ellipse", "rect", "sticky"]);
+});
+
+test("Tools Panel summaries toggle exposes state and persists after reload", async ({ page }) => {
+  await boot(page);
+  await page.evaluate(() => localStorage.setItem("cv-panel-summaries", "false"));
+  await page.reload();
+
+  const openTools = async () => {
+    await page.locator("button[title^='Tools —']").click();
+    return page.getByRole("dialog", { name: "Tools panel" });
+  };
+
+  let dock = await openTools();
+  let summaries = dock.getByRole("button", { name: "Panel summaries" });
+  await expect(summaries).toHaveAttribute("aria-pressed", "false");
+  await summaries.click();
+  await expect(dock.getByRole("button", { name: "Panel summaries" })).toHaveAttribute("aria-pressed", "true");
+
+  await page.reload();
+  dock = await openTools();
+  summaries = dock.getByRole("button", { name: "Panel summaries" });
+  await expect(summaries).toHaveAttribute("aria-pressed", "true");
+  await summaries.click();
+  await expect(summaries).toHaveAttribute("aria-pressed", "false");
+});
+
+test("Tools capture and documentation actions produce usable outputs", async ({ page }) => {
+  const { repo } = await boot(page);
+
+  // Canvas shot must export a real image rather than merely dismissing Tools.
   await page.locator("button[title^='Tools —']").click();
-  const dock = page.getByRole("dialog", { name: "Tools panel" });
-  await dock.getByRole("button", { name: "Add shape" }).click();
-  const rect = dock.locator("button[title='rect']");
-  await expect(rect).toBeVisible();
-  await rect.click();
+  let dock = page.getByRole("dialog", { name: "Tools panel" });
+  const shotDownload = page.waitForEvent("download");
+  await dock.getByRole("button", { name: "Canvas shot" }).click();
+  const shot = await shotDownload;
+  expect(shot.suggestedFilename()).toMatch(/^canvas-.*\.png$/);
   await expect(dock).toBeHidden();
-  await expect(page.locator(".react-flow__node-shape")).toBeVisible();
+
+  // Digest is backed by the live daemon and offers the documented copy,
+  // PDF/artifact, memory, and dismiss actions.
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Session digest" }).click();
+  const digest = page.getByText("Session digest", { exact: true }).last();
+  await expect(digest).toBeVisible({ timeout: 10_000 });
+  const digestDialog = page.locator(".glass").filter({ has: digest }).last();
+  await expect(digestDialog.locator("pre")).toContainText("# Session digest");
+  await expect(digestDialog.getByRole("button", { name: "copy" })).toBeVisible();
+  const pdfDownload = page.waitForEvent("download");
+  await digestDialog.getByRole("button", { name: "→ PDF" }).click();
+  expect((await pdfDownload).suggestedFilename()).toMatch(/\.pdf$/);
+  await digestDialog.getByRole("button", { name: "→ board memory" }).click();
+  await expect(page.getByText("Session digest", { exact: true })).toHaveCount(0);
+
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Memory to canvas" }).click();
+  const memory = page.locator(".react-flow__node-panel [data-panel='memory']").first();
+  await expect(memory.locator("textarea")).toContainText("# Session digest");
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  const artifacts = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
+  await expect(artifacts).toBeVisible();
+  await expect(artifacts.getByText("PDF — Session digest", { exact: true })).toBeVisible({ timeout: 10_000 });
+
+  // Studio doc is generated from the configured repository and downloads as
+  // Markdown, with the repo dossier's expected sections.
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Studio doc" }).click();
+  const studioTitle = page.getByText("studio doc", { exact: true });
+  await expect(studioTitle).toBeVisible({ timeout: 10_000 });
+  const studioDialog = page.locator(".glass").filter({ has: studioTitle }).last();
+  await expect(studioDialog.locator("pre")).toContainText("# Studio — repo dossier");
+  await expect(studioDialog.locator("pre")).toContainText("## Tree");
+  await expect(studioDialog.locator("pre")).toContainText(repo.split("/").at(-1)!);
+  const mdDownload = page.waitForEvent("download");
+  await studioDialog.getByRole("button", { name: "▤ .md" }).click();
+  expect((await mdDownload).suggestedFilename()).toMatch(/^studio-.*\.md$/);
+  await studioDialog.getByRole("button").last().click();
+  await expect(studioTitle).toHaveCount(0);
+});
+
+test("Tools creates an Orchestrator and Team builder spawns a configured shell member", async ({ page }) => {
+  await boot(page);
+
+  const openTools = async () => {
+    await page.locator("button[title^='Tools —']").click();
+    return page.getByRole("dialog", { name: "Tools panel" });
+  };
+
+  let dock = await openTools();
+  await dock.getByRole("button", { name: "New orchestrator" }).click();
+  await expect(page.locator(".react-flow__node[data-id^='orch-']")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("canvas:orchestrators") ?? "{}")).length)).toBe(1);
+
+  dock = await openTools();
+  await dock.getByRole("button", { name: "Team builder" }).click();
+  const team = page.getByRole("dialog", { name: "Team builder" });
+  await expect(team).toBeVisible();
+  const spawn = team.getByRole("button", { name: "Spawn" });
+  await expect(spawn).toBeDisabled();
+  await team.getByRole("combobox", { name: "CLI for every member" }).selectOption("bash");
+  await team.getByRole("button", { name: "Add one Frontend" }).click();
+  await expect(team.getByRole("button", { name: "Spawn 1" })).toBeEnabled();
+  await team.getByRole("button", { name: "Remove one Frontend" }).click();
+  await expect(team.getByRole("button", { name: "Spawn" })).toBeDisabled();
+  await team.getByRole("button", { name: "Add one Frontend" }).click();
+  await team.getByRole("button", { name: "Spawn 1" }).click();
+
+  const member = page.locator(".agent-card").filter({ hasText: "frontend-1" });
+  await expect(member).toBeVisible({ timeout: 10_000 });
+  await expect(member.getByTestId("agent-card-cli")).toContainText("Terminal");
+  await expect(team).toHaveCount(0);
+});
+
+test("Pencil and Region shot modes have working visible and Escape exits", async ({ page }) => {
+  const { port } = stack();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
+
+  const openTools = async () => {
+    await page.locator("button[title^='Tools —']").click();
+    return page.getByRole("dialog", { name: "Tools panel" });
+  };
+
+  const tools = await openTools();
+  await tools.getByRole("button", { name: "Pencil markups" }).click();
+  await expect(page.getByTestId("pencil-overlay")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Turn off pencil/ })).toBeVisible();
+  await page.getByRole("button", { name: /Turn off pencil/ }).click();
+  await expect(page.getByTestId("pencil-overlay")).toHaveCount(0);
+
+  const toolsAgain = await openTools();
+  await toolsAgain.getByRole("button", { name: "Pencil markups" }).click();
+  await expect(page.getByTestId("pencil-overlay")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("pencil-overlay")).toHaveCount(0);
+
+  const toolsForRegion = await openTools();
+  await toolsForRegion.getByRole("button", { name: "Region shot" }).click();
+  await expect(page.getByTestId("region-shot-overlay")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("region-shot-overlay")).toHaveCount(0);
 });
 
 test("Add to canvas closes Tools and mounts a live Inbox panel", async ({ page }) => {
@@ -351,7 +501,7 @@ test("pinned Obsidian note edits and saves back to the real vault", async ({ pag
 });
 
 test("Add Artifacts to canvas closes Tools and mounts the interactive artifact library", async ({ page }) => {
-  await boot(page);
+  const { vault } = await boot(page);
   await page.locator("button[title^='Tools —']").click();
   const dock = page.getByRole("dialog", { name: "Tools panel" });
   await expect(dock).toBeVisible();
@@ -376,6 +526,12 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await artifacts.getByPlaceholder("Search artifacts or ask Dex").fill(title);
   const addToBoard = artifacts.locator("button[title^='Add to Board']");
   await expect(addToBoard).toHaveCount(1);
+  const vaultFile = resolve(vault, "Canvas", "Artifacts", `${title}.md`);
+  await artifacts.locator("button[title^='save to your Obsidian vault']").click();
+  await expect.poll(() => {
+    try { return readFileSync(vaultFile, "utf8"); } catch { return ""; }
+  }).toBe(`## ${title}\n\n${body}\n`);
+  unlinkSync(vaultFile);
   await addToBoard.click();
 
   await expect(page.locator(".react-flow__node-panel [data-panel='artifacts']")).toHaveCount(0);
@@ -474,6 +630,12 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await expect(restoredCard).toBeVisible();
   await expect.poll(async () => restoredCard.evaluate((el) => Number.parseFloat(getComputedStyle(el).width))).toBe(savedShape.w);
   await expect.poll(async () => restoredCard.evaluate((el) => Number.parseFloat(getComputedStyle(el).height))).toBe(savedShape.h);
+  const pinnedNote = resolve(vault, "Canvas", `${title}.md`);
+  await restoredCard.locator("button[title^='append this note to your Obsidian vault']").click();
+  await expect.poll(() => {
+    try { return readFileSync(pinnedNote, "utf8"); } catch { return ""; }
+  }).toBe(`## ${title}\n\n${body}\n`);
+  unlinkSync(pinnedNote);
 });
 
 test("web preview windows resize and keep their dimensions after reload", async ({ page }) => {
@@ -518,24 +680,52 @@ test("web preview windows resize and keep their dimensions after reload", async 
     return stableSamples;
   }, { intervals: [100, 100, 100, 100, 100, 100], timeout: 3_000 }).toBeGreaterThanOrEqual(4);
   const original = await web.boundingBox();
-  const handle = await grip.boundingBox();
   expect(original).not.toBeNull();
-  expect(handle).not.toBeNull();
-  const bottomIsHitTarget = await page.evaluate(({ x, y }) => {
-    const target = document.elementFromPoint(x, y);
-    return !!target?.closest(".react-flow__resize-control.line.bottom");
-  }, { x: handle!.x + handle!.width / 2, y: handle!.y + handle!.height / 2 });
-  expect(bottomIsHitTarget, "the invisible bottom-edge resize zone must receive the pointer").toBe(true);
-  await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2 + 60, { steps: 8 });
-  await page.mouse.up();
-  await expect.poll(async () => (await web.boundingBox())?.height ?? 0).toBeGreaterThan(original!.height + 30);
+  const originalSize = await web.evaluate((el) => ({
+    width: Number.parseFloat(getComputedStyle(el).width),
+    height: Number.parseFloat(getComputedStyle(el).height),
+  }));
+  const dragInvisibleEdge = async (edge: "top" | "right" | "bottom" | "left", dx: number, dy: number, dimension: "width" | "height") => {
+    const bounds = await web.boundingBox();
+    expect(bounds).not.toBeNull();
+    // Start three screen pixels inside the visible card boundary. Measuring
+    // from the card (rather than the resize strip) prevents the test from
+    // passing if a shifted strip silently leaves a dead band at the edge.
+    const x = edge === "left"
+      ? bounds!.x + 3
+      : edge === "right"
+        ? bounds!.x + bounds!.width - 3
+        : bounds!.x + bounds!.width / 2;
+    const y = edge === "top"
+      ? bounds!.y + 3
+      : edge === "bottom"
+        ? bounds!.y + bounds!.height - 3
+        : bounds!.y + bounds!.height / 2;
+    const before = await web.boundingBox();
+    expect(before).not.toBeNull();
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(async () => (await web.boundingBox())?.[dimension] ?? 0).toBeGreaterThan(before![dimension] + 25);
+  };
+
+  // All four invisible edge hit areas must resize the live web node. Drag
+  // outward for top/left so xyflow grows from the opposite anchored edge.
+  await dragInvisibleEdge("bottom", 0, 60, "height");
+  await dragInvisibleEdge("top", 0, -45, "height");
+  await dragInvisibleEdge("right", 55, 0, "width");
+  await dragInvisibleEdge("left", -45, 0, "width");
   const savedHeight = await page.evaluate((id) => {
     const sizes = JSON.parse(localStorage.getItem("cv-webnodesizes") ?? "{}");
     return sizes[`main:${id}`]?.h ?? 0;
   }, webId);
-  expect(savedHeight).toBeGreaterThan(370);
+  const savedWidth = await page.evaluate((id) => {
+    const sizes = JSON.parse(localStorage.getItem("cv-webnodesizes") ?? "{}");
+    return sizes[`main:${id}`]?.w ?? 0;
+  }, webId);
+  expect(savedHeight).toBeGreaterThan(originalSize.height + 25);
+  expect(savedWidth).toBeGreaterThan(originalSize.width + 25);
   if (process.env.CANVAS_PREVIEW_PATH) {
     await page.screenshot({ path: process.env.CANVAS_PREVIEW_PATH, animations: "disabled" });
     const detail = await web.boundingBox();
@@ -558,6 +748,7 @@ test("web preview windows resize and keep their dimensions after reload", async 
   // fitView changes screen-space dimensions on reload, so compare the node's
   // own CSS size with the persisted flow-space size rather than its bbox.
   await expect.poll(async () => restored.evaluate((el) => Number.parseFloat(getComputedStyle(el).height))).toBe(savedHeight);
+  await expect.poll(async () => restored.evaluate((el) => Number.parseFloat(getComputedStyle(el).width))).toBe(savedWidth);
 });
 
 test("Add to canvas closes Tools even when the dock is pinned", async ({ page }) => {
@@ -568,6 +759,64 @@ test("Add to canvas closes Tools even when the dock is pinned", async ({ page })
   await dock.getByRole("button", { name: "Add Automations to canvas" }).click();
   await expect(dock).toBeHidden();
   await expect(page.locator(".react-flow__node-panel [data-panel='automations']").first()).toBeVisible();
+});
+
+test("automation creation survives reload and can be deleted", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Automations to canvas" }).click();
+  await expect(dock).toBeHidden();
+
+  const panel = page.locator(".react-flow__node-panel [data-panel='automations']").first();
+  await expect(panel).toBeVisible();
+  await panel.getByRole("button", { name: "+ new", exact: true }).click();
+  const automationName = `E2E automation ${Date.now()}`;
+  await panel.getByPlaceholder("name — e.g. nightly audit").fill(automationName);
+  await panel.getByPlaceholder("prompt the agent receives on run").fill("Report the current repository branch and stop.");
+  await panel.getByRole("button", { name: "save automation" }).click();
+  await expect(panel.getByText(automationName, { exact: true })).toBeVisible();
+  await expect(panel.getByText("Report the current repository branch and stop.", { exact: true })).toBeVisible();
+
+  await page.reload();
+  const restoredPanel = page.locator(".react-flow__node-panel [data-panel='automations']").first();
+  await expect(restoredPanel).toBeVisible();
+  const savedAutomation = restoredPanel.locator("div").filter({ hasText: automationName }).filter({ has: page.getByRole("button", { name: "delete" }) }).last();
+  await expect(savedAutomation).toContainText("Report the current repository branch and stop.");
+  await savedAutomation.getByRole("button", { name: "delete" }).click();
+  await expect(restoredPanel.getByText(automationName, { exact: true })).toHaveCount(0);
+});
+
+test("loop creation, pause, resume, persistence, and delete work from the canvas panel", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Loops to canvas" }).click();
+  await expect(dock).toBeHidden();
+
+  const panel = page.locator(".react-flow__node-panel [data-panel='loops']").first();
+  await expect(panel).toBeVisible();
+  await panel.getByRole("button", { name: "+ new", exact: true }).click();
+  const instruction = `E2E loop ${Date.now()}: record status only`;
+  await panel.getByPlaceholder("the instruction the agent receives").fill(instruction);
+  await panel.getByRole("combobox").nth(1).selectOption("match");
+  const pattern = `E2E_NEVER_MATCH_${Date.now()}`;
+  await panel.getByPlaceholder('text to watch for — e.g. "FAILED" or "DO YOU WANT"').fill(pattern);
+  await panel.getByRole("button", { name: "start loop" }).click();
+  await expect(panel.getByText(instruction, { exact: true })).toBeVisible();
+  await expect(panel).toContainText(`on "${pattern}"`);
+  await expect(panel.getByRole("button", { name: "pause" })).toBeVisible();
+
+  await panel.getByRole("button", { name: "pause" }).click();
+  await expect(panel.getByRole("button", { name: "resume" })).toBeVisible();
+  await panel.getByRole("button", { name: "resume" }).click();
+  await expect(panel.getByRole("button", { name: "pause" })).toBeVisible();
+
+  await page.reload();
+  const restoredPanel = page.locator(".react-flow__node-panel [data-panel='loops']").first();
+  await expect(restoredPanel.getByText(instruction, { exact: true })).toBeVisible();
+  await restoredPanel.getByRole("button", { name: "delete" }).click();
+  await expect(restoredPanel.getByText(instruction, { exact: true })).toHaveCount(0);
 });
 
 test("panel chrome minimizes, restores, and closes with accessible controls", async ({ page }) => {
@@ -731,4 +980,38 @@ test("panel card resizing from the top-left keeps the resized origin instead of 
   expect(afterRect).not.toBeNull();
   expect(afterRect!.x).toBeLessThan(beforeRect!.x - 20);
   expect(afterRect!.y).toBeLessThan(beforeRect!.y - 12);
+});
+
+test("Tools Pause all freezes every board PTY and Resume all continues them", async ({ page }) => {
+  const { repo } = await boot(page);
+  const markers = [resolve(repo, "pause-all-one.log"), resolve(repo, "pause-all-two.log")];
+  markers.forEach((path) => writeFileSync(path, ""));
+
+  for (let i = 0; i < markers.length; i++) {
+    await page.locator("button[title='Terminal — spawn a plain shell']").first().click();
+    const card = page.locator(".agent-card").nth(i);
+    await expect(card).toBeVisible({ timeout: 8_000 });
+    const steering = card.getByTestId("agent-steering-input");
+    await steering.fill(`while true; do printf x >> '${markers[i]}'; sleep 0.05; done`);
+    await steering.press("Enter");
+    await expect.poll(() => statSync(markers[i]).size, { timeout: 8_000 }).toBeGreaterThan(0);
+  }
+
+  const openTools = async () => {
+    await page.locator("button[title^='Tools —']").click();
+    return page.getByRole("dialog", { name: "Tools panel" });
+  };
+  let tools = await openTools();
+  await tools.getByRole("button", { name: "Pause all" }).click();
+  // Allow any in-flight `sleep` child to return; then both shell-parent
+  // processes must remain stopped across a sustained observation window.
+  await page.waitForTimeout(500);
+  const pausedSizes = markers.map((path) => statSync(path).size);
+  await page.waitForTimeout(650);
+  expect(markers.map((path) => statSync(path).size)).toEqual(pausedSizes);
+
+  await tools.getByRole("button", { name: "Resume all" }).click();
+  for (let i = 0; i < markers.length; i++) {
+    await expect.poll(() => statSync(markers[i]).size, { timeout: 5_000 }).toBeGreaterThan(pausedSizes[i]);
+  }
 });

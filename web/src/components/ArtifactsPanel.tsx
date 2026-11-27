@@ -342,7 +342,7 @@ export function ArtifactsPanel() {
                 onClick={() => {
                   if (!vaultDir) { notify("open a vault first — Library → Obsidian"); return; }
                   const safe = a.title.replace(/[\\/:*?"<>|]/g, "-").slice(0, 60) || "artifact";
-                  vaultAppend(`Canvas/Artifacts/${safe}.md`, `## ${a.title}\n\n${a.text ?? a.path ?? ""}\n`);
+                  vaultAppend(`Canvas/Artifacts/${safe}.md`, `## ${a.title}\n\n${a.text ?? a.path ?? ""}`);
                   notify(`saved to vault → Canvas/Artifacts/${safe}.md`);
                 }}
               >

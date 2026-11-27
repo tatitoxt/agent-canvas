@@ -236,6 +236,44 @@ test("split right shows two live xterm panes in the drawer", async ({ page }) =>
   // The second pane auto-picks the other agent on the board — both xterm
   // panes render live inside the drawer.
   await expect(page.locator(".terminal-drawer .xterm")).toHaveCount(2, { timeout: 6_000 });
+
+  const primary = page.getByTestId("terminal-split-primary");
+  const separator = page.getByRole("separator", { name: "Resize split terminals" });
+  await expect(separator).toHaveAttribute("aria-orientation", "vertical");
+  const before = await primary.boundingBox();
+  const grip = await separator.boundingBox();
+  expect(before).not.toBeNull();
+  expect(grip).not.toBeNull();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + grip!.width / 2 + 65, grip!.y + grip!.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await primary.boundingBox())?.width ?? 0).toBeGreaterThan(before!.width + 35);
+  const savedRatio = await page.evaluate(() => Number(localStorage.getItem("cv-terminal-split-ratio")));
+  expect(savedRatio).toBeGreaterThan(0.5);
+  expect(savedRatio).toBeLessThanOrEqual(0.8);
+
+  // The ratio belongs to the drawer preference, so remounting a drawer must
+  // restore it before the user resizes again.
+  await page.locator(".terminal-drawer > div").first().getByRole("button").last().click();
+  await expect(page.locator(".terminal-drawer")).toHaveCount(0);
+  await openDrawer(page);
+  await page.locator(".terminal-drawer button[title*='split right']").click();
+  await expect(page.getByRole("separator", { name: "Resize split terminals" })).toHaveAttribute("aria-valuenow", String(Math.round(savedRatio * 100)));
+
+  await page.locator(".terminal-drawer button[title*='split down']").click();
+  const horizontalSeparator = page.getByRole("separator", { name: "Resize split terminals" });
+  await expect(horizontalSeparator).toHaveAttribute("aria-orientation", "horizontal");
+  const primaryDown = page.getByTestId("terminal-split-primary");
+  const beforeDown = await primaryDown.boundingBox();
+  const downGrip = await horizontalSeparator.boundingBox();
+  expect(beforeDown).not.toBeNull();
+  expect(downGrip).not.toBeNull();
+  await page.mouse.move(downGrip!.x + downGrip!.width / 2, downGrip!.y + downGrip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(downGrip!.x + downGrip!.width / 2, downGrip!.y + downGrip!.height / 2 + 45, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => (await primaryDown.boundingBox())?.height ?? 0).toBeGreaterThan(beforeDown!.height + 20);
 });
 
 test("terminal accepts shell input and renders PTY output", async ({ page }) => {
@@ -248,6 +286,34 @@ test("terminal accepts shell input and renders PTY output", async ({ page }) => 
   await page.keyboard.type("printf 'terminal-e2e-ok\\n'");
   await page.keyboard.press("Enter");
   await expect(page.locator(".xterm-rows")).toContainText("terminal-e2e-ok", { timeout: 8_000 });
+});
+
+test("terminal card reflects live running/waiting state and the model announced by its PTY", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+
+  const card = page.locator(".agent-card").first();
+  const status = card.getByTestId("agent-card-status");
+  const terminal = page.locator(".terminal-drawer .xterm").first();
+  const rows = page.locator(".terminal-drawer .xterm-rows");
+  await expect(terminal).toBeVisible();
+  await terminal.click();
+  await expect(status).toHaveText(/waiting/i, { timeout: 8_000 });
+
+  // A continuously emitting shell process exercises the real status path
+  // without invoking a provider CLI or consuming model usage.
+  await page.keyboard.type("while :; do printf 'status-running-pulse\\n'; sleep 0.25; done");
+  await page.keyboard.press("Enter");
+  await expect(rows).toContainText("status-running-pulse", { timeout: 5_000 });
+  await expect(status).toHaveText(/running/i, { timeout: 5_000 });
+
+  await page.keyboard.press("Control+c");
+  await expect(status).toHaveText(/waiting/i, { timeout: 8_000 });
+  await page.keyboard.type("printf 'GPT-6.2-e2e\\n'");
+  await page.keyboard.press("Enter");
+  await expect(rows).toContainText("GPT-6.2-e2e", { timeout: 8_000 });
+  await expect(card).toContainText("GPT-6.2-e2e", { timeout: 8_000 });
 });
 
 test("terminal search shortcut finds scrollback and Escape returns focus to the TUI", async ({ page }) => {
@@ -388,20 +454,41 @@ test("terminal drawer resizes and keeps its PTY interactive", async ({ page }) =
   const panel = handle.locator("xpath=..");
   const before = await panel.boundingBox();
   const grip = await handle.boundingBox();
+  const host = page.getByTestId("terminal-xterm-host").first();
+  const hostBefore = await host.boundingBox();
   expect(before).not.toBeNull();
   expect(grip).not.toBeNull();
+  expect(hostBefore).not.toBeNull();
+  const terminal = page.locator(".xterm").first();
+  await terminal.click();
+  const rows = page.locator(".terminal-drawer .xterm-rows");
+  const readPtySize = async (marker: string) => {
+    await page.keyboard.type(`printf '${marker} '; stty size`);
+    await page.keyboard.press("Enter");
+    await expect(rows).toContainText(marker, { timeout: 8_000 });
+    await expect.poll(async () => rows.innerText()).toMatch(new RegExp(`${marker}\\s+\\d+\\s+\\d+`));
+    const text = await rows.innerText();
+    const match = text.match(new RegExp(`${marker}\\s+(\\d+)\\s+(\\d+)`));
+    expect(match, `expected ${marker} followed by PTY rows and columns in: ${text}`).not.toBeNull();
+    return { rows: Number(match![1]), cols: Number(match![2]) };
+  };
+  const sizeBefore = await readPtySize("PTY_SIZE_BEFORE");
+
   await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
   await page.mouse.down();
   await page.mouse.move(grip!.x + grip!.width / 2 + 90, grip!.y + grip!.height / 2 + 60);
   await page.mouse.up();
   await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBeGreaterThan(before!.width + 50);
   await expect.poll(async () => (await panel.boundingBox())?.height ?? 0).toBeGreaterThan(before!.height + 30);
+  await expect.poll(async () => (await host.boundingBox())?.height ?? 0).toBeGreaterThan(hostBefore!.height + 20);
 
-  const terminal = page.locator(".xterm").first();
   await terminal.click();
   await page.keyboard.type("printf 'resized-terminal-e2e-ok\\n'");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".xterm-rows")).toContainText("resized-terminal-e2e-ok", { timeout: 8_000 });
+  await expect(rows).toContainText("resized-terminal-e2e-ok", { timeout: 8_000 });
+  const sizeAfter = await readPtySize("PTY_SIZE_AFTER");
+  expect(sizeAfter.rows).toBeGreaterThan(sizeBefore.rows);
+  expect(sizeAfter.cols).toBeGreaterThan(sizeBefore.cols);
 });
 
 test("reconnecting rebuilds a live terminal from scrollback without duplicate history", async ({ page }) => {

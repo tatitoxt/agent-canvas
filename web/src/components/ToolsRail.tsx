@@ -124,6 +124,7 @@ export function ToolsMenu({
       key={label}
       style={{ ...rowBtn, color: on ? "var(--cv-accent)" : "var(--cv-ink)" }}
       title={hint}
+      aria-pressed={on == null ? undefined : on}
       onClick={() => {
         onClick();
         if (!keepSub) setSub(null);
@@ -193,7 +194,7 @@ export function ToolsMenu({
           <div className="cv-section-label" style={sectionLabel}>Board</div>
           {item("automations", "New orchestrator", () => { spawnOrchestrator(); dismiss(); }, "wire consoles, command all")}
           {item("accounts", "Team builder", () => { setTeamOpen(true); dismiss(); }, "roles × one CLI")}
-          {item("shape", "Add shape", () => setSub((s) => (s === "shape" ? null : "shape")), "whiteboard", false, true)}
+          {item("shape", "Add shape", () => setSub((s) => (s === "shape" ? null : "shape")), "whiteboard", undefined, true)}
           {sub === "shape" && (
             <div style={{ display: "flex", gap: 6, padding: "4px 10px 6px" }}>
               {(["rect", "ellipse", "diamond", "sticky"] as const).map((k) => (
@@ -209,7 +210,7 @@ export function ToolsMenu({
               ))}
             </div>
           )}
-          {item("ws", "New workspace", () => setSub((s) => (s === "ws" ? null : "ws")), undefined, false, true)}
+          {item("ws", "New workspace", () => setSub((s) => (s === "ws" ? null : "ws")), undefined, undefined, true)}
           {sub === "ws" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 5, padding: "4px 10px 6px" }}>
               <input style={miniInput} placeholder="workspace name" value={wsName} onChange={(e) => setWsName(e.target.value)} autoFocus />
@@ -229,7 +230,7 @@ export function ToolsMenu({
           {item("eye", "Panel summaries", () => togglePanelSummaries(), summaries ? "on" : "off", summaries)}
           <div className="cv-section-label" style={sectionLabel}>Capture</div>
           {item("draw", "Pencil markups", () => { actions.onDraw(); dismiss(); }, actions.drawOn ? "on" : "", actions.drawOn)}
-          {item("region", "Region shot", () => { actions.onRegion(); dismiss(); }, "drag → PNG")}
+          {item("region", "Region shot", () => { actions.onRegion(); dismiss(); }, "drag → PNG", actions.regionOn)}
           {item("shot", "Canvas shot", () => { actions.onShot(); dismiss(); }, "⌘⇧S")}
           {item("digest", "Session digest", () => { actions.onDigest(); dismiss(); }, "lose nothing")}
           {item("studio", "Studio doc", () => { actions.onStudio(); dismiss(); }, "repo → dossier")}

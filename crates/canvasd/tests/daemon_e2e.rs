@@ -25,11 +25,6 @@ struct Daemon {
 impl Daemon {
     /// Boot canvasd on an ephemeral port inside a fresh git repo.
     fn start() -> Self {
-        let port = TcpListener::bind("127.0.0.1:0")
-            .unwrap()
-            .local_addr()
-            .unwrap()
-            .port();
         static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let repo = std::env::temp_dir().join(format!(
             "canvasd-e2e-{}-{}",
@@ -66,10 +61,26 @@ impl Daemon {
             .output()
             .unwrap();
 
+        let (child, port, token) = Self::spawn_process(&repo, &home);
+        Self {
+            child,
+            port,
+            token,
+            repo,
+            home,
+        }
+    }
+
+    fn spawn_process(repo: &std::path::Path, home: &std::path::Path) -> (Child, u16, String) {
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
         let mut child = Command::new(env!("CARGO_BIN_EXE_canvasd"))
             .env("CANVASD_PORT", port.to_string())
-            .env("CANVAS_REPO", &repo)
-            .env("HOME", &home)
+            .env("CANVAS_REPO", repo)
+            .env("HOME", home)
             // Keep user-config resolution inside the temp home too: on a
             // Linux dev machine with XDG_CONFIG_HOME set, vault writes
             // would otherwise escape into the real config dir.
@@ -90,13 +101,16 @@ impl Daemon {
             }
         }
         assert!(!token.is_empty(), "canvasd never printed its session token");
-        Self {
-            child,
-            port,
-            token,
-            repo,
-            home,
-        }
+        (child, port, token)
+    }
+
+    fn restart(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        let (child, port, token) = Self::spawn_process(&self.repo, &self.home);
+        self.child = child;
+        self.port = port;
+        self.token = token;
     }
 
     fn ws_url(&self, token: &str) -> String {
@@ -107,6 +121,7 @@ impl Daemon {
 impl Drop for Daemon {
     fn drop(&mut self) {
         let _ = self.child.kill();
+        let _ = self.child.wait();
         let _ = std::fs::remove_dir_all(&self.repo);
         let _ = std::fs::remove_dir_all(&self.home);
     }
@@ -281,6 +296,106 @@ async fn end_to_end_agent_lifecycle() {
         seen.iter()
             .any(|m| m["type"] == "status" && m["status"] == "exited"),
         "confirmed kill must exit the agent"
+    );
+}
+
+#[tokio::test]
+async fn daemon_restart_restores_exited_agent_snapshot_and_terminal_scrollback() {
+    let mut d = Daemon::start();
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .expect("initial ws connect");
+    let snap = next_ctrl(&mut ws, Duration::from_secs(5)).await.unwrap();
+    assert_eq!(snap["type"], "snapshot");
+
+    ws.send(Message::Text(
+        json!({"cmd":"create_workspace","name":"restart-e2e","repo":d.repo.to_str().unwrap()})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(3), |m| {
+        m["type"] == "workspace_created"
+    })
+    .await;
+    let workspace_id = seen
+        .iter()
+        .find(|m| m["type"] == "workspace_created")
+        .unwrap()["workspace_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    ws.send(Message::Text(
+        json!({
+            "cmd": "spawn_agent", "name": "restart-agent", "command": "bash",
+            "cwd": ".", "workspace_id": workspace_id, "permission": "auto"
+        })
+        .to_string()
+        .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |m| m["type"] == "spawned").await;
+    let agent_id = seen.iter().find(|m| m["type"] == "spawned").unwrap()["agent_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    const MARKER: &[u8] = b"terminal-history-survives-daemon-restart";
+    let mut command = b"printf '\\n".to_vec();
+    command.extend_from_slice(MARKER);
+    command.extend_from_slice(b"\\n'\n");
+    ws.send(Message::Binary(pty_frame(&agent_id, &command).into()))
+        .await
+        .unwrap();
+    assert!(
+        collect_pty_until(&mut ws, Duration::from_secs(5), MARKER).await,
+        "terminal should echo the marker before daemon shutdown"
+    );
+    let transcript = d
+        .repo
+        .join(".canvas")
+        .join("transcripts")
+        .join(format!("{agent_id}.bin"));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline
+        && !std::fs::read(&transcript)
+            .map(|bytes| bytes.windows(MARKER.len()).any(|window| window == MARKER))
+            .unwrap_or(false)
+    {
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    assert!(
+        std::fs::read(&transcript)
+            .unwrap()
+            .windows(MARKER.len())
+            .any(|window| window == MARKER),
+        "terminal output must be flushed to the persistent transcript before restart"
+    );
+
+    let _ = ws.close(None).await;
+    d.restart();
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .expect("reconnected ws after daemon restart");
+    let snap = next_ctrl(&mut ws, Duration::from_secs(5)).await.unwrap();
+    assert_eq!(snap["type"], "snapshot");
+    let agent = snap["agents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|agent| agent["agent_id"] == agent_id)
+        .expect("snapshot should retain the agent record");
+    assert_eq!(agent["status"], "exited");
+    assert!(
+        agent["output_bytes"].as_u64().unwrap_or(0) > 0,
+        "snapshot should report persisted terminal output"
+    );
+    assert!(
+        collect_pty_until(&mut ws, Duration::from_secs(5), MARKER).await,
+        "terminal scrollback should replay from disk after process restart"
     );
 }
 

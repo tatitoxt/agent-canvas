@@ -70,7 +70,7 @@ export const ShapeNode = memo(function ShapeNode({ id, data, selected, width, he
     }
     const title = (s.title ?? "pinned").trim() || "pinned";
     const safe = title.replace(/[\\/:*?"<>|]/g, "-").slice(0, 60) || "note";
-    vaultAppend(`Canvas/${safe}.md`, `## ${title}\n\n${s.text ?? ""}\n`);
+    vaultAppend(`Canvas/${safe}.md`, `## ${title}\n\n${s.text ?? ""}`);
     notify(`saved to vault → Canvas/${safe}.md`);
   };
 
