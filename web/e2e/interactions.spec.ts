@@ -40,21 +40,56 @@ test("double-click pops the terminal out in-place as a canvas card", async ({ pa
   await expect(page.locator(".react-flow__node-term").first()).toBeVisible({ timeout: 5_000 });
 });
 
-test("pin to board edge docks a panel; undo gather restores positions", async ({ page }) => {
+test("pin to the screen docks a panel at the right edge, visible and persisted", async ({ page }) => {
   await boot(page);
-  // open a panel from the rail (vault) and pin it
-  const vaultBtn = page.locator("button[title*='vault' i], button[title*='Vault' i]").first();
-  if (!(await vaultBtn.count())) { console.log("PROBE no vault btn — skip"); return; }
-  await vaultBtn.click();
-  await page.waitForTimeout(1200);
+  // Settings is the cheapest reliable panel — no vault or repo needed.
+  await page.locator("button[title='Settings']").first().click();
   const panel = page.locator(".react-flow__node-panel").first();
-  if (!(await panel.count())) { console.log("PROBE no panel node — skip"); return; }
-  const pin = panel.locator("button", { hasText: "⬈" }).first();
-  if (!(await pin.count())) { console.log("PROBE no pin btn — skip"); return; }
-  await pin.click();
-  await page.waitForTimeout(900);
-  // docked = flush against the right edge of the viewport in flow coords;
-  // observable: the node moved compared to before pinning
-  console.log("PROBE pin clicked, panel still visible:", await panel.isVisible());
+  await expect(panel).toBeVisible({ timeout: 6_000 });
+  // cv-panelnodes is keyed per-board: { [board]: { [panelId]: {x,y,w,h} } }.
+  const readPersisted = () =>
+    page.evaluate(() => {
+      const all = JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}");
+      return Object.values(all)[0] ?? {};
+    });
+  const before = await readPersisted();
+  const ids = Object.keys(before);
+  expect(ids.length).toBeGreaterThan(0);
+  const id = ids[0];
+
+  // Deska-style window menu: right-click the card → "Pin to the screen".
+  const b = await panel.boundingBox();
+  if (!b) throw new Error("panel has no box");
+  await page.mouse.click(b.x + b.width / 2, b.y + 12, { button: "right" });
+  const pinRow = page.locator("button", { hasText: "Pin to the screen" }).first();
+  await expect(pinRow).toBeVisible({ timeout: 4_000 });
+  await pinRow.click();
+  await page.waitForTimeout(800);
+
+  // 1) Persisted: the docked position is committed to cv-panelnodes and
+  //    differs from where the card spawned.
+  const after = await readPersisted();
+  expect(after[id]).toBeDefined();
+  expect({ x: after[id].x, y: after[id].y }).not.toEqual({ x: before[id].x, y: before[id].y });
+
+  // 2) Visible and flush against the right edge of the viewport: at the
+  //    boot viewport the dock math targets screen x = innerWidth - w - 20,
+  //    y = 20 — allow slack for zoom drift, but it must sit in the
+  //    top-right quadrant hugging the edge.
+  const box = await panel.boundingBox();
+  expect(box).not.toBeNull();
+  const vw = await page.evaluate(() => window.innerWidth);
+  expect(box!.x + box!.width).toBeGreaterThan(vw - 120);
+  expect(box!.y).toBeLessThan(160);
+  await expect(panel).toBeVisible();
+
+  // 3) Survives a reload: same persisted position, card mounted again.
+  await page.reload();
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
+  const reloaded = await readPersisted();
+  expect(reloaded[id]).toBeDefined();
+  expect(reloaded[id].x).toBeCloseTo(after[id].x, 0);
+  expect(reloaded[id].y).toBeCloseTo(after[id].y, 0);
+  await expect(page.locator(".react-flow__node-panel").first()).toBeVisible({ timeout: 6_000 });
 });
 
