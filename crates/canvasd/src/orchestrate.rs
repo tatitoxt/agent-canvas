@@ -92,6 +92,10 @@ pub struct DelegateParams {
     pub account_id: Option<String>,
     pub board_id: Option<String>,
     pub initial_input: Option<String>,
+    /// Trusted operator surfaces may delegate from orchestrator cards, which
+    /// are board objects rather than agent rows. Agent-authenticated control
+    /// callers leave this false so forgotten agents have no residual power.
+    pub allow_unpersisted_parent: bool,
 }
 
 /// What happened to a supervised-gated input write.
@@ -625,14 +629,14 @@ impl Orchestrator {
     /// Delegation: spawn a child and persist its result edge. The child must
     /// never climb above its parent's permission level.
     pub fn delegate(&self, params: DelegateParams) -> Result<String, String> {
-        let parent_level = self
-            .store
-            .agent_permission(&params.from)
-            .ok()
-            .flatten()
-            .ok_or_else(|| format!("unknown delegation parent: {}", params.from))?;
+        let parent_level = self.store.agent_permission(&params.from).ok().flatten();
+        if parent_level.is_none() && !params.allow_unpersisted_parent {
+            return Err(format!("unknown delegation parent: {}", params.from));
+        }
         let requested = protocol::normalize_permission(params.permission.as_deref());
-        let level = protocol::clamp_to_parent(requested, Some(&parent_level));
+        // A missing row is only reachable for a trusted operator surface such
+        // as an orchestrator card; then there is no agent ceiling to inherit.
+        let level = protocol::clamp_to_parent(requested, parent_level.as_deref());
         // The child lands on the requested board, else its parent's
         // (orchestrator nodes aren't agents — they carry theirs over).
         let parent_board = params.board_id.clone().or(self

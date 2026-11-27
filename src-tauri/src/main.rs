@@ -2109,6 +2109,9 @@ fn delegate(
         account_id,
         board_id,
         initial_input,
+        // The desktop UI can delegate from orchestrator cards. Those cards
+        // are operator-owned board objects, not agent rows.
+        allow_unpersisted_parent: true,
     })
 }
 

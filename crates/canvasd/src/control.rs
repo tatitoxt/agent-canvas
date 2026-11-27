@@ -861,6 +861,7 @@ fn handle_client_msg(text: &str, state: &ControlSocketState, identity: &ControlI
                             account_id,
                             board_id,
                             initial_input,
+                            allow_unpersisted_parent: matches!(identity, ControlIdentity::Operator),
                         })
                         .map(|_| ()),
                     None,
