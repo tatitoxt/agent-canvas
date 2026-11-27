@@ -177,6 +177,7 @@ pub struct AgentManager {
     automation_meta: Mutex<HashMap<AgentId, AutoMeta>>,
     transcript_dir: Mutex<PathBuf>,
     extra_env: Mutex<HashMap<String, String>>,
+    path_entries: Mutex<Vec<PathBuf>>,
 }
 
 /// Cap transcripts at ~1MB; when exceeded keep the newest 512KB.
@@ -326,14 +327,22 @@ fn shell_command(command: &str) -> CommandBuilder {
     cmd
 }
 
-/// Prepend the directory holding this binary to PATH so `canvasctl` is
-/// reachable inside every PTY, using the host platform's PATH separator.
-fn path_with_exe_dir() -> Option<std::ffi::OsString> {
+/// Prepend the directory holding this binary plus any host-registered helper
+/// directories to PATH so `canvasctl` is reachable inside every PTY, using
+/// the host platform's PATH separator. The exe dir stays first: canvasd and
+/// canvasctl build side by side, while the Tauri shell registers its generated
+/// shim dir as the next candidate.
+fn path_with_exe_dir(extra_entries: &[PathBuf]) -> Option<std::ffi::OsString> {
     let exe_dir = std::env::current_exe()
         .ok()?
         .parent()
         .map(|dir| dir.to_path_buf())?;
     let mut entries = vec![exe_dir];
+    for dir in extra_entries {
+        if !entries.contains(dir) {
+            entries.push(dir.clone());
+        }
+    }
     if let Some(path) = std::env::var_os("PATH") {
         entries.extend(std::env::split_paths(&path));
     }
@@ -358,6 +367,7 @@ impl AgentManager {
                     .join("transcripts"),
             ),
             extra_env: Mutex::new(HashMap::new()),
+            path_entries: Mutex::new(Vec::new()),
         }
     }
 
@@ -368,6 +378,17 @@ impl AgentManager {
             .lock()
             .unwrap()
             .insert(key.to_string(), value.to_string());
+    }
+
+    /// Prepend an extra directory when constructing each PTY's PATH. The
+    /// native shell uses this for its generated canvasctl shim; the daemon
+    /// needs no entry because canvasctl already sits beside canvasd.
+    pub fn prepend_path_entry(&self, dir: impl Into<PathBuf>) {
+        let dir = dir.into();
+        let mut entries = self.path_entries.lock().unwrap();
+        if !entries.contains(&dir) {
+            entries.push(dir);
+        }
     }
 
     /// Where per-agent transcript files live (`<dir>/<agent_id>.bin`).
@@ -441,7 +462,8 @@ impl AgentManager {
         // Put the directory holding this binary (canvasd / the app) first
         // on PATH so `canvasctl` is reachable inside every PTY. If the exe
         // path is unavailable, CommandBuilder still inherits the ambient PATH.
-        if let Some(path) = path_with_exe_dir() {
+        let extra_path_entries = self.path_entries.lock().unwrap().clone();
+        if let Some(path) = path_with_exe_dir(&extra_path_entries) {
             cmd.env("PATH", path);
         }
 
@@ -908,6 +930,20 @@ pub fn account_env_key(cli: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn registered_path_entry_is_prepended_after_the_exe_dir() {
+        let extra = PathBuf::from("/tmp/canvas-test-shim-dir");
+        let path = path_with_exe_dir(std::slice::from_ref(&extra)).unwrap();
+        let entries: Vec<PathBuf> = std::env::split_paths(&path).collect();
+        let exe_dir = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        assert_eq!(entries[0], exe_dir);
+        assert_eq!(entries[1], extra);
+    }
 
     #[test]
     fn canvas_result_survives_pty_escapes() {

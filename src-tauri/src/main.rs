@@ -9,19 +9,18 @@
 
 use base64::Engine;
 use canvasd::agent::{
-    canvas_result_line, dirty_diff, dirty_file_count, dirty_files, sensitive_line, worktree_branch,
-    AgentManager,
+    canvas_result_line, dirty_diff, dirty_file_count, dirty_files, worktree_branch, AgentManager,
 };
-use canvasd::chain::{chain_for_spawn, command_cli, substitute_cli, KNOWN_CLIS};
-use canvasd::protocol::{
-    AgentStatus, ServerMsg, SnapshotAgent, SnapshotAutomation, SnapshotDelegation,
+use canvasd::orchestrate::{
+    DelegateParams, InputDisposition, Orchestrator, SpawnParams, TaskSpawner,
 };
+use canvasd::protocol::{AgentStatus, ServerMsg, SnapshotAutomation};
 use canvasd::store::Store;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
-use tokio::sync::mpsc;
+use tokio::sync::broadcast;
 use tracing::warn;
 
 /// Published artifacts: share id → (title, mime, bytes). Same shape as the
@@ -39,60 +38,43 @@ struct CanvasState {
     pending_inputs: Arc<Mutex<HashMap<String, Vec<u8>>>>, // agent_id → held PTY input
     /// agent_id → chain-retry state: a fresh PTY dying within seconds
     /// respawns as the next fallback CLI instead of dying silently.
-    pending_fallbacks: Arc<Mutex<HashMap<String, FallbackState>>>,
+    pending_fallbacks: Arc<Mutex<HashMap<String, canvasd::orchestrate::FallbackState>>>,
     /// Canonicalized roots vault file operations may touch — the board repo
     /// plus user-granted vault/workspace roots. Mutex because mounting a
     /// vault from the UI appends at runtime.
     allowed_roots: Arc<Mutex<Vec<PathBuf>>>,
     /// In-memory published artifacts behind the embedded share server.
     shares: ShareMap,
-    /// Port the embedded share server bound (127.0.0.1 only). None when the
-    /// bind failed — share_create then errors instead of minting dead links.
+    /// Port the embedded localhost server bound (share links + control WS).
+    /// None when the bind failed — share_create and agent orchestration then
+    /// error instead of minting dead links/dead environment variables.
     share_port: Option<u16>,
+    /// Transport-independent orchestration core. The Arc fields above are
+    /// shared with it; keeping them mirrored preserves the existing command
+    /// code while all spawn/delegate logic lives in one place.
+    orchestrator: Orchestrator,
+    control_events: broadcast::Sender<ServerMsg>,
+    pty_events: broadcast::Sender<(String, Vec<u8>)>,
 }
-
-/// Per-spawn retry state: when a fresh PTY dies within seconds, the next
-/// chain candidate gets a chance with the same parameters. Mirrors
-/// canvasd's FallbackState so the desktop shell falls back identically.
-struct FallbackState {
-    spawned_at: std::time::Instant,
-    name: String,
-    command: String,
-    cwd: String,
-    workspace_id: Option<String>,
-    permission: String,
-    board_id: Option<String>,
-    account_id: Option<String>,
-    /// Automation guardrails (idle alert secs, deny-approvals policy) —
-    /// re-applied to every replacement so a fallback keeps the original's
-    /// automation constraints.
-    automation: Option<(u64, bool)>,
-    /// CLIs not yet tried, in order.
-    remaining: Vec<String>,
-    /// Task text queued for the original PTY — re-injected into the
-    /// replacement so a fallback never silently drops the user's task.
-    /// Never cleared on a successful write: fallback only fires when the
-    /// original DIED within seconds of launch, so its copy of the task
-    /// never completed and re-running it is the correct retry semantics.
-    initial_input: Option<String>,
-}
-
-/// Registration-completion gate handed back from [`spawn_wired`]. The
-/// agent's exit watcher waits on it before processing any exit, so a PTY
-/// dying during spawn can never outrun the registration of its fallback
-/// state, automation metadata, or delegation ticket. Callers fire it once
-/// their own post-spawn registration completes; dropping it (error paths)
-/// releases the watcher too — a permanently-blocked watcher would never
-/// mark the agent exited at all.
-type RegistrationGate = tokio::sync::oneshot::Sender<()>;
 
 fn emit_control(app: &AppHandle, msg: &ServerMsg) {
-    if let Err(e) = app.emit("canvas://control", msg) {
+    // The control bus is the single event source: one subscription feeds the
+    // webview, another feeds `/ws` clients. Before state management (or in
+    // minimal tests) fall back to direct emission rather than dropping.
+    if let Some(state) = app.try_state::<CanvasState>() {
+        let _ = state.control_events.send(msg.clone());
+    } else if let Err(e) = app.emit("canvas://control", msg) {
         warn!(error = %e, "emit control failed");
     }
 }
 
 fn emit_pty(app: &AppHandle, agent_id: &str, bytes: &[u8]) {
+    if let Some(state) = app.try_state::<CanvasState>() {
+        let _ = state
+            .pty_events
+            .send((agent_id.to_string(), bytes.to_vec()));
+        return;
+    }
     let payload = serde_json::json!({
         "agent_id": agent_id,
         "data": base64::engine::general_purpose::STANDARD.encode(bytes),
@@ -102,394 +84,16 @@ fn emit_pty(app: &AppHandle, agent_id: &str, bytes: &[u8]) {
     }
 }
 
-/// Memory file for a node: the board repo's `.canvas/memory.md`, or the
-/// workspace's repo memory when node_id is a workspace.
-fn memory_path(state: &CanvasState, node_id: &str) -> PathBuf {
-    let repo = if node_id == "main" {
-        state.repo_root.clone()
-    } else {
-        state
-            .store
-            .workspace_repo(node_id)
-            .ok()
-            .flatten()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| state.repo_root.clone())
-    };
-    repo.join(".canvas").join("memory.md")
-}
-
-/// Write PTY input honoring the supervised-input gate: `supervised`
-/// agents hold destructive-looking input until the operator approves.
-/// Mirrors canvasd's gated_write — chain-fallback re-injection goes
-/// through here so a replacement keeps the original's approval gate.
-/// Returns true when the payload was written (or held) without error.
-fn gated_write(app: &AppHandle, state: &CanvasState, agent_id: &str, bytes: &[u8]) -> bool {
-    let supervised = state
-        .agents
-        .permission(agent_id)
-        .map(|p| p == "supervised")
-        .unwrap_or(false);
-    if supervised {
-        if let Some(line) = sensitive_line(bytes) {
-            // Automation guardrail: a run whose approval policy is "deny"
-            // never waits on a human — the input is dropped and reported.
-            if state
-                .agents
-                .automation(agent_id)
-                .map(|m| m.deny_approvals)
-                .unwrap_or(false)
-            {
-                emit_control(
-                    app,
-                    &ServerMsg::NeedsAttention {
-                        agent_id: agent_id.to_string(),
-                        reason: format!("automation policy denied: {line}"),
-                    },
-                );
-                return true;
-            }
-            state
-                .pending_inputs
-                .lock()
-                .unwrap()
-                .insert(agent_id.to_string(), bytes.to_vec());
-            emit_control(
-                app,
-                &ServerMsg::NeedsApproval {
-                    agent_id: agent_id.to_string(),
-                    line,
-                },
-            );
-            return true;
-        }
-    }
-    state.agents.write(agent_id, bytes).is_ok()
-}
-
-/// Spawn a PTY agent wired to emit events + persist. Shared by spawn_agent
-/// and delegate.
-#[allow(clippy::too_many_arguments)]
-fn spawn_wired(
-    app: &AppHandle,
-    state: &CanvasState,
-    name: &str,
-    command: &str,
-    cwd: &str,
-    workspace_id: Option<&str>,
-    permission: &str,
-    board_id: Option<&str>,
-    account_id: Option<&str>,
-    initial_input: Option<&str>,
-    chain_override: Option<Vec<String>>,
-    automation: Option<(u64, bool)>,
-) -> Result<(String, Option<String>, RegistrationGate), String> {
-    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<(String, Vec<u8>)>();
-    let (exit_tx, mut exit_rx) = mpsc::unbounded_channel::<String>();
-    // The exit watcher waits on this gate before processing any exit —
-    // the PTY reader can report a death before spawn even returns, and
-    // without the gate that exit would be handled with fallback state,
-    // automation metadata, or delegation tickets not yet registered.
-    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
-
-    let app1 = app.clone();
-    tauri::async_runtime::spawn(async move {
-        while let Some((id, bytes)) = out_rx.recv().await {
-            emit_pty(&app1, &id, &bytes);
-        }
-    });
-
-    let app2 = app.clone();
-    let store2 = state.store.clone();
-    let agents2 = state.agents.clone();
-    let repo2 = state.repo_root.clone();
-    let ws2 = workspace_id.map(|w| w.to_string());
-    let fallbacks2 = state.pending_fallbacks.clone();
-    let results2 = state.pending_results.clone();
-    let inputs2 = state.pending_inputs.clone();
-    tauri::async_runtime::spawn(async move {
-        // Hold exit processing until the spawning call signals that all
-        // registration for this agent is complete. Dropping the sender
-        // (spawn error paths) releases the watcher too.
-        let _ = ready_rx.await;
-        while let Some(id) = exit_rx.recv().await {
-            // Chain fallback: a PTY dying within seconds of launch never
-            // gave the operator a working agent — retry the next CLI with
-            // the same parameters and announce the replacement. Mirrors
-            // canvasd's exit watcher so desktop and daemon behave alike.
-            let fb = fallbacks2.lock().unwrap().remove(&id);
-            let mut fell_back = false;
-            if let Some(fb) = fb {
-                if fb.spawned_at.elapsed() < std::time::Duration::from_secs(5)
-                    && !fb.remaining.is_empty()
-                {
-                    let next = fb.remaining[0].clone();
-                    let cmd = substitute_cli(&fb.command, &next);
-                    let respawned = {
-                        let st = app2.state::<CanvasState>();
-                        spawn_wired(
-                            &app2,
-                            st.inner(),
-                            &fb.name,
-                            &cmd,
-                            &fb.cwd,
-                            fb.workspace_id.as_deref(),
-                            &fb.permission,
-                            fb.board_id.as_deref(),
-                            fb.account_id.as_deref(),
-                            fb.initial_input.as_deref(),
-                            // The replacement's chain is what remained — never
-                            // recomputed, so a fully-dead chain ends instead of
-                            // looping through the same failing CLIs forever.
-                            Some(fb.remaining.clone()),
-                            // Automation guardrails ride the fallback state —
-                            // the replacement keeps the original's idle alert
-                            // and approval policy instead of losing them with
-                            // the dead agent's id.
-                            fb.automation,
-                        )
-                    };
-                    if let Ok((new_id, new_board, new_ready)) = respawned {
-                        fell_back = true;
-                        // Re-inject the queued task into the replacement —
-                        // gated, so a supervised automation keeps its
-                        // approval gate on the fallback too.
-                        if let Some(text) = fb.initial_input.clone() {
-                            let app3 = app2.clone();
-                            let target = new_id.clone();
-                            tauri::async_runtime::spawn(async move {
-                                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                                let mut data = text.into_bytes();
-                                data.push(b'\r');
-                                let st = app3.state::<CanvasState>();
-                                gated_write(&app3, st.inner(), &target, &data);
-                            });
-                        }
-                        // A delegation awaiting this child's result moves to
-                        // the replacement — otherwise the original exit marks
-                        // the ticket failed and the parent's result is lost.
-                        let edge = results2.lock().unwrap().remove(&id);
-                        if let Some(edge) = edge {
-                            // The replacement may have exited in the microseconds
-                            // since spawn — its exit runs on a different watcher,
-                            // so a ticket keyed to it would strand in flight.
-                            // Already dead: fail the ticket now instead.
-                            let replacement_live = agents2
-                                .statuses()
-                                .iter()
-                                .any(|(aid, st)| aid == &new_id && *st != "exited");
-                            if replacement_live {
-                                results2.lock().unwrap().insert(new_id.clone(), edge);
-                            } else {
-                                let _ = store2.delegation_failed(&edge, 0);
-                                emit_control(&app2, &ServerMsg::DelegationFailed { edge_id: edge });
-                            }
-                        }
-                        // Registration for the replacement is complete
-                        // (fallback state inside spawn_wired, ticket transfer
-                        // above) — release its exit watcher.
-                        let _ = new_ready.send(());
-                        let wt = agents2
-                            .worktree(&new_id)
-                            .map(|p| p.to_string_lossy().to_string());
-                        emit_control(
-                            &app2,
-                            &ServerMsg::Spawned {
-                                agent_id: new_id,
-                                name: fb.name.clone(),
-                                command: cmd.clone(),
-                                permission: fb.permission.clone(),
-                                workspace_id: fb.workspace_id.clone(),
-                                board_id: new_board.or(fb.board_id.clone()),
-                                fallback_from: Some(command_cli(&fb.command).to_string()),
-                                worktree: wt,
-                            },
-                        );
-                    }
-                }
-            }
-            let _ = store2.agent_status(&id, "exited");
-            // Held input keyed to a dead agent can never be approved —
-            // drop it. On fallback the re-injection re-holds against the
-            // replacement through the gate.
-            inputs2.lock().unwrap().remove(&id);
-            // Close delegation tickets waiting on this agent: last-chance
-            // CANVAS_RESULT scan, else fail so the board isn't stuck in
-            // flight. Skipped when the agent fell back — its ticket moved
-            // to the replacement and belongs to the replacement's exit.
-            if !fell_back {
-                // The in-memory ticket map is the primary key (a fallback
-                // replacement inherits the ticket under its own id, while
-                // the store row keeps the original's); the store scan
-                // sweeps tickets the map no longer holds — e.g. one
-                // removed by a kill confirmation before the PTY died.
-                let mut edges: Vec<String> =
-                    results2.lock().unwrap().remove(&id).into_iter().collect();
-                for (edge_id, _) in store2
-                    .unresolved_delegations()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|(_, to)| to == &id)
-                {
-                    if !edges.contains(&edge_id) {
-                        edges.push(edge_id);
-                    }
-                }
-                if !edges.is_empty() {
-                    let summary = agents2
-                        .scrollback(&id)
-                        .map(|b| String::from_utf8_lossy(&b).to_string())
-                        .and_then(|t| canvas_result_line(&t))
-                        .map(|s| s.trim().to_string());
-                    let repo = ws2
-                        .as_deref()
-                        .and_then(|w| store2.workspace_repo(w).ok().flatten())
-                        .map(PathBuf::from)
-                        .unwrap_or_else(|| repo2.clone());
-                    let files = store2
-                        .agent_worktree_abs(&id, &repo)
-                        .ok()
-                        .flatten()
-                        .map(|w| dirty_file_count(&w))
-                        .unwrap_or(0);
-                    for edge_id in edges {
-                        if let Some(summary) = summary.clone() {
-                            let _ = store2.delegation_resolved(&edge_id, &summary, files);
-                            emit_control(
-                                &app2,
-                                &ServerMsg::Result {
-                                    edge_id,
-                                    summary,
-                                    files,
-                                },
-                            );
-                        } else {
-                            let _ = store2.delegation_failed(&edge_id, files);
-                            emit_control(&app2, &ServerMsg::DelegationFailed { edge_id });
-                        }
-                    }
-                }
-            }
-            emit_control(
-                &app2,
-                &ServerMsg::Status {
-                    agent_id: id,
-                    status: AgentStatus::Exited,
-                },
-            );
-        }
-    });
-
-    let repo_root = match workspace_id.and_then(|w| state.store.workspace_repo(w).ok().flatten()) {
-        Some(repo) => PathBuf::from(repo),
-        None => state.repo_root.clone(),
-    };
-    // Named account: per-account config dir so several sign-ins of the
-    // same CLI coexist.
-    let pty_env: Vec<(String, String)> = account_id
-        .and_then(|a| state.store.account_record(a).ok().flatten())
-        .and_then(|(cli, _label, dir, env)| {
-            let abs = state.repo_root.join(&dir);
-            let _ = std::fs::create_dir_all(&abs);
-            // Account-level env override, else the CLI's known config-dir key.
-            let key = env.or_else(|| canvasd::agent::account_env_key(&cli).map(str::to_string));
-            key.map(|k| vec![(k, abs.to_string_lossy().to_string())])
-        })
-        .unwrap_or_default();
-    // Workspace (or board) memory — injected as CANVAS_MEMORY.
-    let mem_scope = workspace_id.unwrap_or("main");
-    let mem_path = memory_path(state, mem_scope);
-    if let Some(p) = mem_path.parent() {
-        let _ = std::fs::create_dir_all(p);
-    }
-    if !mem_path.exists() {
-        let _ = std::fs::write(&mem_path, "");
-    }
-    let mut pty_env = pty_env;
-    pty_env.push((
-        "CANVAS_MEMORY".to_string(),
-        mem_path.to_string_lossy().to_string(),
-    ));
-    // Fallback chain: sync spawn failures (missing binary, bad exec) retry
-    // with the next CLI; early PTY deaths retry from the exit watcher.
-    let configured = workspace_id.and_then(|w| state.store.workspace_chain(w).ok().flatten());
-    let chain = chain_override.unwrap_or_else(|| chain_for_spawn(configured, command_cli(command)));
-    let mut remaining: Vec<String> = chain.iter().skip(1).cloned().collect();
-    let mut cmd_attempt = command.to_string();
-    let id = loop {
-        match state.agents.spawn(
-            name,
-            &cmd_attempt,
-            cwd,
-            &repo_root,
-            permission,
-            out_tx.clone(),
-            exit_tx.clone(),
-            &pty_env,
-        ) {
-            Ok(id) => break id,
-            Err(e) => {
-                if let Some(next) = remaining.first().cloned() {
-                    warn!(error = %e, cli = %command_cli(&cmd_attempt), fallback = %next, "spawn failed — trying fallback CLI");
-                    cmd_attempt = substitute_cli(&cmd_attempt, &next);
-                    remaining.remove(0);
-                    continue;
-                }
-                return Err(e.to_string());
-            }
-        }
-    };
-    // Automation guardrails attach here — inside the spawn, before the
-    // registration gate fires — so even a PTY dying in the meantime is
-    // handled with the policy in place, and the fallback state carries it
-    // to any replacement.
-    if let Some((idle_secs, deny)) = automation {
-        state.agents.set_automation(&id, idle_secs, deny);
-    }
-    if !remaining.is_empty() {
-        state.pending_fallbacks.lock().unwrap().insert(
-            id.clone(),
-            FallbackState {
-                spawned_at: std::time::Instant::now(),
-                name: name.to_string(),
-                command: cmd_attempt.clone(),
-                cwd: cwd.to_string(),
-                workspace_id: workspace_id.map(str::to_string),
-                permission: permission.to_string(),
-                board_id: board_id.map(str::to_string),
-                account_id: account_id.map(str::to_string),
-                automation,
-                remaining,
-                initial_input: initial_input.map(str::to_string),
-            },
-        );
-    }
-    // The persisted command is the one that actually launched, which may
-    // be a fallback substitute of the requested one.
-    let command = cmd_attempt.as_str();
-    // Board: explicit, else the workspace's board, else 'main'.
-    let board = board_id
-        .map(|b| b.to_string())
-        .or_else(|| workspace_id.and_then(|w| state.store.workspace_board(w).ok().flatten()));
-    if let Err(e) = state.store.agent_spawned(
-        &id,
-        name,
-        command,
-        &format!(".canvas-worktrees/{id}"),
-        workspace_id,
-        permission,
-        board.as_deref(),
-        account_id,
-    ) {
-        warn!(error = %e, "failed to persist agent");
-    }
-    Ok((id, board, ready_tx))
+/// Write PTY input through the shared orchestration core's permission gate.
+/// The Tauri-shaped helper remains because loop firing and automation prompt
+/// injection predate the transport-independent core.
+fn gated_write(state: &CanvasState, agent_id: &str, bytes: &[u8]) -> bool {
+    state.orchestrator.gated_write(agent_id, bytes)
 }
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 fn spawn_agent(
-    app: AppHandle,
     state: State<'_, CanvasState>,
     name: String,
     command: String,
@@ -500,59 +104,16 @@ fn spawn_agent(
     account_id: Option<String>,
     initial_input: Option<String>,
 ) -> Result<String, String> {
-    let level = canvasd::protocol::normalize_permission(permission.as_deref());
-    let (id, board, ready) = spawn_wired(
-        &app,
-        state.inner(),
-        &name,
-        &command,
-        &cwd,
-        workspace_id.as_deref(),
-        level,
-        board_id.as_deref(),
-        account_id.as_deref(),
-        initial_input.as_deref(),
-        None,
-        None,
-    )?;
-    if let Some(text) = initial_input {
-        // Quick request: type the task once the CLI has booted. The copy
-        // in the fallback state is NOT cleared on write — fallback only
-        // fires when the original died within seconds of launch, so its
-        // copy of the task never completed and re-running it on the
-        // replacement is the correct retry semantics.
-        let app2 = app.clone();
-        let target = id.clone();
-        tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            let mut data = text.into_bytes();
-            data.push(b'\r');
-            let st = app2.state::<CanvasState>();
-            let _ = st.agents.write(&target, &data);
-        });
-    }
-    // spawn_agent registers nothing beyond what spawn_wired already did —
-    // release the exit watcher.
-    let _ = ready.send(());
-    let wt = app
-        .state::<CanvasState>()
-        .agents
-        .worktree(&id)
-        .map(|p| p.to_string_lossy().to_string());
-    emit_control(
-        &app,
-        &ServerMsg::Spawned {
-            agent_id: id.clone(),
-            name,
-            command,
-            permission: level.to_string(),
-            workspace_id,
-            board_id: board,
-            fallback_from: None,
-            worktree: wt,
-        },
-    );
-    Ok(id)
+    state.orchestrator.spawn_node(SpawnParams {
+        name,
+        command,
+        cwd,
+        workspace_id,
+        permission,
+        board_id,
+        account_id,
+        initial_input,
+    })
 }
 
 #[tauri::command]
@@ -2314,7 +1875,6 @@ fn git_push(app: AppHandle, state: State<'_, CanvasState>, agent_id: String) -> 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 fn artifact_create(
-    app: AppHandle,
     state: State<'_, CanvasState>,
     board_id: Option<String>,
     agent_id: Option<String>,
@@ -2323,46 +1883,10 @@ fn artifact_create(
     path: Option<String>,
     text: Option<String>,
 ) -> Result<(), String> {
-    let id = format!("art-{}", &uuid_v4ish()[..8]);
-    let board = board_id
-        .or_else(|| {
-            agent_id
-                .as_deref()
-                .and_then(|a| state.store.agent_board(a).ok().flatten())
-        })
-        .unwrap_or_else(|| "main".to_string());
-    let agent_name = agent_id
-        .as_deref()
-        .and_then(|a| state.store.agent_name(a).ok().flatten());
     state
-        .store
-        .artifact_created(
-            &id,
-            &board,
-            agent_id.as_deref(),
-            &kind,
-            &title,
-            path.as_deref(),
-            text.as_deref(),
-        )
-        .map_err(|e| e.to_string())?;
-    emit_control(
-        &app,
-        &ServerMsg::ArtifactCreated {
-            artifact: canvasd::protocol::SnapshotArtifact {
-                artifact_id: id,
-                board_id: board,
-                agent_id,
-                agent_name,
-                kind,
-                title,
-                path,
-                text,
-                created_at: String::new(),
-            },
-        },
-    );
-    Ok(())
+        .orchestrator
+        .artifact_create(board_id, agent_id, kind, title, path, text)
+        .map(|_| ())
 }
 
 #[tauri::command]
@@ -2465,7 +1989,7 @@ fn session_digest(app: AppHandle, state: State<'_, CanvasState>) -> Result<(), S
 
 #[tauri::command]
 fn memory_read(state: State<'_, CanvasState>, node_id: String) -> Result<String, String> {
-    Ok(std::fs::read_to_string(memory_path(state.inner(), &node_id)).unwrap_or_default())
+    Ok(std::fs::read_to_string(state.orchestrator.memory_path(&node_id)).unwrap_or_default())
 }
 
 #[tauri::command]
@@ -2475,7 +1999,7 @@ fn memory_write(
     node_id: String,
     text: String,
 ) -> Result<(), String> {
-    let path = memory_path(state.inner(), &node_id);
+    let path = state.orchestrator.memory_path(&node_id);
     if let Some(p) = path.parent() {
         let _ = std::fs::create_dir_all(p);
     }
@@ -2562,7 +2086,6 @@ fn uuid_v4ish() -> String {
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 fn delegate(
-    app: AppHandle,
     state: State<'_, CanvasState>,
     from: String,
     name: String,
@@ -2575,105 +2098,18 @@ fn delegate(
     board_id: Option<String>,
     initial_input: Option<String>,
 ) -> Result<String, String> {
-    let parent_level = state.store.agent_permission(&from).ok().flatten();
-    let requested = canvasd::protocol::normalize_permission(permission.as_deref());
-    let level = canvasd::protocol::clamp_to_parent(requested, parent_level.as_deref());
-    // The child lands on the requested board, else its parent's
-    // (orchestrator nodes aren't agents — they carry theirs over).
-    let parent_board = board_id.or(state.store.agent_board(&from).ok().flatten());
-    let (id, board, ready) = spawn_wired(
-        &app,
-        state.inner(),
-        &name,
-        &command,
-        &cwd,
-        workspace_id.as_deref(),
-        level,
-        parent_board.as_deref(),
-        account_id.as_deref(),
-        initial_input.as_deref(),
-        None,
-        None,
-    )?;
-    let edge_id = format!("edge-{}", &id[..8.min(id.len())]);
-    let _ = state.store.delegation_created(&edge_id, &from, &id, &task);
-    state
-        .pending_results
-        .lock()
-        .unwrap()
-        .insert(id.clone(), edge_id.clone());
-    // The delegation ticket is the registration the exit watcher needs —
-    // release it only now that the ticket is in place.
-    let _ = ready.send(());
-    if let Some(text) = initial_input {
-        // Type the brief once the CLI has booted (same delay as spawn_agent).
-        // The fallback-state copy is NOT cleared on write — the original
-        // dying within seconds of launch means its copy of the brief never
-        // completed, so re-running it on the replacement is correct.
-        let app2 = app.clone();
-        let target = id.clone();
-        tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            let mut data = text.into_bytes();
-            data.push(b'\r');
-            let st = app2.state::<CanvasState>();
-            let _ = st.agents.write(&target, &data);
-        });
-    }
-    let wt = app
-        .state::<CanvasState>()
-        .agents
-        .worktree(&id)
-        .map(|p| p.to_string_lossy().to_string());
-    emit_control(
-        &app,
-        &ServerMsg::Spawned {
-            agent_id: id.clone(),
-            name,
-            command,
-            permission: level.to_string(),
-            workspace_id,
-            board_id: board,
-            fallback_from: None,
-            worktree: wt,
-        },
-    );
-    emit_control(
-        &app,
-        &ServerMsg::Delegation {
-            edge_id,
-            from,
-            to: id.clone(),
-            task,
-        },
-    );
-    Ok(id)
-}
-
-fn loop_to_snapshot(
-    (
-        loop_id,
+    state.orchestrator.delegate(DelegateParams {
+        from,
+        name,
+        command,
+        task,
+        cwd,
+        workspace_id,
+        permission,
+        account_id,
         board_id,
-        target,
-        instruction,
-        trigger,
-        interval_secs,
-        pattern,
-        enabled,
-        last_fired_at,
-    ): canvasd::store::LoopRow,
-) -> canvasd::protocol::SnapshotLoop {
-    canvasd::protocol::SnapshotLoop {
-        loop_id,
-        board_id,
-        target,
-        instruction,
-        trigger,
-        interval_secs: interval_secs.map(|v| v.max(0) as u64),
-        pattern,
-        enabled,
-        last_fired_at,
-    }
+        initial_input,
+    })
 }
 
 fn loop_targets(state: &CanvasState, board_id: &str, target: &str) -> Vec<String> {
@@ -2697,28 +2133,14 @@ fn loop_targets(state: &CanvasState, board_id: &str, target: &str) -> Vec<String
 
 /// Fire a loop: write its instruction to every resolved target — gated
 /// exactly like the automation prompt (supervised + sensitive → held).
-fn fire_loop(app: &AppHandle, state: &CanvasState, row: &canvasd::store::LoopRow) {
+fn fire_loop(state: &CanvasState, row: &canvasd::store::LoopRow) {
     let (loop_id, board_id, target, instruction, _, _, _, _, _) = row;
     for id in loop_targets(state, board_id, target) {
         let bytes = format!("{instruction}\n");
-        let gated = state
-            .agents
-            .permission(&id)
-            .map(|p| p == "supervised")
-            .unwrap_or(false)
-            && sensitive_line(bytes.as_bytes()).is_some();
-        if gated {
-            if let Some(line) = sensitive_line(bytes.as_bytes()) {
-                state
-                    .pending_inputs
-                    .lock()
-                    .unwrap()
-                    .insert(id.clone(), bytes.into_bytes());
-                emit_control(app, &ServerMsg::NeedsApproval { agent_id: id, line });
-                continue;
-            }
+        // Same supervised-input gate as operator input and automation prompts.
+        if !gated_write(state, &id, bytes.as_bytes()) {
+            warn!(agent_id = %id, "loop instruction write failed");
         }
-        let _ = state.agents.write(&id, bytes.as_bytes());
     }
     let _ = state.store.loop_fired(loop_id);
 }
@@ -2781,14 +2203,14 @@ fn run_loop(app: AppHandle, state: State<'_, CanvasState>, loop_id: String) -> R
         .into_iter()
         .find(|r| r.0 == loop_id)
         .ok_or_else(|| format!("loop not found: {loop_id}"))?;
-    fire_loop(&app, &state, &row);
+    fire_loop(&state, &row);
     if let Some(l) = state
         .store
         .loops_snapshot()
         .unwrap_or_default()
         .into_iter()
         .find(|r| r.0 == loop_id)
-        .map(loop_to_snapshot)
+        .map(canvasd::control::loop_to_snapshot)
     {
         emit_control(&app, &ServerMsg::LoopSaved { l });
     }
@@ -2840,7 +2262,7 @@ fn set_loop_enabled(
         .unwrap_or_default()
         .into_iter()
         .find(|r| r.0 == loop_id)
-        .map(loop_to_snapshot)
+        .map(canvasd::control::loop_to_snapshot)
     {
         emit_control(&app, &ServerMsg::LoopSaved { l });
     }
@@ -2938,9 +2360,7 @@ fn run_automation_row(
         _,
         _,
     ) = row;
-    let (id, run_board, ready) = spawn_wired(
-        app,
-        state,
+    let (id, run_board, ready) = state.orchestrator.spawn(
         &name,
         &command,
         ".",
@@ -2976,53 +2396,11 @@ fn run_automation_row(
         },
     );
     // Inject the saved prompt — the kernel PTY buffer holds it until the
-    // CLI reads stdin, gated like operator input.
+    // CLI reads stdin, through the same supervised-input gate as operator input.
     let bytes = format!("{prompt}\n");
-    let mut write_prompt = true;
-    if state
-        .agents
-        .permission(&id)
-        .map(|p| p == "supervised")
-        .unwrap_or(false)
-    {
-        if let Some(line) = sensitive_line(bytes.as_bytes()) {
-            write_prompt = false;
-            if !state
-                .agents
-                .automation(&id)
-                .map(|m| m.deny_approvals)
-                .unwrap_or(false)
-            {
-                state
-                    .pending_inputs
-                    .lock()
-                    .unwrap()
-                    .insert(id.clone(), bytes.clone().into_bytes());
-                emit_control(
-                    app,
-                    &ServerMsg::NeedsApproval {
-                        agent_id: id.clone(),
-                        line,
-                    },
-                );
-            } else {
-                emit_control(
-                    app,
-                    &ServerMsg::NeedsAttention {
-                        agent_id: id.clone(),
-                        reason: format!("automation policy denied: {line}"),
-                    },
-                );
-            }
-        }
-    }
-    let mut write_result = Ok(());
-    if write_prompt {
-        write_result = state
-            .agents
-            .write(&id, bytes.as_bytes())
-            .map_err(|e| e.to_string());
-    }
+    let disposition = state
+        .orchestrator
+        .gated_write_disposition(&id, bytes.as_bytes());
     // Prompt disposition vs. fallback retry:
     // - written or held: the fallback-state copy STAYS — fallback only
     //   fires when the original died within seconds of launch, so its copy
@@ -3030,22 +2408,16 @@ fn run_automation_row(
     //   of a dying CLI delivers nothing); the replacement re-runs it.
     // - dropped by deny-policy: a deliberate drop must NOT retry on the
     //   replacement — clear the copy so fallback skips re-injection.
-    if !write_prompt {
-        let denied = state
-            .agents
-            .automation(&id)
-            .map(|m| m.deny_approvals)
-            .unwrap_or(false);
-        if denied {
-            if let Some(fb) = state.pending_fallbacks.lock().unwrap().get_mut(&id) {
-                fb.initial_input = None;
-            }
+    if matches!(disposition, Ok(InputDisposition::Denied)) {
+        if let Some(fb) = state.pending_fallbacks.lock().unwrap().get_mut(&id) {
+            fb.initial_input = None;
         }
     }
-    // Registration for this run is complete (guardrails inside spawn_wired,
-    // prompt disposition above) — release the exit watcher.
+    // Registration for this run is complete (guardrails inside orchestrator spawn,
+    // prompt disposition above) — release the exit watcher before surfacing a
+    // write error, so even that path cannot strand the exit watcher.
     let _ = ready.send(());
-    write_result?;
+    disposition?;
     Ok(id)
 }
 
@@ -3064,62 +2436,20 @@ fn delete_automation(
 }
 
 #[tauri::command]
-fn pty_input(
-    app: AppHandle,
-    state: State<'_, CanvasState>,
-    agent_id: String,
-    data: String,
-) -> Result<(), String> {
+fn pty_input(state: State<'_, CanvasState>, agent_id: String, data: String) -> Result<(), String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&data)
         .map_err(|e| e.to_string())?;
-    // Supervised-input gate: hold destructive-looking input for approval.
-    let supervised = state
-        .agents
-        .permission(&agent_id)
-        .map(|p| p == "supervised")
-        .unwrap_or(false);
-    if supervised {
-        if let Some(line) = sensitive_line(&bytes) {
-            // Automation guardrail: a run whose approval policy is "deny"
-            // drops gated input instead of waiting on a human forever.
-            if state
-                .agents
-                .automation(&agent_id)
-                .map(|m| m.deny_approvals)
-                .unwrap_or(false)
-            {
-                emit_control(
-                    &app,
-                    &ServerMsg::NeedsAttention {
-                        agent_id,
-                        reason: format!("automation policy denied: {line}"),
-                    },
-                );
-                return Ok(());
-            }
-            state
-                .pending_inputs
-                .lock()
-                .unwrap()
-                .insert(agent_id.clone(), bytes);
-            emit_control(&app, &ServerMsg::NeedsApproval { agent_id, line });
-            return Ok(());
-        }
+    if gated_write(&state, &agent_id, &bytes) {
+        Ok(())
+    } else {
+        Err("pty write failed".to_string())
     }
-    state
-        .agents
-        .write(&agent_id, &bytes)
-        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn approve_input(state: State<'_, CanvasState>, agent_id: String) -> Result<(), String> {
-    let bytes = state.pending_inputs.lock().unwrap().remove(&agent_id);
-    match bytes {
-        Some(b) => state.agents.write(&agent_id, &b).map_err(|e| e.to_string()),
-        None => Err("no pending input to approve".to_string()),
-    }
+    state.orchestrator.approve_input(&agent_id)
 }
 
 #[tauri::command]
@@ -3166,53 +2496,11 @@ fn pty_resize(
 
 #[tauri::command]
 fn confirm_destructive(
-    app: AppHandle,
     state: State<'_, CanvasState>,
     agent_id: String,
     action: String,
 ) -> Result<(), String> {
-    match action.as_str() {
-        "kill" => {
-            // A deliberate kill is operator intent — never retry the chain.
-            // Disarm BEFORE signaling the PTY: the exit watcher fires as soon
-            // as the process closes and would claim the retry while the kill
-            // was still returning.
-            state.pending_fallbacks.lock().unwrap().remove(&agent_id);
-            state.agents.kill(&agent_id).map_err(|e| e.to_string())?;
-            let _ = state.store.agent_status(&agent_id, "exited");
-            state.pending_results.lock().unwrap().remove(&agent_id);
-            emit_control(
-                &app,
-                &ServerMsg::Status {
-                    agent_id,
-                    status: AgentStatus::Exited,
-                },
-            );
-            Ok(())
-        }
-        "forget" => {
-            // Forget is operator intent too — a live agent cleared within
-            // seconds of launch must not respawn as a fallback. Disarm
-            // BEFORE the kill so the exit watcher can't claim the retry
-            // in between.
-            state.pending_fallbacks.lock().unwrap().remove(&agent_id);
-            // no-op if the agent is already gone
-            let _ = state.agents.kill(&agent_id);
-            state
-                .store
-                .remove_agent(&agent_id)
-                .map_err(|e| e.to_string())?;
-            emit_control(
-                &app,
-                &ServerMsg::Status {
-                    agent_id,
-                    status: AgentStatus::Exited,
-                },
-            );
-            Ok(())
-        }
-        other => Err(format!("unknown destructive action: {other}")),
-    }
+    state.orchestrator.confirm_destructive(&agent_id, &action)
 }
 
 #[tauri::command]
@@ -3276,8 +2564,10 @@ fn diff_detail(
 
 #[tauri::command]
 fn snapshot(app: AppHandle, state: State<'_, CanvasState>) -> Result<serde_json::Value, String> {
-    // Transcript replay: buffered PTY scrollback so a reopened terminal
-    // shows history instead of a blank screen.
+    // Transcript replay stays a Tauri-only transport concern: buffered PTY
+    // scrollback is emitted before the snapshot so a reopened terminal shows
+    // history instead of a blank screen. The snapshot payload itself is the
+    // exact shared ServerMsg construction used by both WS control sockets.
     for id in state.agents.list() {
         if let Some(buf) = state.agents.scrollback(&id) {
             if !buf.is_empty() {
@@ -3285,234 +2575,16 @@ fn snapshot(app: AppHandle, state: State<'_, CanvasState>) -> Result<serde_json:
             }
         }
     }
-    let live: HashMap<String, &str> = state.agents.statuses().into_iter().collect();
-    let acct_labels: HashMap<String, String> = state
-        .store
-        .accounts_snapshot()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(id, _cli, label, _env)| (id, label))
-        .collect();
-    let agents: Vec<SnapshotAgent> = state
-        .store
-        .agents_snapshot()
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .map(
-            |(
-                id,
-                name,
-                command,
-                worktree,
-                status,
-                workspace_id,
-                permission,
-                board_id,
-                account_id,
-            )| {
-                let ob = state
-                    .repo_root
-                    .join(".canvas")
-                    .join("transcripts")
-                    .join(format!("{id}.bin"))
-                    .metadata()
-                    .map(|m| m.len())
-                    .unwrap_or(0);
-                // Same diff-state replay as the daemon's snapshot — a fresh
-                // client shouldn't show a dirty worktree as clean.
-                let wt = state.agents.worktree(&id).or_else(|| {
-                    state
-                        .store
-                        .agent_worktree_abs(&id, &state.repo_root)
-                        .ok()
-                        .flatten()
-                });
-                let (files, paths, branch) = wt
-                    .map(|w| {
-                        let paths = dirty_files(&w);
-                        (paths.len() as u32, paths, worktree_branch(&w))
-                    })
-                    .unwrap_or_default();
-                SnapshotAgent {
-                    status: live
-                        .get(&id)
-                        .copied()
-                        .unwrap_or(status.as_str())
-                        .to_string(),
-                    account_label: account_id.and_then(|a| acct_labels.get(&a).cloned()),
-                    agent_id: id,
-                    name,
-                    command,
-                    worktree,
-                    permission,
-                    workspace_id,
-                    board_id,
-                    output_bytes: ob,
-                    files,
-                    paths,
-                    branch,
-                }
-            },
-        )
-        .collect();
-    let workspaces: Vec<canvasd::protocol::SnapshotWorkspace> = state
-        .store
-        .workspaces_snapshot()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(workspace_id, name, repo, board_id)| {
-            let agent_chain = state.store.workspace_chain(&workspace_id).ok().flatten();
-            canvasd::protocol::SnapshotWorkspace {
-                workspace_id,
-                name,
-                repo,
-                board_id,
-                agent_chain,
-            }
-        })
-        .collect();
-    let boards: Vec<canvasd::protocol::SnapshotBoard> = state
-        .store
-        .boards_snapshot()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(board_id, name)| canvasd::protocol::SnapshotBoard { board_id, name })
-        .collect();
-    let delegations: Vec<SnapshotDelegation> = state
-        .store
-        .delegations_snapshot()
-        .unwrap_or_default()
-        .into_iter()
-        .map(
-            |(edge_id, from, to, task, result, state, files, created_at, resolved_at)| {
-                SnapshotDelegation {
-                    edge_id,
-                    from,
-                    to,
-                    task,
-                    result,
-                    files: files.unwrap_or(0) as u32,
-                    state,
-                    created_at,
-                    resolved_at,
-                }
-            },
-        )
-        .collect();
-    let accts: Vec<canvasd::protocol::SnapshotAccount> = state
-        .store
-        .accounts_snapshot()
-        .unwrap_or_default()
-        .into_iter()
-        .map(
-            |(account_id, cli, label, env)| canvasd::protocol::SnapshotAccount {
-                account_id,
-                cli,
-                label,
-                env,
-            },
-        )
-        .collect();
-    let layout = state.store.layout_map().unwrap_or_default();
-    // Same remote normalization as canvasd's Snapshot::repo_url.
-    let repo_url = std::process::Command::new("git")
-        .args([
-            "-C",
-            &state.repo_root.to_string_lossy(),
-            "remote",
-            "get-url",
-            "origin",
-        ])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .filter(|u| !u.is_empty())
-        .map(|u| {
-            let inner = u
-                .rfind("github.com/")
-                .map(|i| format!("https://{}", &u[i..]));
-            let u = inner.unwrap_or_else(|| {
-                u.replace("git@github.com:", "https://github.com/")
-                    .replace("ssh://git@", "https://")
-            });
-            u.strip_suffix(".git").unwrap_or(&u).to_string()
-        });
-    let agent_names: std::collections::HashMap<String, String> = state
-        .store
-        .agents_snapshot()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|a| (a.0, a.1))
-        .collect();
-    let artifacts = state
-        .store
-        .artifacts_snapshot()
-        .unwrap_or_default()
-        .into_iter()
-        .map(
-            |(artifact_id, board_id, agent_id, kind, title, path, text, created_at)| {
-                let agent_name = agent_id.as_ref().and_then(|a| agent_names.get(a).cloned());
-                canvasd::protocol::SnapshotArtifact {
-                    artifact_id,
-                    board_id,
-                    agent_id,
-                    agent_name,
-                    kind,
-                    title,
-                    path,
-                    text,
-                    created_at,
-                }
-            },
-        )
-        .collect::<Vec<_>>();
-    Ok(serde_json::json!({
-        "type": "snapshot",
-        "boards": boards,
-        "accounts": accts,
-        "agents": agents,
-        "delegations": delegations,
-        "workspaces": workspaces,
-        "layout": layout,
-        "repo_url": repo_url,
-        "cli_identities": canvasd::detect::detect_cli_identities(KNOWN_CLIS),
-        "artifacts": artifacts,
-        "notes": state
-            .store
-            .all_notes()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(note_id, board_id, col, text, pos, due)| canvasd::protocol::SnapshotNote {
-                note_id, board_id, col, text, pos, due,
-            })
-            .collect::<Vec<_>>(),
-        "automations": state
-            .store
-            .automations_snapshot()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(id, name, prompt, command, workspace_id, permission, idle_secs, on_approval, last_run_at, interval_secs, next_run_at)| SnapshotAutomation {
-                id, name, prompt, command, workspace_id, permission,
-                idle_secs: idle_secs.max(0) as u64, on_approval, last_run_at,
-                interval_secs: interval_secs.map(|v| v.max(0) as u64), next_run_at,
-            })
-            .collect::<Vec<_>>(),
-        "loops": state
-            .store
-            .loops_snapshot()
-            .unwrap_or_default()
-            .into_iter()
-            .map(loop_to_snapshot)
-            .collect::<Vec<_>>(),
-        "approvals": state
-            .pending_inputs
-            .lock()
-            .unwrap()
-            .iter()
-            .filter_map(|(id, bytes)| sensitive_line(bytes).map(|line| (id.clone(), line)))
-            .collect::<HashMap<_, _>>(),
-    }))
+    let approvals = canvasd::control::approval_lines(&state.pending_inputs);
+    let msg = canvasd::control::snapshot_message(
+        &state.store,
+        &state.agents,
+        &state.repo_root,
+        canvasd::control::repo_url(&state.repo_root),
+        approvals,
+    )
+    .map_err(|e| e.to_string())?;
+    serde_json::to_value(msg).map_err(|e| e.to_string())
 }
 
 /// One bookmark-bar entry for the web launcher's bookmarks section.
@@ -3859,7 +2931,26 @@ fn share_router(shares: ShareMap, store: Arc<Store>) -> axum::Router {
 /// two coexisting Canvas runtimes must not fight over a well-known port.
 /// The share URL handed to the user carries the actual port, so the
 /// ephemerality is invisible to the copy-paste flow.
-fn spawn_share_server(listener: std::net::TcpListener, shares: ShareMap, store: Arc<Store>) {
+fn embedded_router(
+    shares: ShareMap,
+    store: Arc<Store>,
+    orchestrator: Orchestrator,
+    control_token: String,
+) -> axum::Router {
+    // One localhost ephemeral server, two surfaces: public unguessable share
+    // links and the token-authenticated agent control socket. Sharing the
+    // port means CANVAS_PORT is enough for canvasctl while share URLs keep
+    // the exact same shape they had before.
+    share_router(shares, store).merge(canvasd::control::router(orchestrator, control_token))
+}
+
+fn spawn_share_server(
+    listener: std::net::TcpListener,
+    shares: ShareMap,
+    store: Arc<Store>,
+    orchestrator: Orchestrator,
+    control_token: String,
+) {
     if let Err(e) = listener.set_nonblocking(true) {
         warn!(error = %e, "share server could not go non-blocking — sharing disabled");
         return;
@@ -3872,8 +2963,13 @@ fn spawn_share_server(listener: std::net::TcpListener, shares: ShareMap, store: 
                 return;
             }
         };
-        if let Err(e) = axum::serve(listener, share_router(shares, store)).await {
-            warn!(error = %e, "share server stopped");
+        if let Err(e) = axum::serve(
+            listener,
+            embedded_router(shares, store, orchestrator, control_token),
+        )
+        .await
+        {
+            warn!(error = %e, "embedded server stopped");
         }
     });
 }
@@ -3989,14 +3085,50 @@ mod share_server_tests {
     /// Raw HTTP/1.0 GET over a real TCP stream — no client dependency, and
     /// the response is assertable as plain text.
     async fn raw_get(port: u16, path: &str) -> String {
+        raw_request(port, path, "Connection: close\r\n").await
+    }
+
+    /// Raw websocket-upgrade GET. The auth decision lives after axum's
+    /// upgrade extractor, so a plain GET would fail earlier with a generic
+    /// 400 and prove nothing about the token gate. Reads only headers: a
+    /// rejected upgrade keeps the HTTP connection alive, so read_to_end hangs.
+    async fn raw_ws_upgrade_get(port: u16, path: &str) -> String {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let mut stream = tokio::net::TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, port))
             .await
             .unwrap();
         stream
             .write_all(
-                format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
-                    .as_bytes(),
+                format!(
+                    "GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n"
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let mut out = Vec::new();
+        let mut buf = [0u8; 1024];
+        while !out.windows(4).any(|w| w == b"\r\n\r\n") {
+            let n = tokio::time::timeout(std::time::Duration::from_secs(2), stream.read(&mut buf))
+                .await
+                .expect("timed out waiting for upgrade response headers")
+                .unwrap();
+            if n == 0 {
+                break;
+            }
+            out.extend_from_slice(&buf[..n]);
+        }
+        String::from_utf8_lossy(&out).to_string()
+    }
+
+    async fn raw_request(port: u16, path: &str, headers: &str) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut stream = tokio::net::TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, port))
+            .await
+            .unwrap();
+        stream
+            .write_all(
+                format!("GET {path} HTTP/1.1\r\nHost: localhost\r\n{headers}\r\n").as_bytes(),
             )
             .await
             .unwrap();
@@ -4042,6 +3174,48 @@ mod share_server_tests {
         assert!(res.starts_with("HTTP/1.1 200"), "got: {res}");
         assert!(res.contains("\"version\":1"), "got: {res}");
     }
+
+    #[tokio::test]
+    async fn embedded_router_mounts_share_and_control_socket_together() {
+        let (state, shares, tmp) = fixture();
+        shares.lock().unwrap().insert(
+            "0123456789abcdef".to_string(),
+            (
+                "digest".to_string(),
+                "application/pdf".to_string(),
+                b"%PDF-1.4".to_vec(),
+            ),
+        );
+        let agents = Arc::new(canvasd::agent::AgentManager::new());
+        agents.set_transcript_dir(tmp.path().join(".canvas").join("transcripts"));
+        let orchestrator = canvasd::orchestrate::Orchestrator::new(
+            state.store.clone(),
+            agents,
+            tmp.path().to_path_buf(),
+            canvasd::orchestrate::tokio_task_spawner(),
+        );
+        let router = super::embedded_router(
+            state.shares.clone(),
+            state.store.clone(),
+            orchestrator,
+            "secret".to_string(),
+        );
+        let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0u16))
+            .await
+            .unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+
+        // The public share route survived the merge.
+        let res = raw_get(port, "/share/0123456789abcdef").await;
+        assert!(res.starts_with("HTTP/1.1 200"), "got: {res}");
+        // And /ws exists on the same port, gated before the upgrade. Without
+        // the merge this path would be a router 404 rather than an auth 401.
+        let res = raw_ws_upgrade_get(port, "/ws?token=wrong").await;
+        assert!(res.starts_with("HTTP/1.1 401"), "got: {res}");
+    }
 }
 
 /// Where the board lives when nothing points anywhere else.
@@ -4064,7 +3238,140 @@ fn pick_repo_root(canvas_repo: Option<&str>, cwd: &Path, home: &Path) -> PathBuf
     home.join("Canvas")
 }
 
+/// Quote one path for POSIX `/bin/sh` single-quote syntax.
+fn posix_shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+/// Contents of the generated Unix canvasctl shim. The native app cannot rely
+/// on a sibling canvasctl binary (the Tauri executable lives in a different
+/// target/install layout), so the shim re-enters this same executable through
+/// its hidden CLI mode. The implementation is the shared `canvasd::ctl` one,
+/// not a divergent copy.
+#[cfg(not(windows))]
+fn canvasctl_shim_contents(exe: &Path) -> String {
+    format!(
+        "#!/bin/sh\n# Generated by Canvas; overwritten when the app path changes.\nexec {} --canvasctl \"$@\"\n",
+        posix_shell_quote(&exe.to_string_lossy())
+    )
+}
+
+/// Windows command-file equivalent. `%*` preserves the original argument
+/// splitting closely enough for canvasctl's simple flag/value surface.
+#[cfg(windows)]
+fn canvasctl_shim_contents(exe: &Path) -> String {
+    format!(
+        "@echo off\r\nrem Generated by Canvas; overwritten when the app path changes.\r\n\"{}\" --canvasctl %*\r\n",
+        exe.to_string_lossy()
+    )
+}
+
+/// Install/update the user-level shim and return the directory PTYs should
+/// prepend to PATH. Lives in user config, never the board repo: checkout
+/// contents must not be able to replace the control binary agents execute.
+fn install_canvasctl_shim() -> Option<PathBuf> {
+    let dir = canvasd::paths::canvas_config_dir()?.join("bin");
+    let exe = std::env::current_exe()
+        .ok()
+        .and_then(|p| std::fs::canonicalize(&p).ok().or(Some(p)))?;
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join(if cfg!(windows) {
+        "canvasctl.cmd"
+    } else {
+        "canvasctl"
+    });
+    std::fs::write(&path, canvasctl_shim_contents(&exe)).ok()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).ok()?;
+    }
+    Some(dir)
+}
+
+/// Forward the transport-independent buses into the webview. This is the
+/// only Tauri-specific event adaptation left: control events keep the exact
+/// ServerMsg JSON shape, PTY chunks keep the existing base64 payload shape.
+fn forward_core_events(app: &AppHandle, orchestrator: &Orchestrator) {
+    let ui = app.clone();
+    let mut control_rx = orchestrator.subscribe_control();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            match control_rx.recv().await {
+                Ok(msg) => {
+                    if let Err(e) = ui.emit("canvas://control", msg) {
+                        warn!(error = %e, "forward control event failed");
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    warn!(skipped = n, "webview lagged on control events");
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
+    let ui = app.clone();
+    let mut pty_rx = orchestrator.subscribe_pty();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            match pty_rx.recv().await {
+                Ok((agent_id, bytes)) => {
+                    let payload = serde_json::json!({
+                        "agent_id": agent_id,
+                        "data": base64::engine::general_purpose::STANDARD.encode(bytes),
+                    });
+                    if let Err(e) = ui.emit("canvas://pty", payload) {
+                        warn!(error = %e, "forward pty event failed");
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    warn!(skipped = n, "webview lagged on pty output");
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+}
+
+#[cfg(test)]
+mod canvasctl_shim_tests {
+    use super::*;
+
+    #[test]
+    fn posix_single_quote_escapes_embedded_quotes() {
+        assert_eq!(posix_shell_quote("/tmp/plain"), "'/tmp/plain'");
+        assert_eq!(
+            posix_shell_quote("/tmp/o'clock/app"),
+            "'/tmp/o'\"'\"'clock/app'"
+        );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn unix_shim_execs_current_exe_in_canvasctl_mode() {
+        let text = canvasctl_shim_contents(Path::new(
+            "/Applications/Canvas.app/Contents/MacOS/canvas-app",
+        ));
+        assert!(text.starts_with("#!/bin/sh"));
+        assert!(text.contains("--canvasctl \"$@\""));
+        assert!(text.contains("'/Applications/Canvas.app/Contents/MacOS/canvas-app'"));
+    }
+}
+
 fn main() {
+    // Generated canvasctl shims re-enter this executable instead of relying
+    // on a sibling binary that packaged apps do not have. Handle that mode
+    // before any GUI/tracing initialization and exit like the standalone CLI.
+    if std::env::args().nth(1).as_deref() == Some("--canvasctl") {
+        let args = std::env::args().skip(2).collect();
+        if let Err(e) = canvasd::ctl::run_blocking(args) {
+            eprintln!("Error: {e:#}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -4137,37 +3444,77 @@ fn main() {
                     }
                 }
             }
-            let agents = AgentManager::new();
+            let agents = Arc::new(AgentManager::new());
             agents.set_transcript_dir(repo_root.join(".canvas").join("transcripts"));
+            // Make the generated re-entry shim visible inside PTYs. The exe
+            // dir still leads PATH (canvasd development layout); this dir is
+            // the first place a packaged native app can actually provide one.
+            match install_canvasctl_shim() {
+                Some(dir) => agents.prepend_path_entry(dir),
+                None => warn!(
+                    "could not install canvasctl shim — in-PTY orchestration may be unavailable"
+                ),
+            }
             let allowed_roots = initial_allowed_roots(&repo_root, &store);
-            // Embedded share server — bound before state management so
-            // share_create can build absolute URLs from the actual port.
-            // Ephemeral localhost-only: the daemon owns 4242, and a fixed
-            // port here would make coexisting runtimes fight over it.
+
+            // Transport-independent orchestration core. Tauri commands can be
+            // invoked outside a tokio thread-local context, so the core gets
+            // Tauri's launcher explicitly instead of assuming `tokio::spawn`.
+            let task_spawner: TaskSpawner = Arc::new(|task| {
+                drop(tauri::async_runtime::spawn(task));
+            });
+            let orchestrator = Orchestrator::new(
+                store.clone(),
+                agents.clone(),
+                repo_root.clone(),
+                task_spawner,
+            );
+
+            // Embedded localhost server — bound before state management so
+            // share_create can build absolute URLs and PTYs can receive the
+            // real control port. Ephemeral only: the daemon owns 4242, and a
+            // fixed port here would make coexisting runtimes fight over it.
             let shares: ShareMap = Arc::new(Mutex::new(HashMap::new()));
+            let control_token = canvasd::control::generate_token();
             let (share_listener, share_port) =
                 match std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0u16))
                     .and_then(|listener| listener.local_addr().map(|addr| (listener, addr.port())))
                 {
                     Ok((listener, port)) => (Some(listener), Some(port)),
                     Err(e) => {
-                        warn!(error = %e, "share server bind failed — sharing disabled");
+                        warn!(error = %e, "embedded server bind failed — sharing/control disabled");
                         (None, None)
                     }
                 };
+            if let Some(port) = share_port {
+                // Same contract canvasd injects: canvasctl inside the PTY
+                // reads exactly these variables and needs no native-specific mode.
+                agents.set_env("CANVAS_PORT", &port.to_string());
+                agents.set_env("CANVAS_TOKEN", &control_token);
+                #[cfg(debug_assertions)]
+                if std::env::var_os("CANVAS_PRINT_CONTROL_TOKEN").is_some() {
+                    // Opt-in debug-boot smoke-test hook; release builds ignore it.
+                    println!("CANVAS_CONTROL_PORT={port}");
+                    println!("CANVAS_CONTROL_TOKEN={control_token}");
+                }
+            }
             app.manage(CanvasState {
-                agents: Arc::new(agents),
+                agents,
                 store: store.clone(),
                 repo_root,
-                pending_results: Arc::new(Mutex::new(HashMap::new())),
-                pending_inputs: Arc::new(Mutex::new(HashMap::new())),
-                pending_fallbacks: Arc::new(Mutex::new(HashMap::new())),
+                pending_results: orchestrator.pending_results.clone(),
+                pending_inputs: orchestrator.pending_inputs.clone(),
+                pending_fallbacks: orchestrator.pending_fallbacks.clone(),
                 allowed_roots: Arc::new(Mutex::new(allowed_roots)),
                 shares: shares.clone(),
                 share_port,
+                orchestrator: orchestrator.clone(),
+                control_events: orchestrator.control_sender(),
+                pty_events: orchestrator.pty_sender(),
             });
+            forward_core_events(app.handle(), &orchestrator);
             if let Some(listener) = share_listener {
-                spawn_share_server(listener, shares, store);
+                spawn_share_server(listener, shares, store, orchestrator, control_token);
             }
 
             // 1s ticker: derived statuses + CANVAS_RESULT returns + diffs.
@@ -4316,7 +3663,7 @@ fn main() {
                         // edge-detected on the PTY tail.
                         if let Ok(rows) = state.store.loops_interval_due() {
                             for row in &rows {
-                                fire_loop(&handle, &state, row);
+                                fire_loop(&state, row);
                             }
                         }
                         if let Ok(rows) = state.store.loops_enabled() {
@@ -4338,7 +3685,7 @@ fn main() {
                                         .map(|t| t.contains(pat))
                                         .unwrap_or(false);
                                     if hit && !match_seen.get(&key).copied().unwrap_or(false) {
-                                        fire_loop(&handle, &state, row);
+                                        fire_loop(&state, row);
                                     }
                                     match_seen.insert(key, hit);
                                 }
@@ -4364,7 +3711,7 @@ fn main() {
                                         {
                                             continue;
                                         }
-                                        fire_loop(&handle, &state, row);
+                                        fire_loop(&state, row);
                                     }
                                 }
                             }
