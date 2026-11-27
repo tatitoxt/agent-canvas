@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { panelRoot, actionBtn } from "./panelChrome";
 import { useBoard } from "../store/board";
 import { isTauri } from "../daemon/tauriClient";
@@ -585,6 +585,14 @@ export function VaultPanel() {
     setSplitDraft((d) => (d && d.text !== vaultText ? null : d));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vaultText]);
+  // The mirror only means something while the editor is mounted (Source or
+  // Split view) in this vault — in Reading/Graph the editor unmounts and the
+  // mirror goes stale (reopening Source reinitializes from disk), and after
+  // a vault switch the draft belongs to another vault entirely.
+  useEffect(() => {
+    if (view !== "source" && view !== "split") setSplitDraft(null);
+  }, [view]);
+  useEffect(() => { setSplitDraft(null); }, [vaultDir]);
   const [genOpen, setGenOpen] = useState(false);
   const [newNote, setNewNote] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -697,15 +705,67 @@ export function VaultPanel() {
   );
   const tree = buildTree(filter ? shown : vaultEntries);
   const vaultName = activeVault?.name ?? vaultDir.replace(/\/+$/, "").split("/").pop() ?? "vault";
-  const pinCurrentNote = () => {
+  /** Heading currently at the top of the reading scrollport — the pin
+   * carries it so the canvas window opens scrolled to the same place the
+   * user was reading, like Deska's heading-anchored pins. Scoped to the
+   * exact card the pin was clicked in: split clones each have their own
+   * scrollport and position. */
+  const visibleHeading = (cardId: string): { line: number; title: string } | null => {
+    const root = document.querySelector(`.react-flow__node[data-id="${cardId}"]`);
+    if (!root) return null;
+    const els = Array.from(root.querySelectorAll('[id^="vh-"]')) as HTMLElement[];
+    if (!els.length) return null;
+    let sc: HTMLElement | null = els[0].parentElement;
+    while (sc && sc !== root) {
+      const oy = getComputedStyle(sc).overflowY;
+      if ((oy === "auto" || oy === "scroll") && sc.scrollHeight > sc.clientHeight) break;
+      sc = sc.parentElement;
+    }
+    if (!sc || sc === (root as unknown as HTMLElement)) return null;
+    const top = sc.getBoundingClientRect().top;
+    let current: HTMLElement | null = null;
+    for (const el of els) {
+      if (el.getBoundingClientRect().top <= top + 8) current = el;
+      else break;
+    }
+    if (!current) return null;
+    const line = Number(current.id.slice(3));
+    const h = headings.find((x) => x.line === line);
+    return h ? { line, title: h.title.trim().toLowerCase() } : null;
+  };
+
+  const pinCurrentNote = (e?: ReactMouseEvent) => {
     if (!vaultFile) return;
     const state = useBoard.getState();
+    const board = state.activeBoard;
+    // The card the pin was clicked in — the original vault card or any of
+    // its split clones; anchors and placement both follow that card.
+    const cardId =
+      (e?.currentTarget as HTMLElement | undefined)?.closest(".react-flow__node")?.getAttribute("data-id") ??
+      "panel-vault";
+    // Anchor-adjacent placement: the pinned window lands just right of the
+    // vault card it came from (slightly below its top edge), falling back to
+    // a viewport-relative spot when the panel isn't on the canvas.
+    const panel = state.panelNodes[board]?.[cardId];
     const viewport = state.viewportRect;
-    const position = viewport
-      ? { x: viewport.left + (viewport.right - viewport.left) * 0.34, y: viewport.top + (viewport.bottom - viewport.top) * 0.24 }
-      : undefined;
-    mdNodeAdd(vaultFile.path, undefined, position);
-    state.closePanelNode("panel-vault");
+    const position = panel
+      ? { x: panel.x + panel.w + 40, y: panel.y + 48 }
+      : viewport
+        ? { x: viewport.left + (viewport.right - viewport.left) * 0.34, y: viewport.top + (viewport.bottom - viewport.top) * 0.24 }
+        : undefined;
+    const heading = visibleHeading(cardId) ?? undefined;
+    // Pinning closes the card — flush any unsaved Source-editor draft first
+    // or the edit dies with the unmounted editor and the pinned window
+    // misleadingly shows the older saved bytes.
+    if (
+      (view === "source" || view === "split") &&
+      splitDraft?.path === vaultFile.path &&
+      splitDraft.text !== vaultFile.text
+    ) {
+      vaultWrite(vaultFile.path, splitDraft.text);
+    }
+    mdNodeAdd(vaultFile.path, undefined, position, heading);
+    state.closePanelNode(cardId);
     state.requestNav("canvas");
     state.requestView();
     notify("Added the live note window to the board.");

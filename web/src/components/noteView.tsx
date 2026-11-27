@@ -324,7 +324,10 @@ export function ReadingView({ text, onLink, onTag, onToggleTask, depth = 0, embe
       const size = [20, 16, 14, 13, 13, 13][h[1].length - 1];
       const isFolded = folded.has(i);
       els.push(
-        <div key={i} id={`vh-${i}`} style={{ fontSize: size, fontWeight: 700, margin: "16px 0 6px", color: "var(--cv-accent)", letterSpacing: 0.2 }}>
+        // Heading ids exist only at depth 0 — embedded notes re-render the
+        // same lines and would otherwise duplicate `vh-<line>` anchors in the
+        // same document, hijacking scroll-to-heading lookups.
+        <div key={i} id={depth === 0 ? `vh-${i}` : undefined} style={{ fontSize: size, fontWeight: 700, margin: "16px 0 6px", color: "var(--cv-accent)", letterSpacing: 0.2 }}>
           <span
             onClick={() => toggleFold(i)}
             title={isFolded ? "unfold" : "fold"}

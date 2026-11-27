@@ -2,6 +2,7 @@ import { lazy, memo, Suspense, useEffect, useRef, useState } from "react";
 import { NodeResizer, type NodeProps, type Node } from "@xyflow/react";
 import type { MdNodeData } from "../board/types";
 import { resolveNotePath } from "./notePath";
+import { headingLineFor } from "./noteHeadings";
 import { useBoard } from "../store/board";
 import { countRender } from "../lib/renderProbe";
 import { Icon } from "./icons";
@@ -36,6 +37,29 @@ export const MdNode = memo(function MdNode({ id, data, selected }: NodeProps<Nod
   const dirty = useRef(false);
   const editBase = useRef(text ?? "");
   const basename = data.path.split("/").pop() ?? data.path;
+  const heading = useBoard((s) => s.mdHeadings[s.activeBoard]?.[id]);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const scrolledFor = useRef<number | null>(null);
+
+  // Pinned-at-heading: scroll the reading view to the heading the user was
+  // reading when they pinned the note. Runs once per mount — the 4s poll
+  // must never yank the scroll back while the user reads elsewhere.
+  useEffect(() => {
+    if (!heading || text == null || editing) return;
+    if (scrolledFor.current != null) return;
+    const line = headingLineFor(text, heading);
+    if (line == null) return;
+    let tries = 0;
+    const t = setInterval(() => {
+      const el = rootRef.current?.querySelector(`#vh-${line}`);
+      if (el) {
+        el.scrollIntoView({ block: "start" });
+        scrolledFor.current = line;
+        clearInterval(t);
+      } else if (++tries > 20) clearInterval(t);
+    }, 100);
+    return () => clearInterval(t);
+  }, [heading, text == null, editing]);
 
   useEffect(() => {
     if (!dirty.current) setDraft(text ?? "");
@@ -62,7 +86,7 @@ export const MdNode = memo(function MdNode({ id, data, selected }: NodeProps<Nod
   };
 
   return (
-    <div className="glass-panel" style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 12, border: "1px solid var(--cv-glass-edge)" }}>
+    <div ref={rootRef} className="glass-panel" style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 12, border: "1px solid var(--cv-glass-edge)" }}>
       <NodeResizer isVisible={selected} minWidth={260} minHeight={180} handleClassName="cv-node-resize-handle" lineClassName="cv-node-resize-line"
         onResizeEnd={(_, p) => resizeMdNode(id, Math.round(p.width), Math.round(p.height), true, boardId, { x: p.x, y: p.y })} />
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--cv-glass-edge)", fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-dim)" }}>
