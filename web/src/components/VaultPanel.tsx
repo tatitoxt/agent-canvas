@@ -746,6 +746,12 @@ export function VaultPanel() {
         ? { x: viewport.left + (viewport.right - viewport.left) * 0.34, y: viewport.top + (viewport.bottom - viewport.top) * 0.24 }
         : undefined;
     const heading = visibleHeading(cardId) ?? undefined;
+    // Pinning closes the card — flush any unsaved Source-editor draft first
+    // or the edit dies with the unmounted editor and the pinned window
+    // misleadingly shows the older saved bytes.
+    if (splitDraft?.path === vaultFile.path && splitDraft.text !== vaultFile.text) {
+      vaultWrite(vaultFile.path, splitDraft.text);
+    }
     mdNodeAdd(vaultFile.path, undefined, position, heading);
     state.closePanelNode(cardId);
     state.requestNav("canvas");
