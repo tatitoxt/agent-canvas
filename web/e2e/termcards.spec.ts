@@ -431,7 +431,6 @@ test("reconnecting rebuilds a live terminal from scrollback without duplicate hi
 
   await page.evaluate(() => {
     const socket = (window as any).__canvasSockets[0] as WebSocket;
-    socket.onclose = null;
     socket.close();
   });
   await page.waitForFunction(() => (window as any).__canvasSockets.length >= 2, { timeout: 12_000 });
@@ -493,6 +492,83 @@ test("PTY resize made while disconnected is replayed after reconnect", async ({ 
   expect(after.rows, "reconnected PTY should adopt the taller terminal").toBeGreaterThan(before.rows);
 });
 
+test("PTY resize stays pending until the daemon ACK arrives", async ({ page }) => {
+  await page.addInitScript(() => {
+    const NativeWebSocket = window.WebSocket;
+    const sockets: WebSocket[] = [];
+    Object.defineProperties(window, {
+      __canvasSockets: { value: sockets },
+      __resizeFrames: { value: [] },
+      __resizeAckDropped: { value: 0, writable: true },
+      __dropResizeAcks: { value: false, writable: true },
+    });
+    window.WebSocket = new Proxy(NativeWebSocket, {
+      construct(target, args) {
+        const socket = Reflect.construct(target, args) as WebSocket;
+        sockets.push(socket);
+        const send = socket.send.bind(socket);
+        socket.send = (data) => {
+          if (typeof data === "string") {
+            const message = JSON.parse(data);
+            if (message.cmd === "pty_resize") (window as any).__resizeFrames.push(message);
+          }
+          send(data);
+        };
+        const onmessage = Object.getOwnPropertyDescriptor(NativeWebSocket.prototype, "onmessage");
+        if (onmessage?.get && onmessage.set) {
+          Object.defineProperty(socket, "onmessage", {
+            configurable: true,
+            get() { return onmessage.get!.call(socket); },
+            set(value) {
+              if (typeof value === "function") {
+                onmessage.set!.call(socket, (event: MessageEvent) => {
+                if (typeof event.data === "string") {
+                  const message = JSON.parse(event.data);
+                  if (message.type === "pty_resized" && (window as any).__dropResizeAcks) {
+                    (window as any).__resizeAckDropped += 1;
+                    return;
+                  }
+                }
+                  value.call(socket, event);
+                });
+              } else {
+                onmessage.set!.call(socket, value);
+              }
+            },
+          });
+        }
+        return socket;
+      },
+    });
+  });
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+
+  await page.evaluate(() => { (window as any).__dropResizeAcks = true; });
+  const handle = page.getByTestId("terminal-resize-handle");
+  const panel = handle.locator("xpath=..");
+  const beforeBox = await panel.boundingBox();
+  const grip = await handle.boundingBox();
+  expect(beforeBox).not.toBeNull();
+  expect(grip).not.toBeNull();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + grip!.width / 2 + 160, grip!.y + grip!.height / 2 + 90, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBeGreaterThan(beforeBox!.width + 80);
+  await expect.poll(() => page.evaluate(() => (window as any).__resizeAckDropped)).toBeGreaterThan(0);
+
+  // The daemon already applied the first request, but the browser never saw
+  // its ACK. Reconnect must replay it instead of treating WebSocket.send as
+  // proof of application.
+  await page.evaluate(() => (window as any).__canvasSockets[0].close());
+  await page.waitForFunction(() => (window as any).__canvasSockets.length >= 2, { timeout: 12_000 });
+  await expect(page.locator("[data-testid='daemon-status']")).toHaveAttribute("aria-label", "Canvas daemon connected", { timeout: 12_000 });
+  await expect.poll(() => page.evaluate(() => (window as any).__resizeFrames.length)).toBeGreaterThan(1);
+  await page.evaluate(() => { (window as any).__dropResizeAcks = false; });
+});
+
 test("reconnecting a terminal tab without a pending resize does not overwrite another tab's PTY size", async ({ browser }) => {
   const tabA = await browser.newPage();
   const tabB = await browser.newPage();
@@ -532,6 +608,10 @@ test("reconnecting a terminal tab without a pending resize does not overwrite an
   await tabB.goto(`http://127.0.0.1:${stackInfo.port}/?token=${stackInfo.token}`);
   await expect(tabB.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
   const termB = await open(tabB);
+  const noPendingResize = (page: import("@playwright/test").Page) =>
+    page.evaluate((id) => !(window as any).useBoard?.getState().pendingPtyResize[id], agentId);
+  await expect.poll(() => noPendingResize(tabA)).toBe(true);
+  await expect.poll(() => noPendingResize(tabB)).toBe(true);
   const sizeOn = async (page: import("@playwright/test").Page, terminal: import("@playwright/test").Locator, marker: string) => {
     await terminal.click();
     await page.keyboard.type(`printf '${marker}:'; stty size`);
@@ -561,6 +641,7 @@ test("reconnecting a terminal tab without a pending resize does not overwrite an
   await expect.poll(async () => (await handle.locator("xpath=..").boundingBox())?.width ?? 0).toBeGreaterThan(beforeBox!.width + 100);
   await expect.poll(async () => (await handle.locator("xpath=..").boundingBox())?.height ?? 0).toBeGreaterThan(beforeBox!.height + 50);
   const newSharedSize = await sizeOn(tabB, termB, "shared-after-tab-b-resize");
+  await expect.poll(() => noPendingResize(tabB)).toBe(true);
   expect(newSharedSize.cols).toBeGreaterThan(initial.cols);
   expect(newSharedSize.rows).toBeGreaterThan(initial.rows);
   await disconnect(tabB);

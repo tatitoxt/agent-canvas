@@ -1676,18 +1676,12 @@ fn handle_client_msg(text: &str, state: &Arc<AppState>, send_control: &impl Fn(S
         ClientMsg::PauseAll { board_id } => {
             let board = board_id.unwrap_or_else(|| "main".to_string());
             let n = state.agents.suspend_many(&loop_targets(state, &board, "*"));
-            send_control(ServerMsg::Error {
-                agent_id: None,
-                message: format!("paused {n} agents"),
-            });
+            send_control(ServerMsg::AgentProcessesPaused { count: n });
         }
         ClientMsg::ResumeAll { board_id } => {
             let board = board_id.unwrap_or_else(|| "main".to_string());
             let n = state.agents.resume_many(&loop_targets(state, &board, "*"));
-            send_control(ServerMsg::Error {
-                agent_id: None,
-                message: format!("resumed {n} agents"),
-            });
+            send_control(ServerMsg::AgentProcessesResumed { count: n });
         }
         ClientMsg::Transcript { agent_id } => {
             // Dead agents keep no live PTY — replay their on-disk

@@ -453,6 +453,12 @@ pub enum ServerMsg {
         agent_id: Option<String>,
         message: String,
     },
+    AgentProcessesPaused {
+        count: usize,
+    },
+    AgentProcessesResumed {
+        count: usize,
+    },
     PtyResized {
         agent_id: String,
         request_id: String,

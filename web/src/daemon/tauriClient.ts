@@ -20,9 +20,12 @@ export class TauriCanvasClient {
   private handlers: Handlers;
   private snapshotReady = false;
   private pendingPty: Array<{ agentId: string; bytes: Uint8Array }> = [];
+  private ready: Promise<void>;
+  private resolveReady!: () => void;
 
   constructor(handlers: Handlers) {
     this.handlers = handlers;
+    this.ready = new Promise((resolve) => { this.resolveReady = resolve; });
     // Install both event listeners before requesting the snapshot. The
     // snapshot command emits PTY scrollback while it builds that response;
     // queue those bytes until the store has reset existing live terminals.
@@ -42,16 +45,18 @@ export class TauriCanvasClient {
         handlers.onControl(snap as Parameters<Handlers["onControl"]>[0]);
         this.snapshotReady = true;
         this.pendingPty.splice(0).forEach(({ agentId, bytes }) => handlers.onPty(agentId, bytes));
+        this.resolveReady();
       })
       .catch((error) => {
         this.snapshotReady = true;
         this.pendingPty.splice(0).forEach(({ agentId, bytes }) => handlers.onPty(agentId, bytes));
         console.error(error);
+        this.resolveReady();
       });
   }
 
   whenOpen(): Promise<void> {
-    return Promise.resolve();
+    return this.ready;
   }
   isClosed(): boolean {
     return false;

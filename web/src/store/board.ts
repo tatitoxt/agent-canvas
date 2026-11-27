@@ -1455,6 +1455,12 @@ export const useBoard = create<BoardState>((set, get) => ({
           case "session_digest":
             set({ digest: msg.text });
             break;
+          case "agent_processes_paused":
+            get().notify(`paused ${msg.count} agents`);
+            break;
+          case "agent_processes_resumed":
+            get().notify(`resumed ${msg.count} agents`);
+            break;
           case "memory": {
             set((st) => ({ memories: { ...st.memories, [msg.node_id]: msg.text } }));
             break;
@@ -1540,7 +1546,10 @@ export const useBoard = create<BoardState>((set, get) => ({
               set({ pendingPtyResize: rest });
             }
           });
-        } else if (accepted) {
+        } else if (accepted && isTauri()) {
+          // The native invoke resolves only after Rust applied the resize.
+          // WebSocket `send()` only queues bytes locally; keep that request
+          // pending until the daemon's matching `pty_resized` control frame.
           const latest = get().pendingPtyResize[agentId];
           if (latest?.requestId === requestId) {
             const rest = { ...get().pendingPtyResize };
@@ -3461,7 +3470,9 @@ export const useBoard = create<BoardState>((set, get) => ({
       });
     } else if (!accepted) {
       return;
-    } else {
+    } else if (isTauri()) {
+      // In Tauri the successful command response confirms Rust applied it.
+      // The WebSocket path must wait for the server's request-id ACK.
       const pendingPtyResize = { ...get().pendingPtyResize };
       delete pendingPtyResize[agentId];
       set({ pendingPtyResize });

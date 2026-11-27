@@ -9,6 +9,26 @@ import { TauriCanvasClient } from "./tauriClient";
 describe("Tauri PTY startup replay", () => {
   beforeEach(() => vi.resetAllMocks());
 
+  it("settles a native resize only after the command succeeds", async () => {
+    tauriMocks.listen.mockImplementation(async () => () => {});
+    let resolveResize!: () => void;
+    tauriMocks.invoke.mockImplementation((cmd: string) => {
+      if (cmd === "snapshot") return Promise.resolve({ type: "snapshot" });
+      if (cmd === "pty_resize") return new Promise<void>((resolve) => { resolveResize = resolve; });
+      return Promise.resolve(null);
+    });
+    const controls: unknown[] = [];
+    const client = new TauriCanvasClient({ onControl: (message) => controls.push(message), onPty: () => {} });
+
+    const resize = client.resize("agent-a", 91, 23, "resize-1");
+    await vi.waitFor(() => expect(tauriMocks.invoke).toHaveBeenCalledWith("pty_resize", { agentId: "agent-a", cols: 91, rows: 23 }));
+    expect(controls).toEqual([]);
+
+    resolveResize();
+    await expect(resize).resolves.toBe(true);
+    expect(controls).toContainEqual({ type: "pty_resized", agent_id: "agent-a", request_id: "resize-1" });
+  });
+
   it("waits for listeners, applies the snapshot, then delivers queued PTY history", async () => {
     const eventHandlers: Record<string, (event: { payload: any }) => void> = {};
     tauriMocks.listen.mockImplementation(async (name: string, handler: (event: { payload: any }) => void) => {
@@ -19,17 +39,21 @@ describe("Tauri PTY startup replay", () => {
     let resolveSnapshot!: (snapshot: unknown) => void;
     tauriMocks.invoke.mockReturnValue(new Promise((resolve) => { resolveSnapshot = resolve; }));
     const order: string[] = [];
-    new TauriCanvasClient({
+    const client = new TauriCanvasClient({
       onControl: (message) => { if (message.type === "snapshot") order.push("snapshot"); },
       onPty: (_agentId, bytes) => { expect(new TextDecoder().decode(bytes)).toBe("history"); order.push("pty"); },
     });
+    let ready = false;
+    void client.whenOpen().then(() => { ready = true; });
 
     await vi.waitFor(() => expect(tauriMocks.invoke).toHaveBeenCalledWith("snapshot"));
     eventHandlers["canvas://pty"]({ payload: { agent_id: "agent-a", data: "aGlzdG9yeQ==" } });
     expect(order).toEqual([]);
+    expect(ready).toBe(false);
 
     resolveSnapshot({ type: "snapshot" });
     await vi.waitFor(() => expect(order).toEqual(["snapshot", "pty"]));
+    await vi.waitFor(() => expect(ready).toBe(true));
 
     eventHandlers["canvas://pty"]({ payload: { agent_id: "agent-a", data: "aGlzdG9yeQ==" } });
     expect(order).toEqual(["snapshot", "pty", "pty"]);

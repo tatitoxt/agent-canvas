@@ -65,6 +65,7 @@ export type ServerMsg =
   | { type: "activity"; agent_id: string; line: string }
   | { type: "diff"; agent_id: string; files: number; paths?: string[]; branch?: string }
   | { type: "error"; agent_id: string | null; message: string }
+  | { type: "agent_processes_paused" | "agent_processes_resumed"; count: number }
   | { type: "pty_resized"; agent_id: string; request_id: string }
   | { type: "needs_approval"; agent_id: string; line: string }
   | { type: "needs_attention"; agent_id: string; reason: string }
