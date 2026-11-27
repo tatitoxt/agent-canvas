@@ -144,6 +144,14 @@ Live events:
 | `GET /health`             | —                       | `{status, version}`. |
 | `GET /ws?token=…`         | token                   | The channel above. |
 | `GET /api/github/{*rest}?…` | `Authorization: Bearer` | Proxies `api.github.com` via `gh api` when `gh` is installed (authenticated), `curl` otherwise. |
+| `POST /api/share`         | `Authorization: Bearer` | Publish base64 artifact bytes (decoded cap 8 MB) → `{id, url}`. Lives only while the daemon runs. |
+| `GET /share/{id}`         | —                       | Public by design: the unguessable 16-hex id is the capability. Streams the bytes inline with their mime type. |
+| `GET /api/export`         | `Authorization: Bearer` | Full board-state dump (boards, layout, agents, workspaces, delegations), `version: 1`. |
+
+In the Tauri shell these endpoints are native commands (`github_proxy`,
+`share_create`, `export_state`) plus an embedded localhost server that
+serves `/share/{id}` and `/api/export` on an ephemeral port — see
+ARCHITECTURE.md.
 
 ## `canvasctl`
 

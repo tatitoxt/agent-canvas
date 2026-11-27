@@ -3175,7 +3175,7 @@ export const useBoard = create<BoardState>((set, get) => ({
           void navigator.clipboard.writeText(url).catch(() => {});
           reply(`published "${hit.title}" → ${url} (copied — live while the app runs)`);
         } else {
-          reply("share needs the daemon on :4242");
+          reply("publish failed — neither the daemon nor the native share server answered");
         }
       });
       return;

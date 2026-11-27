@@ -24,6 +24,10 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::mpsc;
 use tracing::warn;
 
+/// Published artifacts: share id → (title, mime, bytes). Same shape as the
+/// daemon's — one contract, two serving runtimes.
+type ShareMap = Arc<Mutex<HashMap<String, (String, String, Vec<u8>)>>>;
+
 struct CanvasState {
     agents: Arc<AgentManager>,
     store: Arc<Store>,
@@ -40,6 +44,11 @@ struct CanvasState {
     /// plus user-granted vault/workspace roots. Mutex because mounting a
     /// vault from the UI appends at runtime.
     allowed_roots: Arc<Mutex<Vec<PathBuf>>>,
+    /// In-memory published artifacts behind the embedded share server.
+    shares: ShareMap,
+    /// Port the embedded share server bound (127.0.0.1 only). None when the
+    /// bind failed — share_create then errors instead of minting dead links.
+    share_port: Option<u16>,
 }
 
 /// Per-spawn retry state: when a fresh PTY dies within seconds, the next
@@ -3613,6 +3622,428 @@ fn chrome_bookmarks() -> Vec<ChromeBookmark> {
     out
 }
 
+/// One shelled-out probe: `Some((success, stdout))` when the binary ran at
+/// all, `None` when it couldn't even spawn (not installed). The process
+/// output type is sealed, so tests inject this shape rather than fabricate
+/// a `std::process::Output`.
+type ProcResult = Option<(bool, Vec<u8>)>;
+
+/// Boxed process runner — injectable so the gh→curl fallback chain is
+/// unit-testable without touching the real PATH.
+type ProcRunner = dyn FnMut(
+        String,
+        Vec<String>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ProcResult> + Send>>
+    + Send;
+
+fn system_proc_runner(
+    cmd: String,
+    args: Vec<String>,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = ProcResult> + Send>> {
+    Box::pin(async move {
+        tokio::process::Command::new(cmd)
+            .args(&args)
+            .output()
+            .await
+            .ok()
+            .map(|o| (o.status.success(), o.stdout))
+    })
+}
+
+/// GitHub REST response body for `path` (e.g. `repos/o/r/pulls?state=open`):
+/// `gh api` first — it carries the user's auth, so private repos work and
+/// the rate limit is the authenticated one — then unauthenticated curl,
+/// then the same unavailable-message JSON the daemon serves. Mirrors
+/// canvasd's `/api/github` exactly; `std::process::Output` can't be
+/// constructed in tests, so the probe results arrive as `(success, stdout)`.
+async fn github_body(path: &str, run: &mut ProcRunner) -> Vec<u8> {
+    if let Some((true, stdout)) = run("gh".into(), vec!["api".into(), path.to_string()]).await {
+        return stdout;
+    }
+    match run(
+        "curl".into(),
+        vec![
+            "-sf".into(),
+            "-H".into(),
+            "Accept: application/vnd.github+json".into(),
+            format!("https://api.github.com/{path}"),
+        ],
+    )
+    .await
+    {
+        Some((true, stdout)) => stdout,
+        _ => br#"{"message":"github unavailable - install gh or retry later"}"#.to_vec(),
+    }
+}
+
+/// GET /api/github's native answer — the panel's fetch goes through this
+/// command instead of a daemon route. Returns the upstream body verbatim
+/// (it is always JSON), exactly like the daemon's proxy.
+#[tauri::command]
+async fn github_proxy(path: String) -> Result<String, String> {
+    let body = github_body(&path, &mut system_proc_runner).await;
+    Ok(String::from_utf8_lossy(&body).to_string())
+}
+
+#[cfg(test)]
+mod github_proxy_tests {
+    use super::{github_body, ProcResult};
+    use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex};
+
+    /// Every process invocation the fallback chain made, in order.
+    type RecordedCalls = Arc<Mutex<Vec<(String, Vec<String>)>>>;
+
+    /// Scripted runner: records every (cmd, args) invocation and answers
+    /// from a queue of canned results keyed in call order.
+    struct Scripted {
+        calls: RecordedCalls,
+        answers: VecDeque<ProcResult>,
+    }
+
+    impl Scripted {
+        fn new(answers: Vec<ProcResult>) -> (Self, RecordedCalls) {
+            let calls = Arc::new(Mutex::new(Vec::new()));
+            (
+                Scripted {
+                    calls: calls.clone(),
+                    answers: answers.into(),
+                },
+                calls,
+            )
+        }
+
+        fn runner(
+            mut self,
+        ) -> impl FnMut(
+            String,
+            Vec<String>,
+        )
+            -> std::pin::Pin<Box<dyn std::future::Future<Output = ProcResult> + Send>>
+               + Send {
+            move |cmd, args| {
+                self.calls.lock().unwrap().push((cmd, args));
+                let answer = self.answers.pop_front().unwrap_or(None);
+                Box::pin(async move { answer })
+            }
+        }
+    }
+
+    fn ok(body: &str) -> ProcResult {
+        Some((true, body.as_bytes().to_vec()))
+    }
+
+    fn failed() -> ProcResult {
+        Some((false, Vec::new()))
+    }
+
+    #[tokio::test]
+    async fn gh_success_short_circuits_curl() {
+        let (scripted, calls) = Scripted::new(vec![ok("[{\"number\":1}]")]);
+        let mut runner = scripted.runner();
+        let body = github_body("repos/o/r/pulls?state=open", &mut runner).await;
+        assert_eq!(body, b"[{\"number\":1}]");
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "curl must not run when gh succeeds");
+        assert_eq!(
+            calls[0],
+            (
+                "gh".to_string(),
+                vec!["api".to_string(), "repos/o/r/pulls?state=open".to_string()]
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn gh_failure_falls_back_to_anonymous_curl() {
+        let (scripted, calls) = Scripted::new(vec![failed(), ok("{\"items\":[]}")]);
+        let mut runner = scripted.runner();
+        let body = github_body("repos/o/r/issues", &mut runner).await;
+        assert_eq!(body, b"{\"items\":[]}");
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[1].0, "curl");
+        assert_eq!(
+            calls[1].1,
+            vec![
+                "-sf".to_string(),
+                "-H".to_string(),
+                "Accept: application/vnd.github+json".to_string(),
+                "https://api.github.com/repos/o/r/issues".to_string()
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_gh_and_curl_serve_the_unavailable_message() {
+        // None = the binary never even spawned (not installed).
+        let (scripted, _) = Scripted::new(vec![None, None]);
+        let mut runner = scripted.runner();
+        let body = github_body("repos/o/r/pulls", &mut runner).await;
+        let text = String::from_utf8(body).unwrap();
+        assert!(text.contains("github unavailable"));
+    }
+
+    #[tokio::test]
+    async fn gh_success_with_empty_stdout_wins_over_curl() {
+        // `gh api` success is authoritative even when the body is empty —
+        // matching the daemon, which returns gh's stdout verbatim on exit 0.
+        let (scripted, calls) = Scripted::new(vec![Some((true, Vec::new()))]);
+        let mut runner = scripted.runner();
+        let body = github_body("user", &mut runner).await;
+        assert!(body.is_empty());
+        assert_eq!(calls.lock().unwrap().len(), 1);
+    }
+}
+
+/// State for the embedded share server: the published bytes plus the store
+/// the export endpoint reads from.
+#[derive(Clone)]
+struct ShareServerState {
+    shares: ShareMap,
+    store: Arc<Store>,
+}
+
+/// GET /share/{id} — same contract as the daemon's: public (the unguessable
+/// id is the capability), bytes streamed inline with their mime type.
+async fn share_server_get(
+    axum::extract::State(state): axum::extract::State<ShareServerState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let doc = state.shares.lock().unwrap().get(&id).cloned();
+    match doc {
+        Some((title, mime, body)) => (
+            [
+                (axum::http::header::CONTENT_TYPE, mime),
+                (
+                    axum::http::header::CONTENT_DISPOSITION,
+                    canvasd::share::content_disposition(&title),
+                ),
+            ],
+            axum::body::Body::from(body),
+        )
+            .into_response(),
+        None => (
+            axum::http::StatusCode::NOT_FOUND,
+            "share not found — it lives only while the app runs",
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/export — the same store dump the daemon serves. Localhost-only
+/// exposure: this reveals nothing a local process can't already read from
+/// `.canvas/board.db` on disk (unlike the daemon, which can be LAN-bound
+/// and therefore keeps it behind the session token).
+async fn share_server_export(
+    axum::extract::State(state): axum::extract::State<ShareServerState>,
+) -> axum::Json<serde_json::Value> {
+    axum::Json(canvasd::export::state_json(&state.store))
+}
+
+/// The share server's routes, factored out so tests can serve the real
+/// router over a real socket — axum 0.8's `{id}` path syntax is exactly
+/// the kind of wiring detail a handler-level test never exercises.
+fn share_router(shares: ShareMap, store: Arc<Store>) -> axum::Router {
+    axum::Router::new()
+        .route("/share/{id}", axum::routing::get(share_server_get))
+        .route("/api/export", axum::routing::get(share_server_export))
+        .with_state(ShareServerState { shares, store })
+}
+
+/// Embedded HTTP server behind share-by-link. The native shell runs no
+/// daemon, but a share link is only useful when a browser can open it —
+/// the webview's `tauri://` origin can't serve anything. Binds 127.0.0.1 on
+/// an ephemeral port: never a fixed one, because the daemon owns 4242 and
+/// two coexisting Canvas runtimes must not fight over a well-known port.
+/// The share URL handed to the user carries the actual port, so the
+/// ephemerality is invisible to the copy-paste flow.
+fn spawn_share_server(listener: std::net::TcpListener, shares: ShareMap, store: Arc<Store>) {
+    if let Err(e) = listener.set_nonblocking(true) {
+        warn!(error = %e, "share server could not go non-blocking — sharing disabled");
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        let listener = match tokio::net::TcpListener::from_std(listener) {
+            Ok(l) => l,
+            Err(e) => {
+                warn!(error = %e, "share server listener conversion failed");
+                return;
+            }
+        };
+        if let Err(e) = axum::serve(listener, share_router(shares, store)).await {
+            warn!(error = %e, "share server stopped");
+        }
+    });
+}
+
+/// What the daemon's POST /api/share answers, but with an absolute URL:
+/// there is no web origin in the native shell, so the copied link has to
+/// carry host and port with it.
+#[derive(serde::Serialize)]
+struct ShareCreated {
+    id: String,
+    url: String,
+}
+
+/// POST /api/share's native answer — publish artifact bytes in memory and
+/// hand back the browser-openable link. Lives exactly as long as the app
+/// does, same as the daemon's version.
+#[tauri::command]
+fn share_create(
+    state: State<'_, CanvasState>,
+    title: String,
+    mime: String,
+    b64: String,
+) -> Result<ShareCreated, String> {
+    let body = canvasd::share::decode_body(&b64).map_err(|e| e.message().to_string())?;
+    let port = state
+        .share_port
+        .ok_or_else(|| "share server unavailable — restart the app".to_string())?;
+    let id = canvasd::share::new_share_id();
+    state.shares.lock().unwrap().insert(
+        id.clone(),
+        (
+            canvasd::share::normalize_title(&title),
+            canvasd::share::normalize_mime(&mime),
+            body,
+        ),
+    );
+    Ok(ShareCreated {
+        url: format!("http://127.0.0.1:{port}/share/{id}"),
+        id,
+    })
+}
+
+/// GET /api/export's native answer as a command — the same JSON the
+/// embedded server answers over HTTP for curl-driven workflows. Full
+/// board-state dump: boards, layout, agents, workspaces, delegations.
+#[tauri::command]
+fn export_state(state: State<'_, CanvasState>) -> Result<serde_json::Value, String> {
+    Ok(canvasd::export::state_json(&state.store))
+}
+
+#[cfg(test)]
+mod share_server_tests {
+    use super::{share_server_export, share_server_get, ShareMap, ShareServerState};
+    use axum::extract::{Path, State as AxumState};
+    use axum::response::IntoResponse;
+    use canvasd::store::Store;
+    use std::sync::{Arc, Mutex};
+
+    fn fixture() -> (ShareServerState, ShareMap, tempfile::TempDir) {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(Store::open(tmp.path()).unwrap());
+        let shares: ShareMap = Arc::new(Mutex::new(std::collections::HashMap::new()));
+        let state = ShareServerState {
+            shares: shares.clone(),
+            store,
+        };
+        (state, shares, tmp)
+    }
+
+    #[tokio::test]
+    async fn serves_stored_bytes_with_mime_and_pdf_disposition() {
+        let (state, shares, _tmp) = fixture();
+        shares.lock().unwrap().insert(
+            "abcdef0123456789".to_string(),
+            (
+                "digest".to_string(),
+                "application/pdf".to_string(),
+                b"%PDF".to_vec(),
+            ),
+        );
+        let response = share_server_get(AxumState(state), Path("abcdef0123456789".to_string()))
+            .await
+            .into_response();
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        assert_eq!(response.headers()["content-type"], "application/pdf");
+        assert_eq!(
+            response.headers()["content-disposition"],
+            "inline; filename=\"digest.pdf\""
+        );
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&body[..], b"%PDF");
+    }
+
+    #[tokio::test]
+    async fn unknown_share_ids_are_a_plain_404() {
+        let (state, _, _tmp) = fixture();
+        let response = share_server_get(AxumState(state), Path("0000000000000000".to_string()))
+            .await
+            .into_response();
+        assert_eq!(response.status(), axum::http::StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn export_answers_the_versioned_state_dump() {
+        let (state, _, _tmp) = fixture();
+        let axum::Json(dump) = share_server_export(AxumState(state)).await;
+        assert_eq!(dump["version"], 1);
+        assert!(!dump["boards"].as_array().unwrap().is_empty());
+    }
+
+    /// Raw HTTP/1.0 GET over a real TCP stream — no client dependency, and
+    /// the response is assertable as plain text.
+    async fn raw_get(port: u16, path: &str) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut stream = tokio::net::TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, port))
+            .await
+            .unwrap();
+        stream
+            .write_all(
+                format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let mut out = Vec::new();
+        stream.read_to_end(&mut out).await.unwrap();
+        String::from_utf8_lossy(&out).to_string()
+    }
+
+    #[tokio::test]
+    async fn share_routes_roundtrip_over_a_real_socket() {
+        let (state, shares, _tmp) = fixture();
+        shares.lock().unwrap().insert(
+            "0123456789abcdef".to_string(),
+            (
+                "digest".to_string(),
+                "application/pdf".to_string(),
+                b"%PDF-1.4".to_vec(),
+            ),
+        );
+        let router = super::share_router(state.shares.clone(), state.store.clone());
+        let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0u16))
+            .await
+            .unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+
+        // The share link itself: exact bytes, mime, inline disposition.
+        let res = raw_get(port, "/share/0123456789abcdef").await;
+        assert!(res.starts_with("HTTP/1.1 200"), "got: {res}");
+        assert!(res.contains("content-type: application/pdf"));
+        assert!(res.contains("content-disposition: inline; filename=\"digest.pdf\""));
+        assert!(res.ends_with("%PDF-1.4"));
+
+        // Unknown ids are the same 404 the daemon answers.
+        let res = raw_get(port, "/share/ffffffffffffffff").await;
+        assert!(res.starts_with("HTTP/1.1 404"), "got: {res}");
+        assert!(res.contains("share not found"));
+
+        // The export route answers the versioned dump as JSON.
+        let res = raw_get(port, "/api/export").await;
+        assert!(res.starts_with("HTTP/1.1 200"), "got: {res}");
+        assert!(res.contains("\"version\":1"), "got: {res}");
+    }
+}
+
 /// Where the board lives when nothing points anywhere else.
 ///
 /// - `CANVAS_REPO` wins (dev / power-user override).
@@ -3709,15 +4140,35 @@ fn main() {
             let agents = AgentManager::new();
             agents.set_transcript_dir(repo_root.join(".canvas").join("transcripts"));
             let allowed_roots = initial_allowed_roots(&repo_root, &store);
+            // Embedded share server — bound before state management so
+            // share_create can build absolute URLs from the actual port.
+            // Ephemeral localhost-only: the daemon owns 4242, and a fixed
+            // port here would make coexisting runtimes fight over it.
+            let shares: ShareMap = Arc::new(Mutex::new(HashMap::new()));
+            let (share_listener, share_port) =
+                match std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0u16))
+                    .and_then(|listener| listener.local_addr().map(|addr| (listener, addr.port())))
+                {
+                    Ok((listener, port)) => (Some(listener), Some(port)),
+                    Err(e) => {
+                        warn!(error = %e, "share server bind failed — sharing disabled");
+                        (None, None)
+                    }
+                };
             app.manage(CanvasState {
                 agents: Arc::new(agents),
-                store,
+                store: store.clone(),
                 repo_root,
                 pending_results: Arc::new(Mutex::new(HashMap::new())),
                 pending_inputs: Arc::new(Mutex::new(HashMap::new())),
                 pending_fallbacks: Arc::new(Mutex::new(HashMap::new())),
                 allowed_roots: Arc::new(Mutex::new(allowed_roots)),
+                shares: shares.clone(),
+                share_port,
             });
+            if let Some(listener) = share_listener {
+                spawn_share_server(listener, shares, store);
+            }
 
             // 1s ticker: derived statuses + CANVAS_RESULT returns + diffs.
             let handle = app.handle().clone();
@@ -4000,6 +4451,9 @@ fn main() {
             diff_detail,
             snapshot,
             chrome_bookmarks,
+            github_proxy,
+            share_create,
+            export_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running canvas");

@@ -114,6 +114,21 @@ directory. **Any change to `protocol.rs` types or snapshot fields must
 be mirrored in `src-tauri/src/main.rs`** — the CI `tauri-*` jobs catch a
 drift as a compile error.
 
+The daemon's small HTTP surface maps onto the shell two ways:
+
+- Request/response endpoints become commands: `github_proxy` (the same
+  `gh api` → anonymous `curl` fallback chain), `export_state` (the same
+  versioned state dump), `share_create` (publish artifact bytes).
+- `GET /share/{id}` can't be a command — the whole point is a link a
+  browser opens outside the app. So the shell embeds a tiny axum server
+  on an ephemeral 127.0.0.1 port (never a fixed one: the daemon owns
+  4242 and the two runtimes must not fight) serving `/share/{id}` and
+  `/api/export`. `share_create` answers with the absolute URL carrying
+  that port, so the ephemerality never reaches the user. Shares are
+  in-memory capability URLs in both runtimes, and localhost-only export
+  reveals nothing a local process can't already read in
+  `.canvas/board.db`.
+
 ## Delegation edges
 
 An edge is created by `ClientMsg::Delegate` (or `canvasctl delegate` inside
