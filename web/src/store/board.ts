@@ -952,6 +952,27 @@ export const useBoard = create<BoardState>((set, get) => ({
               set({ pendingSpawnPositions });
               get().moveNode(msg.agent_id, namedSpawn.x, namedSpawn.y);
             }
+            // An unclaimed loose spawn still needs a STABLE birth position.
+            // The canvas fallback grid is viewport-relative and re-evaluated
+            // on every board recompute, so a card left implicit teleports
+            // into the current view as soon as any store write lands mid-pan
+            // (PTY output flushes several times a second) — dragging the
+            // card back into the viewport halo and waking its suspended
+            // terminal/preview. Freeze the in-view birth position once, here,
+            // so every spawn path (dock, thread, quick spawn) stays put.
+            if (!pSpawn && !namedSpawn && !msg.workspace_id && !get().positions[msg.agent_id]) {
+              const st = get();
+              const spawnBoard = msg.board_id ?? "main";
+              const occupied = [
+                ...Object.values(st.agents)
+                  .filter((a) => a.id !== msg.agent_id && (a.board_id ?? "main") === spawnBoard && !a.workspace_id && st.positions[a.id])
+                  .map((a) => ({ ...st.positions[a.id], w: st.agentSizes[a.id]?.w ?? 460, h: st.agentSizes[a.id]?.h ?? 260 })),
+                ...Object.values(st.panelNodes[spawnBoard] ?? {}).map((n) => ({ x: n.x, y: n.y, w: n.w ?? 320, h: n.h ?? 420 })),
+                ...Object.values(st.termNodes[spawnBoard] ?? {}).map((n) => ({ x: n.x, y: n.y, w: n.w ?? 560, h: n.h ?? 320 })),
+              ];
+              const [spot] = getAgentSpawnPositions(1, st.viewportRect, occupied);
+              if (spot) get().moveNode(msg.agent_id, spot.x, spot.y, false);
+            }
             break;
           }
           case "workspace_created":

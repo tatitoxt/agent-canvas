@@ -333,10 +333,15 @@ test("offscreen terminal stays mounted, suspends writes, and flushes output on r
   // meaningless) and only then schedule output. The marker therefore cannot
   // exist in either terminal model before the card is outside the halo.
   await cardTerminal.locator("textarea.xterm-helper-textarea").evaluate((el: HTMLTextAreaElement) => el.focus());
-  // Encode the marker as printf hex escapes so shell line-editing/echo can
-  // never render the contiguous plaintext marker before the delayed output.
-  const encodedMarker = [...marker].map((ch) => `\\x${ch.charCodeAt(0).toString(16)}`).join("");
-  await page.keyboard.type(`sh -c 'sleep 0.5; printf "${encodedMarker}\\n"'`);
+  // The echoed command line must never contain the contiguous plaintext
+  // marker: if it did, the post-return assertion could be satisfied by the
+  // echo alone even when the real output bytes were lost offscreen. Splitting
+  // the suffix out as a printf %s argument keeps the two halves apart in the
+  // echo while the output reassembles them — and unlike \x hex escapes (a
+  // bashism dash prints literally, which is exactly how this test failed on
+  // every Ubuntu CI run), printf %s is POSIX and behaves identically in
+  // bash, dash, zsh and sh everywhere.
+  await page.keyboard.type(`sh -c 'sleep 0.5; printf "offscreen-flush-%s\\n" ${suffix}'`);
   await page.keyboard.press("Enter");
 
   // The shell emits after the card is offscreen. Neither the interactive
