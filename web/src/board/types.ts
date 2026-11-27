@@ -50,7 +50,7 @@ export type WebNodeData = {
   url: string;
 };
 
-export type ShapeKind = "rect" | "ellipse" | "diamond" | "sticky" | "pin";
+export type ShapeKind = "rect" | "ellipse" | "diamond" | "sticky" | "pin" | "artifact";
 
 export type ShapeDef = {
   id: string;
@@ -64,6 +64,9 @@ export type ShapeDef = {
   /** Card title (pinned panels) — body lives in `text`. */
   title?: string;
   anchor?: string;
+  /** Live snapshot reference for an artifact window on the board. */
+  artifactId?: string;
+  artifactKind?: string;
   /** Frames created by Gather/“group windows” use a cleaner region chrome
    * than freehand whiteboard rects. */
   group?: boolean;

@@ -74,7 +74,7 @@ export const ShapeNode = memo(function ShapeNode({ id, data, selected, width, he
     notify(`saved to vault → Canvas/${safe}.md`);
   };
 
-  if (s.kind === "pin") {
+  if (s.kind === "pin" || s.kind === "artifact") {
     return (
       <>
         <NodeResizer
@@ -83,6 +83,7 @@ export const ShapeNode = memo(function ShapeNode({ id, data, selected, width, he
           minHeight={140}
           handleClassName="cv-node-resize-handle"
           lineClassName="cv-node-resize-line"
+          color="transparent"
           onResizeEnd={(_, p) => updateShape(id, { x: p.x, y: p.y, w: Math.round(p.width), h: Math.round(p.height) })}
         />
         <div
@@ -112,12 +113,13 @@ export const ShapeNode = memo(function ShapeNode({ id, data, selected, width, he
             gap: 6,
           }}
         >
-          <span style={{ width: 6, height: 6, borderRadius: 2, background: s.color, flexShrink: 0 }} />
+          <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 2, background: s.color, flexShrink: 0 }} />
+          {s.kind === "artifact" && <span data-testid="artifact-window-kind" style={{ color: s.color, fontSize: "var(--cv-text-xxs)", textTransform: "uppercase", letterSpacing: "0.08em", flexShrink: 0 }}>{s.artifactKind ?? "artifact"}</span>}
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{s.title ?? "pinned"}</span>
           <button
             className="nodrag"
             onClick={saveToVault}
-            title={vaultDir ? "append this note to your Obsidian vault (Canvas/<title>.md)" : "open a vault first — Library → Obsidian"}
+            title={vaultDir ? (s.kind === "artifact" ? "save this artifact window to your Obsidian vault" : "append this note to your Obsidian vault (Canvas/<title>.md)") : "open a vault first — Library → Obsidian"}
             style={{
               background: "none", border: "none", cursor: "pointer", padding: 0,
               color: vaultDir ? "#a98af0" : "var(--cv-ink-faint)", flexShrink: 0,
@@ -127,7 +129,11 @@ export const ShapeNode = memo(function ShapeNode({ id, data, selected, width, he
             <img src="/obsidian.svg" alt="" width={11} height={11} style={{ opacity: vaultDir ? 1 : 0.5 }} />
           </button>
         </div>
-        <textarea
+        {s.kind === "artifact" ? (
+          <div data-testid="artifact-window-content" className="nodrag" style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "10px 14px", color: "var(--cv-ink)", fontSize: "var(--cv-text-sm)", lineHeight: 1.55, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+            {s.text || "This artifact has no text preview."}
+          </div>
+        ) : <textarea
           className="nodrag"
           value={s.text}
           onChange={(e) => updateShape(id, { text: e.target.value })}
@@ -144,7 +150,7 @@ export const ShapeNode = memo(function ShapeNode({ id, data, selected, width, he
             fontFamily: "inherit",
             color: "var(--cv-ink)",
           }}
-        />
+        />}
         {selected && (
           <button
             className="nodrag cv-card-btn cv-card-close"

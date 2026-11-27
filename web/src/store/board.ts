@@ -737,6 +737,7 @@ type BoardState = {
   addShape: (kind: import("../board/types").ShapeKind) => void;
   /** Pin arbitrary content onto the canvas as a card (Deska's "Open in canvas"). */
   pinCard: (title: string, body: string, color?: string, anchor?: string, pos?: { x: number; y: number }) => void;
+  pinArtifact: (artifact: import("../daemon/client").SnapshotArtifact, pos?: { x: number; y: number }) => void;
   /** nodeId -> panel key the card was pinned from (dashed anchor cable). */
   anchors: Record<string, Record<string, string>>;
   moveShape: (id: string, x: number, y: number) => void;
@@ -2366,6 +2367,34 @@ export const useBoard = create<BoardState>((set, get) => ({
     }
     // A pin is an explicit "put this in front of me" action — surface the
     // card above whatever is already on the board, same as panel/term cards.
+    get().bringCardToFront(id);
+  },
+
+  pinArtifact: (artifact, pos) => {
+    const { activeBoard, shapes } = get();
+    const existing = Object.values(shapes[activeBoard] ?? {}).find((shape) => shape.artifactId === artifact.artifact_id);
+    if (existing) {
+      get().requestFocus(existing.id);
+      return;
+    }
+    const id = `artifact-${artifact.artifact_id}`;
+    const def = {
+      id,
+      kind: "artifact" as const,
+      x: pos?.x ?? 320 + Math.random() * 240,
+      y: pos?.y ?? 220 + Math.random() * 160,
+      w: 440,
+      h: 320,
+      color: "#7ba3cf",
+      title: artifact.title,
+      text: artifact.text ?? artifact.path ?? "",
+      artifactId: artifact.artifact_id,
+      artifactKind: artifact.kind,
+      anchor: "artifacts",
+    };
+    const next = { ...shapes, [activeBoard]: { ...(shapes[activeBoard] ?? {}), [id]: def } };
+    localStorage.setItem("cv-shapes", JSON.stringify(next));
+    set({ shapes: next });
     get().bringCardToFront(id);
   },
 

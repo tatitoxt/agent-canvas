@@ -36,7 +36,7 @@ export function ArtifactsPanel() {
   const closePanelNode = useBoard((s) => s.closePanelNode);
   const threadSend = useBoard((s) => s.threadSend);
   const requestNav = useBoard((s) => s.requestNav);
-  const pinCard = useBoard((s) => s.pinCard);
+  const pinArtifact = useBoard((s) => s.pinArtifact);
   const vaultDir = useBoard((s) => s.vaultDir);
   const vaultAppend = useBoard((s) => s.vaultAppend);
   const notify = useBoard((s) => s.notify);
@@ -321,13 +321,7 @@ export function ArtifactsPanel() {
                   flexShrink: 0,
                 }}
                 onClick={() => {
-                  pinCard(
-                    a.title,
-                    a.text ?? a.path ?? "",
-                    undefined,
-                    "artifacts",
-                    screenToFlowPosition(cleanPinSpot("artifacts")),
-                  );
+                  pinArtifact(a, screenToFlowPosition(cleanPinSpot("artifacts")));
                   closePanelNode("panel-artifacts");
                   requestNav("canvas");
                   notify("Added the full artifact window to the board.");
