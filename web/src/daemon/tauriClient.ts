@@ -90,7 +90,10 @@ export class TauriCanvasClient {
   }
 
   resize(agentId: string, cols: number, rows: number) {
-    void invoke("pty_resize", { agentId, cols, rows }).catch(console.error);
+    return invoke("pty_resize", { agentId, cols, rows }).then(() => true, (error) => {
+      console.error(error);
+      return false;
+    });
   }
 
   confirmDestructive(agentId: string, action: "kill" | "forget") {

@@ -383,7 +383,9 @@ export class CanvasClient {
   }
 
   resize(agentId: string, cols: number, rows: number) {
-    this.send({ cmd: "pty_resize", agent_id: agentId, cols, rows });
+    if (this.ws.readyState !== WebSocket.OPEN) return false;
+    this.ws.send(JSON.stringify({ cmd: "pty_resize", agent_id: agentId, cols, rows }));
+    return true;
   }
 
   /** The only way to kill: explicit destructive confirmation. */

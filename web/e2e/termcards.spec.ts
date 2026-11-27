@@ -488,3 +488,82 @@ test("PTY resize made while disconnected is replayed after reconnect", async ({ 
   expect(after.cols, "reconnected PTY should adopt the wider terminal").toBeGreaterThan(before.cols);
   expect(after.rows, "reconnected PTY should adopt the taller terminal").toBeGreaterThan(before.rows);
 });
+
+test("reconnecting a terminal tab without a pending resize does not overwrite another tab's PTY size", async ({ browser }) => {
+  const tabA = await browser.newPage();
+  const tabB = await browser.newPage();
+  for (const page of [tabA, tabB]) {
+    await page.addInitScript(() => {
+      const NativeWebSocket = window.WebSocket;
+      const sockets: WebSocket[] = [];
+      Object.defineProperty(window, "__canvasSockets", { value: sockets });
+      window.WebSocket = new Proxy(NativeWebSocket, {
+        construct(target, args) {
+          const socket = Reflect.construct(target, args) as WebSocket;
+          sockets.push(socket);
+          return socket;
+        },
+      });
+    });
+  }
+  await boot(tabA);
+  await spawnTerm(tabA);
+  const node = tabA.locator(".react-flow__node-agent").first();
+  await expect(node).toBeVisible();
+  const agentId = await node.getAttribute("data-id");
+  expect(agentId).toBeTruthy();
+  const open = async (page: import("@playwright/test").Page) => {
+    const card = page.locator(`.react-flow__node[data-id="${agentId}"]`);
+    await expect(card).toBeVisible({ timeout: 8_000 });
+    const rect = await card.boundingBox();
+    expect(rect).not.toBeNull();
+    await page.mouse.click(rect!.x + 30, rect!.y + 30, { button: "right" });
+    await page.locator(".cv-menu").getByRole("button", { name: "open terminal" }).click();
+    const terminal = page.locator(".terminal-drawer .xterm").first();
+    await expect(terminal).toBeVisible({ timeout: 8_000 });
+    return terminal;
+  };
+  const termA = await open(tabA);
+  const stackInfo = stack();
+  await tabB.goto(`http://127.0.0.1:${stackInfo.port}/?token=${stackInfo.token}`);
+  await expect(tabB.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
+  const termB = await open(tabB);
+  const sizeOn = async (page: import("@playwright/test").Page, terminal: import("@playwright/test").Locator, marker: string) => {
+    await terminal.click();
+    await page.keyboard.type(`printf '${marker}:'; stty size`);
+    await page.keyboard.press("Enter");
+    const rows = page.locator(".terminal-drawer .xterm-rows");
+    await expect(rows).toContainText(`${marker}:`, { timeout: 8_000 });
+    const text = await rows.innerText();
+    const match = text.match(new RegExp(`${marker}:(\\d+)\\s+(\\d+)`));
+    if (!match) throw new Error(`Could not read PTY dimensions: ${text}`);
+    return { rows: Number(match[1]), cols: Number(match[2]) };
+  };
+  const initial = await sizeOn(tabA, termA, "shared-before");
+  const disconnect = async (page: import("@playwright/test").Page) => {
+    await page.evaluate(() => (window as any).__canvasSockets[0].close());
+    await page.waitForFunction(() => (window as any).__canvasSockets[0].readyState === WebSocket.CLOSED, { timeout: 5_000 });
+  };
+  await disconnect(tabA);
+  const handle = tabB.getByTestId("terminal-resize-handle");
+  const beforeBox = await handle.locator("xpath=..").boundingBox();
+  const grip = await handle.boundingBox();
+  expect(beforeBox).not.toBeNull();
+  expect(grip).not.toBeNull();
+  await tabB.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await tabB.mouse.down();
+  await tabB.mouse.move(grip!.x + grip!.width / 2 + 180, grip!.y + grip!.height / 2 + 100, { steps: 8 });
+  await tabB.mouse.up();
+  await expect.poll(async () => (await handle.locator("xpath=..").boundingBox())?.width ?? 0).toBeGreaterThan(beforeBox!.width + 100);
+  await expect.poll(async () => (await handle.locator("xpath=..").boundingBox())?.height ?? 0).toBeGreaterThan(beforeBox!.height + 50);
+  const newSharedSize = await sizeOn(tabB, termB, "shared-after-tab-b-resize");
+  expect(newSharedSize.cols).toBeGreaterThan(initial.cols);
+  expect(newSharedSize.rows).toBeGreaterThan(initial.rows);
+  await disconnect(tabB);
+  await tabA.waitForFunction(() => (window as any).__canvasSockets.length >= 2, { timeout: 12_000 });
+  await expect(tabA.locator("[data-testid='daemon-status']")).toHaveAttribute("aria-label", "Canvas daemon connected", { timeout: 12_000 });
+  const afterTabAReconnect = await sizeOn(tabA, termA, "shared-after-tab-a-reconnect");
+  expect(afterTabAReconnect).toEqual(newSharedSize);
+  await tabA.close();
+  await tabB.close();
+});

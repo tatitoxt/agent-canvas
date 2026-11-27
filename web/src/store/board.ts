@@ -502,6 +502,8 @@ type BoardState = {
   ptyBuffers: Record<string, Uint8Array>;
   /** Last known PTY size per agent (daemon default 80×24). */
   ptySize: Record<string, { cols: number; rows: number }>;
+  /** Latest resize not accepted by the transport yet; only these are replayed after reconnect. */
+  pendingPtyResize: Record<string, { cols: number; rows: number }>;
   connect: (token: string) => void;
   setActiveBoard: (boardId: string) => void;
   createBoard: (name: string) => void;
@@ -895,6 +897,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   ptyListeners: {},
   ptyBuffers: {},
   ptySize: {},
+  pendingPtyResize: {},
   sessionUse: {},
   acctLedger: loadLedger(),
 
@@ -1495,16 +1498,16 @@ export const useBoard = create<BoardState>((set, get) => ({
     void openingClient.whenOpen().then(() => {
       if (client !== openingClient) return;
       set({ connected: true });
-      // PTY size is a client-side desired value. Resize gestures can happen
-      // while the transport is down, when CanvasClient silently drops sends;
-      // replay the latest dimensions after every connection opens so shells
-      // and TUIs do not keep stale rows/columns after reconnect.
+      // Only replay a resize that the transport rejected while offline. A
+      // resize accepted on this socket is already authoritative at the
+      // daemon; replaying this tab's old geometry could overwrite a newer
+      // resize from another tab sharing the same PTY.
       const state = get();
-      for (const [agentId, size] of Object.entries(state.ptySize)) {
-        if (state.agents[agentId]?.status !== "exited") {
-          openingClient.resize(agentId, size.cols, size.rows);
-        }
+      const pending = state.pendingPtyResize;
+      for (const [agentId, size] of Object.entries(pending)) {
+        if (state.agents[agentId]?.status !== "exited") void openingClient.resize(agentId, size.cols, size.rows);
       }
+      set({ pendingPtyResize: {} });
       // Re-mount the saved vault after (re)connect — a vaultList() sent
       // before the socket opens would be silently dropped.
       const dir = get().vaultDir || (() => {
@@ -3397,8 +3400,16 @@ export const useBoard = create<BoardState>((set, get) => ({
 
   sendInput: (agentId, bytes) => client?.ptyInput(agentId, bytes),
   resizePty: (agentId, cols, rows) => {
-    set({ ptySize: { ...get().ptySize, [agentId]: { cols, rows } } });
-    client?.resize(agentId, cols, rows);
+    const size = { cols, rows };
+    const current = client;
+    set({ ptySize: { ...get().ptySize, [agentId]: size } });
+    if (!current || !current.resize(agentId, cols, rows)) {
+      set({ pendingPtyResize: { ...get().pendingPtyResize, [agentId]: size } });
+      return;
+    }
+    const pendingPtyResize = { ...get().pendingPtyResize };
+    delete pendingPtyResize[agentId];
+    set({ pendingPtyResize });
   },
 
   requestTranscript: (agentId) => client?.transcript(agentId),
