@@ -318,6 +318,39 @@ test("Tools Panel summaries toggle exposes state and persists after reload", asy
   await expect(summaries).toHaveAttribute("aria-pressed", "false");
 });
 
+test("Tools creates an Orchestrator and Team builder spawns a configured shell member", async ({ page }) => {
+  await boot(page);
+
+  const openTools = async () => {
+    await page.locator("button[title^='Tools —']").click();
+    return page.getByRole("dialog", { name: "Tools panel" });
+  };
+
+  let dock = await openTools();
+  await dock.getByRole("button", { name: "New orchestrator" }).click();
+  await expect(page.locator(".react-flow__node[data-id^='orch-']")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("canvas:orchestrators") ?? "{}")).length)).toBe(1);
+
+  dock = await openTools();
+  await dock.getByRole("button", { name: "Team builder" }).click();
+  const team = page.getByRole("dialog", { name: "Team builder" });
+  await expect(team).toBeVisible();
+  const spawn = team.getByRole("button", { name: "Spawn" });
+  await expect(spawn).toBeDisabled();
+  await team.getByRole("combobox", { name: "CLI for every member" }).selectOption("bash");
+  await team.getByRole("button", { name: "Add one Frontend" }).click();
+  await expect(team.getByRole("button", { name: "Spawn 1" })).toBeEnabled();
+  await team.getByRole("button", { name: "Remove one Frontend" }).click();
+  await expect(team.getByRole("button", { name: "Spawn" })).toBeDisabled();
+  await team.getByRole("button", { name: "Add one Frontend" }).click();
+  await team.getByRole("button", { name: "Spawn 1" }).click();
+
+  const member = page.locator(".agent-card").filter({ hasText: "frontend-1" });
+  await expect(member).toBeVisible({ timeout: 10_000 });
+  await expect(member.getByTestId("agent-card-cli")).toContainText("Terminal");
+  await expect(team).toHaveCount(0);
+});
+
 test("Pencil and Region shot modes have working visible and Escape exits", async ({ page }) => {
   const { port } = stack();
   await page.goto(`http://127.0.0.1:${port}/`);
