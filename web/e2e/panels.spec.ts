@@ -524,11 +524,21 @@ test("web preview windows resize and keep their dimensions after reload", async 
     height: Number.parseFloat(getComputedStyle(el).height),
   }));
   const dragInvisibleEdge = async (edge: "top" | "right" | "bottom" | "left", dx: number, dy: number, dimension: "width" | "height") => {
-    const zone = web.locator(`.react-flow__resize-control.line.${edge}`);
-    const box = await zone.boundingBox();
-    expect(box, `${edge} resize zone should have geometry`).not.toBeNull();
-    const x = box!.x + box!.width / 2;
-    const y = box!.y + box!.height / 2;
+    const bounds = await web.boundingBox();
+    expect(bounds).not.toBeNull();
+    // Start three screen pixels inside the visible card boundary. Measuring
+    // from the card (rather than the resize strip) prevents the test from
+    // passing if a shifted strip silently leaves a dead band at the edge.
+    const x = edge === "left"
+      ? bounds!.x + 3
+      : edge === "right"
+        ? bounds!.x + bounds!.width - 3
+        : bounds!.x + bounds!.width / 2;
+    const y = edge === "top"
+      ? bounds!.y + 3
+      : edge === "bottom"
+        ? bounds!.y + bounds!.height - 3
+        : bounds!.y + bounds!.height / 2;
     const before = await web.boundingBox();
     expect(before).not.toBeNull();
     await page.mouse.move(x, y);
