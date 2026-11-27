@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { panelRoot, actionBtn } from "./panelChrome";
 import { useBoard } from "../store/board";
 import { isTauri } from "../daemon/tauriClient";
@@ -699,9 +699,11 @@ export function VaultPanel() {
   const vaultName = activeVault?.name ?? vaultDir.replace(/\/+$/, "").split("/").pop() ?? "vault";
   /** Heading currently at the top of the reading scrollport — the pin
    * carries it so the canvas window opens scrolled to the same place the
-   * user was reading, like Deska's heading-anchored pins. */
-  const visibleHeading = (): string | null => {
-    const root = document.querySelector('.react-flow__node[data-id="panel-vault"]');
+   * user was reading, like Deska's heading-anchored pins. Scoped to the
+   * exact card the pin was clicked in: split clones each have their own
+   * scrollport and position. */
+  const visibleHeading = (cardId: string): { line: number; title: string } | null => {
+    const root = document.querySelector(`.react-flow__node[data-id="${cardId}"]`);
     if (!root) return null;
     const els = Array.from(root.querySelectorAll('[id^="vh-"]')) as HTMLElement[];
     if (!els.length) return null;
@@ -721,26 +723,31 @@ export function VaultPanel() {
     if (!current) return null;
     const line = Number(current.id.slice(3));
     const h = headings.find((x) => x.line === line);
-    return h ? h.title.trim().toLowerCase() : null;
+    return h ? { line, title: h.title.trim().toLowerCase() } : null;
   };
 
-  const pinCurrentNote = () => {
+  const pinCurrentNote = (e?: ReactMouseEvent) => {
     if (!vaultFile) return;
     const state = useBoard.getState();
     const board = state.activeBoard;
+    // The card the pin was clicked in — the original vault card or any of
+    // its split clones; anchors and placement both follow that card.
+    const cardId =
+      (e?.currentTarget as HTMLElement | undefined)?.closest(".react-flow__node")?.getAttribute("data-id") ??
+      "panel-vault";
     // Anchor-adjacent placement: the pinned window lands just right of the
     // vault card it came from (slightly below its top edge), falling back to
     // a viewport-relative spot when the panel isn't on the canvas.
-    const panel = state.panelNodes[board]?.["panel-vault"];
+    const panel = state.panelNodes[board]?.[cardId];
     const viewport = state.viewportRect;
     const position = panel
       ? { x: panel.x + panel.w + 40, y: panel.y + 48 }
       : viewport
         ? { x: viewport.left + (viewport.right - viewport.left) * 0.34, y: viewport.top + (viewport.bottom - viewport.top) * 0.24 }
         : undefined;
-    const heading = visibleHeading() ?? undefined;
+    const heading = visibleHeading(cardId) ?? undefined;
     mdNodeAdd(vaultFile.path, undefined, position, heading);
-    state.closePanelNode("panel-vault");
+    state.closePanelNode(cardId);
     state.requestNav("canvas");
     state.requestView();
     notify("Added the live note window to the board.");
