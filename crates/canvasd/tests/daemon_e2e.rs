@@ -889,3 +889,513 @@ async fn share_and_export_roundtrip_over_http() {
     assert!(res.contains("\"version\":1"), "got: {res}");
     assert!(res.contains("\"boards\""), "got: {res}");
 }
+
+/// Install fake CLIs the PTY's login shell resolves first: ~/.bash_profile
+/// runs after /etc/profile, so this prepend survives path_helper-style
+/// PATH reordering. Each entry is (cli name, script body).
+#[cfg(unix)]
+fn install_fake_clis(home: &std::path::Path, clis: &[(&str, String)]) {
+    let fakebin = home.join("fakebin");
+    std::fs::create_dir_all(&fakebin).unwrap();
+    for (name, body) in clis {
+        let path = fakebin.join(name);
+        std::fs::write(&path, body).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    std::fs::write(
+        home.join(".bash_profile"),
+        format!("export PATH=\"{}:$PATH\"\n", fakebin.display()),
+    )
+    .unwrap();
+}
+
+/// Create a workspace over the daemon's repo and pin its fallback chain;
+/// returns the workspace id. The configured chain drives fallback order —
+/// no reliance on what the host machine happens to have installed.
+#[cfg(unix)]
+async fn workspace_with_chain(ws: &mut Ws, d: &Daemon, chain: &[&str]) -> String {
+    ws.send(Message::Text(
+        json!({"cmd":"create_workspace","name":"chain-ws","repo":d.repo.to_str().unwrap()})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(ws, Duration::from_secs(3), |m| {
+        m["type"] == "workspace_created"
+    })
+    .await;
+    let ws_id = seen
+        .iter()
+        .find(|m| m["type"] == "workspace_created")
+        .unwrap()["workspace_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    ws.send(Message::Text(
+        json!({"cmd":"set_agent_chain","workspace_id":ws_id,"chain":chain})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    ws_id
+}
+
+/// Poll a file for `needle` until the deadline — the fake-CLI marker files
+/// are written from inside PTYs, so timing is inherently asynchronous.
+#[cfg(unix)]
+async fn file_contains(path: &std::path::Path, needle: &str, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if let Ok(text) = std::fs::read_to_string(path) {
+            if text.contains(needle) {
+                return true;
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(150)).await;
+    }
+    false
+}
+
+/// A shell script body that appends every stdin line to `log` and then
+/// keeps reading (idles) — the stand-in for a CLI waiting on operator
+/// input. What it never does is produce stdout, so idle detection is
+/// undisturbed.
+#[cfg(unix)]
+fn stdin_logger_script(log: &std::path::Path) -> String {
+    format!(
+        "#!/bin/sh\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> '{}'; done\n",
+        log.display()
+    )
+}
+
+/// Issue #78 acceptance: an automation whose CLI dies at launch must
+/// respawn as the next chain entry with its guardrails (deny-approvals,
+/// idle alert) and its prompt intact. The dying CLI here outlives the
+/// synchronous prompt write — so the write lands in the kernel PTY buffer
+/// of a process that never reads it, the exact loss the fallback-state
+/// copy now survives: it is re-injected into the replacement instead of
+/// being cleared on write.
+#[cfg(unix)]
+#[tokio::test]
+async fn automation_fallback_keeps_prompt_and_guardrails() {
+    let d = Daemon::start();
+    let prompt_log = d.home.join("prompt.log");
+    install_fake_clis(
+        &d.home,
+        &[
+            // Alive when the prompt is written (sync injection), dead a
+            // second later — the write delivered nothing.
+            ("claude", "#!/bin/sh\nsleep 1\nexit 1\n".to_string()),
+            ("codex", stdin_logger_script(&prompt_log)),
+        ],
+    );
+
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .expect("ws connect");
+    let _ = next_ctrl(&mut ws, Duration::from_secs(5)).await;
+    let ws_id = workspace_with_chain(&mut ws, &d, &["claude", "codex"]).await;
+
+    ws.send(Message::Text(
+        json!({
+            "cmd": "create_automation",
+            "name": "nightly-fb",
+            "prompt": "harvest the quarterly report",
+            "command": "claude",
+            "workspace_id": ws_id,
+            "permission": "supervised",
+            "idle_secs": 10,
+            "on_approval": "deny"
+        })
+        .to_string()
+        .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(4), |m| {
+        m["type"] == "automation_saved"
+    })
+    .await;
+    let auto_id = seen
+        .iter()
+        .find(|m| m["type"] == "automation_saved")
+        .unwrap()["automation"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    ws.send(Message::Text(
+        json!({"cmd":"run_automation","automation_id":auto_id})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    // The original spawn is announced first…
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |m| m["type"] == "spawned").await;
+    let first = seen.iter().find(|m| m["type"] == "spawned").unwrap();
+    assert_eq!(first["command"].as_str().unwrap_or(""), "claude");
+    // …then the chain replacement once claude's early death is processed.
+    let seen = collect_until(&mut ws, Duration::from_secs(10), |m| {
+        m["type"] == "spawned" && m["fallback_from"].as_str() == Some("claude")
+    })
+    .await;
+    let replacement = seen
+        .iter()
+        .find(|m| m["type"] == "spawned" && m["fallback_from"].as_str() == Some("claude"))
+        .unwrap_or_else(|| panic!("automation must fall back to codex; saw {seen:?}"));
+    assert_eq!(replacement["command"].as_str().unwrap_or(""), "codex");
+    let replacement_id = replacement["agent_id"].as_str().unwrap().to_string();
+
+    // Prompt intact: although the original write landed in a dead-end
+    // buffer, the fallback-state copy survives writes, so the replacement
+    // is re-injected (through the gate, ~3s after the respawn).
+    assert!(
+        file_contains(
+            &prompt_log,
+            "harvest the quarterly report",
+            Duration::from_secs(9)
+        )
+        .await,
+        "replacement never received the automation prompt"
+    );
+
+    // Deny-approvals guardrail rode the fallback state: gated input on the
+    // REPLACEMENT is dropped by policy, not held for a human.
+    ws.send(Message::Binary(
+        pty_frame(&replacement_id, b"sudo rm -rf /\n").into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(4), |m| {
+        m["type"] == "needs_attention" || m["type"] == "needs_approval"
+    })
+    .await;
+    assert!(
+        seen.iter().any(|m| m["type"] == "needs_attention"
+            && m["reason"]
+                .as_str()
+                .unwrap_or("")
+                .contains("automation policy denied")),
+        "replacement must keep the deny-approvals policy; saw {seen:?}"
+    );
+    assert!(
+        !seen.iter().any(|m| m["type"] == "needs_approval"),
+        "a policy-denied run must never wait on a human; saw {seen:?}"
+    );
+
+    // Idle alert rode too: the logger never prints, so after idle_secs of
+    // silence the hang guardrail fires against the replacement.
+    let seen = collect_until(&mut ws, Duration::from_secs(14), |m| {
+        m["type"] == "needs_attention" && m["reason"].as_str().unwrap_or("").contains("silent")
+    })
+    .await;
+    assert!(
+        seen.iter()
+            .any(|m| m["agent_id"].as_str() == Some(replacement_id.as_str())
+                && m["reason"].as_str().unwrap_or("").contains("silent")),
+        "replacement must keep the idle alert; saw {seen:?}"
+    );
+}
+
+/// Issue #78 acceptance: immediate-exit fallback reliability. A CLI dying
+/// during spawn can report its exit before the spawn path finishes
+/// registering the fallback state — the registration gate makes the
+/// watcher wait, so the chain continues deterministically. One iteration
+/// would pass by luck most of the time; three in a row smoke out the
+/// race.
+#[cfg(unix)]
+#[tokio::test]
+async fn immediate_exit_fallback_is_reliable() {
+    let d = Daemon::start();
+    install_fake_clis(
+        &d.home,
+        &[
+            ("claude", "#!/bin/sh\nexit 1\n".to_string()),
+            ("codex", "#!/bin/sh\nexec sleep 60\n".to_string()),
+        ],
+    );
+
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .expect("ws connect");
+    let _ = next_ctrl(&mut ws, Duration::from_secs(5)).await;
+    let ws_id = workspace_with_chain(&mut ws, &d, &["claude", "codex"]).await;
+
+    for i in 0..3 {
+        ws.send(Message::Text(
+            json!({
+                "cmd": "spawn_agent", "name": format!("racer-{i}"), "command": "claude",
+                "cwd": ".", "workspace_id": ws_id, "permission": "auto"
+            })
+            .to_string()
+            .into(),
+        ))
+        .await
+        .unwrap();
+    }
+    // Every one of the three must produce a codex replacement — a missed
+    // registration would end that chain silently.
+    let mut replacements = std::collections::HashSet::new();
+    let deadline = Instant::now() + Duration::from_secs(12);
+    while Instant::now() < deadline && replacements.len() < 3 {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let Some(m) = next_ctrl(&mut ws, remaining).await else {
+            break;
+        };
+        if m["type"] == "spawned" && m["fallback_from"].as_str() == Some("claude") {
+            replacements.insert(m["agent_id"].as_str().unwrap().to_string());
+        }
+    }
+    assert_eq!(
+        replacements.len(),
+        3,
+        "every immediate exit must fall back — the registration gate may not outrun registration"
+    );
+}
+
+/// The delegation ticket is part of the registration the gate protects:
+/// a child dying at launch must move its ticket to the replacement, so the
+/// result the replacement prints resolves the edge instead of the edge
+/// failing with the dead original.
+#[cfg(unix)]
+#[tokio::test]
+async fn delegation_ticket_survives_chain_fallback() {
+    let d = Daemon::start();
+    install_fake_clis(
+        &d.home,
+        &[
+            ("claude", "#!/bin/sh\nexit 1\n".to_string()),
+            (
+                "codex",
+                "#!/bin/sh\necho 'CANVAS_RESULT: fallback finished'\nexec sleep 30\n".to_string(),
+            ),
+        ],
+    );
+
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .expect("ws connect");
+    let _ = next_ctrl(&mut ws, Duration::from_secs(5)).await;
+    let ws_id = workspace_with_chain(&mut ws, &d, &["claude", "codex"]).await;
+
+    ws.send(Message::Text(
+        json!({
+            "cmd": "delegate", "from": "orchestrator", "name": "child",
+            "command": "claude", "task": "prove it", "cwd": ".",
+            "workspace_id": ws_id, "permission": "full"
+        })
+        .to_string()
+        .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |m| {
+        m["type"] == "delegation"
+    })
+    .await;
+    let edge_id = seen.iter().find(|m| m["type"] == "delegation").unwrap()["edge_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let seen = collect_until(&mut ws, Duration::from_secs(12), |m| {
+        m["type"] == "result" && m["edge_id"].as_str() == Some(edge_id.as_str())
+    })
+    .await;
+    assert!(
+        !seen
+            .iter()
+            .any(|m| m["type"] == "delegation_failed"
+                && m["edge_id"].as_str() == Some(edge_id.as_str())),
+        "the ticket must move to the replacement, not fail with the original; saw {seen:?}"
+    );
+    let result = seen
+        .iter()
+        .find(|m| m["type"] == "result" && m["edge_id"].as_str() == Some(edge_id.as_str()))
+        .unwrap_or_else(|| {
+            panic!("replacement's CANVAS_RESULT must resolve the edge; saw {seen:?}")
+        });
+    assert!(
+        result["summary"]
+            .as_str()
+            .unwrap_or("")
+            .contains("fallback finished"),
+        "unexpected summary: {result:?}"
+    );
+}
+
+/// Prompt disposition: input dropped by the deny policy is a deliberate
+/// drop — it must NOT re-run on the replacement. The automation's prompt
+/// is itself sensitive, so the run is denied at injection; the CLI then
+/// dies inside the fallback window, the chain still respawns (the fallback
+/// machinery is policy-blind), but the prompt log must stay empty.
+#[cfg(unix)]
+#[tokio::test]
+async fn deny_dropped_prompt_does_not_retry_on_fallback() {
+    let d = Daemon::start();
+    let prompt_log = d.home.join("denied-prompt.log");
+    install_fake_clis(
+        &d.home,
+        &[
+            ("claude", "#!/bin/sh\nsleep 1\nexit 1\n".to_string()),
+            ("codex", stdin_logger_script(&prompt_log)),
+        ],
+    );
+
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .expect("ws connect");
+    let _ = next_ctrl(&mut ws, Duration::from_secs(5)).await;
+    let ws_id = workspace_with_chain(&mut ws, &d, &["claude", "codex"]).await;
+
+    ws.send(Message::Text(
+        json!({
+            "cmd": "create_automation",
+            "name": "denied-run",
+            "prompt": "sudo rm -rf /tmp/nope",
+            "command": "claude",
+            "workspace_id": ws_id,
+            "permission": "supervised",
+            "idle_secs": 10,
+            "on_approval": "deny"
+        })
+        .to_string()
+        .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(4), |m| {
+        m["type"] == "automation_saved"
+    })
+    .await;
+    let auto_id = seen
+        .iter()
+        .find(|m| m["type"] == "automation_saved")
+        .unwrap()["automation"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    ws.send(Message::Text(
+        json!({"cmd":"run_automation","automation_id":auto_id})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    // The sensitive prompt is denied at injection on the original…
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |m| {
+        m["type"] == "needs_attention"
+            && m["reason"]
+                .as_str()
+                .unwrap_or("")
+                .contains("automation policy denied")
+    })
+    .await;
+    assert!(
+        seen.iter().any(|m| m["type"] == "needs_attention"),
+        "deny policy must drop the sensitive prompt; saw {seen:?}"
+    );
+    // …the chain still respawns when the original dies…
+    let seen = collect_until(&mut ws, Duration::from_secs(10), |m| {
+        m["type"] == "spawned" && m["fallback_from"].as_str() == Some("claude")
+    })
+    .await;
+    assert!(
+        seen.iter().any(|m| m["type"] == "spawned"),
+        "the chain fallback itself is policy-blind and must still respawn; saw {seen:?}"
+    );
+    // …but the deliberately-dropped prompt never re-runs on the
+    // replacement — 8s covers the 3s re-injection delay with margin.
+    assert!(
+        !file_contains(&prompt_log, "sudo rm -rf", Duration::from_secs(8)).await,
+        "a deliberate deny-drop must not retry on the replacement"
+    );
+}
+
+/// Held input keyed to a dead agent can never be approved — the exit
+/// watcher drops it. Chain of one here (no fallback): the supervised
+/// agent's held input must be gone once the process exits, so a late
+/// approve finds nothing pending.
+#[cfg(unix)]
+#[tokio::test]
+async fn held_input_is_dropped_when_the_agent_exits() {
+    let d = Daemon::start();
+    install_fake_clis(
+        &d.home,
+        &[("claude", "#!/bin/sh\nsleep 2\nexit 1\n".to_string())],
+    );
+
+    let (mut ws, _) = tokio_tungstenite::connect_async(d.ws_url(&d.token))
+        .await
+        .expect("ws connect");
+    let _ = next_ctrl(&mut ws, Duration::from_secs(5)).await;
+    let ws_id = workspace_with_chain(&mut ws, &d, &["claude"]).await;
+
+    ws.send(Message::Text(
+        json!({
+            "cmd": "spawn_agent", "name": "holder", "command": "claude",
+            "cwd": ".", "workspace_id": ws_id, "permission": "supervised"
+        })
+        .to_string()
+        .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(5), |m| m["type"] == "spawned").await;
+    let agent_id = seen.iter().find(|m| m["type"] == "spawned").unwrap()["agent_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Sensitive input is held for approval while the agent is still alive.
+    ws.send(Message::Binary(
+        pty_frame(&agent_id, b"sudo rm -rf /\n").into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(4), |m| {
+        m["type"] == "needs_approval"
+    })
+    .await;
+    assert!(
+        seen.iter().any(|m| m["type"] == "needs_approval"),
+        "supervised input must be held first; saw {seen:?}"
+    );
+
+    // The agent dies on its own (sleep 2) — wait for the exit, then a
+    // late approval must find nothing: the exit watcher dropped the hold.
+    let seen = collect_until(&mut ws, Duration::from_secs(8), |m| {
+        m["type"] == "status"
+            && m["agent_id"].as_str() == Some(agent_id.as_str())
+            && m["status"] == "exited"
+    })
+    .await;
+    assert!(
+        seen.iter().any(|m| m["type"] == "status"),
+        "agent must exit on its own; saw {seen:?}"
+    );
+    ws.send(Message::Text(
+        json!({"cmd":"approve_input","agent_id":agent_id})
+            .to_string()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    let seen = collect_until(&mut ws, Duration::from_secs(3), |m| {
+        m["type"] == "error"
+            && m["message"]
+                .as_str()
+                .unwrap_or("")
+                .contains("no pending input")
+    })
+    .await;
+    assert!(
+        seen.iter().any(|m| m["type"] == "error"),
+        "held input must be dropped at exit; saw {seen:?}"
+    );
+}
