@@ -1,7 +1,7 @@
 import { memo, useContext } from "react";
 import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { useBoard } from "../store/board";
-import { TermHost } from "../components/TermHost";
+import { LazyTermHost as TermHost } from "../components/LazyTermHost";
 import { PanelActionsCtx } from "../components/panelCtx";
 import { CliMark } from "../components/CliMark";
 import { Icon } from "../components/icons";

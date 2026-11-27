@@ -6,7 +6,7 @@ import { cleanPinSpot } from "./PinBtn";
 import { downloadPdf } from "../lib/pdf";
 import { shareArtifactPdf } from "../lib/share";
 import { buildDoc, buildAskDoc } from "../lib/boardDocs";
-import { GeneratePdfMenu } from "./VaultPanel";
+import { GeneratePdfMenu } from "./GeneratePdfMenu";
 import { Icon } from "./icons";
 
 /** Each artifact kind gets its own symbol + muted color (Deska-style

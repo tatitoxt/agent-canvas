@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./icons";
-import { TeamBuilder } from "./TeamBuilder";
-import { WebLauncher } from "./WebLauncher";
+// Team builder and web launcher open once in a blue moon from this menu —
+// they lazy-load instead of taxing every canvas boot.
+const TeamBuilder = lazy(() => import("./TeamBuilder").then((m) => ({ default: m.TeamBuilder })));
+const WebLauncher = lazy(() => import("./WebLauncher").then((m) => ({ default: m.WebLauncher })));
 import { useBoard } from "../store/board";
 
 const PANEL_ITEMS = [
@@ -239,10 +241,10 @@ export function ToolsMenu({
       )}
       {teamOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60 }}>
-          <TeamBuilder onClose={() => setTeamOpen(false)} />
+          <Suspense fallback={null}><TeamBuilder onClose={() => setTeamOpen(false)} /></Suspense>
         </div>
       )}
-      {launcherOpen && <WebLauncher onClose={() => setLauncherOpen(false)} />}
+      {launcherOpen && <Suspense fallback={null}><WebLauncher onClose={() => setLauncherOpen(false)} /></Suspense>}
     </div>
   );
 }
