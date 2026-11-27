@@ -754,3 +754,138 @@ async fn chain_fallback_respawns_dead_cli_as_next_chain_entry() {
         "a deliberate kill must not fall back; saw {seen:?}"
     );
 }
+
+/// Raw HTTP/1.1 roundtrip over plain TCP — the daemon's REST surface is
+/// small enough that a hand-rolled request beats pulling in a client crate
+/// for the e2e suite alone.
+async fn raw_http(
+    port: u16,
+    method: &str,
+    path: &str,
+    headers: &[(&str, &str)],
+    body: &[u8],
+) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
+        .await
+        .unwrap();
+    let mut req = format!("{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n");
+    for (k, v) in headers {
+        req.push_str(&format!("{k}: {v}\r\n"));
+    }
+    if !body.is_empty() {
+        req.push_str(&format!("Content-Length: {}\r\n", body.len()));
+    }
+    req.push_str("\r\n");
+    // Write-then-read with writes tolerant of reset: a rejecting server
+    // (413 oversize) responds and closes long before an 11 MB body finishes
+    // uploading, and the RST its close generates must not eat the response
+    // the test is asserting on.
+    let _ = stream.write_all(req.as_bytes()).await;
+    let _ = stream.write_all(body).await;
+    let mut out = Vec::new();
+    let read = stream.read_to_end(&mut out).await;
+    assert!(
+        read.is_ok() && !out.is_empty(),
+        "no response read: {read:?}"
+    );
+    String::from_utf8_lossy(&out).to_string()
+}
+
+#[tokio::test]
+async fn share_and_export_roundtrip_over_http() {
+    let d = Daemon::start();
+    let auth = format!("Bearer {}", d.token);
+
+    // POST /api/share publishes the bytes and answers the share path. The
+    // base64 decodes to "%PDF-e2e-bytes".
+    let payload =
+        json!({"title":"e2e digest","mime":"application/pdf","b64":"JVBERi1lMmUtYnl0ZXM="})
+            .to_string();
+    let res = raw_http(
+        d.port,
+        "POST",
+        "/api/share",
+        &[
+            ("Authorization", auth.as_str()),
+            ("Content-Type", "application/json"),
+        ],
+        payload.as_bytes(),
+    )
+    .await;
+    assert!(
+        res.starts_with("HTTP/1.1 200"),
+        "share create failed: {res}"
+    );
+    let body = res.split("\r\n\r\n").nth(1).unwrap_or("");
+    let created: Value = serde_json::from_str(body).unwrap();
+    let share_path = created["url"].as_str().unwrap();
+    assert!(share_path.starts_with("/share/"), "got {share_path}");
+
+    // GET /share/{id} is public — no token — and streams the exact bytes
+    // back with the mime type and an inline pdf filename.
+    let res = raw_http(d.port, "GET", share_path, &[], b"").await;
+    assert!(res.starts_with("HTTP/1.1 200"), "share get failed: {res}");
+    assert!(res.contains("content-type: application/pdf"), "got: {res}");
+    assert!(
+        res.contains("content-disposition: inline; filename=\"e2e digest.pdf\""),
+        "got: {res}"
+    );
+    assert!(res.contains("%PDF-e2e-bytes"), "body missing: {res}");
+
+    // Unknown ids 404 with the same message either shell serves.
+    let res = raw_http(d.port, "GET", "/share/0000000000000000", &[], b"").await;
+    assert!(res.starts_with("HTTP/1.1 404"), "got: {res}");
+
+    // The share endpoint rejects oversize payloads with 413 and bad base64
+    // with 400 — the two rejection paths share::DecodeError keeps distinct.
+    use base64::Engine;
+    let oversized = json!({
+        "title": "big",
+        "mime": "application/pdf",
+        "b64": base64::engine::general_purpose::STANDARD.encode(vec![0u8; 8 * 1024 * 1024 + 1]),
+    })
+    .to_string();
+    let res = raw_http(
+        d.port,
+        "POST",
+        "/api/share",
+        &[
+            ("Authorization", auth.as_str()),
+            ("Content-Type", "application/json"),
+        ],
+        oversized.as_bytes(),
+    )
+    .await;
+    assert!(
+        res.starts_with("HTTP/1.1 413"),
+        "got: {}",
+        &res[..200.min(res.len())]
+    );
+    let bad = json!({"title":"x","mime":"m","b64":"!!!"}).to_string();
+    let res = raw_http(
+        d.port,
+        "POST",
+        "/api/share",
+        &[
+            ("Authorization", auth.as_str()),
+            ("Content-Type", "application/json"),
+        ],
+        bad.as_bytes(),
+    )
+    .await;
+    assert!(res.starts_with("HTTP/1.1 400"), "got: {res}");
+
+    // GET /api/export answers the versioned dump; auth required.
+    let res = raw_http(
+        d.port,
+        "GET",
+        "/api/export",
+        &[("Authorization", auth.as_str())],
+        b"",
+    )
+    .await;
+    assert!(res.starts_with("HTTP/1.1 200"), "export failed: {res}");
+    assert!(res.contains("\"version\":1"), "got: {res}");
+    assert!(res.contains("\"boards\""), "got: {res}");
+}

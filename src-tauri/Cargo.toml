@@ -14,6 +14,10 @@ tauri = { version = "2", features = [] }
 tauri-plugin-updater = "2"
 tauri-plugin-dialog = "2"
 canvasd = { path = "../crates/canvasd" }
+# The embedded share/export server: already in the dependency graph through
+# canvasd, so this adds no new transitive crates — share-by-link needs a
+# real HTTP endpoint a browser can open, and axum is what the daemon uses.
+axum = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"

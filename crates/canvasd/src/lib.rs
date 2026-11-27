@@ -5,7 +5,9 @@
 pub mod agent;
 pub mod chain;
 pub mod detect;
+pub mod export;
 pub mod paths;
 pub mod protocol;
+pub mod share;
 pub mod store;
 pub mod vault;

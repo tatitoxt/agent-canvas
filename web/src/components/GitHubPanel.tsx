@@ -3,10 +3,7 @@ import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 import { Icon } from "./icons";
 import { EmptyState } from "./EmptyState";
-
-const TOKEN = (import.meta.env.VITE_CANVAS_TOKEN as string | undefined) ??
-  new URLSearchParams(location.search).get("token") ??
-  "";
+import { ghJson } from "../lib/github";
 
 type Item = {
   number: number;
@@ -52,19 +49,14 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
     let dead = false;
     setItems(null);
     setErr(null);
-    // canvasd proxies api.github.com (gh CLI auth when installed) — no
-    // anonymous rate limit and private repos work too. The origin reaches
-    // it directly (canvasd-served build) or through the vite dev proxy;
-    // no daemon backing this page (Tauri shell) → direct anonymous API.
-    const base = location.origin;
-    const gh = (rest: string) =>
-      fetch(`${base}/api/github/${rest}`, {
-        headers: { Authorization: `Bearer ${TOKEN}` },
-      }).catch(() => fetch(`https://api.github.com/${rest}`));
-    gh(`repos/${slug}/${kind === "prs" ? "pulls" : "issues"}?state=open&per_page=30`)
-      .then(async (r) => {
-        if (!r.ok) throw new Error(r.status === 403 ? "GitHub rate limit — retry in a bit" : `GitHub ${r.status}`);
-        const data = (await r.json()) as any;
+    // Both shells proxy api.github.com with gh CLI auth when installed —
+    // the daemon at /api/github, the native shell through the github_proxy
+    // command — so private repos work and there is no anonymous rate
+    // limit. ghJson picks the transport; only a bare static page degrades
+    // to the direct anonymous API.
+    ghJson(`repos/${slug}/${kind === "prs" ? "pulls" : "issues"}?state=open&per_page=30`)
+      .then((raw) => {
+        const data = raw as any;
         if (dead) return;
         if (!Array.isArray(data)) throw new Error(data?.message ?? "unexpected GitHub response");
         const rows: Item[] = data
@@ -85,9 +77,9 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
         if (kind === "prs") {
           rows.forEach((it, i) => {
             if (!it.sha) return;
-            gh(`repos/${slug}/commits/${it.sha}/check-runs?per_page=50`)
-              .then((res) => res.json())
-              .then((cr: any) => {
+            ghJson(`repos/${slug}/commits/${it.sha}/check-runs?per_page=50`)
+              .then((rawCr) => {
+                const cr = rawCr as any;
                 if (dead || !Array.isArray(cr?.check_runs)) return;
                 const runs = cr.check_runs;
                 const ci: Item["ci"] =

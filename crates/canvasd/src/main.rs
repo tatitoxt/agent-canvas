@@ -391,22 +391,18 @@ async fn share_create(
     State(state): State<Arc<AppState>>,
     Json(input): Json<ShareIn>,
 ) -> axum::response::Response {
-    let body = match base64::engine::general_purpose::STANDARD.decode(&input.b64) {
-        Ok(b) if b.len() <= 8 * 1024 * 1024 => b,
-        Ok(_) => return (StatusCode::PAYLOAD_TOO_LARGE, "share too large").into_response(),
-        Err(_) => return (StatusCode::BAD_REQUEST, "bad base64").into_response(),
+    let body = match canvasd::share::decode_body(&input.b64) {
+        Ok(b) => b,
+        Err(canvasd::share::DecodeError::TooLarge) => {
+            return (StatusCode::PAYLOAD_TOO_LARGE, "share too large").into_response()
+        }
+        Err(canvasd::share::DecodeError::BadBase64) => {
+            return (StatusCode::BAD_REQUEST, "bad base64").into_response()
+        }
     };
-    let id = uuid::Uuid::new_v4().simple().to_string()[..16].to_string();
-    let title = if input.title.trim().is_empty() {
-        "artifact".to_string()
-    } else {
-        input.title
-    };
-    let mime = if input.mime.trim().is_empty() {
-        "application/octet-stream".to_string()
-    } else {
-        input.mime
-    };
+    let id = canvasd::share::new_share_id();
+    let title = canvasd::share::normalize_title(&input.title);
+    let mime = canvasd::share::normalize_mime(&input.mime);
     state
         .shares
         .lock()
@@ -419,18 +415,7 @@ async fn share_create(
 /// agents, workspaces) as JSON. The portable answer to "do my canvases
 /// persist" — restore happens by moving .canvas/board.db between machines.
 async fn export_state(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    Json(serde_json::json!({
-        "version": 1,
-        "exported_at": std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs(),
-        "boards": state.store.boards_snapshot().unwrap_or_default(),
-        "layout": state.store.layout_map().unwrap_or_default(),
-        "agents": state.store.agents_snapshot().unwrap_or_default(),
-        "workspaces": state.store.workspaces_snapshot().unwrap_or_default(),
-        "delegations": state.store.delegations_snapshot().unwrap_or_default(),
-    }))
+    Json(canvasd::export::state_json(&state.store))
 }
 
 /// GET /share/{id} — public endpoint (no token): the unguessable id is the
@@ -446,11 +431,7 @@ async fn share_get(
                 (header::CONTENT_TYPE, mime),
                 (
                     header::CONTENT_DISPOSITION,
-                    format!(
-                        "inline; filename=\"{}.{}\"",
-                        title.replace('"', ""),
-                        if title.ends_with(".pdf") { "" } else { "pdf" }
-                    ),
+                    canvasd::share::content_disposition(&title),
                 ),
             ],
             axum::body::Body::from(body),
@@ -3179,7 +3160,16 @@ async fn main() -> Result<()> {
         .route("/health", get(health))
         .route("/export", get(export_state))
         .route("/github/{*rest}", get(github_proxy))
-        .route("/share", axum::routing::post(share_create))
+        .route(
+            "/share",
+            // axum's default body limit (2 MB) would silently shadow the
+            // documented 8 MB share cap: base64 inflates the payload 4/3,
+            // so the wire cap needs headroom past 8 MiB or shares between
+            // ~1.5 MB and 8 MB die in the extractor before decode_body's
+            // own cap can answer properly.
+            axum::routing::post(share_create)
+                .layer(axum::extract::DefaultBodyLimit::max(12 * 1024 * 1024)),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
