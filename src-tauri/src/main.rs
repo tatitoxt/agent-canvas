@@ -2448,7 +2448,10 @@ fn pty_input(
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&data)
         .map_err(|e| e.to_string())?;
-    match state.orchestrator.gated_write_disposition(&agent_id, &bytes) {
+    match state
+        .orchestrator
+        .gated_write_disposition(&agent_id, &bytes)
+    {
         Ok(_) => Ok(()),
         Err(message) => {
             emit_control(
