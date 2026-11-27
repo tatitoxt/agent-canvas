@@ -11,6 +11,7 @@ import type { AgentStatus } from "../board/types";
 const DEFAULT_POS = { x: -1, y: -1 }; // sentinel: anchored, not popped out
 const DEFAULT_SIZE = { width: 576, height: 320 };
 const TERMINAL_SIZE_KEY = "cv-terminal-drawer-size";
+const TERMINAL_SPLIT_KEY = "cv-terminal-split-ratio";
 const ROLE_LABELS: Record<string, string> = {
   review: "Review", reviewer: "Review", builder: "Builder", frontend: "Frontend",
   backend: "Backend", test: "Test", tester: "Test", docs: "Docs", doc: "Docs",
@@ -56,6 +57,16 @@ export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index 
   // this one inside the same drawer.
   const [split, setSplit] = useState<null | "right" | "down">(null);
   const [splitAgent, setSplitAgent] = useState<string | null>(null);
+  const [splitRatio, setSplitRatio] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem(TERMINAL_SPLIT_KEY));
+      if (Number.isFinite(saved) && saved >= 0.2 && saved <= 0.8) return saved;
+    } catch { /* use the balanced split */ }
+    return 0.5;
+  });
+  const splitRatioRef = useRef(splitRatio);
+  const splitAreaRef = useRef<HTMLDivElement>(null);
+  const splitDragRef = useRef<{ start: number; extent: number; ratio: number } | null>(null);
   // "split with NEW terminal": a fresh independent shell in the second pane
   // (Deska behavior) instead of mirroring an existing agent.
   const [pendingNew, setPendingNew] = useState<{ name: string; since: number } | null>(null);
@@ -171,6 +182,36 @@ export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index 
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       try { localStorage.setItem(TERMINAL_SIZE_KEY, JSON.stringify(nextSize)); } catch { /* noop */ }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  const onSplitResizeDown = (e: React.PointerEvent) => {
+    if (!split) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = splitAreaRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const horizontal = split === "down";
+    splitDragRef.current = {
+      start: horizontal ? e.clientY : e.clientX,
+      extent: horizontal ? rect.height : rect.width,
+      ratio: splitRatio,
+    };
+    const move = (ev: PointerEvent) => {
+      const drag = splitDragRef.current;
+      if (!drag || drag.extent <= 0) return;
+      const point = horizontal ? ev.clientY : ev.clientX;
+      const next = Math.max(0.2, Math.min(0.8, drag.ratio + (point - drag.start) / drag.extent));
+      splitRatioRef.current = next;
+      setSplitRatio(next);
+    };
+    const up = () => {
+      splitDragRef.current = null;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      try { localStorage.setItem(TERMINAL_SPLIT_KEY, String(splitRatioRef.current)); } catch { /* noop */ }
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -459,18 +500,65 @@ export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index 
         </div>
       </div>
       <div
+        ref={splitAreaRef}
         className="min-h-0 flex-1"
-        style={{ display: "flex", flexDirection: split === "down" ? "column" : "row" }}
+        style={{ display: "flex", flexDirection: split === "down" ? "column" : "row", minWidth: 0, minHeight: 0 }}
       >
-        <TermHost agentId={agentId} />
+        <div
+          data-testid={split ? "terminal-split-primary" : undefined}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            minWidth: 0,
+            minHeight: 0,
+            overflow: "hidden",
+            flex: split ? `0 0 calc(${splitRatio * 100}% - 3px)` : "1 1 0%",
+          }}
+        >
+          <TermHost agentId={agentId} />
+        </div>
         {split && (
           <div
+            role="separator"
+            aria-label="Resize split terminals"
+            aria-orientation={split === "down" ? "horizontal" : "vertical"}
+            aria-valuemin={20}
+            aria-valuemax={80}
+            aria-valuenow={Math.round(splitRatio * 100)}
+            tabIndex={0}
+            onPointerDown={onSplitResizeDown}
+            onKeyDown={(e) => {
+              if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+              e.preventDefault();
+              const direction = ["ArrowRight", "ArrowDown"].includes(e.key) ? 1 : -1;
+              setSplitRatio((ratio) => {
+                const next = Math.max(0.2, Math.min(0.8, ratio + direction * 0.04));
+                splitRatioRef.current = next;
+                try { localStorage.setItem(TERMINAL_SPLIT_KEY, String(next)); } catch { /* noop */ }
+                return next;
+              });
+            }}
+            title="drag to resize split terminals"
+            style={{
+              flex: "none",
+              width: split === "right" ? 6 : "100%",
+              height: split === "down" ? 6 : "100%",
+              cursor: split === "down" ? "row-resize" : "col-resize",
+              touchAction: "none",
+              background: "var(--cv-glass-edge)",
+              zIndex: 2,
+            }}
+          />
+        )}
+        {split && (
+          <div
+            data-testid="terminal-split-secondary"
             className="min-h-0 flex-1"
             style={{
               display: "flex",
               flexDirection: "column",
-              borderLeft: split === "right" ? "1px solid var(--cv-glass-edge)" : "none",
-              borderTop: split === "down" ? "1px solid var(--cv-glass-edge)" : "none",
+              minWidth: 0,
+              minHeight: 0,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 8px", borderBottom: "1px solid var(--cv-glass-edge)" }}>

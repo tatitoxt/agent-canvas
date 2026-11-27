@@ -283,7 +283,7 @@ export const TermHost = memo(function TermHost({ agentId }: { agentId: string })
           </button>
         </div>
       )}
-      <div ref={hostRef} className="min-h-0 min-w-0 flex-1" style={{ minWidth: 0 }} />
+      <div data-testid="terminal-xterm-host" ref={hostRef} className="min-h-0 min-w-0 flex-1" style={{ minWidth: 0 }} />
       <div
         className="nodrag"
         style={{ position: "absolute", top: findOpen ? 30 : 6, right: 8, display: findOpen ? "none" : "flex", gap: 4, alignItems: "center", zIndex: 5 }}
