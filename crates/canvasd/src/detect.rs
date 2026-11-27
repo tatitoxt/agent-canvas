@@ -1,16 +1,18 @@
 //! Best-effort CLI account/model detection, shared between canvasd
 //! and the Tauri embedded host.
 
-use std::path::PathBuf;
-
 /// Best-effort detection of which account/model a CLI runs with, from
 /// the CLI's own config files. Honest by design: anything not found in
 /// a real file stays None and the UI says "unknown".
 pub fn detect_cli_identities(known_clis: &[&str]) -> std::collections::HashMap<String, crate::protocol::CliIdentity> {
     use std::collections::HashMap;
-    let home = std::env::var("HOME").unwrap_or_default();
+    // The CLIs keep the same dotfile layout in the home/profile directory
+    // on every platform — what changes is how the home directory itself is
+    // resolved (HOME is typically absent on Windows).
+    let Some(home) = crate::paths::home_dir() else {
+        return HashMap::new();
+    };
     let mut out = HashMap::new();
-    if home.is_empty() { return out; }
 
     fn read_json(path: &std::path::Path) -> Option<serde_json::Value> {
         serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
@@ -61,13 +63,13 @@ pub fn detect_cli_identities(known_clis: &[&str]) -> std::collections::HashMap<S
         let mut id = crate::protocol::CliIdentity { account: None, model: None, source: None };
         match cli {
             "claude" => {
-                let cfg = PathBuf::from(&home).join(".claude.json");
+                let cfg = home.join(".claude.json");
                 if let Some(v) = read_json(&cfg) {
                     id.account = scan_keys(&v, &|k| k.eq_ignore_ascii_case("email") || k.to_ascii_lowercase().ends_with("emailaddress"), 0).filter(|e| emailish(e));
                     id.model = scan_keys(&v, &|k| k == "model", 0);
                     if id.account.is_some() || id.model.is_some() { id.source = Some("~/.claude.json".into()); }
                 }
-                let st = PathBuf::from(&home).join(".claude").join("settings.json");
+                let st = home.join(".claude").join("settings.json");
                 if id.model.is_none() {
                     if let Some(v) = read_json(&st) {
                         id.model = scan_keys(&v, &|k| k == "model", 0);
@@ -76,7 +78,7 @@ pub fn detect_cli_identities(known_clis: &[&str]) -> std::collections::HashMap<S
                 }
             }
             "codex" => {
-                let auth = PathBuf::from(&home).join(".codex").join("auth.json");
+                let auth = home.join(".codex").join("auth.json");
                 if let Some(v) = read_json(&auth) {
                     if let Some(tok) = scan_keys(&v, &|k| k == "id_token", 0) {
                         id.account = jwt_email(&tok);
@@ -87,7 +89,7 @@ pub fn detect_cli_identities(known_clis: &[&str]) -> std::collections::HashMap<S
                     if id.account.is_some() { id.source = Some("~/.codex/auth.json".into()); }
                 }
                 // config.toml — no toml dep; a top-level `model = "x"` line scan is enough.
-                let toml = PathBuf::from(&home).join(".codex").join("config.toml");
+                let toml = home.join(".codex").join("config.toml");
                 if let Ok(text) = std::fs::read_to_string(&toml) {
                     for line in text.lines() {
                         let line = line.trim();
@@ -105,12 +107,12 @@ pub fn detect_cli_identities(known_clis: &[&str]) -> std::collections::HashMap<S
                 }
             }
             "gemini" => {
-                let accts = PathBuf::from(&home).join(".gemini").join("google_accounts.json");
+                let accts = home.join(".gemini").join("google_accounts.json");
                 if let Some(v) = read_json(&accts) {
                     id.account = scan_keys(&v, &|k| k == "active" || k == "email", 0).filter(|e| emailish(e));
                     if id.account.is_some() { id.source = Some("~/.gemini/google_accounts.json".into()); }
                 }
-                let st = PathBuf::from(&home).join(".gemini").join("settings.json");
+                let st = home.join(".gemini").join("settings.json");
                 if let Some(v) = read_json(&st) {
                     id.model = scan_keys(&v, &|k| k == "model", 0);
                     if id.model.is_some() && id.source.is_none() { id.source = Some("~/.gemini/settings.json".into()); }

@@ -20,6 +20,7 @@ base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
 tokio-tungstenite = "0.29"
 libc = "0.2"
+dirs = "7"
 futures-util = "0.3"
 
 [[bin]]

@@ -393,12 +393,27 @@ impl AgentManager {
         cmd.cwd(&spawn_dir);
         cmd.env("TERM", "xterm-256color");
         cmd.env("CANVAS_AGENT_ID", &id);
+        // The PTY's HOME comes from the portable resolver: $HOME verbatim
+        // when set (identical to before), the passwd entry when unset —
+        // the old `/` fallback only ever applied on a home-less system.
         #[cfg(unix)]
-        cmd.env("HOME", std::env::var("HOME").unwrap_or_else(|_| "/".into()));
+        cmd.env(
+            "HOME",
+            crate::paths::home_dir()
+                .unwrap_or_else(|| PathBuf::from("/"))
+                .to_string_lossy()
+                .to_string(),
+        );
         // Many agent CLIs read HOME even on Windows. Populate it from the
-        // real user profile instead of the Unix-only `/` fallback.
+        // real user profile instead of the Unix-only `/` fallback — env
+        // first (an intentional USERPROFILE redirect must win), then the
+        // known-folder API for environments where the variables are absent.
         #[cfg(windows)]
-        if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+        if let Some(home) = std::env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+            .or_else(crate::paths::home_dir)
+        {
             cmd.env("HOME", home);
         }
         for (k, v) in self.extra_env.lock().unwrap().iter() {
@@ -809,6 +824,18 @@ fn uuid_like() -> String {
     uuid::Uuid::new_v4().simple().to_string()[..12].to_string()
 }
 
+/// Env var that points a CLI at a per-account config dir, so two
+/// accounts of the same CLI keep separate auth. `None` = the CLI has no
+/// documented config-dir override.
+pub fn account_env_key(cli: &str) -> Option<&'static str> {
+    match cli {
+        c if c.contains("codex") => Some("CODEX_HOME"),
+        c if c.contains("claude") => Some("CLAUDE_CONFIG_DIR"),
+        c if c.contains("gemini") => Some("GEMINI_CLI_HOME"),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -945,17 +972,5 @@ mod tests {
         // …and the worktree failure still surfaces rather than being hidden.
         assert!(ensure_worktree(&dir, "testagent02", "Terminal").is_err());
         std::fs::remove_dir_all(&dir).unwrap();
-    }
-}
-
-/// Env var that points a CLI at a per-account config dir, so two
-/// accounts of the same CLI keep separate auth. `None` = the CLI has no
-/// documented config-dir override.
-pub fn account_env_key(cli: &str) -> Option<&'static str> {
-    match cli {
-        c if c.contains("codex") => Some("CODEX_HOME"),
-        c if c.contains("claude") => Some("CLAUDE_CONFIG_DIR"),
-        c if c.contains("gemini") => Some("GEMINI_CLI_HOME"),
-        _ => None,
     }
 }

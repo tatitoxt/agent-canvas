@@ -115,8 +115,12 @@ async fn main() -> Result<()> {
             let is_delegate = sub == "delegate";
             let name = flag(rest, "--name").unwrap_or_else(|| "agent".into());
             let cmd_flag = if is_delegate { "--cli" } else { "--cmd" };
+            // Default shell is platform-native: bash exists on every Unix
+            // canvas targets; Windows gets cmd (bash only exists there as
+            // an optional git-bash install).
+            let default_shell = if cfg!(windows) { "cmd" } else { "bash" };
             let command = flag(rest, cmd_flag)
-                .unwrap_or_else(|| "bash".into());
+                .unwrap_or_else(|| default_shell.into());
             let cwd = flag(rest, "--cwd").unwrap_or_else(|| ".".into());
             let mut msg = json!({
                 "cmd": if is_delegate { "delegate" } else { "spawn_agent" },

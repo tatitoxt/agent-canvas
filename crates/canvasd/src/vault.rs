@@ -7,18 +7,37 @@
 use crate::protocol::VaultLocation;
 use std::path::PathBuf;
 
+/// Every place Obsidian might keep its vault registry on any platform.
+/// This is a candidate scan — entries for other platforms simply never
+/// exist and cost nothing, which keeps the Unix ordering byte-identical
+/// while Windows gains its native locations. Home resolution is portable:
+/// `HOME` is typically unset on Windows, where the scan would otherwise
+/// have nothing to work with.
 fn obsidian_config_candidates() -> Vec<PathBuf> {
     let mut out = Vec::new();
-    if let Ok(home) = std::env::var("HOME") {
-        let h = PathBuf::from(&home);
-        out.push(h.join("Library/Application Support/obsidian/obsidian.json")); // macOS
-        out.push(h.join(".config/obsidian/obsidian.json")); // Linux
+    if let Some(h) = crate::paths::home_dir() {
+        // macOS — chained joins rather than a "/"-laden literal: separator
+        // characters belong to the platform path parser, not to our strings.
+        out.push(h.join("Library").join("Application Support").join("obsidian").join("obsidian.json"));
+        // Linux
+        out.push(h.join(".config").join("obsidian").join("obsidian.json"));
     }
     if let Ok(appdata) = std::env::var("APPDATA") {
-        out.push(PathBuf::from(appdata).join("obsidian/obsidian.json")); // Windows
+        out.push(PathBuf::from(appdata).join("obsidian").join("obsidian.json")); // Windows
     }
     if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-        out.push(PathBuf::from(xdg).join("obsidian/obsidian.json"));
+        out.push(PathBuf::from(xdg).join("obsidian").join("obsidian.json"));
+    }
+    // The platform-preferred config dir as a safety net: on Windows this
+    // is the roaming folder resolved through the known-folder API, which
+    // still answers when APPDATA is missing from the environment (service
+    // accounts, hardened shells). Deduped — on macOS/Linux it usually
+    // restates one of the home-based candidates above.
+    if let Some(cfg) = dirs::config_dir() {
+        let p = cfg.join("obsidian").join("obsidian.json");
+        if !out.contains(&p) {
+            out.push(p);
+        }
     }
     out
 }
@@ -57,9 +76,12 @@ pub fn discover() -> Vec<VaultLocation> {
             }
         }
     }
-    if let Ok(home) = std::env::var("HOME") {
-        let h = PathBuf::from(&home);
-        for base in [h.join("Documents"), h.join("Desktop"), h.clone()] {
+    {
+        // Scan bases are platform-aware: Unix scans the profile's
+        // Documents/Desktop/root exactly as before; Windows also scans the
+        // known-folder locations, which OneDrive redirection moves away
+        // from the profile defaults.
+        for base in crate::paths::home_scan_bases() {
             if let Ok(rd) = std::fs::read_dir(&base) {
                 for e in rd.flatten().take(200) {
                     let p = e.path();
@@ -84,15 +106,19 @@ pub fn register(dir: &str) -> Result<Vec<VaultLocation>, String> {
     }
     std::fs::create_dir_all(root.join(".obsidian")).map_err(|e| e.to_string())?;
 
+    // No registry anywhere yet: write the fresh one where Obsidian itself
+    // looks on this platform. `dirs::config_dir` encodes exactly that —
+    // ~/Library/Application Support on macOS (the historical fallback
+    // here, byte-identical), $XDG_CONFIG_HOME/~/.config on Linux (the old
+    // fallback wrote the macOS path even on Linux, where Obsidian never
+    // reads it), %APPDATA% on Windows.
     let cfg = obsidian_config_candidates()
         .into_iter()
         .find(|p| p.is_file())
         .or_else(|| {
-            std::env::var("HOME").ok().map(|h| {
-                PathBuf::from(h).join("Library/Application Support/obsidian/obsidian.json")
-            })
+            dirs::config_dir().map(|c| c.join("obsidian").join("obsidian.json"))
         })
-        .ok_or_else(|| "cannot locate obsidian.json (HOME/APPDATA unset)".to_string())?;
+        .ok_or_else(|| "cannot locate obsidian.json (no user config directory)".to_string())?;
 
     let mut json = std::fs::read_to_string(&cfg)
         .ok()
