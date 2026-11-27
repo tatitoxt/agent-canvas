@@ -599,6 +599,32 @@ test("Add to canvas closes Tools even when the dock is pinned", async ({ page })
   await expect(page.locator(".react-flow__node-panel [data-panel='automations']").first()).toBeVisible();
 });
 
+test("automation creation survives reload and can be deleted", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Automations to canvas" }).click();
+  await expect(dock).toBeHidden();
+
+  const panel = page.locator(".react-flow__node-panel [data-panel='automations']").first();
+  await expect(panel).toBeVisible();
+  await panel.getByRole("button", { name: "+ new", exact: true }).click();
+  const automationName = `E2E automation ${Date.now()}`;
+  await panel.getByPlaceholder("name — e.g. nightly audit").fill(automationName);
+  await panel.getByPlaceholder("prompt the agent receives on run").fill("Report the current repository branch and stop.");
+  await panel.getByRole("button", { name: "save automation" }).click();
+  await expect(panel.getByText(automationName, { exact: true })).toBeVisible();
+  await expect(panel.getByText("Report the current repository branch and stop.", { exact: true })).toBeVisible();
+
+  await page.reload();
+  const restoredPanel = page.locator(".react-flow__node-panel [data-panel='automations']").first();
+  await expect(restoredPanel).toBeVisible();
+  const savedAutomation = restoredPanel.locator("div").filter({ hasText: automationName }).filter({ has: page.getByRole("button", { name: "delete" }) }).last();
+  await expect(savedAutomation).toContainText("Report the current repository branch and stop.");
+  await savedAutomation.getByRole("button", { name: "delete" }).click();
+  await expect(restoredPanel.getByText(automationName, { exact: true })).toHaveCount(0);
+});
+
 test("panel chrome minimizes, restores, and closes with accessible controls", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();
