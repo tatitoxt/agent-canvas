@@ -2,6 +2,7 @@ import { memo, useContext } from "react";
 import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { useBoard } from "../store/board";
 import { LazyTermHost as TermHost } from "../components/LazyTermHost";
+import { TerminalError } from "../components/TerminalError";
 import { PanelActionsCtx } from "../components/panelCtx";
 import { CliMark } from "../components/CliMark";
 import { CardChrome, CardChromeButton } from "../components/CardChrome";
@@ -195,6 +196,7 @@ export const TermNode = memo(function TermNode({ id, selected, width }: NodeProp
           />
         </CardChrome>
       </div>
+      <TerminalError agentId={agentId} />
       {!n.collapsed && (
         <div className="nodrag nowheel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
           <TermHost agentId={agentId} />
