@@ -8,6 +8,7 @@ import { shareArtifactPdf } from "../lib/share";
 import { buildDoc, buildAskDoc } from "../lib/boardDocs";
 import { GeneratePdfMenu } from "./GeneratePdfMenu";
 import { Icon } from "./icons";
+import { resolveNotePath } from "./notePath";
 
 /** Markdown reader for inline artifact previews — lazy, same as the vault. */
 const ReadingView = lazy(() =>
@@ -430,7 +431,7 @@ export function ArtifactsPanel() {
                       onLink={(name) => {
                         const base = name.split("#")[0].trim();
                         const st = useBoard.getState();
-                        const hit = st.vaultEntries.find((e) => e === `${base}.md` || e.endsWith(`/${base}.md`) || e.replace(/\.md$/, "") === base);
+                        const hit = resolveNotePath(st.vaultEntries, base);
                         if (hit) st.vaultRead(hit);
                       }}
                     />
