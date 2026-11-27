@@ -585,6 +585,14 @@ export function VaultPanel() {
     setSplitDraft((d) => (d && d.text !== vaultText ? null : d));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vaultText]);
+  // The mirror only means something while the editor is mounted (Source or
+  // Split view) in this vault — in Reading/Graph the editor unmounts and the
+  // mirror goes stale (reopening Source reinitializes from disk), and after
+  // a vault switch the draft belongs to another vault entirely.
+  useEffect(() => {
+    if (view !== "source" && view !== "split") setSplitDraft(null);
+  }, [view]);
+  useEffect(() => { setSplitDraft(null); }, [vaultDir]);
   const [genOpen, setGenOpen] = useState(false);
   const [newNote, setNewNote] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -749,7 +757,11 @@ export function VaultPanel() {
     // Pinning closes the card — flush any unsaved Source-editor draft first
     // or the edit dies with the unmounted editor and the pinned window
     // misleadingly shows the older saved bytes.
-    if (splitDraft?.path === vaultFile.path && splitDraft.text !== vaultFile.text) {
+    if (
+      (view === "source" || view === "split") &&
+      splitDraft?.path === vaultFile.path &&
+      splitDraft.text !== vaultFile.text
+    ) {
       vaultWrite(vaultFile.path, splitDraft.text);
     }
     mdNodeAdd(vaultFile.path, undefined, position, heading);
