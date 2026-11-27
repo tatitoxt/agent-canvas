@@ -48,6 +48,60 @@ pub fn generate_token() -> String {
     buf.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// Who authenticated to the native control socket.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ControlIdentity {
+    /// The per-launch operator/test token. This is intentionally not injected
+    /// into PTYs by the native shell.
+    Operator,
+    /// A per-agent credential issued when that agent's PTY was spawned.
+    Agent(String),
+}
+
+/// Token issuer/verifier for the native control socket. The operator token
+/// remains useful for tests and debugging, while each spawned PTY receives a
+/// distinct agent credential. That makes delegation parents verifiable instead
+/// of trusting a self-declared CANVAS_AGENT_ID over a shared bearer token.
+#[derive(Clone)]
+pub struct ControlAuth {
+    operator_token: String,
+    agent_tokens: std::sync::Arc<Mutex<HashMap<String, String>>>,
+}
+
+impl ControlAuth {
+    pub fn new(operator_token: String) -> Self {
+        Self {
+            operator_token,
+            agent_tokens: std::sync::Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn operator_token(&self) -> &str {
+        &self.operator_token
+    }
+
+    pub fn issue_agent_token(&self, agent_id: &str) -> String {
+        let token = generate_token();
+        self.agent_tokens
+            .lock()
+            .unwrap()
+            .insert(token.clone(), agent_id.to_string());
+        token
+    }
+
+    pub fn identity(&self, token: &str) -> Option<ControlIdentity> {
+        if token_eq(token, &self.operator_token) {
+            return Some(ControlIdentity::Operator);
+        }
+        self.agent_tokens
+            .lock()
+            .unwrap()
+            .get(token)
+            .cloned()
+            .map(ControlIdentity::Agent)
+    }
+}
+
 pub fn uuid_like() -> String {
     uuid::Uuid::new_v4().simple().to_string()[..12].to_string()
 }
@@ -336,7 +390,7 @@ pub fn snapshot_message(
 #[derive(Clone)]
 struct ControlSocketState {
     orchestrator: Orchestrator,
-    token: String,
+    auth: ControlAuth,
 }
 
 #[derive(Deserialize)]
@@ -350,12 +404,15 @@ struct WsQuery {
 /// native-only transport: `canvasctl` already speaks it, and agents should
 /// not care which runtime owns the board.
 pub fn router(orchestrator: Orchestrator, token: String) -> Router {
+    router_with_auth(orchestrator, ControlAuth::new(token))
+}
+
+/// Router variant backed by per-agent credentials. The plain `router` helper
+/// keeps tests/simple embedding unchanged; the Tauri shell uses this one.
+pub fn router_with_auth(orchestrator: Orchestrator, auth: ControlAuth) -> Router {
     Router::new()
         .route("/ws", get(ws_handler))
-        .with_state(ControlSocketState {
-            orchestrator,
-            token,
-        })
+        .with_state(ControlSocketState { orchestrator, auth })
 }
 
 async fn ws_handler(
@@ -363,14 +420,14 @@ async fn ws_handler(
     Query(q): Query<WsQuery>,
     State(state): State<ControlSocketState>,
 ) -> impl IntoResponse {
-    if !token_eq(&q.token, &state.token) {
+    let Some(identity) = state.auth.identity(&q.token) else {
         return (StatusCode::UNAUTHORIZED, "invalid session token").into_response();
-    }
+    };
     ws.max_message_size(8 * 1024 * 1024)
         // Keep frame == message cap: some browsers (Firefox) send ws payloads
         // as a single frame, so a smaller frame cap rejects valid uploads.
         .max_frame_size(8 * 1024 * 1024)
-        .on_upgrade(move |socket| handle_socket(socket, state))
+        .on_upgrade(move |socket| handle_socket(socket, state, identity))
 }
 
 fn snapshot_for(state: &ControlSocketState) -> Result<ServerMsg> {
@@ -384,7 +441,11 @@ fn snapshot_for(state: &ControlSocketState) -> Result<ServerMsg> {
     )
 }
 
-async fn handle_socket(mut socket: WebSocket, state: ControlSocketState) {
+async fn handle_socket(
+    mut socket: WebSocket,
+    state: ControlSocketState,
+    identity: ControlIdentity,
+) {
     let mut control_rx = state.orchestrator.subscribe_control();
     let mut pty_rx = state.orchestrator.subscribe_pty();
 
@@ -455,7 +516,7 @@ async fn handle_socket(mut socket: WebSocket, state: ControlSocketState) {
             },
             msg = receiver.next() => match msg {
                 Some(Ok(Message::Text(text))) => {
-                    handle_client_msg(&text, &state);
+                    handle_client_msg(&text, &state, &identity);
                 }
                 Some(Ok(Message::Binary(frame))) => {
                     // [id_len][agent_id][payload] — client typing into a PTY.
@@ -713,7 +774,7 @@ fn unsupported(orchestrator: &Orchestrator, cmd: &str) {
 /// the orchestration/core board subset an in-PTY agent needs; heavy UI file
 /// browsers and daemon scheduling surfaces stay on their existing native or
 /// daemon transports rather than being reimplemented behind agent tokens.
-fn handle_client_msg(text: &str, state: &ControlSocketState) {
+fn handle_client_msg(text: &str, state: &ControlSocketState, identity: &ControlIdentity) {
     let orchestrator = &state.orchestrator;
     let msg: ClientMsg = match serde_json::from_str(text) {
         Ok(m) => m,
@@ -733,22 +794,37 @@ fn handle_client_msg(text: &str, state: &ControlSocketState) {
             board_id,
             account_id,
             initial_input,
-        } => report(
-            orchestrator,
-            orchestrator
-                .spawn_node(SpawnParams {
-                    name,
-                    command,
-                    cwd,
-                    workspace_id,
-                    permission,
-                    board_id,
-                    account_id,
-                    initial_input,
-                })
-                .map(|_| ()),
-            None,
-        ),
+        } => {
+            let mut params = SpawnParams {
+                name,
+                command,
+                cwd,
+                workspace_id,
+                permission,
+                board_id,
+                account_id,
+                initial_input,
+            };
+            if let ControlIdentity::Agent(caller) = identity {
+                // A child can never climb above the authenticated caller. If
+                // the caller row has disappeared, fail closed at supervised
+                // rather than treating the stale token as operator power.
+                let parent = orchestrator
+                    .store
+                    .agent_permission(caller)
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| "supervised".to_string());
+                let requested = protocol::normalize_permission(params.permission.as_deref());
+                params.permission =
+                    Some(protocol::clamp_to_parent(requested, Some(&parent)).to_string());
+            }
+            report(
+                orchestrator,
+                orchestrator.spawn_node(params).map(|_| ()),
+                None,
+            )
+        }
         ClientMsg::Delegate {
             from,
             name,
@@ -760,24 +836,37 @@ fn handle_client_msg(text: &str, state: &ControlSocketState) {
             account_id,
             board_id,
             initial_input,
-        } => report(
-            orchestrator,
-            orchestrator
-                .delegate(DelegateParams {
-                    from,
-                    name,
-                    command,
-                    task,
-                    cwd,
-                    workspace_id,
-                    permission,
-                    account_id,
-                    board_id,
-                    initial_input,
-                })
-                .map(|_| ()),
-            None,
-        ),
+        } => {
+            let caller_matches = match identity {
+                ControlIdentity::Operator => true,
+                ControlIdentity::Agent(caller) => caller == &from,
+            };
+            if !caller_matches {
+                orchestrator.emit_error(
+                    None,
+                    "delegate parent does not match the authenticated agent",
+                );
+            } else {
+                report(
+                    orchestrator,
+                    orchestrator
+                        .delegate(DelegateParams {
+                            from,
+                            name,
+                            command,
+                            task,
+                            cwd,
+                            workspace_id,
+                            permission,
+                            account_id,
+                            board_id,
+                            initial_input,
+                        })
+                        .map(|_| ()),
+                    None,
+                )
+            }
+        }
         ClientMsg::ArtifactCreate {
             board_id,
             agent_id,
@@ -785,13 +874,35 @@ fn handle_client_msg(text: &str, state: &ControlSocketState) {
             title,
             path,
             text,
-        } => report(
-            orchestrator,
-            orchestrator
-                .artifact_create(board_id, agent_id, kind, title, path, text)
-                .map(|_| ()),
-            None,
-        ),
+        } => {
+            let mut agent_id = agent_id;
+            let attribution_matches = match identity {
+                ControlIdentity::Operator => true,
+                ControlIdentity::Agent(caller) => {
+                    let claimed = agent_id.as_deref();
+                    if claimed.is_none_or(|id| id == caller) {
+                        agent_id = Some(caller.clone());
+                        true
+                    } else {
+                        false
+                    }
+                }
+            };
+            if !attribution_matches {
+                orchestrator.emit_error(
+                    None,
+                    "artifact agent does not match the authenticated agent",
+                );
+            } else {
+                report(
+                    orchestrator,
+                    orchestrator
+                        .artifact_create(board_id, agent_id, kind, title, path, text)
+                        .map(|_| ()),
+                    None,
+                )
+            }
+        }
         ClientMsg::ArtifactDelete { artifact_id } => report(
             orchestrator,
             artifact_delete(orchestrator, artifact_id),
@@ -889,32 +1000,13 @@ fn handle_client_msg(text: &str, state: &ControlSocketState) {
         ClientMsg::KillAgent { agent_id } => {
             orchestrator.emit_error(Some(agent_id), "kill requires confirm_destructive")
         }
-        ClientMsg::ConfirmDestructive { agent_id, action } => {
-            let id = agent_id.clone();
-            report(
-                orchestrator,
-                orchestrator.confirm_destructive(&agent_id, &action),
-                Some(id),
-            )
-        }
-        ClientMsg::ApproveInput { agent_id } => {
-            let id = agent_id.clone();
-            report(
-                orchestrator,
-                orchestrator.approve_input(&agent_id),
-                Some(id),
-            )
-        }
-        ClientMsg::DenyInput { agent_id } => {
-            orchestrator
-                .pending_inputs
-                .lock()
-                .unwrap()
-                .remove(&agent_id);
-            // Same wire-level feedback as the daemon: a denied write surfaces
-            // as an error event so the requester knows the payload was dropped.
-            orchestrator.emit_error(Some(agent_id), "input denied by operator");
-        }
+        // Operator confirmations must be a human gesture on the native UI,
+        // never something a token-bearing agent can perform for itself or for
+        // another terminal. Kill already requires this command, so both sides
+        // of the destructive/approval surface stay unavailable here.
+        ClientMsg::ConfirmDestructive { .. } => unsupported(orchestrator, "confirm_destructive"),
+        ClientMsg::ApproveInput { .. } => unsupported(orchestrator, "approve_input"),
+        ClientMsg::DenyInput { .. } => unsupported(orchestrator, "deny_input"),
         ClientMsg::MoveNode { agent_id, x, y } => report(
             orchestrator,
             orchestrator
@@ -1000,6 +1092,59 @@ mod tests {
         assert!(!token_eq("abc", "abd"));
         assert!(!token_eq("abc", "abcd"));
         assert!(!token_eq("", "x"));
+    }
+
+    #[test]
+    fn control_auth_distinguishes_operator_and_issued_agent_tokens() {
+        let auth = ControlAuth::new("operator-token".to_string());
+        let agent_token = auth.issue_agent_token("agent-1");
+        assert_eq!(
+            auth.identity("operator-token"),
+            Some(ControlIdentity::Operator)
+        );
+        assert_eq!(
+            auth.identity(&agent_token),
+            Some(ControlIdentity::Agent("agent-1".to_string()))
+        );
+        assert_eq!(auth.identity("other"), None);
+    }
+
+    #[test]
+    fn operator_confirmation_messages_are_rejected_on_the_agent_socket() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = std::sync::Arc::new(Store::open(&tmp.path().join("c.db")).unwrap());
+        let orchestrator = Orchestrator::new(
+            store,
+            std::sync::Arc::new(crate::agent::AgentManager::new()),
+            tmp.path().to_path_buf(),
+            crate::orchestrate::tokio_task_spawner(),
+        );
+        let auth = ControlAuth::new("operator-token".to_string());
+        let state = ControlSocketState {
+            orchestrator: orchestrator.clone(),
+            auth,
+        };
+        let mut rx = orchestrator.subscribe_control();
+        for msg in [
+            serde_json::json!({"cmd":"confirm_destructive","agent_id":"a","action":"kill"}),
+            serde_json::json!({"cmd":"approve_input","agent_id":"a"}),
+            serde_json::json!({"cmd":"deny_input","agent_id":"a"}),
+        ] {
+            handle_client_msg(
+                &serde_json::to_string(&msg).unwrap(),
+                &state,
+                &ControlIdentity::Operator,
+            );
+            match rx.try_recv() {
+                Ok(ServerMsg::Error { message, .. }) => {
+                    assert!(
+                        message.contains("outside the native control socket scope"),
+                        "unexpected error: {message}"
+                    );
+                }
+                other => panic!("expected unsupported error, got {other:?}"),
+            }
+        }
     }
 
     #[test]

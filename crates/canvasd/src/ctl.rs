@@ -136,6 +136,10 @@ pub async fn run(args: Vec<String>) -> Result<()> {
             }
             if is_delegate {
                 let task = flag(rest, "--task").context("--task is required")?;
+                // canvasctl has no separate "brief vs input" surface: the
+                // delegated task is both the edge description and the text
+                // typed into the child once its CLI has booted.
+                msg["initial_input"] = json!(&task);
                 msg["task"] = json!(task);
                 msg["from"] = json!(std::env::var("CANVAS_AGENT_ID")
                     .context("CANVAS_AGENT_ID not set — delegate must run inside an agent")?);
