@@ -7,6 +7,7 @@ import { useBoard } from "../store/board";
 import { PtyWriteBuffer } from "../board/ptyWriteBuffer";
 import { observeNearViewport } from "../lib/nearViewport";
 import { countRender } from "../lib/renderProbe";
+import { sendPtyResize, updatePtyConnection } from "./ptyResize";
 
 /** The xterm core shared by the bottom drawer (TerminalPanel) and the
  * canvas terminal card (TermNode): mounts the emulator, replays the
@@ -21,41 +22,6 @@ const DECOR = { matchBackground: "#5c4316", matchOverviewRuler: "#f5a524", activ
  * over the width and corrupting reflow. */
 type Mirror = { term: Terminal; fit: FitAddon; host: HTMLDivElement };
 const mirrors = new Map<string, Set<Mirror>>();
-
-/** PTY resize is expensive end to end: a websocket frame, the daemon's
- * ioctl and a SIGWINCH that makes the shell or TUI repaint everything.
- * A resize gesture otherwise produces one of those per mousemove frame
- * (~55/s). Gate on real integer geometry changes and coalesce bursts to
- * one update per 140ms — leading edge so the shell tracks the gesture,
- * trailing edge so the final size always lands. */
-const ptyResizeState = new Map<string, { cols: number; rows: number; sentAt: number; timer?: number; pending?: { cols: number; rows: number } }>();
-
-function sendPtyResize(agentId: string, cols: number, rows: number) {
-  let st = ptyResizeState.get(agentId);
-  if (!st) {
-    st = { cols: -1, rows: -1, sentAt: 0 };
-    ptyResizeState.set(agentId, st);
-  }
-  if (!st.pending && st.cols === cols && st.rows === rows) return;
-  st.pending = { cols, rows };
-  if (st.timer !== undefined) return;
-  const flush = () => {
-    const cur = ptyResizeState.get(agentId);
-    if (!cur) return;
-    cur.timer = undefined;
-    if (!cur.pending) return;
-    const { cols: c, rows: r } = cur.pending;
-    cur.pending = undefined;
-    if (cur.cols === c && cur.rows === r) return;
-    cur.cols = c;
-    cur.rows = r;
-    cur.sentAt = Date.now();
-    useBoard.getState().resizePty(agentId, c, r);
-  };
-  const wait = 140 - (Date.now() - st.sentAt);
-  if (wait <= 0) flush();
-  else st.timer = window.setTimeout(flush, wait);
-}
 
 function syncMirroredSize(agentId: string) {
   const set = mirrors.get(agentId);
@@ -83,9 +49,14 @@ export const TermHost = memo(function TermHost({ agentId }: { agentId: string })
   const termRef = useRef<Terminal | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
   const termFont = useBoard((s) => s.termFont);
+  const connected = useBoard((s) => s.connected);
   // In-terminal find — a mini bar over the buffer (next/prev, Enter=next).
   const [findOpen, setFindOpen] = useState(false);
   const [findQ, setFindQ] = useState("");
+
+  useEffect(() => {
+    updatePtyConnection(agentId, connected);
+  }, [agentId, connected]);
 
   // Keep terminal shortcuts scoped to this pane. In particular, Cmd/Ctrl+F
   // should search scrollback without sending control characters to a TUI.

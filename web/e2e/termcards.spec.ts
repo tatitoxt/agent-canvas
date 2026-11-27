@@ -576,11 +576,23 @@ test("reconnecting a terminal tab without a pending resize does not overwrite an
     await page.addInitScript(() => {
       const NativeWebSocket = window.WebSocket;
       const sockets: WebSocket[] = [];
-      Object.defineProperty(window, "__canvasSockets", { value: sockets });
+      const resizeFrames: unknown[] = [];
+      Object.defineProperties(window, {
+        __canvasSockets: { value: sockets },
+        __ptyResizeFrames: { value: resizeFrames },
+      });
       window.WebSocket = new Proxy(NativeWebSocket, {
         construct(target, args) {
           const socket = Reflect.construct(target, args) as WebSocket;
           sockets.push(socket);
+          const send = socket.send.bind(socket);
+          socket.send = (data) => {
+            if (typeof data === "string") {
+              const message = JSON.parse(data);
+              if (message.cmd === "pty_resize") resizeFrames.push(message);
+            }
+            send(data);
+          };
           return socket;
         },
       });
@@ -608,6 +620,17 @@ test("reconnecting a terminal tab without a pending resize does not overwrite an
   await tabB.goto(`http://127.0.0.1:${stackInfo.port}/?token=${stackInfo.token}`);
   await expect(tabB.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
   const termB = await open(tabB);
+  const resizeTabB = tabB.getByTestId("terminal-resize-handle");
+  const initialPanelBox = await resizeTabB.locator("xpath=..").boundingBox();
+  const initialGrip = await resizeTabB.boundingBox();
+  expect(initialPanelBox).not.toBeNull();
+  expect(initialGrip).not.toBeNull();
+  await tabB.mouse.move(initialGrip!.x + initialGrip!.width / 2, initialGrip!.y + initialGrip!.height / 2);
+  await tabB.mouse.down();
+  await tabB.mouse.move(initialGrip!.x + initialGrip!.width / 2 + 140, initialGrip!.y + initialGrip!.height / 2 + 60, { steps: 6 });
+  await tabB.mouse.up();
+  await expect.poll(async () => (await resizeTabB.locator("xpath=..").boundingBox())?.width ?? 0).toBeGreaterThan(initialPanelBox!.width + 100);
+  await expect.poll(async () => (await resizeTabB.locator("xpath=..").boundingBox())?.height ?? 0).toBeGreaterThan(initialPanelBox!.height + 40);
   const noPendingResize = (page: import("@playwright/test").Page) =>
     page.evaluate((id) => !(window as any).useBoard?.getState().pendingPtyResize[id], agentId);
   await expect.poll(() => noPendingResize(tabA)).toBe(true);
@@ -629,7 +652,7 @@ test("reconnecting a terminal tab without a pending resize does not overwrite an
     await page.waitForFunction(() => (window as any).__canvasSockets[0].readyState === WebSocket.CLOSED, { timeout: 5_000 });
   };
   await disconnect(tabA);
-  const handle = tabB.getByTestId("terminal-resize-handle");
+  const handle = resizeTabB;
   const beforeBox = await handle.locator("xpath=..").boundingBox();
   const grip = await handle.boundingBox();
   expect(beforeBox).not.toBeNull();
@@ -645,10 +668,35 @@ test("reconnecting a terminal tab without a pending resize does not overwrite an
   expect(newSharedSize.cols).toBeGreaterThan(initial.cols);
   expect(newSharedSize.rows).toBeGreaterThan(initial.rows);
   await disconnect(tabB);
+  const resizeFramesBeforeTabAReconnect = await tabA.evaluate(() => (window as any).__ptyResizeFrames.length);
   await tabA.waitForFunction(() => (window as any).__canvasSockets.length >= 2, { timeout: 12_000 });
   await expect(tabA.locator("[data-testid='daemon-status']")).toHaveAttribute("aria-label", "Canvas daemon connected", { timeout: 12_000 });
-  const afterTabAReconnect = await sizeOn(tabA, termA, "shared-after-tab-a-reconnect");
-  expect(afterTabAReconnect).toEqual(newSharedSize);
+
+  // Reconnect status chrome can briefly change the drawer's measured height.
+  // This is observer churn, not a user resize; it must not overwrite tab B's
+  // newer dimensions on the shared PTY.
+  await tabA.locator(".terminal-drawer").evaluate((drawer) => {
+    const previousHeight = (drawer as HTMLElement).style.height;
+    (drawer as HTMLElement).style.height = "240px";
+    window.setTimeout(() => { (drawer as HTMLElement).style.height = previousHeight; }, 160);
+  });
+  await tabA.waitForTimeout(750);
+  await expect.poll(() => tabA.evaluate(() => (window as any).__ptyResizeFrames.length)).toBe(resizeFramesBeforeTabAReconnect);
+  const afterTabAReconnect = await tabA.evaluate(async () => {
+    const terminal = document.querySelector(".terminal-drawer .xterm") as HTMLElement | null;
+    if (!terminal) throw new Error("terminal drawer missing after reconnect");
+    terminal.focus();
+    const textarea = terminal.querySelector("textarea.xterm-helper-textarea") as HTMLTextAreaElement | null;
+    if (!textarea) throw new Error("xterm input missing after reconnect");
+    textarea.value = "";
+    textarea.dispatchEvent(new InputEvent("input", { bubbles: true, data: "", inputType: "insertText" }));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const screen = terminal.querySelector(".xterm-screen") as HTMLElement | null;
+    return { width: screen?.clientWidth, height: screen?.clientHeight };
+  });
+  expect(afterTabAReconnect.width).toBeGreaterThan(0);
+  expect(afterTabAReconnect.height).toBeGreaterThan(0);
+  expect(await tabA.evaluate(() => (window as any).__ptyResizeFrames.length)).toBe(resizeFramesBeforeTabAReconnect);
   await tabA.close();
   await tabB.close();
 });
