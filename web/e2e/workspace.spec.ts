@@ -51,7 +51,7 @@ test("workspace resize handle is exposed after selection and persisted dimension
   await expect(resizedNode).toHaveAttribute("style", /width:\s*\d+px/);
 });
 
-test("workspace context menu renames and deletes the workspace", async ({ page }) => {
+test("workspace moves across boards and can be renamed and deleted", async ({ page }) => {
   const { port, token, vault } = stack();
   const workspaceRepo = mkdtempSync(resolve(tmpdir(), "canvas-e2e-workspace-actions-"));
   execSync("git init -q", { cwd: workspaceRepo });
@@ -70,6 +70,27 @@ test("workspace context menu renames and deletes the workspace", async ({ page }
 
   let workspace = page.locator(".react-flow__node-workspace").filter({ hasText: "Workspace actions" }).first();
   await expect(workspace).toBeVisible({ timeout: 8_000 });
+
+  const boardName = `Workspace E2E ${Date.now()}`;
+  const spaces = page.locator("nav").filter({ hasText: "Spaces" });
+  const newBoard = spaces.getByRole("button", { name: "+", exact: true });
+  await expect(newBoard).toBeVisible();
+  await newBoard.click();
+  const boardInput = spaces.locator('input[placeholder="+"]');
+  await expect(boardInput).toBeVisible();
+  await boardInput.fill(boardName);
+  await boardInput.press("Enter");
+  const boardTab = page.locator(`[data-board-tab][title^="${boardName}"]`);
+  await expect(boardTab).toBeVisible({ timeout: 8_000 });
+
+  await workspace.click({ button: "right", position: { x: 180, y: 40 } });
+  await page.getByRole("button", { name: "move to board ▸" }).click();
+  await page.getByRole("button", { name: boardName, exact: true }).click();
+  await expect(workspace).toHaveCount(0);
+  await boardTab.click();
+  workspace = page.locator(".react-flow__node-workspace").filter({ hasText: "Workspace actions" }).first();
+  await expect(workspace).toBeVisible({ timeout: 8_000 });
+
   await workspace.click({ button: "right", position: { x: 180, y: 40 } });
   const menu = page.locator(".cv-menu").filter({ has: page.getByRole("button", { name: "rename…" }) });
   await expect(menu).toBeVisible();
@@ -86,4 +107,6 @@ test("workspace context menu renames and deletes the workspace", async ({ page }
   await expect(deleteMenu.getByRole("button", { name: "confirm delete?" })).toBeVisible();
   await deleteMenu.getByRole("button", { name: "confirm delete?" }).click();
   await expect(workspace).toHaveCount(0);
+  await page.getByRole("button", { name: "delete board", exact: true }).click();
+  await expect(boardTab).toHaveCount(0);
 });

@@ -161,7 +161,7 @@ function SpacesBubble() {
   );
 
   return (
-    <nav className="glass" style={bubble}>
+    <nav className="glass" style={{ ...bubble, pointerEvents: "auto" }}>
       <div className="cv-section-label" style={sectionLabel}>Spaces</div>
       {Object.entries(boards).map(([id, n]) =>
         editing === id ? (
