@@ -56,6 +56,29 @@ describe("Tauri PTY startup replay", () => {
     expect(errors[0]).toContain("git worktree add failed");
   });
 
+  it("routes a rejected PTY input invoke to the terminal-specific control error", async () => {
+    tauriMocks.listen.mockImplementation(async () => () => {});
+    tauriMocks.invoke.mockImplementation((cmd: string) => {
+      if (cmd === "snapshot") return Promise.resolve({ type: "snapshot" });
+      if (cmd === "pty_input") return Promise.reject(new Error("pty input queue is full (1024 KiB limit)"));
+      return Promise.resolve(null);
+    });
+    const controls: any[] = [];
+    const client = new TauriCanvasClient({
+      onControl: (message) => controls.push(message),
+      onPty: () => {},
+    });
+
+    await vi.waitFor(() => expect(controls.some((message) => message.type === "snapshot")).toBe(true));
+    client.ptyInput("agent-7", new TextEncoder().encode("paste"));
+    await vi.waitFor(() => expect(controls.some((message) => message.type === "error")).toBe(true));
+    expect(controls.filter((message) => message.type === "error")).toEqual([{
+      type: "error",
+      agent_id: "agent-7",
+      message: "pty input queue is full (1024 KiB limit)",
+    }]);
+  });
+
   it("surfaces delegate rejections and formats non-string rejection reasons", async () => {
     tauriMocks.listen.mockImplementation(async () => () => {});
     tauriMocks.invoke.mockImplementation((cmd: string) => {
