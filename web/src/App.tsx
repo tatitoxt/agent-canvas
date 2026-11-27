@@ -198,6 +198,14 @@ function Board() {
   // Markup pencil — freehand strokes drawn over the canvas (screen coords),
   // baked into the PNG when a shot exports.
   const [pencil, setPencil] = useState(false);
+  const [pencilColor, setPencilColor] = useState("#e8b25a");
+  const pencilColors = [
+    { name: "Gold", value: "#e8b25a" },
+    { name: "Coral", value: "#ff7048" },
+    { name: "Mint", value: "#58d6bd" },
+    { name: "Blue", value: "#6ea8ff" },
+    { name: "White", value: "#f4f1eb" },
+  ];
   const [strokes, setStrokes] = useState<Array<Array<{ x: number; y: number }>>>([]);
   const [drawing, setDrawing] = useState<Array<{ x: number; y: number }> | null>(null);
 
@@ -213,7 +221,7 @@ function Board() {
       ctx.drawImage(img, 0, 0);
       const sx = img.width / (screenRect.x2 - screenRect.x1);
       const sy = img.height / (screenRect.y2 - screenRect.y1);
-      ctx.strokeStyle = "#e8b25a";
+      ctx.strokeStyle = pencilColor;
       ctx.lineWidth = 3;
       ctx.lineJoin = ctx.lineCap = "round";
       for (const st of strokes) {
@@ -227,7 +235,7 @@ function Board() {
       a.download = name;
       a.href = cv.toDataURL("image/png");
       a.click();
-    }, [strokes]);
+    }, [strokes, pencilColor]);
   const shotCanvas = useCallback(async () => {
     const ns = getNodes();
     if (ns.length === 0) return;
@@ -1160,7 +1168,7 @@ function Board() {
                 key={i}
                 points={st.map((p) => `${p.x},${p.y}`).join(" ")}
                 fill="none"
-                stroke="#e8b25a"
+                stroke={pencilColor}
                 strokeWidth={3}
                 strokeLinejoin="round"
                 strokeLinecap="round"
@@ -1190,6 +1198,29 @@ function Board() {
             <Icon name="draw" size={13} color="var(--cv-accent)" />
             <span style={{ fontSize: "var(--cv-text-xs)", fontWeight: 600, color: "var(--cv-ink)" }}>Pencil</span>
             <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", fontWeight: 500 }}>drag to mark up the canvas</span>
+            <span style={{ width: 1, height: 16, background: "var(--cv-glass-edge)" }} />
+            <div role="group" aria-label="Pencil color" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              {pencilColors.map((color) => (
+                <button
+                  key={color.value}
+                  type="button"
+                  aria-label={`${color.name} pencil color`}
+                  aria-pressed={pencilColor === color.value}
+                  title={`${color.name} pencil color`}
+                  onClick={(e) => { e.stopPropagation(); setPencilColor(color.value); }}
+                  style={{
+                    width: 17,
+                    height: 17,
+                    padding: 0,
+                    borderRadius: "50%",
+                    border: pencilColor === color.value ? "2px solid var(--cv-ink)" : "1px solid var(--cv-glass-edge)",
+                    background: color.value,
+                    boxShadow: pencilColor === color.value ? "0 0 0 2px var(--cv-accent)" : "none",
+                    cursor: "pointer",
+                  }}
+                />
+              ))}
+            </div>
             <span style={{ width: 1, height: 16, background: "var(--cv-glass-edge)" }} />
             <button
               title="Clear every stroke"
