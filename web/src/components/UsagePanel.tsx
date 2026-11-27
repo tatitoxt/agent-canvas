@@ -35,7 +35,7 @@ export function UsagePanel() {
         ? !!attention[a.id]
         : !attention[a.id] &&
           (key === "done"
-            ? a.status === "exited"
+            ? a.status === "exited" || a.status === "idle"
             : key === "waiting"
               ? a.status === "waiting"
               : a.status === "working"),
@@ -47,10 +47,15 @@ export function UsagePanel() {
     { key: "done", label: "Resting", color: "var(--cv-done)", list: group("done") },
   ];
 
+  const orchestrators = useBoard((s) => s.orchestrators);
   const boardEdges = Object.values(edges).filter(
+    // A delegation lives on its delegator's board — moving the child agent
+    // elsewhere doesn't move the work it was given (DevTicketsPanel's rule).
     (e) =>
-      (agents[e.from]?.board_id ?? "main") === activeBoard ||
-      (agents[e.to]?.board_id ?? "main") === activeBoard,
+      (agents[e.from]?.board_id ??
+        orchestrators[e.from]?.board ??
+        agents[e.to]?.board_id ??
+        "main") === activeBoard,
   );
 
   // Account rows: registered accounts plus any bucket with usage.
@@ -225,7 +230,7 @@ export function UsagePanel() {
                   textOverflow: "ellipsis",
                 }}
               >
-                {agents[e.from]?.name ?? e.from} → {agents[e.to]?.name ?? e.to}
+                {agents[e.from]?.name ?? orchestrators[e.from]?.name ?? e.from} → {agents[e.to]?.name ?? orchestrators[e.to]?.name ?? e.to}
               </div>
               <div
                 style={{
