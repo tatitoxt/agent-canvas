@@ -124,6 +124,35 @@ test("agent card sends inline steering to the live PTY and preserves Shift+Enter
   await expect(preview).not.toContainText("command not found");
 });
 
+test("supervised terminal input is denied or released only from the approval controls", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  const card = page.locator(".agent-card").first();
+  const permission = card.getByRole("button", { name: "supervised" });
+  await expect(permission).toBeVisible();
+
+  const deniedMarker = `deny-e2e-${Date.now()}`;
+  const input = card.getByTestId("agent-steering-input");
+  await input.fill(`rm -rf ${deniedMarker}`);
+  await input.press("Enter");
+  await expect(card.getByText(`rm -rf ${deniedMarker}`, { exact: true })).toBeVisible({ timeout: 8_000 });
+  await card.getByRole("button", { name: "deny", exact: true }).click();
+  await expect(card.getByText(`rm -rf ${deniedMarker}`, { exact: true })).toHaveCount(0);
+  const drawerButton = card.locator("[title='Open terminal']");
+  await card.locator("[data-testid='agent-card-header']").click();
+  await drawerButton.click();
+  const terminalRows = page.locator(".terminal-drawer .xterm-rows").first();
+  await expect(terminalRows).not.toContainText(deniedMarker);
+
+  const allowedMarker = `allow-e2e-${Date.now()}`;
+  const allowedCommand = `rm -rf missing-${allowedMarker}; printf '%s\\n' '${allowedMarker}'`;
+  await input.fill(allowedCommand);
+  await input.press("Enter");
+  await expect(card.getByText(allowedCommand, { exact: true })).toBeVisible({ timeout: 8_000 });
+  await card.getByRole("button", { name: "allow", exact: true }).click();
+  await expect(terminalRows).toContainText(allowedMarker, { timeout: 8_000 });
+});
+
 test("inline steering does not submit while an IME candidate is composing", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
