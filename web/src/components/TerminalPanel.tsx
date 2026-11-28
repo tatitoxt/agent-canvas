@@ -150,15 +150,20 @@ export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index 
       window.removeEventListener("pointerup", cleanup);
       window.removeEventListener("pointercancel", cleanup);
       window.removeEventListener("blur", cleanup);
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
     };
-    const onKeyDown = (ev: KeyboardEvent) => { if (ev.key === "Escape") cleanup(); };
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      cleanup();
+    };
     drag.cleanup = cleanup;
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", cleanup);
     window.addEventListener("pointercancel", cleanup);
     window.addEventListener("blur", cleanup);
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
   };
 
   const onResizeDown = (e: React.PointerEvent) => {
@@ -186,16 +191,21 @@ export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index 
       window.removeEventListener("pointerup", cleanup);
       window.removeEventListener("pointercancel", cleanup);
       window.removeEventListener("blur", cleanup);
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
       try { localStorage.setItem(TERMINAL_SIZE_KEY, JSON.stringify(nextSize)); } catch { /* noop */ }
     };
-    const onKeyDown = (ev: KeyboardEvent) => { if (ev.key === "Escape") cleanup(); };
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      cleanup();
+    };
     resize.cleanup = cleanup;
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", cleanup);
     window.addEventListener("pointercancel", cleanup);
     window.addEventListener("blur", cleanup);
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
   };
 
   useEffect(() => () => {

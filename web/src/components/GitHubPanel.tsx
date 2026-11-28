@@ -22,7 +22,7 @@ type WorkflowRun = {
   id: number;
   name: string;
   run_number: number;
-  status: string;
+  status: string | null;
   conclusion: string | null;
   event: string;
   head_branch: string;
@@ -48,6 +48,7 @@ function age(iso: string): string {
 }
 
 function workflowState(run: WorkflowRun): { label: string; ci: NonNullable<Item["ci"]> } {
+  if (!run.status) return { label: "Unknown", ci: "none" };
   if (run.status !== "completed") {
     const label = run.status === "in_progress" ? "Running"
       : run.status === "queued" || run.status === "requested" ? "Queued"
@@ -59,6 +60,7 @@ function workflowState(run: WorkflowRun): { label: string; ci: NonNullable<Item[
   switch (run.conclusion) {
     case "success": return { label: "Succeeded", ci: "pass" };
     case "failure": return { label: "Failed", ci: "fail" };
+    case "startup_failure": return { label: "Failed to start", ci: "fail" };
     case "timed_out": return { label: "Timed out", ci: "fail" };
     case "cancelled": return { label: "Cancelled", ci: "none" };
     case "skipped": return { label: "Skipped", ci: "none" };

@@ -249,6 +249,8 @@ test("Extras opens GitHub Actions as a live canvas panel", async ({ page }) => {
         { id: 9, name: "Cancelled preview", run_number: 20, status: "completed", conclusion: "cancelled", event: "pull_request", head_branch: "feature/old", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/9" },
         { id: 10, name: "Docs only", run_number: 21, status: "completed", conclusion: "skipped", event: "push", head_branch: "docs/readme", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/10" },
         { id: 11, name: "Broken build", run_number: 22, status: "completed", conclusion: "failure", event: "push", head_branch: "feature/broken", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/11" },
+        { id: 12, name: "Runner startup error", run_number: 23, status: "completed", conclusion: "startup_failure", event: "push", head_branch: "feature/startup", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/12" },
+        { id: 13, name: "Unknown run", run_number: 24, status: null, conclusion: null, event: "workflow_dispatch", head_branch: "feature/unknown", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/13" },
       ] }),
     });
   });
@@ -267,6 +269,10 @@ test("Extras opens GitHub Actions as a live canvas panel", async ({ page }) => {
   await expect(panel).toContainText("Skipped");
   await expect(panel).toContainText("Broken build");
   await expect(panel).toContainText("Failed");
+  await expect(panel).toContainText("Runner startup error");
+  await expect(panel).toContainText("Failed to start");
+  await expect(panel).toContainText("Unknown run");
+  await expect(panel).toContainText("Unknown");
   await expect(page.locator(".cv-menu")).toHaveCount(0);
 });
 

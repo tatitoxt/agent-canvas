@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 import { useReactFlow } from "@xyflow/react";
@@ -22,6 +22,25 @@ const KINDS: Record<string, { mark: string; color: string }> = {
 };
 const kindMeta = (k: string) => KINDS[k] ?? KINDS.note;
 
+type ArtifactDraft = { creating: boolean; kind: string; title: string; text: string };
+const emptyDraft = (): ArtifactDraft => ({ creating: false, kind: "note", title: "", text: "" });
+const draftKey = (board: string) => `cv-artifact-draft:${board}`;
+function loadArtifactDraft(board: string): ArtifactDraft {
+  try {
+    const raw = localStorage.getItem(draftKey(board));
+    if (!raw) return emptyDraft();
+    const value = JSON.parse(raw) as Partial<ArtifactDraft>;
+    return {
+      creating: value.creating === true,
+      kind: typeof value.kind === "string" && KINDS[value.kind] ? value.kind : "note",
+      title: typeof value.title === "string" ? value.title : "",
+      text: typeof value.text === "string" ? value.text : "",
+    };
+  } catch {
+    return emptyDraft();
+  }
+}
+
 const SUGGESTIONS: { icon: string; color: string; label: string; dex: string }[] = [
   { icon: "canvas", color: "#7ba3cf", label: "Design a landing page for my app", dex: "spawn codex to design a landing page for my app" },
   { icon: "code", color: "#7ba389", label: "Build me a budget calculator", dex: "spawn codex to build me a budget calculator" },
@@ -41,13 +60,30 @@ export function ArtifactsPanel() {
   const vaultAppend = useBoard((s) => s.vaultAppend);
   const notify = useBoard((s) => s.notify);
   const { screenToFlowPosition } = useReactFlow();
-  const [creating, setCreating] = useState(false);
-  const [kind, setKind] = useState("note");
-  const [title, setTitle] = useState("");
-  const [text, setText] = useState("");
+  const [draft, setDraft] = useState(() => loadArtifactDraft(activeBoard ?? "main"));
+  const draftBoard = useRef(activeBoard ?? "main");
+  const { creating, kind, title, text } = draft;
+  const setCreating = (value: boolean | ((current: boolean) => boolean)) =>
+    setDraft((current) => ({ ...current, creating: typeof value === "function" ? value(current.creating) : value }));
+  const setKind = (kind: string) => setDraft((current) => ({ ...current, kind }));
+  const setTitle = (title: string) => setDraft((current) => ({ ...current, title }));
+  const setText = (text: string) => setDraft((current) => ({ ...current, text }));
   const [query, setQuery] = useState("");
   const [shared, setShared] = useState<Record<string, string>>({});
   const [genOpen, setGenOpen] = useState(false);
+
+  useEffect(() => {
+    const board = activeBoard ?? "main";
+    if (draftBoard.current !== board) return;
+    try { localStorage.setItem(draftKey(board), JSON.stringify(draft)); } catch { /* storage may be unavailable */ }
+  }, [activeBoard, draft]);
+
+  useEffect(() => {
+    const board = activeBoard ?? "main";
+    if (draftBoard.current === board) return;
+    draftBoard.current = board;
+    setDraft(loadArtifactDraft(board));
+  }, [activeBoard]);
 
   // Generate-PDF lives here too (not only in the vault panel): same
   // templates, same "ask for anything", saved straight into this list.
@@ -97,10 +133,13 @@ export function ArtifactsPanel() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && query.trim() && list.length === 0) {
-                threadSend(query.trim());
+              if (e.key === "Enter" && query.trim() && list.length === 0 && earlier.length === 0) {
+                e.preventDefault();
+                const question = query.trim();
+                const hasUnsavedDraft = creating && (title.trim().length > 0 || text.trim().length > 0);
+                if (!hasUnsavedDraft) closePanelNode("panel-artifacts");
+                threadSend(question);
                 setQuery("");
-                closePanelNode("panel-artifacts");
                 useBoard.getState().openPanelNode("thread", screenToFlowPosition({ x: window.innerWidth * 0.42, y: window.innerHeight * 0.18 }));
                 requestNav("thread");
               }

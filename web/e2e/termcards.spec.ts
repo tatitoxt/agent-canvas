@@ -429,6 +429,30 @@ test("terminal drawer resize cleans up when pointer interaction is cancelled", a
   await expect.poll(async () => (await panel.boundingBox())?.height ?? 0).toBeCloseTo(cancelled!.height, 0);
 });
 
+test("Escape cancels drawer resize even while xterm keeps focus", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const handle = page.getByTestId("terminal-resize-handle");
+  const panel = handle.locator("xpath=..");
+  const terminal = page.locator(".terminal-drawer .xterm").first();
+  await terminal.click();
+  const grip = await handle.boundingBox();
+  const initial = await panel.boundingBox();
+  expect(grip).not.toBeNull();
+  expect(initial).not.toBeNull();
+
+  await page.mouse.move(grip!.x + 2, grip!.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + 72, grip!.y + 52);
+  await page.keyboard.press("Escape");
+  const cancelled = await panel.boundingBox();
+  await page.mouse.move(grip!.x + 170, grip!.y + 140);
+  await page.mouse.up();
+  await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBeCloseTo(cancelled!.width, 0);
+  await expect.poll(async () => (await panel.boundingBox())?.height ?? 0).toBeCloseTo(cancelled!.height, 0);
+});
+
 test("reconnecting rebuilds a live terminal from scrollback without duplicate history", async ({ page }) => {
   await page.addInitScript(() => {
     const NativeWebSocket = window.WebSocket;
