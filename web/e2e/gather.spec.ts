@@ -30,15 +30,25 @@ test("gather grids into view and undo restores positions + drops the frame", asy
   await page.waitForTimeout(1000);
   const gathered = await page.evaluate(() => ({
     panels: JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}").main,
+    shapes: JSON.parse(localStorage.getItem("cv-shapes") ?? "{}").main,
   }));
   const frames = await page.locator(".react-flow__node-shape").count();
   console.log("G2 scattered:", JSON.stringify(scattered), "gathered:", JSON.stringify(gathered), "frames:", frames);
   expect(frames).toBeGreaterThan(0);
   expect(gathered).not.toEqual(scattered);
+  const groupFrames = Object.values(gathered.shapes).filter((shape: any) => shape.group && shape.text?.startsWith("Group")) as Array<{ x: number; y: number; w: number; h: number }>;
+  expect(groupFrames, "gather must create a populated group frame").toHaveLength(1);
   const rects = [
     ...Object.values(gathered.panels).map((n: any) => ({ x: n.x, y: n.y, w: n.w ?? 320, h: n.h ?? 420 })),
   ];
   expect(rects).toHaveLength(4);
+  const frame = groupFrames[0];
+  for (const [index, rect] of rects.entries()) {
+    expect(rect.x, `gathered panel ${index + 1} is inside the group frame on the left`).toBeGreaterThanOrEqual(frame.x);
+    expect(rect.y, `gathered panel ${index + 1} is inside the group frame on the top`).toBeGreaterThanOrEqual(frame.y);
+    expect(rect.x + rect.w, `gathered panel ${index + 1} is inside the group frame on the right`).toBeLessThanOrEqual(frame.x + frame.w);
+    expect(rect.y + rect.h, `gathered panel ${index + 1} is inside the group frame on the bottom`).toBeLessThanOrEqual(frame.y + frame.h);
+  }
   for (let i = 0; i < rects.length; i++) {
     for (let j = i + 1; j < rects.length; j++) {
       const a = rects[i], b = rects[j];

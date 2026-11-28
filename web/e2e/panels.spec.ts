@@ -236,6 +236,64 @@ test("Library expands horizontally to labeled tools without a flyout", async ({ 
   await expect(page.getByRole("button", { name: "Collapse Library" })).toBeVisible();
 });
 
+test("every visible Library button opens its matching live panel on the board", async ({ page }) => {
+  await boot(page);
+  // This fixture has no GitHub remote, so the repo-dependent Pull requests
+  // and Issues entries are intentionally absent. Every other Library row is
+  // traversed by a real click, then its live canvas window is closed before
+  // moving on to catch both routing mistakes and stale active state.
+  const expand = page.getByRole("button", { name: "Expand Library" });
+  if (await expand.isVisible()) await expand.click();
+  const rail = page.locator("nav.glass").filter({ has: page.getByRole("button", { name: "Collapse Library" }) });
+  const scroll = rail.locator(".cv-menu-scroll");
+  const rows = [
+    ["Obsidian", "vault"],
+    ["Dex Tickets", "tickets"],
+    ["Notes", "notes"],
+    ["Artifacts", "artifacts"],
+    ["Loops", "loops"],
+  ] as const;
+
+  for (const [label, panelKey] of rows) {
+    const row = scroll.getByRole("button", { name: label, exact: true });
+    await expect(row).toBeVisible();
+    await row.click();
+    const panel = page.locator(`.react-flow__node-panel [data-panel='${panelKey}']`).first();
+    await expect(panel, `${label} should route to the ${panelKey} panel`).toBeVisible();
+    // Select the canvas card before using its header controls; React Flow
+    // intentionally reveals card chrome only for the selected window.
+    await panel.click({ position: { x: 48, y: 14 } });
+    await panel.getByRole("button", { name: "Close panel" }).click();
+    await expect(page.locator(`.react-flow__node-panel [data-panel='${panelKey}']`)).toHaveCount(0);
+  }
+});
+
+test("topbar Tasks, Worktrees, Search, and Extras actions reach their destinations", async ({ page }) => {
+  await boot(page);
+  const worktrees = page.locator("button[title^='Worktrees']");
+  await worktrees.click();
+  await expect(page.locator(".cv-menu-scroll").filter({ hasText: "Worktrees" }).getByText("no worktrees", { exact: true })).toBeVisible();
+  await page.locator(".cv-menu-scroll").getByRole("button", { name: "＋ spawn an agent" }).click();
+  await expect(page.locator("button[title='Terminal']")).toBeVisible();
+
+  // Close the spawn chooser with Escape, then exercise the empty Tasks path
+  // and its route into task history.
+  await page.keyboard.press("Escape");
+  await page.locator("button[title^='Tasks']").click();
+  const tasks = page.locator(".cv-menu-scroll").filter({ hasText: "Tasks" });
+  await expect(tasks.getByRole("button", { name: "no tasks in flight" })).toBeVisible();
+  await tasks.getByRole("button", { name: "Open task history" }).click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='history']").first()).toBeVisible();
+
+  await page.locator("button[title^='Search —']").click();
+  await expect(page.getByPlaceholder(/search/i).first()).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.locator("button[title^='Extras —']").click();
+  await page.getByRole("button", { name: "Obsidian vault" }).click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='vault']").first()).toBeVisible();
+});
+
 test("topbar controls fuse into one glass bubble on hover", async ({ page }) => {
   await boot(page);
   const showChrome = page.getByTitle("Show panels and menus");
