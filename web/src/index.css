@@ -793,7 +793,8 @@ button.cv-card-close:hover,
   display: none;
 }
 .vault-file:hover .vault-file-actions,
-.vault-file:focus-visible .vault-file-actions {
+.vault-file:focus-visible .vault-file-actions,
+.vault-file.vp-active .vault-file-actions {
   display: flex;
 }
 .vault-ctx-item:hover {

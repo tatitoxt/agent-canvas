@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures.mjs";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
@@ -642,6 +642,114 @@ test("pinned Obsidian note edits and saves back to the real vault", async ({ pag
   await note.getByRole("button", { name: "Save" }).click();
   await expect(note.getByText("Saved from the live board window.")).toBeVisible();
   await expect.poll(() => readFileSync(resolve(vault, "Canvas E2E note.md"), "utf8")).toContain("Saved from the live board window.");
+});
+
+test("Obsidian creates, opens, renames, and trashes a note from Files", async ({ page }) => {
+  test.setTimeout(20_000);
+  const sentFrames: string[] = [];
+  page.on("websocket", (socket) => socket.on("framesent", (frame) => {
+    if (typeof frame.payload === "string") sentFrames.push(frame.payload);
+  }));
+  const { vault } = await boot(page);
+  await page.locator("button[title='Files — open your Obsidian vault']").click();
+  const panels = page.locator(".react-flow__node-panel [data-panel='vault']");
+  const explorer = panels.first();
+  await expect(explorer).toBeVisible();
+
+  const noteName = `Vault-created-${Date.now()}`;
+  await explorer.getByTitle("new note in this vault").click();
+  await explorer.getByPlaceholder("folder/note name").fill(noteName);
+  await explorer.getByRole("button", { name: "create", exact: true }).click();
+  await expect.poll(() => {
+    try { return readFileSync(resolve(vault, `${noteName}.md`), "utf8"); } catch { return ""; }
+  }).toContain(`# ${noteName}`);
+
+  const row = explorer.locator("button.vault-file").filter({ hasText: noteName });
+  await expect(row).toBeVisible({ timeout: 8_000 });
+  await row.click();
+  const reader = panels.last();
+  await expect(reader.locator("span[title='click to rename / move (use folder/name)']")).toHaveText(noteName, { timeout: 5_000 });
+  await expect(reader.locator("#vh-0")).toContainText(noteName);
+
+  const title = reader.locator("span[title='click to rename / move (use folder/name)']");
+  await reader.click({ position: { x: 48, y: 12 }, timeout: 2_000 });
+  await title.click({ timeout: 2_000 });
+  const rename = reader.locator("input").first();
+  await expect(rename).toBeVisible();
+  await rename.fill(`${noteName}-renamed`);
+  await rename.press("Enter");
+  await expect.poll(() => sentFrames.some((frame) => frame.includes('"cmd":"vault_rename"')), { timeout: 3_000 }).toBe(true);
+
+  const renamedPath = `${noteName}-renamed.md`;
+  await expect.poll(() => {
+    try { return readFileSync(resolve(vault, renamedPath), "utf8"); } catch { return ""; }
+  }, { timeout: 3_000 }).toContain(`# ${noteName}`);
+  await expect.poll(() => existsSync(resolve(vault, `${noteName}.md`))).toBe(false);
+
+  const renamedRow = explorer.locator("button.vault-file").filter({ hasText: `${noteName}-renamed` });
+  await expect(renamedRow).toBeVisible();
+  await renamedRow.hover();
+  const armDelete = renamedRow.getByTitle("delete this note (removes the real file)");
+  await expect(armDelete).toBeVisible({ timeout: 2_000 });
+  await armDelete.click({ timeout: 2_000 });
+  const confirmDelete = renamedRow.getByTitle("click again to delete for real");
+  await expect(confirmDelete).toBeVisible({ timeout: 2_000 });
+  await confirmDelete.click({ timeout: 2_000 });
+  await expect.poll(() => existsSync(resolve(vault, renamedPath))).toBe(false);
+  await expect.poll(() => existsSync(resolve(vault, ".trash", renamedPath))).toBe(true);
+});
+
+test("Obsidian reading tools support bookmarks, outline, graphs, backlinks, export, and board pinning", async ({ page }) => {
+  const { vault } = stack();
+  // The E2E stack shares one throwaway vault across tests. Start from a known
+  // graph so the expected nodes and links do not depend on which tests ran first.
+  for (const entry of readdirSync(vault)) rmSync(resolve(vault, entry), { recursive: true, force: true });
+  writeFileSync(resolve(vault, "Canvas E2E note.md"), "# Canvas E2E note\n\n## Linked section\n\nSee [[Linked note]].\n");
+  writeFileSync(resolve(vault, "Linked note.md"), "# Linked note\n\nMention Canvas E2E note here.\n");
+  await boot(page);
+
+  await page.locator("button[title='Files — open your Obsidian vault']").click();
+  const panels = page.locator(".react-flow__node-panel [data-panel='vault']");
+  const explorer = panels.first();
+  const file = (name: string) => explorer.locator("button.vault-file").filter({ hasText: name }).first();
+  await expect(file("Canvas E2E note")).toBeVisible({ timeout: 8_000 });
+  await expect(file("Linked note")).toBeVisible({ timeout: 8_000 });
+
+  const primaryFile = file("Canvas E2E note");
+  await primaryFile.hover();
+  await primaryFile.getByTitle("bookmark — pin to the top").click();
+  await expect(explorer.getByText("Bookmarks", { exact: true })).toBeVisible();
+  await expect(explorer.getByRole("button", { name: "Canvas E2E note" }).first()).toBeVisible();
+  await primaryFile.click();
+
+  const reader = panels.last();
+  await expect(reader.getByText("Linked section", { exact: false })).toBeVisible();
+  await reader.getByTitle("Outline — jump to a heading (Obsidian's Outline panel)").click();
+  const outline = reader.getByRole("button", { name: "Linked section", exact: true });
+  await expect(outline).toBeVisible();
+  await outline.click();
+  await expect(reader.locator("#vh-2")).toBeInViewport();
+
+  await reader.getByRole("button", { name: "Graph", exact: true }).click();
+  await expect(reader.locator("svg g[style*='cursor: pointer']")).toHaveCount(1);
+  await reader.getByTitle("whole-vault graph — every note and every [[link]] between them").click();
+  await expect(reader.getByText("2 notes · 1 links", { exact: true })).toBeVisible({ timeout: 8_000 });
+
+  await reader.getByTitle("Linked mentions — notes that link to this one").click();
+  await expect(reader.getByRole("button", { name: "Linked note" })).toBeVisible({ timeout: 8_000 });
+  await expect(reader.getByRole("button", { name: /Linked note:3.*Mention Canvas E2E note here/ })).toBeVisible();
+
+  await reader.getByTitle("Export as PDF (saved to artifacts)").click();
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='artifacts']").getByText("PDF — Canvas E2E note", { exact: true })).toBeVisible({ timeout: 8_000 });
+
+  const linkedFile = file("Linked note");
+  await linkedFile.hover();
+  await expect(linkedFile.getByTitle("pin as live card on the board")).toBeVisible();
+  await linkedFile.getByTitle("pin as live card on the board").click();
+  await expect(page.locator(".react-flow__node[data-id^='md-']")).toBeVisible();
 });
 
 test("Add Artifacts to canvas closes Tools and mounts the interactive artifact library", async ({ page }) => {
