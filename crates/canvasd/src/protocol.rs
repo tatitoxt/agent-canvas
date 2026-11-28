@@ -444,6 +444,12 @@ pub enum ServerMsg {
     AutomationSaved {
         automation: SnapshotAutomation,
     },
+    /// An automation finished registering a run; includes its persisted run timestamp.
+    AutomationRan {
+        automation_id: String,
+        last_run_at: Option<String>,
+        next_run_at: Option<String>,
+    },
     AutomationDeleted {
         automation_id: String,
     },

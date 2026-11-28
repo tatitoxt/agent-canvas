@@ -1150,6 +1150,16 @@ export const useBoard = create<BoardState>((set, get) => ({
               },
             });
             break;
+          case "automation_ran": {
+            const automation = get().automations[msg.automation_id];
+            if (automation) {
+              set({ automations: {
+                ...get().automations,
+                [msg.automation_id]: { ...automation, last_run_at: msg.last_run_at, next_run_at: msg.next_run_at },
+              } });
+            }
+            break;
+          }
           case "automation_deleted": {
             const next = { ...get().automations };
             delete next[msg.automation_id];

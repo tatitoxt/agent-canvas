@@ -184,6 +184,39 @@ test("Settings alignment preference persists and exports to a portable JSON file
   await expect(page.locator(".react-flow__node-panel [data-panel='settings']").first().getByRole("button", { name: "Alignment snap on" })).toHaveAttribute("aria-pressed", "true");
 });
 
+test("Automation create, run, and delete drives a real harmless shell prompt", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Add Automations to canvas" }).click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='automations']").first();
+  await expect(panel).toBeVisible();
+  await panel.getByRole("button", { name: "+ new", exact: true }).click();
+
+  const name = `automation-e2e-${Date.now()}`;
+  const marker = `automation-run-${Date.now()}`;
+  await panel.getByPlaceholder("name — e.g. nightly audit").fill(name);
+  await panel.getByPlaceholder("prompt the agent receives on run").fill(`printf '%s\\n' '${marker}'`);
+  await panel.getByRole("combobox").nth(0).selectOption("bash");
+  await panel.getByRole("button", { name: "save automation" }).click();
+
+  const heading = panel.getByText(name, { exact: true });
+  await expect(heading).toBeVisible();
+  const row = heading.locator("xpath=..");
+  await row.getByRole("button", { name: "run", exact: true }).click();
+  // Distinguish the execution timestamp from the phrase “never ran”.
+  await expect.poll(async () => (await row.innerText()).includes("· ran ") && !(await row.innerText()).includes("never ran"), { timeout: 8_000 }).toBe(true);
+  const agent = page.locator(".agent-card").filter({ hasText: name });
+  await expect(agent).toBeVisible({ timeout: 10_000 });
+  await agent.locator("[data-testid='agent-card-header']").click();
+  await agent.locator("[title='Open terminal']").click();
+  const terminalRows = page.locator(".terminal-drawer .xterm-rows").first();
+  await expect(terminalRows).toContainText(marker, { timeout: 12_000 });
+
+  await row.getByRole("button", { name: "delete", exact: true }).click();
+  await expect(heading).toBeHidden();
+});
+
 test("board settings import rejects malformed data without partial writes", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("cv-theme", "obsidian"));
   const { port } = stack();
