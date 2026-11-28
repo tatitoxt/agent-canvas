@@ -15,6 +15,7 @@ type Item = {
   draft?: boolean;
   sha?: string;
   ci?: "pass" | "fail" | "pending" | "none";
+  stateLabel?: string;
 };
 
 type WorkflowRun = {
@@ -44,6 +45,28 @@ function repoSlug(repoUrl: string | null): string | null {
 function age(iso: string): string {
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   return d <= 0 ? "today" : d === 1 ? "1d" : `${d}d`;
+}
+
+function workflowState(run: WorkflowRun): { label: string; ci: NonNullable<Item["ci"]> } {
+  if (run.status !== "completed") {
+    const label = run.status === "in_progress" ? "Running"
+      : run.status === "queued" || run.status === "requested" ? "Queued"
+      : run.status === "waiting" ? "Waiting"
+      : run.status.replaceAll("_", " ");
+    return { label: label.charAt(0).toUpperCase() + label.slice(1), ci: "pending" };
+  }
+
+  switch (run.conclusion) {
+    case "success": return { label: "Succeeded", ci: "pass" };
+    case "failure": return { label: "Failed", ci: "fail" };
+    case "timed_out": return { label: "Timed out", ci: "fail" };
+    case "cancelled": return { label: "Cancelled", ci: "none" };
+    case "skipped": return { label: "Skipped", ci: "none" };
+    case "neutral": return { label: "Neutral", ci: "none" };
+    case "action_required": return { label: "Action required", ci: "pending" };
+    case "stale": return { label: "Stale", ci: "none" };
+    default: return { label: "Completed", ci: "none" };
+  }
 }
 
 /** Live GitHub PR/issue lists for the repo this canvas runs on (public API,
@@ -76,17 +99,19 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" | "actions" }) {
         if (kind === "actions") {
           if (!Array.isArray(data?.workflow_runs)) throw new Error(data?.message ?? "unexpected GitHub Actions response");
           const rows = data.workflow_runs as WorkflowRun[];
-          const mapped: Item[] = rows.map((run) => ({
-            number: run.run_number,
-            title: run.name || `Workflow run #${run.run_number}`,
-            user: run.head_branch || run.event,
-            labels: [],
-            updated: run.updated_at,
-            url: run.html_url,
-            ci: run.status === "completed"
-              ? run.conclusion === "success" ? "pass" : "fail"
-              : "pending",
-          }));
+          const mapped: Item[] = rows.map((run) => {
+            const state = workflowState(run);
+            return {
+              number: run.run_number,
+              title: run.name || `Workflow run #${run.run_number}`,
+              user: run.head_branch || run.event,
+              labels: [],
+              updated: run.updated_at,
+              url: run.html_url,
+              ci: state.ci,
+              stateLabel: state.label,
+            };
+          });
           setItems(mapped);
           useBoard.setState((s) => ({ ghCounts: { ...s.ghCounts, actions: mapped.length } }));
           return;
@@ -199,7 +224,8 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" | "actions" }) {
                   style={{ width: 7, height: 7, borderRadius: "50%", background: CI_COLOR[it.ci], flexShrink: 0 }}
                 />
               )}
-              <span>{kind === "actions" ? it.ci === "pending" ? "Running" : it.ci === "pass" ? "Succeeded" : "Failed" : it.user}</span>
+              <span>{kind === "actions" ? it.stateLabel : it.user}</span>
+              {kind === "actions" && it.user && <><span>·</span><span>{it.user}</span></>}
               <span>·</span>
               <span>{slug?.split("/")[1]}</span>
               <span>·</span>

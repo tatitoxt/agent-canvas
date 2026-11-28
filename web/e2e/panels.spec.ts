@@ -246,6 +246,9 @@ test("Extras opens GitHub Actions as a live canvas panel", async ({ page }) => {
       body: JSON.stringify({ workflow_runs: [
         { id: 7, name: "Build and test", run_number: 18, status: "completed", conclusion: "success", event: "push", head_branch: "main", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/7" },
         { id: 8, name: "Preview deploy", run_number: 19, status: "in_progress", conclusion: null, event: "pull_request", head_branch: "feature/ui", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/8" },
+        { id: 9, name: "Cancelled preview", run_number: 20, status: "completed", conclusion: "cancelled", event: "pull_request", head_branch: "feature/old", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/9" },
+        { id: 10, name: "Docs only", run_number: 21, status: "completed", conclusion: "skipped", event: "push", head_branch: "docs/readme", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/10" },
+        { id: 11, name: "Broken build", run_number: 22, status: "completed", conclusion: "failure", event: "push", head_branch: "feature/broken", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/11" },
       ] }),
     });
   });
@@ -257,6 +260,13 @@ test("Extras opens GitHub Actions as a live canvas panel", async ({ page }) => {
   await expect(panel).toContainText("Succeeded");
   await expect(panel).toContainText("Preview deploy");
   await expect(panel).toContainText("Running");
+  await expect(panel).toContainText("feature/ui");
+  await expect(panel).toContainText("Cancelled preview");
+  await expect(panel).toContainText("Cancelled");
+  await expect(panel).toContainText("Docs only");
+  await expect(panel).toContainText("Skipped");
+  await expect(panel).toContainText("Broken build");
+  await expect(panel).toContainText("Failed");
   await expect(page.locator(".cv-menu")).toHaveCount(0);
 });
 
