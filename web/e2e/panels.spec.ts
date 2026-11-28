@@ -361,6 +361,28 @@ test("Tools Add shape creates each supported shape from its live menu", async ({
   }
 });
 
+test("Team Builder role counters clamp at zero and expose an accessible CLI chooser", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Team builder" }).click();
+  await expect(tools).toBeHidden();
+  const team = page.getByRole("dialog", { name: "Team builder" });
+  await expect(team).toBeVisible();
+  const frontendCount = team.getByLabel("Frontend agents", { exact: true });
+  await expect(frontendCount).toHaveText("0");
+  await expect(team.getByRole("button", { name: "Spawn", exact: true })).toBeDisabled();
+  await team.getByRole("button", { name: "Remove one Frontend agent" }).click();
+  await expect(frontendCount).toHaveText("0");
+  await team.getByRole("button", { name: "Add one Frontend agent" }).click();
+  await team.getByRole("button", { name: "Add one Frontend agent" }).click();
+  await expect(frontendCount).toHaveText("2");
+  await expect(team.getByRole("button", { name: "Spawn 2" })).toBeEnabled();
+  await team.getByRole("combobox", { name: "CLI for every member" }).selectOption("claude");
+  await team.getByRole("button", { name: "Close Team builder" }).click();
+  await expect(team).toBeHidden();
+});
+
 test("Pencil markup can be activated, cleared, and exited from its own controls", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();
