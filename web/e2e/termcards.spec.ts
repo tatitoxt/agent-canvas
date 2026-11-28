@@ -404,6 +404,31 @@ test("terminal drawer resizes and keeps its PTY interactive", async ({ page }) =
   await expect(page.locator(".xterm-rows")).toContainText("resized-terminal-e2e-ok", { timeout: 8_000 });
 });
 
+test("terminal drawer resize cleans up when pointer interaction is cancelled", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const handle = page.getByTestId("terminal-resize-handle");
+  const panel = handle.locator("xpath=..");
+  const initial = await panel.boundingBox();
+  const grip = await handle.boundingBox();
+  expect(initial).not.toBeNull();
+  expect(grip).not.toBeNull();
+
+  await page.mouse.move(grip!.x + 2, grip!.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + 72, grip!.y + 52);
+  await page.evaluate(() => window.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true })));
+  const cancelled = await panel.boundingBox();
+  expect(cancelled!.width).toBeGreaterThan(initial!.width + 30);
+
+  // Once cancelled, subsequent pointer motion must not keep resizing the drawer.
+  await page.mouse.move(grip!.x + 170, grip!.y + 140);
+  await page.mouse.up();
+  await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBeCloseTo(cancelled!.width, 0);
+  await expect.poll(async () => (await panel.boundingBox())?.height ?? 0).toBeCloseTo(cancelled!.height, 0);
+});
+
 test("reconnecting rebuilds a live terminal from scrollback without duplicate history", async ({ page }) => {
   await page.addInitScript(() => {
     const NativeWebSocket = window.WebSocket;
