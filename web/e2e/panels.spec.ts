@@ -672,12 +672,15 @@ test("Obsidian creates, opens, renames, and trashes a note from Files", async ({
   await expect(reader.locator("#vh-0")).toContainText(noteName);
 
   const title = reader.locator("span[title='click to rename / move (use folder/name)']");
-  await reader.click({ position: { x: 48, y: 12 }, timeout: 2_000 });
   await title.click({ timeout: 2_000 });
   const rename = reader.locator("input").first();
   await expect(rename).toBeVisible();
   await rename.fill(`${noteName}-renamed`);
-  await rename.press("Enter");
+  // The board can re-render the secondary reader while the rename is being
+  // committed. Press Enter against the focused input through the page key
+  // path, then wait on the actual protocol effect instead of a stale locator.
+  await rename.focus();
+  await page.keyboard.press("Enter");
   await expect.poll(() => sentFrames.some((frame) => frame.includes('"cmd":"vault_rename"')), { timeout: 3_000 }).toBe(true);
 
   const renamedPath = `${noteName}-renamed.md`;
@@ -697,6 +700,26 @@ test("Obsidian creates, opens, renames, and trashes a note from Files", async ({
   await confirmDelete.click({ timeout: 2_000 });
   await expect.poll(() => existsSync(resolve(vault, renamedPath))).toBe(false);
   await expect.poll(() => existsSync(resolve(vault, ".trash", renamedPath))).toBe(true);
+});
+
+test("Obsidian blur does not rename an untouched title containing punctuation", async ({ page }) => {
+  const { vault } = stack();
+  const original = "Projects: Q4.md";
+  writeFileSync(resolve(vault, original), "# Keep this path\n");
+  await boot(page);
+  await page.locator("button[title='Files — open your Obsidian vault']").click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='vault']").first();
+  const row = panel.locator("button.vault-file").filter({ hasText: "Projects: Q4" });
+  await row.click();
+  const reader = page.locator(".react-flow__node-panel [data-panel='vault']").last();
+  const title = reader.locator("span[title='click to rename / move (use folder/name)']");
+  await expect(title).toHaveText("Projects: Q4");
+  await title.click();
+  const rename = reader.locator("input").first();
+  await expect(rename).toBeVisible();
+  await rename.blur();
+  await expect.poll(() => existsSync(resolve(vault, original))).toBe(true);
+  await expect.poll(() => existsSync(resolve(vault, "Projects- Q4.md"))).toBe(false);
 });
 
 test("Obsidian reading tools support bookmarks, outline, graphs, backlinks, export, and board pinning", async ({ page }) => {
@@ -1207,20 +1230,40 @@ test("panel card drags to a new position", async ({ page }) => {
 
 test("gather pulls loose cards into a group", async ({ page }) => {
   await boot(page);
-  // spawn one terminal so there's at least one loose card
-  await page.locator("button[title*='New task']").first().click();
-  await page.locator("button[title='Terminal']").click();
-  await page.locator("button", { hasText: "+ spawn" }).last().click();
-  await expect(page.locator(".react-flow__node").first()).toBeVisible({ timeout: 10_000 });
-  await page.waitForTimeout(1000);
-  const before = await page.locator(".react-flow__node").count();
-  await page.locator("button[title*='Gather']").first().click();
-  await page.waitForTimeout(1200);
-  // After gather the board still renders nodes (no crash) — gather either
-  // grouped them or notified "no loose windows"; both are acceptable end states,
-  // what matters is the click handler doesn't throw and loose terminals get a group frame.
-  const count = await page.locator(".react-flow__node").count();
-  expect(count).toBeGreaterThanOrEqual(before);
+  // Add two windows from the library so this exercises the same mixed-panel
+  // gather path users rely on; a single spawnable terminal can legitimately
+  // be considered already grouped by fixture/workspace state.
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Add Inbox to canvas" }).click();
+  await page.locator("button[title^='Tools —']").click();
+  await page.getByRole("dialog", { name: "Tools panel" }).getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  const inboxId = await page.locator(".react-flow__node-panel").filter({ has: page.locator("[data-panel='inbox']") }).getAttribute("data-id");
+  const artifactsId = await page.locator(".react-flow__node-panel").filter({ has: page.locator("[data-panel='artifacts']") }).getAttribute("data-id");
+  expect(inboxId).toBeTruthy();
+  expect(artifactsId).toBeTruthy();
+  const readPositions = () => page.evaluate(() => JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}").main ?? {});
+  const before = await readPositions();
+  const beforeInbox = before[inboxId!];
+  const beforeArtifacts = before[artifactsId!];
+
+  // Gather must move real cards, create a containing group, and expose undo.
+  // It is not enough for the button to avoid throwing or preserve node count.
+  const undo = page.locator("button[title*='Undo grouping']").first();
+  const canvasButtons = page.locator("button[title*='Gather']");
+  await canvasButtons.first().click();
+  await expect(undo).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".react-flow__node-shape")).toHaveCount(1);
+  await expect.poll(async () => {
+    const positions = await readPositions();
+    return JSON.stringify([positions[inboxId!]?.x, positions[inboxId!]?.y, positions[artifactsId!]?.x, positions[artifactsId!]?.y]);
+  }).not.toBe(JSON.stringify([beforeInbox.x, beforeInbox.y, beforeArtifacts.x, beforeArtifacts.y]));
+  await undo.click();
+  await expect(page.locator(".react-flow__node-shape")).toHaveCount(0);
+  await expect.poll(async () => {
+    const positions = await readPositions();
+    return JSON.stringify([positions[inboxId!]?.x, positions[inboxId!]?.y, positions[artifactsId!]?.x, positions[artifactsId!]?.y]);
+  }).toBe(JSON.stringify([beforeInbox.x, beforeInbox.y, beforeArtifacts.x, beforeArtifacts.y]));
 });
 
 test("panel card resizing from the top-left keeps the resized origin instead of snapping back", async ({ page }) => {

@@ -696,8 +696,12 @@ export function VaultPanel() {
   const commitRename = () => {
     if (renameCommit.current) return;
     renameCommit.current = true;
-    const name = renName.trim().replace(/\.md$/i, "").replace(/[\\:*?"<>|]/g, "-");
-    if (name && vaultFile && `${name}.md` !== vaultFile.path) {
+    const rawName = renName.trim().replace(/\.md$/i, "");
+    const name = rawName.replace(/[\\:*?"<>|]/g, "-");
+    // Sanitization is for an explicit rename only. Merely focusing and
+    // blurring an untouched title (which may contain valid platform-specific
+    // punctuation) must not silently move the note or break its links.
+    if (name && vaultFile && rawName !== vaultFile.path.replace(/\.md$/i, "") && `${name}.md` !== vaultFile.path) {
       vaultRename(vaultFile.path, `${name}.md`);
       notify(`renamed → ${name}.md`);
     }
