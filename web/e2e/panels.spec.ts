@@ -666,6 +666,45 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await expect.poll(async () => restoredCard.evaluate((el) => Number.parseFloat(getComputedStyle(el).height))).toBe(savedShape.h);
 });
 
+test("Artifacts actions save to Obsidian, publish, download PDFs, and delete", async ({ page }) => {
+  const { vault } = await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
+  await expect(panel).toBeVisible();
+  await panel.getByRole("button", { name: "+ new" }).click();
+  const title = `Artifact PDF ${Date.now()}`;
+  const body = `e2e artifact contents ${Date.now()}`;
+  await panel.getByRole("combobox").selectOption("pdf");
+  await panel.getByPlaceholder("title").fill(title);
+  await panel.getByPlaceholder("contents (optional)").fill(body);
+  await panel.getByRole("button", { name: "create" }).click();
+  const heading = panel.getByText(title, { exact: true });
+  await expect(heading).toBeVisible();
+  const row = heading.locator("xpath=../..");
+  const obsidian = row.locator("button[title^='save to your Obsidian vault']");
+  await obsidian.click();
+  await expect.poll(() => {
+    try { return readFileSync(resolve(vault, "Canvas", "Artifacts", `${title}.md`), "utf8"); }
+    catch { return ""; }
+  }).toContain(body);
+
+  const publish = row.locator("button[title^='publish']");
+  const shareResponse = page.waitForResponse((response) => response.url().endsWith("/api/share") && response.request().method() === "POST");
+  await publish.click();
+  const response = await shareResponse;
+  if (!response.ok()) throw new Error(`Artifact share failed: ${response.status()} ${await response.text()}`);
+  await expect(row.locator("button[title^='link copied']")).toBeVisible();
+
+  const pdfDownload = page.waitForEvent("download");
+  await row.locator("button[title='download PDF again']").click();
+  expect((await pdfDownload).suggestedFilename()).toMatch(/^Artifact-PDF-.*\.pdf$/);
+
+  await row.locator("button[title='delete artifact']").click();
+  await expect(heading).toBeHidden();
+});
+
 test("Artifacts draft stays with its canvas database across a Dex handoff and reload", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();
