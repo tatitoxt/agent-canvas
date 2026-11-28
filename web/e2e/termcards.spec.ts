@@ -267,6 +267,71 @@ test("split right shows two live xterm panes in the drawer", async ({ page }) =>
   await expect(page.locator(".terminal-drawer .xterm")).toHaveCount(2, { timeout: 6_000 });
 });
 
+test("terminal drawer toolbar controls split, restore, files, clipboard, and dictation", async ({ page, context }) => {
+  await page.addInitScript(() => {
+    class FakeRecognition {
+      continuous = false;
+      interimResults = false;
+      onend: (() => void) | null = null;
+      start() { (window as any).__fakeSpeechRecognition = this; }
+      stop() { this.onend?.(); }
+    }
+    (window as any).SpeechRecognition = FakeRecognition;
+  });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await boot(page);
+  await spawnTerm(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const drawer = page.locator(".terminal-drawer").first();
+
+  await drawer.hover();
+  await drawer.locator("button[title='split down — second terminal below this one']").click();
+  await expect(drawer.locator(".xterm")).toHaveCount(2);
+  await expect(drawer.locator(":scope > div.min-h-0.flex-1")).toHaveCSS("flex-direction", "column");
+  await drawer.locator("button[title='close split']").click();
+  await expect(drawer.locator(".xterm")).toHaveCount(1);
+
+  await drawer.locator("button[title='split right — second terminal beside this one']").click();
+  await expect(drawer.locator(".xterm")).toHaveCount(2);
+  await drawer.locator("button[title='split with a NEW independent terminal — fresh bash shell in this pane']").click();
+  const splitPicker = drawer.locator("select[title='which agent this pane shows']");
+  await expect(splitPicker.locator("option")).toHaveCount(3, { timeout: 8_000 });
+  await expect(splitPicker.locator("option:checked")).toContainText("split-term-");
+  await drawer.locator("button[title='close split']").click();
+  await expect(drawer.locator(".xterm")).toHaveCount(1);
+
+  const original = await drawer.boundingBox();
+  await drawer.locator("button[title='maximize — full terminal']").click();
+  await expect(drawer).toHaveCSS("position", "fixed");
+  await drawer.locator("button[title='restore']").click();
+  await expect(drawer).toHaveCSS("position", "absolute");
+  await expect.poll(async () => {
+    const restored = await drawer.boundingBox();
+    return Math.abs(restored!.width - original!.width) + Math.abs(restored!.height - original!.height);
+  }).toBeLessThan(4);
+
+  await drawer.getByTitle("files — open this agent's worktree in the repo explorer").click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='explorer']").first()).toBeVisible();
+
+  const terminal = drawer.locator(".xterm").first();
+  await terminal.click();
+  await page.keyboard.type("printf 'toolbar-clipboard-e2e\\n'");
+  await page.keyboard.press("Enter");
+  await expect(drawer.locator(".xterm-rows")).toContainText("toolbar-clipboard-e2e", { timeout: 8_000 });
+  // xterm paints bytes immediately, while the shared PTY snapshot used by
+  // copy is intentionally coalesced for 150 ms. Wait for its canvas mirror.
+  await expect(page.getByTestId("agent-terminal-preview").first()).toContainText("toolbar-clipboard-e2e", { timeout: 8_000 });
+  await drawer.hover();
+  await drawer.locator("button[title='copy terminal output to clipboard']").click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("toolbar-clipboard-e2e");
+
+  await drawer.locator("button[title='dictate into this terminal']").click();
+  await expect(drawer.locator("button[title='stop dictation']")).toBeVisible();
+  await drawer.locator("button[title='stop dictation']").click();
+  await expect(drawer.locator("button[title='dictate into this terminal']")).toBeVisible();
+});
+
 test("terminal accepts shell input and renders PTY output", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
