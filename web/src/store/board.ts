@@ -650,7 +650,7 @@ type BoardState = {
   edgeDetail: string | null;
   setEdgeDetail: (id: string | null) => void;
   /** Open counts the GitHub panels last fetched — shown as live facts in the Library rail. */
-  ghCounts: { prs?: number; issues?: number };
+  ghCounts: { prs?: number; issues?: number; actions?: number };
   requestNav: (key: string) => void;
   /** Deska's "Show Panel Summaries" — hides each card's last line +
    * inline mini-terminal preview for a quieter board. */

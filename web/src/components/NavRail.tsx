@@ -265,7 +265,7 @@ function ExtrasBubble({ side, onSelect }: { side: "left" | "right"; onSelect: (k
             ["monitor", "VS Code", "bridge — soon"],
             ["vault", "Obsidian vault", "open vault panel"],
             ["thread", "Discord bridge", "chat relay — soon"],
-            ["automations", "GitHub Actions", "watch runs — soon"],
+            ["automations", "GitHub Actions", "recent workflow runs"],
           ].map(([icon, label, hint]) => (
             <button
               key={label}
@@ -273,6 +273,7 @@ function ExtrasBubble({ side, onSelect }: { side: "left" | "right"; onSelect: (k
               title={hint}
               onClick={() => {
                 if (label === "Obsidian vault") onSelect("vault");
+                if (label === "GitHub Actions") onSelect("actions");
                 setOpen(false);
               }}
               onMouseEnter={(e) => hoverRow(e, true)}
@@ -314,6 +315,7 @@ export const NavRail = memo(function NavRail({ active, onSelect }: { active: str
     ...(repoUrl ? [
       { icon: "github", label: "Pull requests", hint: "live list from the repo's GitHub", onClick: () => onSelect("prs"), key: "prs", fact: ghCounts.prs != null ? `${ghCounts.prs} open` : undefined },
       { icon: "github", label: "Issues", hint: "live list from the repo's GitHub", onClick: () => onSelect("issues"), key: "issues", fact: ghCounts.issues != null ? `${ghCounts.issues} open` : undefined },
+      { icon: "automations", label: "GitHub Actions", hint: "recent workflow runs from the repo's GitHub", onClick: () => onSelect("actions"), key: "actions" },
     ] as const : []),
     { icon: "ticket", label: "Dex Tickets", hint: "delegations, status, results and changed files", onClick: () => onSelect("tickets"), key: "tickets" },
     { icon: "notes", label: "Notes", hint: "notes and tasks on the board", onClick: () => onSelect("notes"), key: "notes", fact: noteCount ? `${noteCount}` : undefined },

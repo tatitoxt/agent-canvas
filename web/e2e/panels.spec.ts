@@ -223,6 +223,7 @@ test("Library expands horizontally to labeled tools without a flyout", async ({ 
   await expect(scroll.getByRole("button", { name: "Source Control" })).toBeVisible();
   await expect(scroll.getByRole("button", { name: "Obsidian" })).toBeVisible();
   await expect(scroll.getByRole("button", { name: "Dex Tickets" })).toBeVisible();
+  await expect(scroll.getByRole("button", { name: "GitHub Actions" })).toBeVisible();
   const after = await rail.boundingBox();
   expect(after!.width).toBeGreaterThan(before!.width * 2);
   // Labels share the row with their icons — the rail expands horizontally
@@ -234,6 +235,29 @@ test("Library expands horizontally to labeled tools without a flyout", async ({ 
   await scroll.getByRole("button", { name: "Obsidian" }).click();
   await expect(page.locator(".react-flow__node-panel [data-panel='vault']").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Collapse Library" })).toBeVisible();
+});
+
+test("Extras opens GitHub Actions as a live canvas panel", async ({ page }) => {
+  await boot(page);
+  await page.route("**/api/github/repos/canvas-e2e/sample/actions/runs?*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ workflow_runs: [
+        { id: 7, name: "Build and test", run_number: 18, status: "completed", conclusion: "success", event: "push", head_branch: "main", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/7" },
+        { id: 8, name: "Preview deploy", run_number: 19, status: "in_progress", conclusion: null, event: "pull_request", head_branch: "feature/ui", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/8" },
+      ] }),
+    });
+  });
+  await page.locator("button[title^='Extras —']").click();
+  await page.getByRole("button", { name: "GitHub Actions" }).click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='actions']").first();
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText("Build and test");
+  await expect(panel).toContainText("Succeeded");
+  await expect(panel).toContainText("Preview deploy");
+  await expect(panel).toContainText("Running");
+  await expect(page.locator(".cv-menu")).toHaveCount(0);
 });
 
 test("topbar controls fuse into one glass bubble on hover", async ({ page }) => {
