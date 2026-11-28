@@ -97,16 +97,19 @@ export function ArtifactsPanel() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && query.trim()) {
+              if (e.key === "Enter" && query.trim() && list.length === 0) {
                 threadSend(query.trim());
                 setQuery("");
+                closePanelNode("panel-artifacts");
+                useBoard.getState().openPanelNode("thread", screenToFlowPosition({ x: window.innerWidth * 0.42, y: window.innerHeight * 0.18 }));
                 requestNav("thread");
               }
             }}
-            placeholder="Search artifacts or ask Dex"
+            placeholder="Search artifacts (press Enter to ask Dex if none match)"
+            aria-label="Search artifacts or ask Dex when there are no matches"
             style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", color: "var(--cv-ink)", fontSize: "var(--cv-text-xs)" }}
           />
-          <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", border: "1px solid var(--cv-glass-edge)", borderRadius: 5, padding: "1px 5px" }}>⌘F</span>
+          <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>Filter as you type</span>
         </div>
       </div>
 

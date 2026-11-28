@@ -420,22 +420,38 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await expect(dock).toBeHidden();
   const artifacts = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
   await expect(artifacts).toBeVisible();
-  await expect(artifacts.getByPlaceholder("Search artifacts or ask Dex")).toBeVisible();
+  const search = artifacts.getByPlaceholder("Search artifacts (press Enter to ask Dex if none match)");
+  await expect(search).toBeVisible();
   await expect(artifacts.getByRole("button", { name: "+ new" })).toBeVisible();
+
+  const question = `Dex question ${Date.now()}`;
+  await search.fill(question);
+  await search.press("Enter");
+  await expect(page.locator(".react-flow__node-panel [data-panel='artifacts']")).toHaveCount(0);
+  await expect(page.locator(".react-flow__node-panel [data-panel='thread']")).toContainText(question);
+  // Return to the artifact panel to exercise creation and Add to Board too.
+  await page.locator("button[title^='Tools —']").click();
+  const reopenedDock = page.getByRole("dialog", { name: "Tools panel" });
+  await reopenedDock.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  await expect(reopenedDock).toBeHidden();
+  const artifactPanel = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
+  const reopenedSearch = artifactPanel.getByPlaceholder("Search artifacts (press Enter to ask Dex if none match)");
 
   const title = `Canvas artifact ${Date.now()}`;
   const body = `artifact-body-${"x".repeat(400)}`;
-  await artifacts.getByRole("button", { name: "+ new" }).click();
-  await artifacts.getByPlaceholder("title").fill(title);
-  await artifacts.getByPlaceholder("contents (optional)").fill(body);
-  await artifacts.getByRole("button", { name: "create" }).click();
+  await artifactPanel.getByRole("button", { name: "+ new" }).click();
+  await artifactPanel.getByPlaceholder("title").fill(title);
+  await artifactPanel.getByPlaceholder("contents (optional)").fill(body);
+  await artifactPanel.getByRole("button", { name: "create" }).click();
   // The artifact library is daemon-backed and shared across the whole e2e
   // run — retries of this test leave their created rows behind. An unscoped
   // "Add to Board" click then violates strict mode (or worse, silently pins
   // a previous attempt's artifact). Filter the library down to exactly this
   // artifact through the panel's own search before clicking its row action.
-  await artifacts.getByPlaceholder("Search artifacts or ask Dex").fill(title);
-  const addToBoard = artifacts.locator("button[title^='Add to Board']");
+  await reopenedSearch.fill(title);
+  await reopenedSearch.press("Enter");
+  await expect(reopenedSearch).toBeVisible(); // matching results stay in the artifact library
+  const addToBoard = artifactPanel.locator("button[title^='Add to Board']");
   await expect(addToBoard).toHaveCount(1);
   await addToBoard.click();
 
