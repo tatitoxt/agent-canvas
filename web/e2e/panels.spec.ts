@@ -217,6 +217,39 @@ test("Automation create, run, and delete drives a real harmless shell prompt", a
   await expect(heading).toBeHidden();
 });
 
+test("Loops create, run, pause, resume, and delete through the connected daemon", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title='Terminal — spawn a plain shell']").first().click();
+  const card = page.locator(".agent-card").first();
+  await expect(card).toBeVisible({ timeout: 8_000 });
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Add Loops to canvas" }).click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='loops']").first();
+  await expect(panel).toBeVisible();
+  await panel.getByRole("button", { name: "+ new", exact: true }).click();
+
+  const marker = `loop-run-${Date.now()}`;
+  await panel.getByPlaceholder("the instruction the agent receives").fill(`printf '%s\\n' '${marker}'`);
+  await panel.getByRole("combobox").nth(0).selectOption({ label: "Terminal" });
+  await panel.getByRole("combobox").nth(1).selectOption("interval");
+  await panel.getByRole("button", { name: "start loop" }).click();
+
+  const instruction = panel.getByText(`printf '%s\\n' '${marker}'`, { exact: true });
+  await expect(instruction).toBeVisible({ timeout: 8_000 });
+  const row = instruction.locator("xpath=../..");
+  await row.getByRole("button", { name: "run now" }).click();
+  await expect.poll(async () => (await row.innerText()).includes("· fired ") && !(await row.innerText()).includes("never fired"), { timeout: 8_000 }).toBe(true);
+
+  await expect(card.getByTestId("agent-terminal-preview")).toContainText(marker, { timeout: 8_000 });
+  await row.getByRole("button", { name: "pause", exact: true }).click();
+  await expect(row.getByRole("button", { name: "resume", exact: true })).toBeVisible();
+  await row.getByRole("button", { name: "resume", exact: true }).click();
+  await expect(row.getByRole("button", { name: "pause", exact: true })).toBeVisible();
+  await row.getByRole("button", { name: "delete", exact: true }).click();
+  await expect(instruction).toBeHidden();
+});
+
 test("board settings import rejects malformed data without partial writes", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("cv-theme", "obsidian"));
   const { port } = stack();
