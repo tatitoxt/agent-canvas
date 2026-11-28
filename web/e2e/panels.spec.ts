@@ -433,6 +433,32 @@ test("Capture tools export the canvas and a selected region as PNG downloads", a
   expect(selectedRegion.suggestedFilename()).toMatch(/^canvas-region-.*\.png$/);
 });
 
+test("Session digest and Studio doc open, display content, and export a Markdown file", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  let dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Session digest" }).click();
+  await expect(dock).toBeHidden();
+  const digest = page.getByRole("dialog", { name: "Session digest" });
+  await expect(digest).toBeVisible();
+  await expect(digest.locator("pre")).toContainText("# Session digest");
+  await digest.getByRole("button", { name: "Close session digest" }).click();
+  await expect(digest).toBeHidden();
+
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Studio doc" }).click();
+  await expect(dock).toBeHidden();
+  const studio = page.getByRole("dialog", { name: "Studio doc" });
+  await expect(studio).toBeVisible({ timeout: 10_000 });
+  await expect(studio.locator("pre")).toContainText(/README\.md|Repository/);
+  const markdown = page.waitForEvent("download");
+  await studio.getByRole("button", { name: "▤ .md" }).click();
+  expect((await markdown).suggestedFilename()).toMatch(/^studio-.*\.md$/);
+  await studio.getByRole("button", { name: "Close Studio doc" }).click();
+  await expect(studio).toBeHidden();
+});
+
 test("Add to canvas closes Tools and mounts a live Inbox panel", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();
