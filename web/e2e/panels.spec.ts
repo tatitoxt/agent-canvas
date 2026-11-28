@@ -383,6 +383,31 @@ test("Team Builder role counters clamp at zero and expose an accessible CLI choo
   await expect(team).toBeHidden();
 });
 
+test("Team Builder spawns the selected number of live shell agents", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Team builder" }).click();
+  const team = page.getByRole("dialog", { name: "Team builder" });
+  await team.getByRole("button", { name: "Add one Frontend agent" }).click();
+  await team.getByRole("button", { name: "Add one Frontend agent" }).click();
+  await team.getByRole("combobox", { name: "CLI for every member" }).selectOption("bash");
+  await team.getByRole("button", { name: "Spawn 2" }).click();
+  await expect(team).toBeHidden();
+
+  const first = page.locator(".react-flow__node-agent").filter({ hasText: "frontend-1" });
+  const second = page.locator(".react-flow__node-agent").filter({ hasText: "frontend-2" });
+  await expect(first).toBeVisible({ timeout: 10_000 });
+  await expect(second).toBeVisible({ timeout: 10_000 });
+  await expect(first.getByTestId("agent-card-status")).toContainText("running");
+  await expect(second.getByTestId("agent-card-status")).toContainText("running");
+  const one = await first.boundingBox();
+  const two = await second.boundingBox();
+  expect(one).not.toBeNull();
+  expect(two).not.toBeNull();
+  expect(Math.abs(one!.x - two!.x) + Math.abs(one!.y - two!.y)).toBeGreaterThan(40);
+});
+
 test("Pencil markup can be activated, cleared, and exited from its own controls", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();

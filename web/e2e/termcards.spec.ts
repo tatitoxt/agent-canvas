@@ -250,6 +250,36 @@ test("terminal accepts shell input and renders PTY output", async ({ page }) => 
   await expect(page.locator(".xterm-rows")).toContainText("terminal-e2e-ok", { timeout: 8_000 });
 });
 
+test("Tools Pause all suspends PTY commands until Resume all", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  const card = page.locator(".agent-card").first();
+  await card.locator("[data-testid='agent-card-header']").click();
+  await card.locator("[title='Open terminal']").click();
+  const terminal = page.locator(".terminal-drawer .xterm").first();
+  await expect(terminal).toBeVisible({ timeout: 5_000 });
+  await terminal.click();
+
+  await page.keyboard.type("printf '\\x70\\x72\\x65\\x2d\\x70\\x61\\x75\\x73\\x65\\n'");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".terminal-drawer .xterm-rows")).toContainText("pre-pause", { timeout: 8_000 });
+
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Pause all", exact: true }).click();
+  await expect(tools).toBeVisible();
+  await tools.getByRole("button", { name: "Close Tools panel" }).click();
+
+  await terminal.click();
+  await page.keyboard.type("printf '\\x72\\x65\\x73\\x75\\x6d\\x65\\x2d\\x6d\\x61\\x72\\x6b\\n'");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".terminal-drawer .xterm-rows")).not.toContainText("resume-mark", { timeout: 700 });
+
+  await page.locator("button[title^='Tools —']").click();
+  await page.getByRole("dialog", { name: "Tools panel" }).getByRole("button", { name: "Resume all", exact: true }).click();
+  await expect(page.locator(".terminal-drawer .xterm-rows")).toContainText("resume-mark", { timeout: 8_000 });
+});
+
 test("terminal search shortcut finds scrollback and Escape returns focus to the TUI", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
