@@ -85,6 +85,7 @@ pub type NoteRow = (String, String, String, String, i64, Option<String>);
 
 pub struct Store {
     conn: Mutex<Connection>,
+    canvas_id: String,
 }
 
 impl Store {
@@ -123,7 +124,18 @@ impl Store {
                node_id TEXT PRIMARY KEY,
                x REAL NOT NULL,
                y REAL NOT NULL
-             );",
+             );
+             CREATE TABLE IF NOT EXISTS metadata (
+               key TEXT PRIMARY KEY,
+               value TEXT NOT NULL
+             );
+             INSERT OR IGNORE INTO metadata (key, value)
+               VALUES ('canvas_id', lower(hex(randomblob(16))));",
+        )?;
+        let canvas_id = conn.query_row(
+            "SELECT value FROM metadata WHERE key = 'canvas_id'",
+            [],
+            |row| row.get(0),
         )?;
         // Migrations: v0 → v1 adds agents.workspace_id (agents live inside
         // user-created workspaces that coexist on one canvas).
@@ -290,7 +302,14 @@ impl Store {
         }
         Ok(Self {
             conn: Mutex::new(conn),
+            canvas_id,
         })
+    }
+
+    /// Stable opaque identity for this canvas database. Unlike the repo path,
+    /// this can safely cross the local control protocol without exposing paths.
+    pub fn canvas_id(&self) -> &str {
+        &self.canvas_id
     }
 
     #[allow(clippy::too_many_arguments)]

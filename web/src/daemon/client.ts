@@ -95,6 +95,7 @@ export type ServerMsg =
   | { type: "delegation_failed"; edge_id: string }
   | {
       type: "snapshot";
+      canvas_id?: string;
       boards?: { board_id: string; name: string }[];
       agents: SnapshotAgent[];
       delegations?: SnapshotDelegation[];

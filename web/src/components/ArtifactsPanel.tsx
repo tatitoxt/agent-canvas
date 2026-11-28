@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 import { useReactFlow } from "@xyflow/react";
@@ -8,6 +8,7 @@ import { shareArtifactPdf } from "../lib/share";
 import { buildDoc, buildAskDoc } from "../lib/boardDocs";
 import { GeneratePdfMenu } from "./GeneratePdfMenu";
 import { Icon } from "./icons";
+import { artifactDraftStorageKey } from "../lib/artifactDraft";
 
 /** Each artifact kind gets its own symbol + muted color (Deska-style
  * deliverable templates). */
@@ -24,10 +25,9 @@ const kindMeta = (k: string) => KINDS[k] ?? KINDS.note;
 
 type ArtifactDraft = { creating: boolean; kind: string; title: string; text: string };
 const emptyDraft = (): ArtifactDraft => ({ creating: false, kind: "note", title: "", text: "" });
-const draftKey = (board: string) => `cv-artifact-draft:${board}`;
-function loadArtifactDraft(board: string): ArtifactDraft {
+function loadArtifactDraft(key: string): ArtifactDraft {
   try {
-    const raw = localStorage.getItem(draftKey(board));
+    const raw = localStorage.getItem(key);
     if (!raw) return emptyDraft();
     const value = JSON.parse(raw) as Partial<ArtifactDraft>;
     return {
@@ -50,6 +50,7 @@ const SUGGESTIONS: { icon: string; color: string; label: string; dex: string }[]
 export function ArtifactsPanel() {
   const artifacts = useBoard((s) => s.artifacts);
   const activeBoard = useBoard((s) => s.activeBoard);
+  const canvasId = useBoard((s) => s.canvasId);
   const artifactCreate = useBoard((s) => s.artifactCreate);
   const artifactDelete = useBoard((s) => s.artifactDelete);
   const closePanelNode = useBoard((s) => s.closePanelNode);
@@ -60,8 +61,10 @@ export function ArtifactsPanel() {
   const vaultAppend = useBoard((s) => s.vaultAppend);
   const notify = useBoard((s) => s.notify);
   const { screenToFlowPosition } = useReactFlow();
-  const [draft, setDraft] = useState(() => loadArtifactDraft(activeBoard ?? "main"));
-  const draftBoard = useRef(activeBoard ?? "main");
+  const boardId = activeBoard ?? "main";
+  const draftScope = canvasId ? artifactDraftStorageKey(canvasId, boardId) : null;
+  const [draft, setDraft] = useState<ArtifactDraft>(emptyDraft);
+  const [hydratedScope, setHydratedScope] = useState<string | null>(null);
   const { creating, kind, title, text } = draft;
   const setCreating = (value: boolean | ((current: boolean) => boolean)) =>
     setDraft((current) => ({ ...current, creating: typeof value === "function" ? value(current.creating) : value }));
@@ -73,17 +76,16 @@ export function ArtifactsPanel() {
   const [genOpen, setGenOpen] = useState(false);
 
   useEffect(() => {
-    const board = activeBoard ?? "main";
-    if (draftBoard.current !== board) return;
-    try { localStorage.setItem(draftKey(board), JSON.stringify(draft)); } catch { /* storage may be unavailable */ }
-  }, [activeBoard, draft]);
+    if (!draftScope || hydratedScope !== draftScope) return;
+    try { localStorage.setItem(draftScope, JSON.stringify(draft)); } catch { /* storage may be unavailable */ }
+  }, [draftScope, draft, hydratedScope]);
 
   useEffect(() => {
-    const board = activeBoard ?? "main";
-    if (draftBoard.current === board) return;
-    draftBoard.current = board;
-    setDraft(loadArtifactDraft(board));
-  }, [activeBoard]);
+    if (!draftScope || hydratedScope === draftScope) return;
+    setHydratedScope(null);
+    setDraft(loadArtifactDraft(draftScope));
+    setHydratedScope(draftScope);
+  }, [draftScope, hydratedScope]);
 
   // Generate-PDF lives here too (not only in the vault panel): same
   // templates, same "ask for anything", saved straight into this list.
@@ -173,6 +175,8 @@ export function ArtifactsPanel() {
           <button
             className="cv-mini-btn"
             style={{ padding: "3px 11px", color: "var(--cv-ink)" }}
+            disabled={!canvasId}
+            title={canvasId ? "Create an artifact" : "Waiting for the canvas database identity"}
             onClick={() => setCreating((c) => !c)}
           >
             + new

@@ -16,6 +16,22 @@ fn temp_repo(_tag: &str) -> std::path::PathBuf {
     path
 }
 
+#[test]
+fn canvas_id_is_stable_for_a_database_and_unique_between_databases() {
+    let repo_a = temp_repo("canvas-id-a");
+    let repo_b = temp_repo("canvas-id-b");
+
+    let first = Store::open(&repo_a).unwrap().canvas_id().to_string();
+    let reopened = Store::open(&repo_a).unwrap().canvas_id().to_string();
+    let other = Store::open(&repo_b).unwrap().canvas_id().to_string();
+
+    assert_eq!(first, reopened, "reopening a database must preserve its id");
+    assert_ne!(
+        first, other,
+        "separate canvas databases must not share drafts"
+    );
+}
+
 // ---------- permission ladder ----------
 
 #[test]

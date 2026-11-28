@@ -417,6 +417,8 @@ type BoardState = {
   workspaces: Record<string, LiveWorkspace>;
   /** The board repo's origin (https) — powers the GitHub shortcuts. */
   repoUrl: string | null;
+  /** Opaque identity of the SQLite canvas backing this snapshot. */
+  canvasId: string | null;
   cliIdentities: Record<string, { account?: string | null; model?: string | null; source?: string | null }>;
   /** Registered named CLI accounts (id → account). */
   accounts: Record<string, { account_id: string; cli: string; label: string }>;
@@ -818,6 +820,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   edges: {},
   workspaces: {},
   repoUrl: null,
+  canvasId: null,
   cliIdentities: {},
   accounts: {},
   memories: {},
@@ -1356,6 +1359,7 @@ export const useBoard = create<BoardState>((set, get) => ({
               workspaces,
               approvals: msg.approvals ?? {},
               repoUrl: msg.repo_url ?? null,
+              canvasId: msg.canvas_id ?? null,
               cliIdentities: msg.cli_identities ?? {},
               automations,
               loops,

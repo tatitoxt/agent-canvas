@@ -281,6 +281,7 @@ pub fn snapshot_message(
         .collect();
 
     Ok(ServerMsg::Snapshot {
+        canvas_id: store.canvas_id().to_string(),
         boards: store
             .boards_snapshot()
             .unwrap_or_default()

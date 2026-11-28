@@ -559,6 +559,38 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await expect.poll(async () => restoredCard.evaluate((el) => Number.parseFloat(getComputedStyle(el).height))).toBe(savedShape.h);
 });
 
+test("Artifacts draft stays with its canvas database across a Dex handoff and reload", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+
+  const panel = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
+  await panel.getByRole("button", { name: "+ new" }).click();
+  const title = `Unsaved artifact ${Date.now()}`;
+  const body = `private draft ${Date.now()}`;
+  await panel.getByPlaceholder("title").fill(title);
+  await panel.getByPlaceholder("contents (optional)").fill(body);
+
+  const search = panel.getByPlaceholder("Search artifacts (press Enter to ask Dex if none match)");
+  await search.fill(`ask Dex ${Date.now()}`);
+  await search.press("Enter");
+  await expect(panel.getByPlaceholder("title")).toHaveValue(title);
+  await expect(panel.getByPlaceholder("contents (optional)")).toHaveValue(body);
+
+  await page.reload();
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
+  await page.locator("button[title^='Tools —']").click();
+  const reopenedDock = page.getByRole("dialog", { name: "Tools panel" });
+  await reopenedDock.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  const restored = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
+  await expect(restored.getByPlaceholder("title")).toHaveValue(title);
+  await expect(restored.getByPlaceholder("contents (optional)")).toHaveValue(body);
+  const draftKeys = await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("cv-artifact-draft:")));
+  expect(draftKeys).toHaveLength(1);
+  expect(draftKeys[0]).toMatch(/^cv-artifact-draft:[^:]+:main$/);
+});
+
 test("web preview windows resize and keep their dimensions after reload", async ({ page }) => {
   await page.route("https://example.com/**", (route) => route.fulfill({
     status: 200,
