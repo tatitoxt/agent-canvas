@@ -480,7 +480,7 @@ test("Team Builder role counters clamp at zero and expose an accessible CLI choo
   await expect(team).toBeHidden();
 });
 
-test("Team Builder spawns the selected number of live shell agents", async ({ page }) => {
+test("Team Builder spawns the selected number of live shell agents into the waiting shell state", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();
   const tools = page.getByRole("dialog", { name: "Tools panel" });
@@ -496,8 +496,10 @@ test("Team Builder spawns the selected number of live shell agents", async ({ pa
   const second = page.locator(".react-flow__node-agent").filter({ hasText: "frontend-2" });
   await expect(first).toBeVisible({ timeout: 10_000 });
   await expect(second).toBeVisible({ timeout: 10_000 });
-  await expect(first.getByTestId("agent-card-status")).toContainText("running");
-  await expect(second.getByTestId("agent-card-status")).toContainText("running");
+  // A spawned bash shell reaches its prompt and waits for input. `running`
+  // is not an AgentStatus; waiting is the correct ready-for-command state.
+  await expect(first.getByTestId("agent-card-status")).toContainText("waiting");
+  await expect(second.getByTestId("agent-card-status")).toContainText("waiting");
   const one = await first.boundingBox();
   const two = await second.boundingBox();
   expect(one).not.toBeNull();
@@ -825,6 +827,47 @@ test("Artifacts actions save to Obsidian, publish, download PDFs, and delete", a
 
   await row.locator("button[title='delete artifact']").click();
   await expect(heading).toBeHidden();
+});
+
+test("Artifacts PDF menu exports each board document template and custom prompt", async ({ page }) => {
+  await boot(page);
+
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
+  await expect(panel).toBeVisible();
+
+  const pdfMenu = panel.getByRole("button", { name: "⎙ pdf" });
+  const templates = [
+    { label: "Project overview" },
+    { label: "Onboarding guide" },
+    { label: "Architecture" },
+  ];
+  for (const template of templates) {
+    await pdfMenu.click();
+    const download = page.waitForEvent("download");
+    await panel.getByRole("button", { name: new RegExp(template.label) }).click();
+    const downloaded = await download;
+    expect(downloaded.suggestedFilename()).toContain(template.label.replaceAll(" ", "-"));
+    const pdfPath = await downloaded.path();
+    expect(pdfPath).not.toBeNull();
+    expect(readFileSync(pdfPath!).subarray(0, 8).toString()).toBe("%PDF-1.4");
+    await expect(panel.getByRole("button", { name: "+ new" })).toBeVisible();
+  }
+
+  await pdfMenu.click();
+  const question = `E2E custom PDF ${Date.now()}`;
+  await panel.getByPlaceholder("Ask for anything…").fill(question);
+  const customDownload = page.waitForEvent("download");
+  await panel.getByTitle("Write a PDF about this from the board's state").click();
+  const customFile = await customDownload;
+  expect(customFile.suggestedFilename()).toContain(question.slice(0, 40).replaceAll(" ", "-"));
+  const customPath = await customFile.path();
+  expect(customPath).not.toBeNull();
+  expect(readFileSync(customPath!).subarray(0, 8).toString()).toBe("%PDF-1.4");
+  await expect(panel.getByRole("button", { name: "+ new" })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "+ new" })).toBeVisible();
 });
 
 test("Artifacts draft stays with its canvas database across a Dex handoff and reload", async ({ page }) => {
