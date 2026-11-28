@@ -262,7 +262,7 @@ function ExtrasBubble({ side, onSelect }: { side: "left" | "right"; onSelect: (k
         >
           <div className="cv-section-label" style={sectionLabel}>Extras</div>
           {[
-            ["monitor", "VS Code", "bridge — soon"],
+            ["explorer", "Code Editor", "open this repo in the canvas explorer"],
             ["vault", "Obsidian vault", "open vault panel"],
             ["thread", "Discord bridge", "chat relay — soon"],
             ["automations", "GitHub Actions", "recent workflow runs"],
@@ -272,8 +272,10 @@ function ExtrasBubble({ side, onSelect }: { side: "left" | "right"; onSelect: (k
               style={menuRow}
               title={hint}
               onClick={() => {
-                if (label === "Obsidian vault") onSelect("vault");
-                if (label === "GitHub Actions") onSelect("actions");
+                if (label === "Code Editor") onSelect("explorer");
+                else if (label === "Obsidian vault") onSelect("vault");
+                else if (label === "GitHub Actions") onSelect("actions");
+                else return;
                 setOpen(false);
               }}
               onMouseEnter={(e) => hoverRow(e, true)}

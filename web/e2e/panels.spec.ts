@@ -260,6 +260,20 @@ test("Extras opens GitHub Actions as a live canvas panel", async ({ page }) => {
   await expect(page.locator(".cv-menu")).toHaveCount(0);
 });
 
+test("Extras opens Code Editor in the repo explorer and leaves unavailable integrations visible", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Extras —']").click();
+  const menu = page.locator(".cv-menu").filter({ hasText: "Extras" }).first();
+  const discord = menu.getByRole("button", { name: /Discord bridge/ });
+  await expect(discord).toContainText("soon");
+  await discord.click();
+  await expect(menu).toBeVisible();
+
+  await menu.getByRole("button", { name: "Code Editor" }).click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='explorer']").first()).toBeVisible();
+  await expect(page.locator(".cv-menu")).toHaveCount(0);
+});
+
 test("topbar controls fuse into one glass bubble on hover", async ({ page }) => {
   await boot(page);
   const showChrome = page.getByTitle("Show panels and menus");
