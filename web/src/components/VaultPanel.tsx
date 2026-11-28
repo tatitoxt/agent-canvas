@@ -600,6 +600,7 @@ export function VaultPanel() {
   const [dropOn, setDropOn] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renName, setRenName] = useState("");
+  const renameCommit = useRef(false);
   const [graphScope, setGraphScope] = useState<"local" | "vault">("local");
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [backlinksOpen, setBacklinksOpen] = useState(false);
@@ -690,6 +691,21 @@ export function VaultPanel() {
       setArmedDel(p);
       setTimeout(() => setArmedDel((c) => (c === p ? null : c)), 2500);
     }
+  };
+
+  const commitRename = () => {
+    if (renameCommit.current) return;
+    renameCommit.current = true;
+    const rawName = renName.trim().replace(/\.md$/i, "");
+    const name = rawName.replace(/[\\:*?"<>|]/g, "-");
+    // Sanitization is for an explicit rename only. Merely focusing and
+    // blurring an untouched title (which may contain valid platform-specific
+    // punctuation) must not silently move the note or break its links.
+    if (name && vaultFile && rawName !== vaultFile.path.replace(/\.md$/i, "") && `${name}.md` !== vaultFile.path) {
+      vaultRename(vaultFile.path, `${name}.md`);
+      notify(`renamed → ${name}.md`);
+    }
+    setRenaming(false);
   };
 
   const shown = vaultEntries.filter((e) =>
@@ -1141,36 +1157,29 @@ export function VaultPanel() {
             overflow: "hidden",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", marginBottom: 8, gap: 6 }}>
             {renaming ? (
               <input
                 autoFocus
                 value={renName}
                 onChange={(e) => setRenName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Escape") setRenaming(false);
-                  if (e.key === "Enter") {
-                    const name = renName.trim().replace(/\.md$/i, "").replace(/[\\:*?"<>|]/g, "-");
-                    if (name && `${name}.md` !== vaultFile.path) {
-                      vaultRename(vaultFile.path, `${name}.md`);
-                      notify(`renamed → ${name}.md`);
-                    }
-                    setRenaming(false);
-                  }
+                  if (e.key === "Escape") { renameCommit.current = true; setRenaming(false); }
+                  if (e.key === "Enter") { e.preventDefault(); commitRename(); }
                 }}
-                onBlur={() => setRenaming(false)}
+                onBlur={commitRename}
                 style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 500, color: "var(--cv-ink)", background: "var(--cv-ink-fill-active)", border: "1px solid color-mix(in srgb, var(--cv-accent) 40%, transparent)", borderRadius: 5, padding: "1px 6px", outline: "none", minWidth: 140 }}
               />
             ) : (
               <span
                 title="click to rename / move (use folder/name)"
-                onClick={() => { setRenName(vaultFile.path.replace(/\.md$/, "")); setRenaming(true); }}
-                style={{ fontSize: "var(--cv-text-xxs)", fontWeight: 500, color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text" }}
+                onClick={() => { renameCommit.current = false; setRenName(vaultFile.path.replace(/\.md$/, "")); setRenaming(true); }}
+                style={{ flex: "1 1 120px", minWidth: 96, fontSize: "var(--cv-text-xxs)", fontWeight: 500, color: "var(--cv-ink-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text" }}
               >
                 {vaultFile.path.replace(/\.md$/, "").split("/").join(" › ")}
               </span>
             )}
-            <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
+            <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", flex: "0 1 auto", marginLeft: "auto" }}>
               <button className="vault-board-action cv-mini-btn" style={actionBtn} title="Pin this live note as a resizable window on the board" onClick={pinCurrentNote}>
                 Add to Board
               </button>

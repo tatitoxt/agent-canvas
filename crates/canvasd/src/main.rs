@@ -2769,6 +2769,14 @@ fn run_automation_row(state: &Arc<AppState>, row: store::AutomationRow) {
     ) {
         Ok((agent_id, run_board, ready)) => {
             let _ = state.store.automation_ran(&automation_id);
+            let run_stamp = state.store.automation_row(&automation_id).ok().flatten();
+            if let Some((_, _, _, _, _, _, _, _, last_run_at, _, next_run_at)) = run_stamp {
+                let _ = state.events.send(Event::Control(ServerMsg::AutomationRan {
+                    automation_id: automation_id.clone(),
+                    last_run_at,
+                    next_run_at,
+                }));
+            }
             let wt = state
                 .agents
                 .worktree(&agent_id)

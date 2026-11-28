@@ -31,7 +31,7 @@ export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index 
   const [confirmingKill, setConfirmingKill] = useState(false);
   const kill = useBoard((s) => s.kill);
   const [pos, setPos] = useState(DEFAULT_POS);
-  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+  const dragRef = useRef<{ dx: number; dy: number; cleanup?: () => void } | null>(null);
   const [size, setSize] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(TERMINAL_SIZE_KEY) ?? "null");
@@ -44,7 +44,7 @@ export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index 
     } catch { /* use the default size */ }
     return DEFAULT_SIZE;
   });
-  const resizeRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const resizeRef = useRef<{ x: number; y: number; width: number; height: number; cleanup?: () => void } | null>(null);
   // Voice dictation — Web Speech API is free/on-device-ish, unlike
   // Deska's metered voice minutes. Dictates text into the PTY.
   const [listening, setListening] = useState(false);
@@ -133,7 +133,9 @@ export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index 
   const onHeaderDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest("button, input, select")) return;
     const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
-    dragRef.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    dragRef.current?.cleanup?.();
+    const drag: { dx: number; dy: number; cleanup?: () => void } = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    dragRef.current = drag;
     const move = (ev: PointerEvent) => {
       const d = dragRef.current;
       if (!d) return;
@@ -142,20 +144,37 @@ export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index 
         y: Math.max(48, Math.min(window.innerHeight - 60, ev.clientY - d.dy)),
       });
     };
-    const up = () => {
-      dragRef.current = null;
+    const cleanup = () => {
+      if (dragRef.current === drag) dragRef.current = null;
       window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointerup", cleanup);
+      window.removeEventListener("pointercancel", cleanup);
+      window.removeEventListener("blur", cleanup);
+      window.removeEventListener("keydown", onKeyDown, true);
     };
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      cleanup();
+    };
+    drag.cleanup = cleanup;
     window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    window.addEventListener("pointerup", cleanup);
+    window.addEventListener("pointercancel", cleanup);
+    window.addEventListener("blur", cleanup);
+    window.addEventListener("keydown", onKeyDown, true);
   };
 
   const onResizeDown = (e: React.PointerEvent) => {
     if (maxed) return;
     e.preventDefault();
     e.stopPropagation();
-    resizeRef.current = { x: e.clientX, y: e.clientY, width: size.width, height: size.height };
+    resizeRef.current?.cleanup?.();
+    const resize: { x: number; y: number; width: number; height: number; cleanup?: () => void } = {
+      x: e.clientX, y: e.clientY, width: size.width, height: size.height,
+    };
+    resizeRef.current = resize;
     let nextSize = { width: size.width, height: size.height };
     const move = (ev: PointerEvent) => {
       const start = resizeRef.current;
@@ -166,15 +185,33 @@ export const TerminalPanel = memo(function TerminalPanel({ agentId, name, index 
       };
       setSize(nextSize);
     };
-    const up = () => {
-      resizeRef.current = null;
+    const cleanup = () => {
+      if (resizeRef.current === resize) resizeRef.current = null;
       window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointerup", cleanup);
+      window.removeEventListener("pointercancel", cleanup);
+      window.removeEventListener("blur", cleanup);
+      window.removeEventListener("keydown", onKeyDown, true);
       try { localStorage.setItem(TERMINAL_SIZE_KEY, JSON.stringify(nextSize)); } catch { /* noop */ }
     };
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      cleanup();
+    };
+    resize.cleanup = cleanup;
     window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    window.addEventListener("pointerup", cleanup);
+    window.addEventListener("pointercancel", cleanup);
+    window.addEventListener("blur", cleanup);
+    window.addEventListener("keydown", onKeyDown, true);
   };
+
+  useEffect(() => () => {
+    dragRef.current?.cleanup?.();
+    resizeRef.current?.cleanup?.();
+  }, []);
 
   return (
     <div

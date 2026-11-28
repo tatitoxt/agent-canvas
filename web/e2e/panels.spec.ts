@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures.mjs";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
@@ -153,6 +153,103 @@ test("Settings clear action names its exited-agent scope and reports an empty re
   await expect(settings.getByRole("button", { name: "Clear exited agents" })).toHaveText("no exited agents");
 });
 
+test("Settings alignment preference persists and exports to a portable JSON file", async ({ page }) => {
+  const { port, vault } = stack();
+  await page.addInitScript(() => {
+    if (localStorage.getItem("cv-snap-align") === null) localStorage.setItem("cv-snap-align", "false");
+  });
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
+  await page.locator("button[title='Settings']").click();
+  const settings = page.locator(".react-flow__node-panel [data-panel='settings']").first();
+  const snap = settings.getByRole("button", { name: "Alignment snap off" });
+  await expect(snap).toHaveAttribute("aria-pressed", "false");
+  await snap.click();
+  await expect(settings.getByRole("button", { name: "Alignment snap on" })).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("cv-snap-align"))).toBe("true");
+
+  const exportDownload = page.waitForEvent("download");
+  await settings.getByRole("button", { name: "Export board settings as JSON" }).click();
+  const download = await exportDownload;
+  expect(download.suggestedFilename()).toBe("canvas-export.json");
+  const exportedPath = resolve(vault, download.suggestedFilename());
+  await download.saveAs(exportedPath);
+  const exported = JSON.parse(readFileSync(exportedPath, "utf8"));
+  expect(exported).toMatchObject({ app: "agent-canvas", v: 1, data: { "cv-snap-align": "true" } });
+
+  await page.reload();
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("cv-snap-align"))).toBe("true");
+  await page.locator("button[title='Settings']").click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='settings']").first().getByRole("button", { name: "Alignment snap on" })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("Automation create, run, and delete drives a real harmless shell prompt", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Add Automations to canvas" }).click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='automations']").first();
+  await expect(panel).toBeVisible();
+  await panel.getByRole("button", { name: "+ new", exact: true }).click();
+
+  const name = `automation-e2e-${Date.now()}`;
+  const marker = `automation-run-${Date.now()}`;
+  await panel.getByPlaceholder("name — e.g. nightly audit").fill(name);
+  await panel.getByPlaceholder("prompt the agent receives on run").fill(`printf '%s\\n' '${marker}'`);
+  await panel.getByRole("combobox").nth(0).selectOption("bash");
+  await panel.getByRole("button", { name: "save automation" }).click();
+
+  const heading = panel.getByText(name, { exact: true });
+  await expect(heading).toBeVisible();
+  const row = heading.locator("xpath=..");
+  await row.getByRole("button", { name: "run", exact: true }).click();
+  // Distinguish the execution timestamp from the phrase “never ran”.
+  await expect.poll(async () => (await row.innerText()).includes("· ran ") && !(await row.innerText()).includes("never ran"), { timeout: 8_000 }).toBe(true);
+  const agent = page.locator(".agent-card").filter({ hasText: name });
+  await expect(agent).toBeVisible({ timeout: 10_000 });
+  await agent.locator("[data-testid='agent-card-header']").click();
+  await agent.locator("[title='Open terminal']").click();
+  const terminalRows = page.locator(".terminal-drawer .xterm-rows").first();
+  await expect(terminalRows).toContainText(marker, { timeout: 12_000 });
+
+  await row.getByRole("button", { name: "delete", exact: true }).click();
+  await expect(heading).toBeHidden();
+});
+
+test("Loops create, run, pause, resume, and delete through the connected daemon", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title='Terminal — spawn a plain shell']").first().click();
+  const card = page.locator(".agent-card").first();
+  await expect(card).toBeVisible({ timeout: 8_000 });
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Add Loops to canvas" }).click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='loops']").first();
+  await expect(panel).toBeVisible();
+  await panel.getByRole("button", { name: "+ new", exact: true }).click();
+
+  const marker = `loop-run-${Date.now()}`;
+  await panel.getByPlaceholder("the instruction the agent receives").fill(`printf '%s\\n' '${marker}'`);
+  await panel.getByRole("combobox").nth(0).selectOption({ label: "Terminal" });
+  await panel.getByRole("combobox").nth(1).selectOption("interval");
+  await panel.getByRole("button", { name: "start loop" }).click();
+
+  const instruction = panel.getByText(`printf '%s\\n' '${marker}'`, { exact: true });
+  await expect(instruction).toBeVisible({ timeout: 8_000 });
+  const row = instruction.locator("xpath=../..");
+  await row.getByRole("button", { name: "run now" }).click();
+  await expect.poll(async () => (await row.innerText()).includes("· fired ") && !(await row.innerText()).includes("never fired"), { timeout: 8_000 }).toBe(true);
+
+  await expect(card.getByTestId("agent-terminal-preview")).toContainText(marker, { timeout: 8_000 });
+  await row.getByRole("button", { name: "pause", exact: true }).click();
+  await expect(row.getByRole("button", { name: "resume", exact: true })).toBeVisible();
+  await row.getByRole("button", { name: "resume", exact: true }).click();
+  await expect(row.getByRole("button", { name: "pause", exact: true })).toBeVisible();
+  await row.getByRole("button", { name: "delete", exact: true }).click();
+  await expect(instruction).toBeHidden();
+});
+
 test("board settings import rejects malformed data without partial writes", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("cv-theme", "obsidian"));
   const { port } = stack();
@@ -223,6 +320,7 @@ test("Library expands horizontally to labeled tools without a flyout", async ({ 
   await expect(scroll.getByRole("button", { name: "Source Control" })).toBeVisible();
   await expect(scroll.getByRole("button", { name: "Obsidian" })).toBeVisible();
   await expect(scroll.getByRole("button", { name: "Dex Tickets" })).toBeVisible();
+  await expect(scroll.getByRole("button", { name: "GitHub Actions" })).toBeVisible();
   const after = await rail.boundingBox();
   expect(after!.width).toBeGreaterThan(before!.width * 2);
   // Labels share the row with their icons — the rail expands horizontally
@@ -234,6 +332,59 @@ test("Library expands horizontally to labeled tools without a flyout", async ({ 
   await scroll.getByRole("button", { name: "Obsidian" }).click();
   await expect(page.locator(".react-flow__node-panel [data-panel='vault']").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Collapse Library" })).toBeVisible();
+});
+
+test("Extras opens GitHub Actions as a live canvas panel", async ({ page }) => {
+  await boot(page);
+  await page.route("**/api/github/repos/canvas-e2e/sample/actions/runs?*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ workflow_runs: [
+        { id: 7, name: "Build and test", run_number: 18, status: "completed", conclusion: "success", event: "push", head_branch: "main", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/7" },
+        { id: 8, name: "Preview deploy", run_number: 19, status: "in_progress", conclusion: null, event: "pull_request", head_branch: "feature/ui", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/8" },
+        { id: 9, name: "Cancelled preview", run_number: 20, status: "completed", conclusion: "cancelled", event: "pull_request", head_branch: "feature/old", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/9" },
+        { id: 10, name: "Docs only", run_number: 21, status: "completed", conclusion: "skipped", event: "push", head_branch: "docs/readme", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/10" },
+        { id: 11, name: "Broken build", run_number: 22, status: "completed", conclusion: "failure", event: "push", head_branch: "feature/broken", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/11" },
+        { id: 12, name: "Runner startup error", run_number: 23, status: "completed", conclusion: "startup_failure", event: "push", head_branch: "feature/startup", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/12" },
+        { id: 13, name: "Unknown run", run_number: 24, status: null, conclusion: null, event: "workflow_dispatch", head_branch: "feature/unknown", updated_at: new Date().toISOString(), html_url: "https://github.com/canvas-e2e/sample/actions/runs/13" },
+      ] }),
+    });
+  });
+  await page.locator("button[title^='Extras —']").click();
+  await page.getByRole("button", { name: "GitHub Actions" }).click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='actions']").first();
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText("Build and test");
+  await expect(panel).toContainText("Succeeded");
+  await expect(panel).toContainText("Preview deploy");
+  await expect(panel).toContainText("Running");
+  await expect(panel).toContainText("feature/ui");
+  await expect(panel).toContainText("Cancelled preview");
+  await expect(panel).toContainText("Cancelled");
+  await expect(panel).toContainText("Docs only");
+  await expect(panel).toContainText("Skipped");
+  await expect(panel).toContainText("Broken build");
+  await expect(panel).toContainText("Failed");
+  await expect(panel).toContainText("Runner startup error");
+  await expect(panel).toContainText("Failed to start");
+  await expect(panel).toContainText("Unknown run");
+  await expect(panel).toContainText("Unknown");
+  await expect(page.locator(".cv-menu")).toHaveCount(0);
+});
+
+test("Extras opens Code Editor in the repo explorer and leaves unavailable integrations visible", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Extras —']").click();
+  const menu = page.locator(".cv-menu").filter({ hasText: "Extras" }).first();
+  const discord = menu.getByRole("button", { name: /Discord bridge/ });
+  await expect(discord).toContainText("soon");
+  await discord.click();
+  await expect(menu).toBeVisible();
+
+  await menu.getByRole("button", { name: "Code Editor" }).click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='explorer']").first()).toBeVisible();
+  await expect(page.locator(".cv-menu")).toHaveCount(0);
 });
 
 test("topbar controls fuse into one glass bubble on hover", async ({ page }) => {
@@ -249,6 +400,19 @@ test("topbar controls fuse into one glass bubble on hover", async ({ page }) => 
   await expect(leftCluster).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await page.locator(".react-flow").hover({ position: { x: 500, y: 300 } });
   await expect.poll(() => bar.evaluate((el) => getComputedStyle(el).boxShadow)).toBe("none");
+});
+
+test("machine menu marks This Mac as selected without exposing a dead action", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title='Machine — where agents run']").click();
+  const menu = page.locator(".cv-menu").filter({ hasText: "Machine" }).first();
+  await expect(menu.getByRole("status", { name: "This Mac selected; agents run locally" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "This Mac" })).toHaveCount(0);
+  const cloud = menu.getByRole("button", { name: /Cloud box.*soon/ });
+  const phone = menu.getByRole("button", { name: /Phone.*soon/ });
+  await expect(cloud).toBeDisabled();
+  await expect(phone).toBeDisabled();
+  await expect(menu).toBeVisible();
 });
 
 test("topbar labels Panels and opens Mission Map from its live summary", async ({ page }) => {
@@ -277,16 +441,146 @@ test("topbar labels Panels and opens Mission Map from its live summary", async (
   await expect(page.locator("button[title='Automations']")).toHaveCSS("width", "34px");
 });
 
-test("Tools Add shape opens its choices and creates a canvas shape", async ({ page }) => {
+test("Tools Add shape creates each supported shape from its live menu", async ({ page }) => {
+  await boot(page);
+  for (const kind of ["rect", "ellipse", "diamond", "sticky"] as const) {
+    await page.locator("button[title^='Tools —']").click();
+    const dock = page.getByRole("dialog", { name: "Tools panel" });
+    await dock.getByRole("button", { name: "Add shape" }).click();
+    const shapeChoice = dock.locator(`button[title='${kind}']`);
+    await expect(shapeChoice).toBeVisible();
+    const previousCount = await page.locator(`.react-flow__node-shape svg ${kind === "rect" || kind === "sticky" ? "rect" : kind === "diamond" ? "polygon" : "ellipse"}`).count();
+    await shapeChoice.click();
+    await expect(dock).toBeHidden();
+    const primitive = kind === "rect" || kind === "sticky" ? "rect" : kind === "diamond" ? "polygon" : "ellipse";
+    await expect(page.locator(`.react-flow__node-shape svg ${primitive}`)).toHaveCount(previousCount + 1);
+    if (kind === "sticky") await expect(page.locator(".react-flow__node-shape textarea[placeholder='note…']")).toBeVisible();
+  }
+});
+
+test("Team Builder role counters clamp at zero and expose an accessible CLI chooser", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Team builder" }).click();
+  await expect(tools).toBeHidden();
+  const team = page.getByRole("dialog", { name: "Team builder" });
+  await expect(team).toBeVisible();
+  const frontendCount = team.getByLabel("Frontend agents", { exact: true });
+  await expect(frontendCount).toHaveText("0");
+  await expect(team.getByRole("button", { name: "Spawn", exact: true })).toBeDisabled();
+  await team.getByRole("button", { name: "Remove one Frontend agent" }).click();
+  await expect(frontendCount).toHaveText("0");
+  await team.getByRole("button", { name: "Add one Frontend agent" }).click();
+  await team.getByRole("button", { name: "Add one Frontend agent" }).click();
+  await expect(frontendCount).toHaveText("2");
+  await expect(team.getByRole("button", { name: "Spawn 2" })).toBeEnabled();
+  await team.getByRole("combobox", { name: "CLI for every member" }).selectOption("claude");
+  await team.getByRole("button", { name: "Close Team builder" }).click();
+  await expect(team).toBeHidden();
+});
+
+test("Team Builder spawns the selected number of live shell agents into the waiting shell state", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Team builder" }).click();
+  const team = page.getByRole("dialog", { name: "Team builder" });
+  await team.getByRole("button", { name: "Add one Frontend agent" }).click();
+  await team.getByRole("button", { name: "Add one Frontend agent" }).click();
+  await team.getByRole("combobox", { name: "CLI for every member" }).selectOption("bash");
+  await team.getByRole("button", { name: "Spawn 2" }).click();
+  await expect(team).toBeHidden();
+
+  const first = page.locator(".react-flow__node-agent").filter({ hasText: "frontend-1" });
+  const second = page.locator(".react-flow__node-agent").filter({ hasText: "frontend-2" });
+  await expect(first).toBeVisible({ timeout: 10_000 });
+  await expect(second).toBeVisible({ timeout: 10_000 });
+  // A spawned bash shell reaches its prompt and waits for input. `running`
+  // is not an AgentStatus; waiting is the correct ready-for-command state.
+  await expect(first.getByTestId("agent-card-status")).toContainText("waiting");
+  await expect(second.getByTestId("agent-card-status")).toContainText("waiting");
+  const one = await first.boundingBox();
+  const two = await second.boundingBox();
+  expect(one).not.toBeNull();
+  expect(two).not.toBeNull();
+  expect(Math.abs(one!.x - two!.x) + Math.abs(one!.y - two!.y)).toBeGreaterThan(40);
+});
+
+test("Pencil markup can be activated, cleared, and exited from its own controls", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();
   const dock = page.getByRole("dialog", { name: "Tools panel" });
-  await dock.getByRole("button", { name: "Add shape" }).click();
-  const rect = dock.locator("button[title='rect']");
-  await expect(rect).toBeVisible();
-  await rect.click();
+  await dock.getByRole("button", { name: "Pencil markups" }).click();
   await expect(dock).toBeHidden();
-  await expect(page.locator(".react-flow__node-shape")).toBeVisible();
+  await expect(page.getByText("drag to mark up the canvas")).toBeVisible();
+  const box = await page.locator(".react-flow__pane").boundingBox();
+  expect(box).toBeTruthy();
+  await page.mouse.move(box!.x + 220, box!.y + 250);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + 300, box!.y + 290, { steps: 4 });
+  await page.mouse.up();
+  await expect(page.locator("svg polyline")).toHaveCount(1);
+  await page.locator("button[title='Clear every stroke']").click();
+  await expect(page.locator("svg polyline")).toHaveCount(0);
+  await page.locator("button[title^='Turn off pencil']").click();
+  await expect(page.getByText("drag to mark up the canvas")).toBeHidden();
+});
+
+test("Capture tools export the canvas and a selected region as PNG downloads", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  let dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add shape" }).click();
+  await dock.locator("button[title='rect']").click();
+  const node = page.locator(".react-flow__node-shape").last();
+  await expect(node).toBeVisible();
+  const bounds = await node.boundingBox();
+  expect(bounds).toBeTruthy();
+
+  const canvasShot = page.waitForEvent("download");
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Canvas shot" }).click();
+  const fullCanvas = await canvasShot;
+  expect(fullCanvas.suggestedFilename()).toMatch(/^canvas-.*\.png$/);
+
+  const regionShot = page.waitForEvent("download");
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Region shot" }).click();
+  await page.mouse.move(bounds!.x - 8, bounds!.y - 8);
+  await page.mouse.down();
+  await page.mouse.move(bounds!.x + bounds!.width + 8, bounds!.y + bounds!.height + 8, { steps: 5 });
+  await page.mouse.up();
+  const selectedRegion = await regionShot;
+  expect(selectedRegion.suggestedFilename()).toMatch(/^canvas-region-.*\.png$/);
+});
+
+test("Session digest and Studio doc open, display content, and export a Markdown file", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  let dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Session digest" }).click();
+  await expect(dock).toBeHidden();
+  const digest = page.getByRole("dialog", { name: "Session digest" });
+  await expect(digest).toBeVisible();
+  await expect(digest.locator("pre")).toContainText("# Session digest");
+  await digest.getByRole("button", { name: "Close session digest" }).click();
+  await expect(digest).toBeHidden();
+
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Studio doc" }).click();
+  await expect(dock).toBeHidden();
+  const studio = page.getByRole("dialog", { name: "Studio doc" });
+  await expect(studio).toBeVisible({ timeout: 10_000 });
+  await expect(studio.locator("pre")).toContainText(/README\.md|Repository/);
+  const markdown = page.waitForEvent("download");
+  await studio.getByRole("button", { name: "▤ .md" }).click();
+  expect((await markdown).suggestedFilename()).toMatch(/^studio-.*\.md$/);
+  await studio.getByRole("button", { name: "Close Studio doc" }).click();
+  await expect(studio).toBeHidden();
 });
 
 test("Add to canvas closes Tools and mounts a live Inbox panel", async ({ page }) => {
@@ -350,6 +644,137 @@ test("pinned Obsidian note edits and saves back to the real vault", async ({ pag
   await expect.poll(() => readFileSync(resolve(vault, "Canvas E2E note.md"), "utf8")).toContain("Saved from the live board window.");
 });
 
+test("Obsidian creates, opens, renames, and trashes a note from Files", async ({ page }) => {
+  test.setTimeout(20_000);
+  const sentFrames: string[] = [];
+  page.on("websocket", (socket) => socket.on("framesent", (frame) => {
+    if (typeof frame.payload === "string") sentFrames.push(frame.payload);
+  }));
+  const { vault } = await boot(page);
+  await page.locator("button[title='Files — open your Obsidian vault']").click();
+  const panels = page.locator(".react-flow__node-panel [data-panel='vault']");
+  const explorer = panels.first();
+  await expect(explorer).toBeVisible();
+
+  const noteName = `Vault-created-${Date.now()}`;
+  await explorer.getByTitle("new note in this vault").click();
+  await explorer.getByPlaceholder("folder/note name").fill(noteName);
+  await explorer.getByRole("button", { name: "create", exact: true }).click();
+  await expect.poll(() => {
+    try { return readFileSync(resolve(vault, `${noteName}.md`), "utf8"); } catch { return ""; }
+  }).toContain(`# ${noteName}`);
+
+  const row = explorer.locator("button.vault-file").filter({ hasText: noteName });
+  await expect(row).toBeVisible({ timeout: 8_000 });
+  await row.click();
+  const reader = panels.last();
+  await expect(reader.locator("span[title='click to rename / move (use folder/name)']")).toHaveText(noteName, { timeout: 5_000 });
+  await expect(reader.locator("#vh-0")).toContainText(noteName);
+
+  const title = reader.locator("span[title='click to rename / move (use folder/name)']");
+  await title.click({ timeout: 2_000 });
+  const rename = reader.locator("input").first();
+  await expect(rename).toBeVisible();
+  await rename.fill(`${noteName}-renamed`);
+  // The board can re-render the secondary reader while the rename is being
+  // committed. Press Enter against the focused input through the page key
+  // path, then wait on the actual protocol effect instead of a stale locator.
+  await rename.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => sentFrames.some((frame) => frame.includes('"cmd":"vault_rename"')), { timeout: 3_000 }).toBe(true);
+
+  const renamedPath = `${noteName}-renamed.md`;
+  await expect.poll(() => {
+    try { return readFileSync(resolve(vault, renamedPath), "utf8"); } catch { return ""; }
+  }, { timeout: 3_000 }).toContain(`# ${noteName}`);
+  await expect.poll(() => existsSync(resolve(vault, `${noteName}.md`))).toBe(false);
+
+  const renamedRow = explorer.locator("button.vault-file").filter({ hasText: `${noteName}-renamed` });
+  await expect(renamedRow).toBeVisible();
+  await renamedRow.hover();
+  const armDelete = renamedRow.getByTitle("delete this note (removes the real file)");
+  await expect(armDelete).toBeVisible({ timeout: 2_000 });
+  await armDelete.click({ timeout: 2_000 });
+  const confirmDelete = renamedRow.getByTitle("click again to delete for real");
+  await expect(confirmDelete).toBeVisible({ timeout: 2_000 });
+  await confirmDelete.click({ timeout: 2_000 });
+  await expect.poll(() => existsSync(resolve(vault, renamedPath))).toBe(false);
+  await expect.poll(() => existsSync(resolve(vault, ".trash", renamedPath))).toBe(true);
+});
+
+test("Obsidian blur does not rename an untouched title containing punctuation", async ({ page }) => {
+  const { vault } = stack();
+  const original = "Projects: Q4.md";
+  writeFileSync(resolve(vault, original), "# Keep this path\n");
+  await boot(page);
+  await page.locator("button[title='Files — open your Obsidian vault']").click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='vault']").first();
+  const row = panel.locator("button.vault-file").filter({ hasText: "Projects: Q4" });
+  await row.click();
+  const reader = page.locator(".react-flow__node-panel [data-panel='vault']").last();
+  const title = reader.locator("span[title='click to rename / move (use folder/name)']");
+  await expect(title).toHaveText("Projects: Q4");
+  await title.click();
+  const rename = reader.locator("input").first();
+  await expect(rename).toBeVisible();
+  await rename.blur();
+  await expect.poll(() => existsSync(resolve(vault, original))).toBe(true);
+  await expect.poll(() => existsSync(resolve(vault, "Projects- Q4.md"))).toBe(false);
+});
+
+test("Obsidian reading tools support bookmarks, outline, graphs, backlinks, export, and board pinning", async ({ page }) => {
+  const { vault } = stack();
+  // The E2E stack shares one throwaway vault across tests. Start from a known
+  // graph so the expected nodes and links do not depend on which tests ran first.
+  for (const entry of readdirSync(vault)) rmSync(resolve(vault, entry), { recursive: true, force: true });
+  writeFileSync(resolve(vault, "Canvas E2E note.md"), "# Canvas E2E note\n\n## Linked section\n\nSee [[Linked note]].\n");
+  writeFileSync(resolve(vault, "Linked note.md"), "# Linked note\n\nMention Canvas E2E note here.\n");
+  await boot(page);
+
+  await page.locator("button[title='Files — open your Obsidian vault']").click();
+  const panels = page.locator(".react-flow__node-panel [data-panel='vault']");
+  const explorer = panels.first();
+  const file = (name: string) => explorer.locator("button.vault-file").filter({ hasText: name }).first();
+  await expect(file("Canvas E2E note")).toBeVisible({ timeout: 8_000 });
+  await expect(file("Linked note")).toBeVisible({ timeout: 8_000 });
+
+  const primaryFile = file("Canvas E2E note");
+  await primaryFile.hover();
+  await primaryFile.getByTitle("bookmark — pin to the top").click();
+  await expect(explorer.getByText("Bookmarks", { exact: true })).toBeVisible();
+  await expect(explorer.getByRole("button", { name: "Canvas E2E note" }).first()).toBeVisible();
+  await primaryFile.click();
+
+  const reader = panels.last();
+  await expect(reader.getByText("Linked section", { exact: false })).toBeVisible();
+  await reader.getByTitle("Outline — jump to a heading (Obsidian's Outline panel)").click();
+  const outline = reader.getByRole("button", { name: "Linked section", exact: true });
+  await expect(outline).toBeVisible();
+  await outline.click();
+  await expect(reader.locator("#vh-2")).toBeInViewport();
+
+  await reader.getByRole("button", { name: "Graph", exact: true }).click();
+  await expect(reader.locator("svg g[style*='cursor: pointer']")).toHaveCount(1);
+  await reader.getByTitle("whole-vault graph — every note and every [[link]] between them").click();
+  await expect(reader.getByText("2 notes · 1 links", { exact: true })).toBeVisible({ timeout: 8_000 });
+
+  await reader.getByTitle("Linked mentions — notes that link to this one").click();
+  await expect(reader.getByRole("button", { name: "Linked note" })).toBeVisible({ timeout: 8_000 });
+  await expect(reader.getByRole("button", { name: /Linked note:3.*Mention Canvas E2E note here/ })).toBeVisible();
+
+  await reader.getByTitle("Export as PDF (saved to artifacts)").click();
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='artifacts']").getByText("PDF — Canvas E2E note", { exact: true })).toBeVisible({ timeout: 8_000 });
+
+  const linkedFile = file("Linked note");
+  await linkedFile.hover();
+  await expect(linkedFile.getByTitle("pin as live card on the board")).toBeVisible();
+  await linkedFile.getByTitle("pin as live card on the board").click();
+  await expect(page.locator(".react-flow__node[data-id^='md-']")).toBeVisible();
+});
+
 test("Add Artifacts to canvas closes Tools and mounts the interactive artifact library", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();
@@ -359,22 +784,42 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await expect(dock).toBeHidden();
   const artifacts = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
   await expect(artifacts).toBeVisible();
-  await expect(artifacts.getByPlaceholder("Search artifacts or ask Dex")).toBeVisible();
+  const search = artifacts.getByPlaceholder("Search artifacts (press Enter to ask Dex if none match)");
+  await expect(search).toBeVisible();
   await expect(artifacts.getByRole("button", { name: "+ new" })).toBeVisible();
+
+  const question = `Dex question ${Date.now()}`;
+  await search.fill(question);
+  await search.press("Enter");
+  await expect(page.locator(".react-flow__node-panel [data-panel='artifacts']")).toHaveCount(0);
+  await expect(page.locator(".react-flow__node-panel [data-panel='thread']")).toContainText(question);
+  // Return to the artifact panel to exercise creation and Add to Board too.
+  await page.locator("button[title^='Tools —']").click();
+  const reopenedDock = page.getByRole("dialog", { name: "Tools panel" });
+  await reopenedDock.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  await expect(reopenedDock).toBeHidden();
+  const artifactPanel = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
+  const reopenedSearch = artifactPanel.getByPlaceholder("Search artifacts (press Enter to ask Dex if none match)");
 
   const title = `Canvas artifact ${Date.now()}`;
   const body = `artifact-body-${"x".repeat(400)}`;
-  await artifacts.getByRole("button", { name: "+ new" }).click();
-  await artifacts.getByPlaceholder("title").fill(title);
-  await artifacts.getByPlaceholder("contents (optional)").fill(body);
-  await artifacts.getByRole("button", { name: "create" }).click();
+  await artifactPanel.getByRole("button", { name: "+ new" }).click();
+  await artifactPanel.getByPlaceholder("title").fill(title);
+  await artifactPanel.getByPlaceholder("contents (optional)").fill(body);
+  await artifactPanel.getByRole("button", { name: "create" }).click();
+  // Creation is asynchronous through the live canvas daemon. Wait until its
+  // snapshot reaches the library before filtering, or Enter can look like a
+  // no-result Dex query and unmount the panel on a loaded runner.
+  await expect(artifactPanel.getByText(title, { exact: true })).toBeVisible();
   // The artifact library is daemon-backed and shared across the whole e2e
   // run — retries of this test leave their created rows behind. An unscoped
   // "Add to Board" click then violates strict mode (or worse, silently pins
   // a previous attempt's artifact). Filter the library down to exactly this
   // artifact through the panel's own search before clicking its row action.
-  await artifacts.getByPlaceholder("Search artifacts or ask Dex").fill(title);
-  const addToBoard = artifacts.locator("button[title^='Add to Board']");
+  await reopenedSearch.fill(title);
+  await reopenedSearch.press("Enter");
+  await expect(reopenedSearch).toBeVisible(); // matching results stay in the artifact library
+  const addToBoard = artifactPanel.locator("button[title^='Add to Board']");
   await expect(addToBoard).toHaveCount(1);
   await addToBoard.click();
 
@@ -474,6 +919,118 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await expect(restoredCard).toBeVisible();
   await expect.poll(async () => restoredCard.evaluate((el) => Number.parseFloat(getComputedStyle(el).width))).toBe(savedShape.w);
   await expect.poll(async () => restoredCard.evaluate((el) => Number.parseFloat(getComputedStyle(el).height))).toBe(savedShape.h);
+});
+
+test("Artifacts actions save to Obsidian, publish, download PDFs, and delete", async ({ page }) => {
+  const { vault } = await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
+  await expect(panel).toBeVisible();
+  await panel.getByRole("button", { name: "+ new" }).click();
+  const title = `Artifact PDF ${Date.now()}`;
+  const body = `e2e artifact contents ${Date.now()}`;
+  await panel.getByRole("combobox").selectOption("pdf");
+  await panel.getByPlaceholder("title").fill(title);
+  await panel.getByPlaceholder("contents (optional)").fill(body);
+  await panel.getByRole("button", { name: "create" }).click();
+  const heading = panel.getByText(title, { exact: true });
+  await expect(heading).toBeVisible();
+  const row = heading.locator("xpath=../..");
+  const obsidian = row.locator("button[title^='save to your Obsidian vault']");
+  await obsidian.click();
+  await expect.poll(() => {
+    try { return readFileSync(resolve(vault, "Canvas", "Artifacts", `${title}.md`), "utf8"); }
+    catch { return ""; }
+  }).toContain(body);
+
+  const publish = row.locator("button[title^='publish']");
+  const shareResponse = page.waitForResponse((response) => response.url().endsWith("/api/share") && response.request().method() === "POST");
+  await publish.click();
+  const response = await shareResponse;
+  if (!response.ok()) throw new Error(`Artifact share failed: ${response.status()} ${await response.text()}`);
+  await expect(row.locator("button[title^='link copied']")).toBeVisible();
+
+  const pdfDownload = page.waitForEvent("download");
+  await row.locator("button[title='download PDF again']").click();
+  expect((await pdfDownload).suggestedFilename()).toMatch(/^Artifact-PDF-.*\.pdf$/);
+
+  await row.locator("button[title='delete artifact']").click();
+  await expect(heading).toBeHidden();
+});
+
+test("Artifacts PDF menu exports each board document template and custom prompt", async ({ page }) => {
+  await boot(page);
+
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  const panel = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
+  await expect(panel).toBeVisible();
+
+  const pdfMenu = panel.getByRole("button", { name: "⎙ pdf" });
+  const templates = [
+    { label: "Project overview" },
+    { label: "Onboarding guide" },
+    { label: "Architecture" },
+  ];
+  for (const template of templates) {
+    await pdfMenu.click();
+    const download = page.waitForEvent("download");
+    await panel.getByRole("button", { name: new RegExp(template.label) }).click();
+    const downloaded = await download;
+    expect(downloaded.suggestedFilename()).toContain(template.label.replaceAll(" ", "-"));
+    const pdfPath = await downloaded.path();
+    expect(pdfPath).not.toBeNull();
+    expect(readFileSync(pdfPath!).subarray(0, 8).toString()).toBe("%PDF-1.4");
+    await expect(panel.getByRole("button", { name: "+ new" })).toBeVisible();
+  }
+
+  await pdfMenu.click();
+  const question = `E2E custom PDF ${Date.now()}`;
+  await panel.getByPlaceholder("Ask for anything…").fill(question);
+  const customDownload = page.waitForEvent("download");
+  await panel.getByTitle("Write a PDF about this from the board's state").click();
+  const customFile = await customDownload;
+  expect(customFile.suggestedFilename()).toContain(question.slice(0, 40).replaceAll(" ", "-"));
+  const customPath = await customFile.path();
+  expect(customPath).not.toBeNull();
+  expect(readFileSync(customPath!).subarray(0, 8).toString()).toBe("%PDF-1.4");
+  await expect(panel.getByRole("button", { name: "+ new" })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "+ new" })).toBeVisible();
+});
+
+test("Artifacts draft stays with its canvas database across a Dex handoff and reload", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  const dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+
+  const panel = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
+  await panel.getByRole("button", { name: "+ new" }).click();
+  const title = `Unsaved artifact ${Date.now()}`;
+  const body = `private draft ${Date.now()}`;
+  await panel.getByPlaceholder("title").fill(title);
+  await panel.getByPlaceholder("contents (optional)").fill(body);
+
+  const search = panel.getByPlaceholder("Search artifacts (press Enter to ask Dex if none match)");
+  await search.fill(`ask Dex ${Date.now()}`);
+  await search.press("Enter");
+  await expect(panel.getByPlaceholder("title")).toHaveValue(title);
+  await expect(panel.getByPlaceholder("contents (optional)")).toHaveValue(body);
+
+  await page.reload();
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
+  await page.locator("button[title^='Tools —']").click();
+  const reopenedDock = page.getByRole("dialog", { name: "Tools panel" });
+  await reopenedDock.getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  const restored = page.locator(".react-flow__node-panel [data-panel='artifacts']").first();
+  await expect(restored.getByPlaceholder("title")).toHaveValue(title);
+  await expect(restored.getByPlaceholder("contents (optional)")).toHaveValue(body);
+  const draftKeys = await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("cv-artifact-draft:")));
+  expect(draftKeys).toHaveLength(1);
+  expect(draftKeys[0]).toMatch(/^cv-artifact-draft:[^:]+:main$/);
 });
 
 test("web preview windows resize and keep their dimensions after reload", async ({ page }) => {
@@ -673,20 +1230,40 @@ test("panel card drags to a new position", async ({ page }) => {
 
 test("gather pulls loose cards into a group", async ({ page }) => {
   await boot(page);
-  // spawn one terminal so there's at least one loose card
-  await page.locator("button[title*='New task']").first().click();
-  await page.locator("button[title='Terminal']").click();
-  await page.locator("button", { hasText: "+ spawn" }).last().click();
-  await expect(page.locator(".react-flow__node").first()).toBeVisible({ timeout: 10_000 });
-  await page.waitForTimeout(1000);
-  const before = await page.locator(".react-flow__node").count();
-  await page.locator("button[title*='Gather']").first().click();
-  await page.waitForTimeout(1200);
-  // After gather the board still renders nodes (no crash) — gather either
-  // grouped them or notified "no loose windows"; both are acceptable end states,
-  // what matters is the click handler doesn't throw and loose terminals get a group frame.
-  const count = await page.locator(".react-flow__node").count();
-  expect(count).toBeGreaterThanOrEqual(before);
+  // Add two windows from the library so this exercises the same mixed-panel
+  // gather path users rely on; a single spawnable terminal can legitimately
+  // be considered already grouped by fixture/workspace state.
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Add Inbox to canvas" }).click();
+  await page.locator("button[title^='Tools —']").click();
+  await page.getByRole("dialog", { name: "Tools panel" }).getByRole("button", { name: "Add Artifacts to canvas" }).click();
+  const inboxId = await page.locator(".react-flow__node-panel").filter({ has: page.locator("[data-panel='inbox']") }).getAttribute("data-id");
+  const artifactsId = await page.locator(".react-flow__node-panel").filter({ has: page.locator("[data-panel='artifacts']") }).getAttribute("data-id");
+  expect(inboxId).toBeTruthy();
+  expect(artifactsId).toBeTruthy();
+  const readPositions = () => page.evaluate(() => JSON.parse(localStorage.getItem("cv-panelnodes") ?? "{}").main ?? {});
+  const before = await readPositions();
+  const beforeInbox = before[inboxId!];
+  const beforeArtifacts = before[artifactsId!];
+
+  // Gather must move real cards, create a containing group, and expose undo.
+  // It is not enough for the button to avoid throwing or preserve node count.
+  const undo = page.locator("button[title*='Undo grouping']").first();
+  const canvasButtons = page.locator("button[title*='Gather']");
+  await canvasButtons.first().click();
+  await expect(undo).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".react-flow__node-shape")).toHaveCount(1);
+  await expect.poll(async () => {
+    const positions = await readPositions();
+    return JSON.stringify([positions[inboxId!]?.x, positions[inboxId!]?.y, positions[artifactsId!]?.x, positions[artifactsId!]?.y]);
+  }).not.toBe(JSON.stringify([beforeInbox.x, beforeInbox.y, beforeArtifacts.x, beforeArtifacts.y]));
+  await undo.click();
+  await expect(page.locator(".react-flow__node-shape")).toHaveCount(0);
+  await expect.poll(async () => {
+    const positions = await readPositions();
+    return JSON.stringify([positions[inboxId!]?.x, positions[inboxId!]?.y, positions[artifactsId!]?.x, positions[artifactsId!]?.y]);
+  }).toBe(JSON.stringify([beforeInbox.x, beforeInbox.y, beforeArtifacts.x, beforeArtifacts.y]));
 });
 
 test("panel card resizing from the top-left keeps the resized origin instead of snapping back", async ({ page }) => {

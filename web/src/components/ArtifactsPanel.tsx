@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { panelRoot } from "./panelChrome";
 import { useBoard } from "../store/board";
 import { useReactFlow } from "@xyflow/react";
@@ -8,6 +8,7 @@ import { shareArtifactPdf } from "../lib/share";
 import { buildDoc, buildAskDoc } from "../lib/boardDocs";
 import { GeneratePdfMenu } from "./GeneratePdfMenu";
 import { Icon } from "./icons";
+import { artifactDraftStorageKey } from "../lib/artifactDraft";
 
 /** Each artifact kind gets its own symbol + muted color (Deska-style
  * deliverable templates). */
@@ -22,6 +23,24 @@ const KINDS: Record<string, { mark: string; color: string }> = {
 };
 const kindMeta = (k: string) => KINDS[k] ?? KINDS.note;
 
+type ArtifactDraft = { creating: boolean; kind: string; title: string; text: string };
+const emptyDraft = (): ArtifactDraft => ({ creating: false, kind: "note", title: "", text: "" });
+function loadArtifactDraft(key: string): ArtifactDraft {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return emptyDraft();
+    const value = JSON.parse(raw) as Partial<ArtifactDraft>;
+    return {
+      creating: value.creating === true,
+      kind: typeof value.kind === "string" && KINDS[value.kind] ? value.kind : "note",
+      title: typeof value.title === "string" ? value.title : "",
+      text: typeof value.text === "string" ? value.text : "",
+    };
+  } catch {
+    return emptyDraft();
+  }
+}
+
 const SUGGESTIONS: { icon: string; color: string; label: string; dex: string }[] = [
   { icon: "canvas", color: "#7ba3cf", label: "Design a landing page for my app", dex: "spawn codex to design a landing page for my app" },
   { icon: "code", color: "#7ba389", label: "Build me a budget calculator", dex: "spawn codex to build me a budget calculator" },
@@ -31,6 +50,7 @@ const SUGGESTIONS: { icon: string; color: string; label: string; dex: string }[]
 export function ArtifactsPanel() {
   const artifacts = useBoard((s) => s.artifacts);
   const activeBoard = useBoard((s) => s.activeBoard);
+  const canvasId = useBoard((s) => s.canvasId);
   const artifactCreate = useBoard((s) => s.artifactCreate);
   const artifactDelete = useBoard((s) => s.artifactDelete);
   const closePanelNode = useBoard((s) => s.closePanelNode);
@@ -41,13 +61,31 @@ export function ArtifactsPanel() {
   const vaultAppend = useBoard((s) => s.vaultAppend);
   const notify = useBoard((s) => s.notify);
   const { screenToFlowPosition } = useReactFlow();
-  const [creating, setCreating] = useState(false);
-  const [kind, setKind] = useState("note");
-  const [title, setTitle] = useState("");
-  const [text, setText] = useState("");
+  const boardId = activeBoard ?? "main";
+  const draftScope = canvasId ? artifactDraftStorageKey(canvasId, boardId) : null;
+  const [draft, setDraft] = useState<ArtifactDraft>(emptyDraft);
+  const [hydratedScope, setHydratedScope] = useState<string | null>(null);
+  const { creating, kind, title, text } = draft;
+  const setCreating = (value: boolean | ((current: boolean) => boolean)) =>
+    setDraft((current) => ({ ...current, creating: typeof value === "function" ? value(current.creating) : value }));
+  const setKind = (kind: string) => setDraft((current) => ({ ...current, kind }));
+  const setTitle = (title: string) => setDraft((current) => ({ ...current, title }));
+  const setText = (text: string) => setDraft((current) => ({ ...current, text }));
   const [query, setQuery] = useState("");
   const [shared, setShared] = useState<Record<string, string>>({});
   const [genOpen, setGenOpen] = useState(false);
+
+  useEffect(() => {
+    if (!draftScope || hydratedScope !== draftScope) return;
+    try { localStorage.setItem(draftScope, JSON.stringify(draft)); } catch { /* storage may be unavailable */ }
+  }, [draftScope, draft, hydratedScope]);
+
+  useEffect(() => {
+    if (!draftScope || hydratedScope === draftScope) return;
+    setHydratedScope(null);
+    setDraft(loadArtifactDraft(draftScope));
+    setHydratedScope(draftScope);
+  }, [draftScope, hydratedScope]);
 
   // Generate-PDF lives here too (not only in the vault panel): same
   // templates, same "ask for anything", saved straight into this list.
@@ -97,16 +135,22 @@ export function ArtifactsPanel() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && query.trim()) {
-                threadSend(query.trim());
+              if (e.key === "Enter" && query.trim() && list.length === 0 && earlier.length === 0) {
+                e.preventDefault();
+                const question = query.trim();
+                const hasUnsavedDraft = creating && (title.trim().length > 0 || text.trim().length > 0);
+                if (!hasUnsavedDraft) closePanelNode("panel-artifacts");
+                threadSend(question);
                 setQuery("");
+                useBoard.getState().openPanelNode("thread", screenToFlowPosition({ x: window.innerWidth * 0.42, y: window.innerHeight * 0.18 }));
                 requestNav("thread");
               }
             }}
-            placeholder="Search artifacts or ask Dex"
+            placeholder="Search artifacts (press Enter to ask Dex if none match)"
+            aria-label="Search artifacts or ask Dex when there are no matches"
             style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", color: "var(--cv-ink)", fontSize: "var(--cv-text-xs)" }}
           />
-          <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)", border: "1px solid var(--cv-glass-edge)", borderRadius: 5, padding: "1px 5px" }}>⌘F</span>
+          <span style={{ fontSize: "var(--cv-text-xxs)", color: "var(--cv-ink-faint)" }}>Filter as you type</span>
         </div>
       </div>
 
@@ -131,6 +175,8 @@ export function ArtifactsPanel() {
           <button
             className="cv-mini-btn"
             style={{ padding: "3px 11px", color: "var(--cv-ink)" }}
+            disabled={!canvasId}
+            title={canvasId ? "Create an artifact" : "Waiting for the canvas database identity"}
             onClick={() => setCreating((c) => !c)}
           >
             + new

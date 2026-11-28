@@ -417,6 +417,8 @@ type BoardState = {
   workspaces: Record<string, LiveWorkspace>;
   /** The board repo's origin (https) — powers the GitHub shortcuts. */
   repoUrl: string | null;
+  /** Opaque identity of the SQLite canvas backing this snapshot. */
+  canvasId: string | null;
   cliIdentities: Record<string, { account?: string | null; model?: string | null; source?: string | null }>;
   /** Registered named CLI accounts (id → account). */
   accounts: Record<string, { account_id: string; cli: string; label: string }>;
@@ -650,7 +652,7 @@ type BoardState = {
   edgeDetail: string | null;
   setEdgeDetail: (id: string | null) => void;
   /** Open counts the GitHub panels last fetched — shown as live facts in the Library rail. */
-  ghCounts: { prs?: number; issues?: number };
+  ghCounts: { prs?: number; issues?: number; actions?: number };
   requestNav: (key: string) => void;
   /** Deska's "Show Panel Summaries" — hides each card's last line +
    * inline mini-terminal preview for a quieter board. */
@@ -818,6 +820,7 @@ export const useBoard = create<BoardState>((set, get) => ({
   edges: {},
   workspaces: {},
   repoUrl: null,
+  canvasId: null,
   cliIdentities: {},
   accounts: {},
   memories: {},
@@ -1147,6 +1150,16 @@ export const useBoard = create<BoardState>((set, get) => ({
               },
             });
             break;
+          case "automation_ran": {
+            const automation = get().automations[msg.automation_id];
+            if (automation) {
+              set({ automations: {
+                ...get().automations,
+                [msg.automation_id]: { ...automation, last_run_at: msg.last_run_at, next_run_at: msg.next_run_at },
+              } });
+            }
+            break;
+          }
           case "automation_deleted": {
             const next = { ...get().automations };
             delete next[msg.automation_id];
@@ -1356,6 +1369,7 @@ export const useBoard = create<BoardState>((set, get) => ({
               workspaces,
               approvals: msg.approvals ?? {},
               repoUrl: msg.repo_url ?? null,
+              canvasId: msg.canvas_id ?? null,
               cliIdentities: msg.cli_identities ?? {},
               automations,
               loops,

@@ -15,6 +15,19 @@ type Item = {
   draft?: boolean;
   sha?: string;
   ci?: "pass" | "fail" | "pending" | "none";
+  stateLabel?: string;
+};
+
+type WorkflowRun = {
+  id: number;
+  name: string;
+  run_number: number;
+  status: string | null;
+  conclusion: string | null;
+  event: string;
+  head_branch: string;
+  updated_at: string;
+  html_url: string;
 };
 
 const CI_COLOR: Record<NonNullable<Item["ci"]>, string> = {
@@ -34,10 +47,34 @@ function age(iso: string): string {
   return d <= 0 ? "today" : d === 1 ? "1d" : `${d}d`;
 }
 
+function workflowState(run: WorkflowRun): { label: string; ci: NonNullable<Item["ci"]> } {
+  if (!run.status) return { label: "Unknown", ci: "none" };
+  if (run.status !== "completed") {
+    const label = run.status === "in_progress" ? "Running"
+      : run.status === "queued" || run.status === "requested" ? "Queued"
+      : run.status === "waiting" ? "Waiting"
+      : run.status.replaceAll("_", " ");
+    return { label: label.charAt(0).toUpperCase() + label.slice(1), ci: "pending" };
+  }
+
+  switch (run.conclusion) {
+    case "success": return { label: "Succeeded", ci: "pass" };
+    case "failure": return { label: "Failed", ci: "fail" };
+    case "startup_failure": return { label: "Failed to start", ci: "fail" };
+    case "timed_out": return { label: "Timed out", ci: "fail" };
+    case "cancelled": return { label: "Cancelled", ci: "none" };
+    case "skipped": return { label: "Skipped", ci: "none" };
+    case "neutral": return { label: "Neutral", ci: "none" };
+    case "action_required": return { label: "Action required", ci: "pending" };
+    case "stale": return { label: "Stale", ci: "none" };
+    default: return { label: "Completed", ci: "none" };
+  }
+}
+
 /** Live GitHub PR/issue lists for the repo this canvas runs on (public API,
  * no token — 60 req/h). The web-node pin can't iframe github.com, so this is
  * the real panel. */
-export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
+export function GitHubPanel({ kind }: { kind: "prs" | "issues" | "actions" }) {
   const repoUrl = useBoard((s) => s.repoUrl);
   const slug = repoSlug(repoUrl);
   const [items, setItems] = useState<Item[] | null>(null);
@@ -54,10 +91,33 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
     // command — so private repos work and there is no anonymous rate
     // limit. ghJson picks the transport; only a bare static page degrades
     // to the direct anonymous API.
-    ghJson(`repos/${slug}/${kind === "prs" ? "pulls" : "issues"}?state=open&per_page=30`)
+    const endpoint = kind === "actions"
+      ? `repos/${slug}/actions/runs?per_page=30`
+      : `repos/${slug}/${kind === "prs" ? "pulls" : "issues"}?state=open&per_page=30`;
+    ghJson(endpoint)
       .then((raw) => {
         const data = raw as any;
         if (dead) return;
+        if (kind === "actions") {
+          if (!Array.isArray(data?.workflow_runs)) throw new Error(data?.message ?? "unexpected GitHub Actions response");
+          const rows = data.workflow_runs as WorkflowRun[];
+          const mapped: Item[] = rows.map((run) => {
+            const state = workflowState(run);
+            return {
+              number: run.run_number,
+              title: run.name || `Workflow run #${run.run_number}`,
+              user: run.head_branch || run.event,
+              labels: [],
+              updated: run.updated_at,
+              url: run.html_url,
+              ci: state.ci,
+              stateLabel: state.label,
+            };
+          });
+          setItems(mapped);
+          useBoard.setState((s) => ({ ghCounts: { ...s.ghCounts, actions: mapped.length } }));
+          return;
+        }
         if (!Array.isArray(data)) throw new Error(data?.message ?? "unexpected GitHub response");
         const rows: Item[] = data
           .filter((it) => kind === "prs" || !it.pull_request)
@@ -130,12 +190,12 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
         {items?.length === 0 && (
           <EmptyState
             compact
-            icon={kind === "prs" ? "pr" : "issue"}
-            title={kind === "prs" ? "No open pull requests" : "No open issues"}
+            icon={kind === "prs" ? "pr" : kind === "issues" ? "issue" : "automations"}
+            title={kind === "prs" ? "No open pull requests" : kind === "issues" ? "No open issues" : "No workflow runs"}
           >
             {kind === "prs"
               ? "Nothing waiting on review — the repo is quiet."
-              : "The tracker is clear — nothing open right now."}
+              : kind === "issues" ? "The tracker is clear — nothing open right now." : "No GitHub Actions runs were found for this repository."}
           </EmptyState>
         )}
         {items?.map((it) => (
@@ -155,7 +215,7 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
             }}
           >
             <div style={{ fontSize: "var(--cv-text-xs)", lineHeight: 1.35 }}>
-              <span style={{ color: "var(--cv-ink-dim)", fontFamily: "var(--cv-font-mono)" }}>#{it.number}</span>{" "}
+              {kind !== "actions" && <span style={{ color: "var(--cv-ink-dim)", fontFamily: "var(--cv-font-mono)" }}>#{it.number}</span>}{kind !== "actions" && " "}
               {it.title}
               {it.draft && <span style={{ color: "var(--cv-ink-dim)", fontSize: "var(--cv-text-xxs)" }}> · draft</span>}
             </div>
@@ -166,7 +226,8 @@ export function GitHubPanel({ kind }: { kind: "prs" | "issues" }) {
                   style={{ width: 7, height: 7, borderRadius: "50%", background: CI_COLOR[it.ci], flexShrink: 0 }}
                 />
               )}
-              <span>{it.user}</span>
+              <span>{kind === "actions" ? it.stateLabel : it.user}</span>
+              {kind === "actions" && it.user && <><span>·</span><span>{it.user}</span></>}
               <span>·</span>
               <span>{slug?.split("/")[1]}</span>
               <span>·</span>

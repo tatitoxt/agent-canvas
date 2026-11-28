@@ -89,6 +89,7 @@ export const PANEL_DEFS: Record<string, PanelDef> = {
   memory: { ...PANEL_META.memory, render: () => <MemoryPanel /> },
   prs: { ...PANEL_META.prs, render: () => <GitHubPanel kind="prs" /> },
   issues: { ...PANEL_META.issues, render: () => <GitHubPanel kind="issues" /> },
+  actions: { ...PANEL_META.actions, render: () => <GitHubPanel kind="actions" /> },
   notes: { ...PANEL_META.notes, render: () => <NotesPanel /> },
   artifacts: { ...PANEL_META.artifacts, render: () => <ArtifactsPanel /> },
   vault: { ...PANEL_META.vault, render: () => <VaultPanel /> },

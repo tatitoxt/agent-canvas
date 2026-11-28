@@ -124,6 +124,35 @@ test("agent card sends inline steering to the live PTY and preserves Shift+Enter
   await expect(preview).not.toContainText("command not found");
 });
 
+test("supervised terminal input is denied or released only from the approval controls", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  const card = page.locator(".agent-card").first();
+  const permission = card.getByRole("button", { name: "supervised" });
+  await expect(permission).toBeVisible();
+
+  const deniedMarker = `deny-e2e-${Date.now()}`;
+  const input = card.getByTestId("agent-steering-input");
+  await input.fill(`rm -rf ${deniedMarker}`);
+  await input.press("Enter");
+  await expect(card.getByText(`rm -rf ${deniedMarker}`, { exact: true })).toBeVisible({ timeout: 8_000 });
+  await card.getByRole("button", { name: "deny", exact: true }).click();
+  await expect(card.getByText(`rm -rf ${deniedMarker}`, { exact: true })).toHaveCount(0);
+  const drawerButton = card.locator("[title='Open terminal']");
+  await card.locator("[data-testid='agent-card-header']").click();
+  await drawerButton.click();
+  const terminalRows = page.locator(".terminal-drawer .xterm-rows").first();
+  await expect(terminalRows).not.toContainText(deniedMarker);
+
+  const allowedMarker = `allow-e2e-${Date.now()}`;
+  const allowedCommand = `rm -rf missing-${allowedMarker}; printf '%s\\n' '${allowedMarker}'`;
+  await input.fill(allowedCommand);
+  await input.press("Enter");
+  await expect(card.getByText(allowedCommand, { exact: true })).toBeVisible({ timeout: 8_000 });
+  await card.getByRole("button", { name: "allow", exact: true }).click();
+  await expect(terminalRows).toContainText(allowedMarker, { timeout: 8_000 });
+});
+
 test("inline steering does not submit while an IME candidate is composing", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
@@ -238,6 +267,71 @@ test("split right shows two live xterm panes in the drawer", async ({ page }) =>
   await expect(page.locator(".terminal-drawer .xterm")).toHaveCount(2, { timeout: 6_000 });
 });
 
+test("terminal drawer toolbar controls split, restore, files, clipboard, and dictation", async ({ page, context }) => {
+  await page.addInitScript(() => {
+    class FakeRecognition {
+      continuous = false;
+      interimResults = false;
+      onend: (() => void) | null = null;
+      start() { (window as any).__fakeSpeechRecognition = this; }
+      stop() { this.onend?.(); }
+    }
+    (window as any).SpeechRecognition = FakeRecognition;
+  });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await boot(page);
+  await spawnTerm(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const drawer = page.locator(".terminal-drawer").first();
+
+  await drawer.hover();
+  await drawer.locator("button[title='split down — second terminal below this one']").click();
+  await expect(drawer.locator(".xterm")).toHaveCount(2);
+  await expect(drawer.locator(":scope > div.min-h-0.flex-1")).toHaveCSS("flex-direction", "column");
+  await drawer.locator("button[title='close split']").click();
+  await expect(drawer.locator(".xterm")).toHaveCount(1);
+
+  await drawer.locator("button[title='split right — second terminal beside this one']").click();
+  await expect(drawer.locator(".xterm")).toHaveCount(2);
+  await drawer.locator("button[title='split with a NEW independent terminal — fresh bash shell in this pane']").click();
+  const splitPicker = drawer.locator("select[title='which agent this pane shows']");
+  await expect(splitPicker.locator("option")).toHaveCount(3, { timeout: 8_000 });
+  await expect(splitPicker.locator("option:checked")).toContainText("split-term-");
+  await drawer.locator("button[title='close split']").click();
+  await expect(drawer.locator(".xterm")).toHaveCount(1);
+
+  const original = await drawer.boundingBox();
+  await drawer.locator("button[title='maximize — full terminal']").click();
+  await expect(drawer).toHaveCSS("position", "fixed");
+  await drawer.locator("button[title='restore']").click();
+  await expect(drawer).toHaveCSS("position", "absolute");
+  await expect.poll(async () => {
+    const restored = await drawer.boundingBox();
+    return Math.abs(restored!.width - original!.width) + Math.abs(restored!.height - original!.height);
+  }).toBeLessThan(4);
+
+  await drawer.getByTitle("files — open this agent's worktree in the repo explorer").click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='explorer']").first()).toBeVisible();
+
+  const terminal = drawer.locator(".xterm").first();
+  await terminal.click();
+  await page.keyboard.type("printf 'toolbar-clipboard-e2e\\n'");
+  await page.keyboard.press("Enter");
+  await expect(drawer.locator(".xterm-rows")).toContainText("toolbar-clipboard-e2e", { timeout: 8_000 });
+  // xterm paints bytes immediately, while the shared PTY snapshot used by
+  // copy is intentionally coalesced for 150 ms. Wait for its canvas mirror.
+  await expect(page.getByTestId("agent-terminal-preview").first()).toContainText("toolbar-clipboard-e2e", { timeout: 8_000 });
+  await drawer.hover();
+  await drawer.locator("button[title='copy terminal output to clipboard']").click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("toolbar-clipboard-e2e");
+
+  await drawer.locator("button[title='dictate into this terminal']").click();
+  await expect(drawer.locator("button[title='stop dictation']")).toBeVisible();
+  await drawer.locator("button[title='stop dictation']").click();
+  await expect(drawer.locator("button[title='dictate into this terminal']")).toBeVisible();
+});
+
 test("terminal accepts shell input and renders PTY output", async ({ page }) => {
   await boot(page);
   await spawnTerm(page);
@@ -248,6 +342,36 @@ test("terminal accepts shell input and renders PTY output", async ({ page }) => 
   await page.keyboard.type("printf 'terminal-e2e-ok\\n'");
   await page.keyboard.press("Enter");
   await expect(page.locator(".xterm-rows")).toContainText("terminal-e2e-ok", { timeout: 8_000 });
+});
+
+test("Tools Pause all suspends PTY commands until Resume all", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  const card = page.locator(".agent-card").first();
+  await card.locator("[data-testid='agent-card-header']").click();
+  await card.locator("[title='Open terminal']").click();
+  const terminal = page.locator(".terminal-drawer .xterm").first();
+  await expect(terminal).toBeVisible({ timeout: 5_000 });
+  await terminal.click();
+
+  await page.keyboard.type("printf '\\x70\\x72\\x65\\x2d\\x70\\x61\\x75\\x73\\x65\\n'");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".terminal-drawer .xterm-rows")).toContainText("pre-pause", { timeout: 8_000 });
+
+  await page.locator("button[title^='Tools —']").click();
+  const tools = page.getByRole("dialog", { name: "Tools panel" });
+  await tools.getByRole("button", { name: "Pause all", exact: true }).click();
+  await expect(tools).toBeVisible();
+  await tools.getByRole("button", { name: "Close Tools panel" }).click();
+
+  await terminal.click();
+  await page.keyboard.type("printf '\\x72\\x65\\x73\\x75\\x6d\\x65\\x2d\\x6d\\x61\\x72\\x6b\\n'");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".terminal-drawer .xterm-rows")).not.toContainText("resume-mark", { timeout: 700 });
+
+  await page.locator("button[title^='Tools —']").click();
+  await page.getByRole("dialog", { name: "Tools panel" }).getByRole("button", { name: "Resume all", exact: true }).click();
+  await expect(page.locator(".terminal-drawer .xterm-rows")).toContainText("resume-mark", { timeout: 8_000 });
 });
 
 test("terminal search shortcut finds scrollback and Escape returns focus to the TUI", async ({ page }) => {
@@ -402,6 +526,55 @@ test("terminal drawer resizes and keeps its PTY interactive", async ({ page }) =
   await page.keyboard.type("printf 'resized-terminal-e2e-ok\\n'");
   await page.keyboard.press("Enter");
   await expect(page.locator(".xterm-rows")).toContainText("resized-terminal-e2e-ok", { timeout: 8_000 });
+});
+
+test("terminal drawer resize cleans up when pointer interaction is cancelled", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const handle = page.getByTestId("terminal-resize-handle");
+  const panel = handle.locator("xpath=..");
+  const initial = await panel.boundingBox();
+  const grip = await handle.boundingBox();
+  expect(initial).not.toBeNull();
+  expect(grip).not.toBeNull();
+
+  await page.mouse.move(grip!.x + 2, grip!.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + 72, grip!.y + 52);
+  await page.evaluate(() => window.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true })));
+  const cancelled = await panel.boundingBox();
+  expect(cancelled!.width).toBeGreaterThan(initial!.width + 30);
+
+  // Once cancelled, subsequent pointer motion must not keep resizing the drawer.
+  await page.mouse.move(grip!.x + 170, grip!.y + 140);
+  await page.mouse.up();
+  await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBeCloseTo(cancelled!.width, 0);
+  await expect.poll(async () => (await panel.boundingBox())?.height ?? 0).toBeCloseTo(cancelled!.height, 0);
+});
+
+test("Escape cancels drawer resize even while xterm keeps focus", async ({ page }) => {
+  await boot(page);
+  await spawnTerm(page);
+  await openDrawer(page);
+  const handle = page.getByTestId("terminal-resize-handle");
+  const panel = handle.locator("xpath=..");
+  const terminal = page.locator(".terminal-drawer .xterm").first();
+  await terminal.click();
+  const grip = await handle.boundingBox();
+  const initial = await panel.boundingBox();
+  expect(grip).not.toBeNull();
+  expect(initial).not.toBeNull();
+
+  await page.mouse.move(grip!.x + 2, grip!.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + 72, grip!.y + 52);
+  await page.keyboard.press("Escape");
+  const cancelled = await panel.boundingBox();
+  await page.mouse.move(grip!.x + 170, grip!.y + 140);
+  await page.mouse.up();
+  await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBeCloseTo(cancelled!.width, 0);
+  await expect.poll(async () => (await panel.boundingBox())?.height ?? 0).toBeCloseTo(cancelled!.height, 0);
 });
 
 test("reconnecting rebuilds a live terminal from scrollback without duplicate history", async ({ page }) => {

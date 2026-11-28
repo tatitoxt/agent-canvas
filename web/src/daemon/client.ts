@@ -68,6 +68,7 @@ export type ServerMsg =
   | { type: "needs_approval"; agent_id: string; line: string }
   | { type: "needs_attention"; agent_id: string; reason: string }
   | { type: "automation_saved"; automation: AutomationDef }
+  | { type: "automation_ran"; automation_id: string; last_run_at?: string | null; next_run_at?: string | null }
   | { type: "automation_deleted"; automation_id: string }
   | { type: "loop_saved"; l: LoopDef }
   | { type: "loop_deleted"; loop_id: string }
@@ -95,6 +96,7 @@ export type ServerMsg =
   | { type: "delegation_failed"; edge_id: string }
   | {
       type: "snapshot";
+      canvas_id?: string;
       boards?: { board_id: string; name: string }[];
       agents: SnapshotAgent[];
       delegations?: SnapshotDelegation[];

@@ -32,6 +32,8 @@ export function DigestPanel() {
     >
       <div
         className="glass"
+        role="dialog"
+        aria-label="Session digest"
         style={{ width: 560, maxHeight: "72vh", display: "flex", flexDirection: "column", padding: "16px 18px" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -55,7 +57,7 @@ export function DigestPanel() {
             <button className="glass-pill" style={{ fontSize: "var(--cv-text-xxs)", padding: "4px 12px", cursor: "pointer", border: "none", color: "var(--cv-accent)" }} onClick={toMemory}>
               → board memory
             </button>
-            <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-md)" }} onClick={closeDigest}>
+            <button aria-label="Close session digest" style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", fontSize: "var(--cv-text-md)" }} onClick={closeDigest}>
               ×
             </button>
           </div>

@@ -2381,6 +2381,18 @@ fn run_automation_row(
         Some((idle_secs.max(0) as u64, on_approval == "deny")),
     )?;
     let _ = state.store.automation_ran(&automation_id);
+    if let Ok(Some((_, _, _, _, _, _, _, _, last_run_at, _, next_run_at))) =
+        state.store.automation_row(&automation_id)
+    {
+        emit_control(
+            app,
+            &ServerMsg::AutomationRan {
+                automation_id: automation_id.clone(),
+                last_run_at,
+                next_run_at,
+            },
+        );
+    }
     let wt = state
         .agents
         .worktree(&id)

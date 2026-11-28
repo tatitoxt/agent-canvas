@@ -444,6 +444,12 @@ pub enum ServerMsg {
     AutomationSaved {
         automation: SnapshotAutomation,
     },
+    /// An automation finished registering a run; includes its persisted run timestamp.
+    AutomationRan {
+        automation_id: String,
+        last_run_at: Option<String>,
+        next_run_at: Option<String>,
+    },
     AutomationDeleted {
         automation_id: String,
     },
@@ -516,6 +522,9 @@ pub enum ServerMsg {
     /// Board state replay sent once when a client connects: every agent the
     /// board knows (live and dead) plus saved node positions.
     Snapshot {
+        /// Stable opaque id for the SQLite database backing this canvas.
+        #[serde(default)]
+        canvas_id: String,
         boards: Vec<SnapshotBoard>,
         agents: Vec<SnapshotAgent>,
         delegations: Vec<SnapshotDelegation>,

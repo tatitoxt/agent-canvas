@@ -13,6 +13,8 @@ export async function startStack() {
   execSync("git init -q", { cwd: repo });
   execSync("git config user.email e2e@test", { cwd: repo });
   execSync("git config user.name e2e", { cwd: repo });
+  // The throwaway repo gives deterministic, non-network GitHub panel tests.
+  execSync("git remote add origin https://github.com/canvas-e2e/sample.git", { cwd: repo });
   writeFileSync(join(repo, "README.md"), "# e2e scratch repo\n");
   writeFileSync(join(repo, "OTHER.md"), "# another file with different contents\n");
   execSync("git add -A && git commit -qm init", { cwd: repo });

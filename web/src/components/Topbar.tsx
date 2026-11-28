@@ -249,6 +249,7 @@ export const Topbar = memo(function Topbar({
   const row = (icon: string, label: string, hint: string, onClick?: () => void, dim?: boolean) => (
     <button
       key={label}
+      disabled={dim && !onClick}
       style={{ ...menuRow, opacity: dim ? 0.45 : 1, cursor: onClick ? "pointer" : "default" }}
       title={hint}
       onClick={() => { onClick?.(); setMenu(null); }}
@@ -317,7 +318,16 @@ export const Topbar = memo(function Topbar({
           {drop("machine", (
             <>
               <div className="cv-section-label" style={sectionLabel}>Machine</div>
-              {row("monitor", "This Mac", "agents run locally", () => {})}
+              <div
+                role="status"
+                aria-label="This Mac selected; agents run locally"
+                title="Agents run on this Mac"
+                style={{ ...menuRow, color: "var(--cv-ink-dim)", cursor: "default" }}
+              >
+                <Icon name="monitor" size={14} color="var(--cv-accent)" />
+                <span style={{ flex: 1 }}>This Mac</span>
+                <span aria-hidden="true" style={{ color: "var(--cv-done)", fontSize: "var(--cv-text-xs)" }}>✓</span>
+              </div>
               {row("ws", "Cloud box", "remote runner — soon", undefined, true)}
               {row("bot", "Phone", "pair a device — soon", undefined, true)}
             </>

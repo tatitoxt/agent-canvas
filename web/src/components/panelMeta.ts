@@ -22,6 +22,7 @@ export const PANEL_META: Record<string, PanelMeta> = {
   memory: { title: "Memory", icon: "memory", w: 320, h: 420 },
   prs: { title: "Pull requests", icon: "github", w: 360, h: 440 },
   issues: { title: "Issues", icon: "issue", w: 360, h: 440 },
+  actions: { title: "GitHub Actions", icon: "automations", w: 380, h: 460 },
   notes: { title: "Board Notes", icon: "ticket", w: 320, h: 420 },
   artifacts: { title: "Artifacts", icon: "artifacts", w: 360, h: 440 },
   vault: { title: "Vault Explorer", img: "/obsidian.svg", w: 460, h: 520, minW: 320, minH: 280 },

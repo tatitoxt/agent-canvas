@@ -31,6 +31,8 @@ export function StudioPanel() {
     >
       <div
         className="glass"
+        role="dialog"
+        aria-label="Studio doc"
         style={{ width: 620, maxHeight: "72vh", display: "flex", flexDirection: "column", padding: 18 }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -39,7 +41,7 @@ export function StudioPanel() {
           <div style={{ display: "flex", gap: 8 }}>
             <button className="glass-pill" style={{ border: "none", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: "5px 12px", color: "var(--cv-accent)" }} onClick={copy}>copy</button>
             <button className="glass-pill" style={{ border: "none", cursor: "pointer", fontSize: "var(--cv-text-xxs)", padding: "5px 12px", color: "var(--cv-accent)" }} onClick={download}>▤ .md</button>
-            <button style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", display: "flex", padding: 2 }} onClick={close}><Icon name="ph-x" size={12} /></button>
+            <button aria-label="Close Studio doc" style={{ border: "none", background: "none", color: "var(--cv-ink-dim)", cursor: "pointer", display: "flex", padding: 2 }} onClick={close}><Icon name="ph-x" size={12} /></button>
           </div>
         </div>
         <pre
