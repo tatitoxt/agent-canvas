@@ -275,6 +275,16 @@ test("topbar controls fuse into one glass bubble on hover", async ({ page }) => 
   await expect.poll(() => bar.evaluate((el) => getComputedStyle(el).boxShadow)).toBe("none");
 });
 
+test("machine menu marks This Mac as selected without exposing a dead action", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title='Machine — where agents run']").click();
+  const menu = page.locator(".cv-menu").filter({ hasText: "Machine" }).first();
+  await expect(menu.getByRole("status", { name: "This Mac selected; agents run locally" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "This Mac" })).toHaveCount(0);
+  await expect(menu.getByRole("button", { name: /Cloud box.*soon/ })).toBeVisible();
+  await expect(menu.getByRole("button", { name: /Phone.*soon/ })).toBeVisible();
+});
+
 test("topbar labels Panels and opens Mission Map from its live summary", async ({ page }) => {
   await boot(page);
   await page.locator("button[title*='New task']").first().click();
