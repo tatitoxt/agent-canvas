@@ -153,6 +153,37 @@ test("Settings clear action names its exited-agent scope and reports an empty re
   await expect(settings.getByRole("button", { name: "Clear exited agents" })).toHaveText("no exited agents");
 });
 
+test("Settings alignment preference persists and exports to a portable JSON file", async ({ page }) => {
+  const { port, vault } = stack();
+  await page.addInitScript(() => {
+    if (localStorage.getItem("cv-snap-align") === null) localStorage.setItem("cv-snap-align", "false");
+  });
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
+  await page.locator("button[title='Settings']").click();
+  const settings = page.locator(".react-flow__node-panel [data-panel='settings']").first();
+  const snap = settings.getByRole("button", { name: "Alignment snap off" });
+  await expect(snap).toHaveAttribute("aria-pressed", "false");
+  await snap.click();
+  await expect(settings.getByRole("button", { name: "Alignment snap on" })).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("cv-snap-align"))).toBe("true");
+
+  const exportDownload = page.waitForEvent("download");
+  await settings.getByRole("button", { name: "Export board settings as JSON" }).click();
+  const download = await exportDownload;
+  expect(download.suggestedFilename()).toBe("canvas-export.json");
+  const exportedPath = resolve(vault, download.suggestedFilename());
+  await download.saveAs(exportedPath);
+  const exported = JSON.parse(readFileSync(exportedPath, "utf8"));
+  expect(exported).toMatchObject({ app: "agent-canvas", v: 1, data: { "cv-snap-align": "true" } });
+
+  await page.reload();
+  await expect(page.locator(".react-flow")).toBeVisible({ timeout: 10_000 });
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("cv-snap-align"))).toBe("true");
+  await page.locator("button[title='Settings']").click();
+  await expect(page.locator(".react-flow__node-panel [data-panel='settings']").first().getByRole("button", { name: "Alignment snap on" })).toHaveAttribute("aria-pressed", "true");
+});
+
 test("board settings import rejects malformed data without partial writes", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("cv-theme", "obsidian"));
   const { port } = stack();
