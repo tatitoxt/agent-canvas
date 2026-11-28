@@ -344,16 +344,71 @@ test("topbar labels Panels and opens Mission Map from its live summary", async (
   await expect(page.locator("button[title='Automations']")).toHaveCSS("width", "34px");
 });
 
-test("Tools Add shape opens its choices and creates a canvas shape", async ({ page }) => {
+test("Tools Add shape creates each supported shape from its live menu", async ({ page }) => {
+  await boot(page);
+  for (const kind of ["rect", "ellipse", "diamond", "sticky"] as const) {
+    await page.locator("button[title^='Tools —']").click();
+    const dock = page.getByRole("dialog", { name: "Tools panel" });
+    await dock.getByRole("button", { name: "Add shape" }).click();
+    const shapeChoice = dock.locator(`button[title='${kind}']`);
+    await expect(shapeChoice).toBeVisible();
+    const previousCount = await page.locator(`.react-flow__node-shape svg ${kind === "rect" || kind === "sticky" ? "rect" : kind === "diamond" ? "polygon" : "ellipse"}`).count();
+    await shapeChoice.click();
+    await expect(dock).toBeHidden();
+    const primitive = kind === "rect" || kind === "sticky" ? "rect" : kind === "diamond" ? "polygon" : "ellipse";
+    await expect(page.locator(`.react-flow__node-shape svg ${primitive}`)).toHaveCount(previousCount + 1);
+    if (kind === "sticky") await expect(page.locator(".react-flow__node-shape textarea[placeholder='note…']")).toBeVisible();
+  }
+});
+
+test("Pencil markup can be activated, cleared, and exited from its own controls", async ({ page }) => {
   await boot(page);
   await page.locator("button[title^='Tools —']").click();
   const dock = page.getByRole("dialog", { name: "Tools panel" });
-  await dock.getByRole("button", { name: "Add shape" }).click();
-  const rect = dock.locator("button[title='rect']");
-  await expect(rect).toBeVisible();
-  await rect.click();
+  await dock.getByRole("button", { name: "Pencil markups" }).click();
   await expect(dock).toBeHidden();
-  await expect(page.locator(".react-flow__node-shape")).toBeVisible();
+  await expect(page.getByText("drag to mark up the canvas")).toBeVisible();
+  const box = await page.locator(".react-flow__pane").boundingBox();
+  expect(box).toBeTruthy();
+  await page.mouse.move(box!.x + 220, box!.y + 250);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + 300, box!.y + 290, { steps: 4 });
+  await page.mouse.up();
+  await expect(page.locator("svg polyline")).toHaveCount(1);
+  await page.locator("button[title='Clear every stroke']").click();
+  await expect(page.locator("svg polyline")).toHaveCount(0);
+  await page.locator("button[title^='Turn off pencil']").click();
+  await expect(page.getByText("drag to mark up the canvas")).toBeHidden();
+});
+
+test("Capture tools export the canvas and a selected region as PNG downloads", async ({ page }) => {
+  await boot(page);
+  await page.locator("button[title^='Tools —']").click();
+  let dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Add shape" }).click();
+  await dock.locator("button[title='rect']").click();
+  const node = page.locator(".react-flow__node-shape").last();
+  await expect(node).toBeVisible();
+  const bounds = await node.boundingBox();
+  expect(bounds).toBeTruthy();
+
+  const canvasShot = page.waitForEvent("download");
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Canvas shot" }).click();
+  const fullCanvas = await canvasShot;
+  expect(fullCanvas.suggestedFilename()).toMatch(/^canvas-.*\.png$/);
+
+  const regionShot = page.waitForEvent("download");
+  await page.locator("button[title^='Tools —']").click();
+  dock = page.getByRole("dialog", { name: "Tools panel" });
+  await dock.getByRole("button", { name: "Region shot" }).click();
+  await page.mouse.move(bounds!.x - 8, bounds!.y - 8);
+  await page.mouse.down();
+  await page.mouse.move(bounds!.x + bounds!.width + 8, bounds!.y + bounds!.height + 8, { steps: 5 });
+  await page.mouse.up();
+  const selectedRegion = await regionShot;
+  expect(selectedRegion.suggestedFilename()).toMatch(/^canvas-region-.*\.png$/);
 });
 
 test("Add to canvas closes Tools and mounts a live Inbox panel", async ({ page }) => {
