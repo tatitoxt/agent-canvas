@@ -249,6 +249,7 @@ export const Topbar = memo(function Topbar({
   const row = (icon: string, label: string, hint: string, onClick?: () => void, dim?: boolean) => (
     <button
       key={label}
+      disabled={dim && !onClick}
       style={{ ...menuRow, opacity: dim ? 0.45 : 1, cursor: onClick ? "pointer" : "default" }}
       title={hint}
       onClick={() => { onClick?.(); setMenu(null); }}

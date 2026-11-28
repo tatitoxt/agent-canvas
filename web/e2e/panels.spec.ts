@@ -305,8 +305,11 @@ test("machine menu marks This Mac as selected without exposing a dead action", a
   const menu = page.locator(".cv-menu").filter({ hasText: "Machine" }).first();
   await expect(menu.getByRole("status", { name: "This Mac selected; agents run locally" })).toBeVisible();
   await expect(menu.getByRole("button", { name: "This Mac" })).toHaveCount(0);
-  await expect(menu.getByRole("button", { name: /Cloud box.*soon/ })).toBeVisible();
-  await expect(menu.getByRole("button", { name: /Phone.*soon/ })).toBeVisible();
+  const cloud = menu.getByRole("button", { name: /Cloud box.*soon/ });
+  const phone = menu.getByRole("button", { name: /Phone.*soon/ });
+  await expect(cloud).toBeDisabled();
+  await expect(phone).toBeDisabled();
+  await expect(menu).toBeVisible();
 });
 
 test("topbar labels Panels and opens Mission Map from its live summary", async ({ page }) => {
