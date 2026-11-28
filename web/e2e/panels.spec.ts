@@ -449,6 +449,10 @@ test("Add Artifacts to canvas closes Tools and mounts the interactive artifact l
   await artifactPanel.getByPlaceholder("title").fill(title);
   await artifactPanel.getByPlaceholder("contents (optional)").fill(body);
   await artifactPanel.getByRole("button", { name: "create" }).click();
+  // Creation is asynchronous through the live canvas daemon. Wait until its
+  // snapshot reaches the library before filtering, or Enter can look like a
+  // no-result Dex query and unmount the panel on a loaded runner.
+  await expect(artifactPanel.getByText(title, { exact: true })).toBeVisible();
   // The artifact library is daemon-backed and shared across the whole e2e
   // run — retries of this test leave their created rows behind. An unscoped
   // "Add to Board" click then violates strict mode (or worse, silently pins

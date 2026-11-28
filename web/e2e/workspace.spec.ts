@@ -7,7 +7,7 @@ import { execSync } from "node:child_process";
 
 const stack = () => JSON.parse(readFileSync(resolve(import.meta.dirname, ".e2e-stack.json"), "utf8"));
 
-test("workspace resize handle is exposed after selection and persisted dimensions survive reload", async ({ page }) => {
+test("workspace can be resized by dragging its invisible edge and dimensions survive reload", async ({ page }) => {
   const { port, token, vault } = stack();
   const workspaceRepo = mkdtempSync(resolve(tmpdir(), "canvas-e2e-workspace-repo-"));
   execSync("git init -q", { cwd: workspaceRepo });
@@ -40,8 +40,23 @@ test("workspace resize handle is exposed after selection and persisted dimension
   await expect(handle).toBeVisible();
   const workspaceId = await workspace.getAttribute("data-id");
   expect(workspaceId).toBeTruthy();
-  const savedSize = { [workspaceId!]: { w: 760, h: 480 } };
-  await page.evaluate((sizes) => localStorage.setItem("cv-workspacesizes", JSON.stringify(sizes)), savedSize);
+
+  const before = await workspace.boundingBox();
+  expect(before).toBeTruthy();
+  // Drag the real React Flow resize control. This exercises pointer handling,
+  // canvas-to-flow scaling, and the app's persistence callback together.
+  await page.mouse.move(before!.x + before!.width - 2, before!.y + before!.height - 2);
+  await page.mouse.down();
+  await page.mouse.move(before!.x + before!.width + 118, before!.y + before!.height + 82, { steps: 8 });
+  await page.mouse.up();
+
+  const after = await workspace.boundingBox();
+  expect(after).toBeTruthy();
+  expect(after!.width).toBeGreaterThan(before!.width + 70);
+  expect(after!.height).toBeGreaterThan(before!.height + 50);
+  const savedSize = await page.evaluate(() => JSON.parse(localStorage.getItem("cv-workspacesizes") ?? "{}"));
+  expect(savedSize[workspaceId!].w).toBeGreaterThan(520);
+  expect(savedSize[workspaceId!].h).toBeGreaterThan(320);
 
   await page.reload();
   await expect(page.locator(".react-flow")).toBeVisible({ timeout: 15_000 });
